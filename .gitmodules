@@ -1,0 +1,3 @@
+[submodule "deps/redis_pool"]
+	path = deps/redis_pool
+	url = git://github.com/JacobVorreuter/redis_pool.git

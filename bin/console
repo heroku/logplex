@@ -1,0 +1,3 @@
+#!/bin/sh
+
+erl -name logplex_console@`hostname -s` -pa ebin -boot release/logplex-1.0
