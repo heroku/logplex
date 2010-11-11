@@ -1,20 +1,25 @@
--module(logplex).
+-module(logplex_tail).
 -behaviour(gen_server).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([route/2]).
+-export([register/1, route/2]).
 
--record(state, {tail_pids=[]}).
+-include_lib("logplex.hrl").
 
 %% API functions
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-route(Token, Msg) ->
-    gen_server:cast(?MODULE, {route, Token, Msg}).
+register(ChannelId) when is_binary(ChannelId) ->
+    Self = self(),
+    [erlang:send({?MODULE, Node}, {register, ChannelId, Self}) || Node <- [node()|nodes()]],
+    ok.
+
+route(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
+    gen_server:cast(?MODULE, {route, ChannelId, Msg}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -29,7 +34,7 @@ route(Token, Msg) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-	{ok, #state{}}.
+	{ok, []}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -51,14 +56,9 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({route, Token, Msg}, State) ->
-    Props = logplex_token:lookup(Token),
-    ChannelId = proplists:get_value(channel_id, Props),
-    Msg1 = re:replace(Msg, Token, proplists:get_value(token_name, Props, "")),
-    Msg2 = iolist_to_binary(Msg1),
-    logplex_channel:push(ChannelId, Msg2),
-    logplex_tail:route(ChannelId, Msg2),
-    {noreply, State};
+handle_cast({route, ChannelId, Msg}, Pids) ->
+    [Pid ! {log, Msg} || {Pid, ChannelId1} <- Pids, ChannelId1 == ChannelId],
+    {noreply, Pids};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -70,8 +70,9 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({register_tail, Self}, #state{tail_pids=Pids}=State) ->
-    {noreply, State#state{tail_pids=[Self|Pids]}};
+handle_info({register, ChannelId, Pid}, Pids)->
+    io:format("register ~p ~p~n", [ChannelId, Pid]),
+    {noreply, [{Pid, ChannelId}|Pids]};
 
 handle_info(_Info, State) ->
     {noreply, State}.

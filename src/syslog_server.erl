@@ -1,20 +1,15 @@
--module(logplex).
+-module(syslog_server).
 -behaviour(gen_server).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([route/2]).
-
--record(state, {tail_pids=[]}).
+-record(state, {socket}).
 
 %% API functions
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-route(Token, Msg) ->
-    gen_server:cast(?MODULE, {route, Token, Msg}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -29,7 +24,8 @@ route(Token, Msg) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-	{ok, #state{}}.
+    {ok, Socket} = gen_udp:open(9999, [binary, {active, true}]),
+	{ok, #state{socket=Socket}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -51,15 +47,6 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({route, Token, Msg}, State) ->
-    Props = logplex_token:lookup(Token),
-    ChannelId = proplists:get_value(channel_id, Props),
-    Msg1 = re:replace(Msg, Token, proplists:get_value(token_name, Props, "")),
-    Msg2 = iolist_to_binary(Msg1),
-    logplex_channel:push(ChannelId, Msg2),
-    logplex_tail:route(ChannelId, Msg2),
-    {noreply, State};
-
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -70,8 +57,13 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({register_tail, Self}, #state{tail_pids=Pids}=State) ->
-    {noreply, State#state{tail_pids=[Self|Pids]}};
+handle_info({udp, Socket, _IP, _InPortNo, Packet}, #state{socket=Socket}=State) ->
+    io:format("incoming udp packet ~p~n", [Packet]),
+    case re:run(Packet, "^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) ", [{capture, all_but_first, list}]) of
+        {match, [Token]} -> logplex:route(Token, Packet);
+        _ -> ok
+    end,
+    {noreply, State};
 
 handle_info(_Info, State) ->
     {noreply, State}.

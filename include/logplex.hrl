@@ -1,0 +1,1 @@
+-record(msg, {time, source, ps, content}).
