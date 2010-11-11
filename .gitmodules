@@ -1,3 +1,6 @@
 [submodule "deps/redis_pool"]
 	path = deps/redis_pool
 	url = git://github.com/JacobVorreuter/redis_pool.git
+[submodule "deps/mochiweb"]
+	path = deps/mochiweb
+	url = git://github.com/mochi/mochiweb.git

@@ -1,1 +1,3 @@
 release/*.boot
+ebin/*.beam
+erl_crash.dump

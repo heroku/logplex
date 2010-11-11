@@ -5,11 +5,14 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([]).
+-export([route/2]).
 
 %% API functions
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+route(Token, Msg) ->
+    gen_server:cast(?MODULE, {route, Token, Msg}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -46,6 +49,13 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({route, Token, Msg}, State) ->
+    Props = logplex_token:lookup(Token),
+    Msg1 = re:replace(Msg, Token, proplists:get_value(token_name, Props, "")),
+    io:format("LPUSH ~p~n", [iolist_to_binary(["ch:", proplists:get_value(channel_id, Props), ":spool"])]),
+    redis:q([<<"LPUSH">>, iolist_to_binary(["ch:", proplists:get_value(channel_id, Props), ":spool"]), Msg1]),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
