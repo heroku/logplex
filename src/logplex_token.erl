@@ -1,7 +1,7 @@
 -module(logplex_token).
 -export([create/2, lookup/1]).
 
-create(ChannelId, TokenName) when is_list(ChannelId), is_list(TokenName) ->
+create(ChannelId, TokenName) when is_list(ChannelId), is_binary(TokenName) ->
     Token = "t." ++ string:strip(os:cmd("uuidgen"), right, $\n),
     redis:q([<<"HMSET">>, Token, <<"channel_id">>, ChannelId, <<"name">>, TokenName]),
     Token.

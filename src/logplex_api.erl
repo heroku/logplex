@@ -19,8 +19,8 @@ handlers() ->
     end},
 
     {['POST', "/channels$"], fun(Req, _Match) ->
-        Params = Req:parse_post(),
-        ChannelName = proplists:get_value("name", Params),
+	{struct, Params} = mochijson2:decode(Req:recv_body()),
+        ChannelName = proplists:get_value(<<"name">>, Params),
         ChannelName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
         ChannelId = logplex_channel:create(ChannelName),
         not is_integer(ChannelId) andalso error_resp(Req, 500, <<"failed to create channel">>),
@@ -28,8 +28,8 @@ handlers() ->
     end},
 
     {['POST', "/channels/(\\d+)/token"], fun(Req, [ChannelId]) ->
-        Params = Req:parse_post(),
-        TokenName = proplists:get_value("name", Params),
+	{struct, Params} = mochijson2:decode(Req:recv_body()),
+        TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
         Token = logplex_token:create(ChannelId, TokenName),
         not is_list(Token) andalso error_resp(Req, 500, <<"failed to create token">>),

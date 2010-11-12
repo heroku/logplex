@@ -1,7 +1,7 @@
 -module(logplex_channel).
 -export([create/1, push/2, logs/2]).
 
-create(ChannelName) when is_list(ChannelName) ->
+create(ChannelName) when is_binary(ChannelName) ->
     case redis:q([<<"INCR">>, <<"channel_index">>]) of
         {ok, ChannelId} -> ChannelId;
         Error -> Error
