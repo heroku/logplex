@@ -47,6 +47,19 @@ init([]) ->
 boot_redis() ->
     case application:start(redis, temporary) of
         ok ->
+	    Url = os:getenv("REDIS_URL"),
+            Opts = case redis_uri:parse(Url) of
+                {redis, UserInfo, Host, Port, _Path, _Query} ->
+                    Pass = 
+                        case UserInfo of
+                            "" -> undefined;
+                            Val -> list_to_binary(Val)
+                        end,
+                    [{ip, Host}, {port, Port}, {pass, Pass}];
+                _ ->
+                    []
+            end,
+	    redis_pool:cycle_pool(Opts),
             redis_pool:expand_pool(1);
         Err ->
             exit(Err)
