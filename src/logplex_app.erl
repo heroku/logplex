@@ -18,14 +18,14 @@ stop(_State) ->
 init([]) ->
     Opts = [
         {ip, "0.0.0.0"},
-        {port, 8008},
+        {port, 80},
         {backlog, 1024},
         {loop, {logplex_api, loop}},
         {name, logplex_api}
     ],
     SslOpts = [
         {ip, "0.0.0.0"},
-        {port, 8443},
+        {port, 443},
         {backlog, 1024},
         {loop, {logplex_api, loop}},
         {name, logplex_ssl_api},
