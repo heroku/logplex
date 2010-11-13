@@ -16,17 +16,18 @@ loop(Req) ->
     Method = Req:get(method),
     Path = Req:get(path),
     io:format("REQ: ~p ~p~n", [Method, Path]),
-    %authorize(Req) andalso
     serve(handlers(), Method, Path, Req),
     ok.
 
 handlers() ->
     [{['GET', "/healthcheck"], fun(Req, _Match) ->
+	authorize(Req),
         Count = logplex_stats:healthcheck(),
         Req:respond({200, [], integer_to_list(Count)})
     end},
 
     {['POST', "/channels$"], fun(Req, _Match) ->
+	authorize(Req),
 	{struct, Params} = mochijson2:decode(Req:recv_body()),
         ChannelName = proplists:get_value(<<"name">>, Params),
         ChannelName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
@@ -36,12 +37,14 @@ handlers() ->
     end},
 
     {['DELETE', "/channels/(\\d+)"], fun(Req, [ChannelId]) ->
+	authorize(Req),
         logplex_channel:delete(list_to_binary(ChannelId)),
         Req:respond({200, [], <<"OK">>})
     end},
 
     {['POST', "/channels/(\\d+)/token"], fun(Req, [ChannelId]) ->
-	    {struct, Params} = mochijson2:decode(Req:recv_body()),
+	authorize(Req),
+	{struct, Params} = mochijson2:decode(Req:recv_body()),
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
         Token = logplex_token:create(list_to_binary(ChannelId), TokenName),
@@ -50,6 +53,7 @@ handlers() ->
     end},
 
     {['POST', "/sessions"], fun(Req, _Match) ->
+	authorize(Req),
         Body = Req:recv_body(),
         Session = logplex_session:create(Body),
         not is_binary(Session) andalso error_resp(Req, 500, <<"failed to create session">>),
@@ -70,7 +74,7 @@ handlers() ->
                 undefined -> 20;
                 BinNum -> list_to_integer(binary_to_list(BinNum))
             end,
-        Num = ternary(Filters == [], Num0, -1),
+        Num = ternary(Filters == [], Num0 - 1, -1),
 
         logplex_stats:incr(session_accessed),
 
@@ -94,23 +98,28 @@ handlers() ->
     end},
 
     {['GET', "/channels/(\\d+)/info"], fun(Req, [ChannelId]) ->
+	authorize(Req),
         Info = logplex_channel:info(list_to_binary(ChannelId)),
         Req:respond({200, [], mochijson2:encode({struct, Info})})
     end},
 
     {['POST', "/channels/(\\d+)/drains"], fun(Req, _Match) ->
+	authorize(Req),
         Req:respond({200, [], <<"OK">>})
     end},
 
     {['GET', "/channels/(\\d+)/drains"], fun(Req, _Match) ->
+	authorize(Req),
         Req:respond({200, [], <<"OK">>})
     end},
 
     {['GET', "/channels/(\\d+)/drains/(\\w+)"], fun(Req, _Match) ->
+	authorize(Req),
         Req:respond({200, [], <<"OK">>})
     end},
 
     {['DELETE', "/channels/(\\d+)/drains"], fun(Req, _Match) ->
+	authorize(Req),
         Req:respond({200, [], <<"OK">>})
     end}].
 
@@ -129,20 +138,14 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
     end.
 
 authorize(Req) ->
-    Valid = 
-        case Req:get_header_value("Authorization") of
-            "Basic " ++ Token ->
-                os:getenv("LOGPLEX_AUTH_KEY") == (catch binary_to_list(base64:decode(Token)));
-            _ ->
-                false
-        end,
-    if 
-        Valid ->
-            ok;
-        true ->
-            Req:respond({401, [{"Content-Type", "text/html"}], "Not Authorized"})
-    end,
-    Valid.
+    AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
+    case Req:get_header_value("Authorization") of
+	AuthKey ->
+	    true;
+        _ ->
+            Req:respond({401, [{"Content-Type", "text/html"}], "Not Authorized"}),
+	    throw(normal)
+    end.
 
 error_resp(Req, RespCode, Body) ->
     Req:respond({RespCode, [{"Content-Type", "text/html"}], Body}),
@@ -152,7 +155,6 @@ tail_loop(Socket, Filters) ->
     inet:setopts(Socket, [{packet, raw}, {active, once}]),
     receive
         {log, Msg} ->
-            io:format("recv'd tail msg ~p~n", [Msg]),
             Msg1 = logplex_utils:parse_msg(Msg),
             logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1)),
             tail_loop(Socket, Filters);
