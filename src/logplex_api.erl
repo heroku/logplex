@@ -57,7 +57,7 @@ handlers() ->
     end},
 
     {['GET', "/sessions/([\\w-]+)"], fun(Req, [Session]) ->
-        Body = logplex_session:lookup(Session),
+        Body = logplex_session:lookup(list_to_binary(Session)),
         not is_binary(Body) andalso error_resp(Req, 404, <<"session not found">>),
 
         {struct, Data} = mochijson2:decode(Body),
@@ -83,12 +83,12 @@ handlers() ->
             logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1))
         end || {ok, Msg} <- lists:reverse(Logs)],
 
-        case proplists:get_value("tail", Data) of
+        case proplists:get_value(<<"tail">>, Data) of
             undefined ->
                 gen_tcp:close(Socket);
             _ ->
                 logplex_stats:incr(session_tailed),
-                logplex_tail:register(list_to_binary(ChannelId)),
+                logplex_tail:register(ChannelId),
                 tail_loop(Socket, Filters)
         end
     end},
