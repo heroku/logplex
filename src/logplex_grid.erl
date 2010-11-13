@@ -23,7 +23,7 @@ loop() ->
 local_ip() ->
     case os:getenv("LOCAL_IP") of
         false -> <<"127.0.0.1">>;
-	LocalIp -> list_to_binary(LocalIp)
+        LocalIp -> list_to_binary(LocalIp)
     end.
 
 connect(<<"node:", BinNode/binary>> = Key) ->
