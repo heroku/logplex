@@ -23,7 +23,7 @@ init([]) ->
         {loop, {logplex_api, loop}},
         {name, logplex_api}
     ],
-    SslOpts = [
+    _SslOpts = [
         {ip, "0.0.0.0"},
         {port, 443},
         {backlog, 1024},
@@ -41,25 +41,29 @@ init([]) ->
         {syslog_server, {syslog_server, start_link, []}, permanent, 2000, worker, [syslog_server]},
         {logplex_api, {logplex_api, start_link, [Opts]}, permanent, 2000, worker, [logplex_api]},
         %{logplex_ssl_api, {logplex_api, start_link, [SslOpts]}, permanent, 2000, worker, [logplex_api]},
-        {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]}
+        {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
+        {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]}
     ]}}.
 
 boot_redis() ->
     case application:start(redis, temporary) of
         ok ->
-	    Url = os:getenv("REDIS_URL"),
-            Opts = case redis_uri:parse(Url) of
-                {redis, UserInfo, Host, Port, _Path, _Query} ->
-                    Pass = 
-                        case UserInfo of
-                            "" -> undefined;
-                            Val -> list_to_binary(Val)
-                        end,
-                    [{ip, Host}, {port, Port}, {pass, Pass}];
-                _ ->
-                    []
+            case os:getenv("REDIS_URL") of
+                false -> ok;
+                Url ->
+                    Opts = case redis_uri:parse(Url) of
+                        {redis, UserInfo, Host, Port, _Path, _Query} ->
+                            Pass = 
+                                case UserInfo of
+                                    "" -> undefined;
+                                    Val -> list_to_binary(Val)
+                                end,
+                            [{ip, Host}, {port, Port}, {pass, Pass}];
+                        _ ->
+                            []
+                    end,
+                    redis_pool:cycle_pool(Opts)
             end,
-	    redis_pool:cycle_pool(Opts),
             redis_pool:expand_pool(1);
         Err ->
             exit(Err)

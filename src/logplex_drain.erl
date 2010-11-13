@@ -1,20 +1,56 @@
--module(logplex).
+-module(logplex_drain).
 -behaviour(gen_server).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([route/2]).
+-export([create/3, delete/1, lookup/1, route/3]).
 
--record(state, {tail_pids=[]}).
+-record(state, {socket}).
 
 %% API functions
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-route(Token, Msg) ->
-    gen_server:cast(?MODULE, {route, Token, Msg}).
+create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host), is_integer(Port) ->
+    case redis:q([<<"INCR">>, <<"drain_index">>]) of
+        {ok, DrainId} ->
+            redis:q([<<"HMSET">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId)]),
+                <<"channel_id">>, ChannelId,
+                <<"host">>, Host,
+                <<"port">>, integer_to_list(Port)]),
+            redis:q([<<"SADD">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>]), integer_to_list(DrainId)]);
+        Error ->
+            Error
+    end.
+
+delete(DrainId) when is_binary(DrainId) ->
+    case lookup(DrainId) of
+        [{channel_id, ChannelId},_] ->
+            redis:q([<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId])]),
+            redis:q([<<"SREM">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>])]);
+        _ ->
+            ok
+    end.
+
+lookup(DrainId) when is_binary(DrainId) ->
+    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId])]) of
+        Fields when is_list(Fields), length(Fields) > 0 ->
+            [{channel_id, logplex_utils:field_val(<<"channel_id">>, Fields)},
+             {host, logplex_utils:field_val(<<"host">>, Fields)},
+             {port, begin
+                 case logplex_utils:field_val(<<"port">>, Fields) of
+                     <<"">> -> undefined;
+                     Val -> list_to_integer(binary_to_list(Val))
+                 end
+              end}];
+        _ ->
+            []
+    end.
+
+route(Host, Port, Msg) when is_binary(Host), is_integer(Port), is_binary(Msg) ->
+    gen_server:cast(?MODULE, {route, Host, Port, Msg}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -29,7 +65,8 @@ route(Token, Msg) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-	{ok, #state{}}.
+    {ok, Socket} = gen_udp:open(0, [binary]),
+	{ok, #state{socket=Socket}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -51,14 +88,8 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({route, Token, Msg}, State) ->
-    Props = logplex_token:lookup(Token),
-    ChannelId = proplists:get_value(channel_id, Props),
-    Msg1 = re:replace(Msg, Token, proplists:get_value(token_name, Props, "")),
-    Msg2 = iolist_to_binary(Msg1),
-    logplex_channel:push(ChannelId, Msg2),
-    logplex_tail:route(ChannelId, Msg2),
-    [logplex_drain:route(Host, Port, Msg2) || [_Channel, {host, Host}, {port, Port}] <- logplex_channel:drains(ChannelId)],
+handle_cast({route, Host, Port, Msg}, State) ->
+    gen_udp:send(State#state.socket, binary_to_list(Host), Port, Msg),
     {noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -71,9 +102,6 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({register_tail, Self}, #state{tail_pids=Pids}=State) ->
-    {noreply, State#state{tail_pids=[Self|Pids]}};
-
 handle_info(_Info, State) ->
     {noreply, State}.
 

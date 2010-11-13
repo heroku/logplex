@@ -1,5 +1,5 @@
 -module(logplex_utils).
--export([parse_msg/1, filter/2, format/1]).
+-export([parse_msg/1, filter/2, format/1, field_val/2, field_val/3]).
 
 -include_lib("logplex.hrl").
 
@@ -28,3 +28,15 @@ format(Msg) when is_record(Msg, msg) ->
 
 format(_Msg) ->
     "".
+
+field_val(Key, Fields) ->
+    field_val(Key, Fields, undefined).
+
+field_val(Key, [{ok, Key}, {ok, Val} | _Tail], _Default) ->
+    Val;
+
+field_val(Key, [_, _ | Tail], Default) ->
+    field_val(Key, Tail, Default);
+
+field_val(_Key, _, Default) ->
+    Default.
