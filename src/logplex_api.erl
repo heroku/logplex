@@ -36,7 +36,7 @@ handlers() ->
     end},
 
     {['DELETE', "/channels/(\\d+)"], fun(Req, [ChannelId]) ->
-        logplex_channel:delete(ChannelId),
+        logplex_channel:delete(list_to_binary(ChannelId)),
         Req:respond({200, [], <<"OK">>})
     end},
 
@@ -44,7 +44,7 @@ handlers() ->
 	    {struct, Params} = mochijson2:decode(Req:recv_body()),
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
-        Token = logplex_token:create(ChannelId, TokenName),
+        Token = logplex_token:create(list_to_binary(ChannelId), TokenName),
         not is_binary(Token) andalso error_resp(Req, 500, <<"failed to create token">>),
         Req:respond({200, [{"Content-Type", "text/html"}], Token})
     end},
@@ -94,7 +94,7 @@ handlers() ->
     end},
 
     {['GET', "/channels/(\\d+)/info"], fun(Req, [ChannelId]) ->
-        Info = logplex_channel:info(ChannelId),
+        Info = logplex_channel:info(list_to_binary(ChannelId)),
         Req:respond({200, [], mochijson2:encode({struct, Info})})
     end},
 

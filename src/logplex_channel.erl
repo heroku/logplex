@@ -24,7 +24,7 @@ tokens(ChannelId) when is_binary(ChannelId) ->
     [Token || {ok, Token} <- redis:q([<<"SMEMBERS">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":tokens">>])])].
 
 drains(ChannelId) when is_binary(ChannelId) ->
-    [logplex_drain:lookup(DrainId) || {ok, DrainId} <- iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>])].
+    [logplex_drain:lookup(DrainId) || {ok, DrainId} <- redis:q([<<"SMEMBERS">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>])])].
 
 info(ChannelId) when is_binary(ChannelId) ->
     {ok, ChannelName} = redis:q([<<"GET">>, iolist_to_binary([<<"ch:">>, ChannelId])]),
