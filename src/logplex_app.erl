@@ -9,6 +9,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    set_cookie(),
     boot_redis(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
@@ -44,6 +45,12 @@ init([]) ->
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]}
     ]}}.
+
+set_cookie() ->
+    case os:getenv("ERLANG_COOKIE") of
+        false -> ok;
+        Cookie -> erlang:set_cookie(node(), list_to_atom(Cookie))
+    end.
 
 boot_redis() ->
     case application:start(redis, temporary) of
