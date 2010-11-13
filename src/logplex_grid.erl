@@ -21,7 +21,10 @@ loop() ->
     ?MODULE:loop().
 
 local_ip() ->
-    <<"127.0.0.1">>.
+    case os:getenv("LOCAL_IP") of
+        false -> <<"127.0.0.1">>;
+	LocalIp -> list_to_binary(LocalIp)
+    end.
 
 connect(<<"node:", BinNode/binary>> = Key) ->
     StrNode = binary_to_list(BinNode),
