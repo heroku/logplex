@@ -55,7 +55,7 @@ set_cookie() ->
 boot_redis() ->
     case application:start(redis, temporary) of
         ok ->
-            case os:getenv("REDIS_URL") of
+            case os:getenv("LOGPLEX_REDIS_URL") of
                 false -> ok;
                 Url ->
                     Opts = case redis_uri:parse(Url) of

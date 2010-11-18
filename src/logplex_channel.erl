@@ -13,11 +13,9 @@ delete(ChannelId) when is_binary(ChannelId) ->
     redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId])]).
 
 push(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
-    io:format("LPUSH ~p~n", [iolist_to_binary(["ch:", ChannelId, ":spool"])]),
     redis:q([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
 
 logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
-    io:format("logs ~p ~p~n", [ChannelId, Num]),
     redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
 
 tokens(ChannelId) when is_binary(ChannelId) ->

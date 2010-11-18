@@ -21,14 +21,14 @@ loop(Req) ->
 
 handlers() ->
     [{['GET', "/healthcheck"], fun(Req, _Match) ->
-	authorize(Req),
+        authorize(Req),
         Count = logplex_stats:healthcheck(),
         Req:respond({200, [], integer_to_list(Count)})
     end},
 
     {['POST', "/channels$"], fun(Req, _Match) ->
-	authorize(Req),
-	{struct, Params} = mochijson2:decode(Req:recv_body()),
+        authorize(Req),
+        {struct, Params} = mochijson2:decode(Req:recv_body()),
         ChannelName = proplists:get_value(<<"name">>, Params),
         ChannelName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
         ChannelId = logplex_channel:create(ChannelName),
@@ -37,14 +37,14 @@ handlers() ->
     end},
 
     {['DELETE', "/channels/(\\d+)"], fun(Req, [ChannelId]) ->
-	authorize(Req),
+        authorize(Req),
         logplex_channel:delete(list_to_binary(ChannelId)),
         Req:respond({200, [], <<"OK">>})
     end},
 
     {['POST', "/channels/(\\d+)/token"], fun(Req, [ChannelId]) ->
-	authorize(Req),
-	{struct, Params} = mochijson2:decode(Req:recv_body()),
+        authorize(Req),
+        {struct, Params} = mochijson2:decode(Req:recv_body()),
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
         Token = logplex_token:create(list_to_binary(ChannelId), TokenName),
@@ -53,7 +53,7 @@ handlers() ->
     end},
 
     {['POST', "/sessions"], fun(Req, _Match) ->
-	authorize(Req),
+        authorize(Req),
         Body = Req:recv_body(),
         Session = logplex_session:create(Body),
         not is_binary(Session) andalso error_resp(Req, 500, <<"failed to create session">>),
@@ -98,28 +98,34 @@ handlers() ->
     end},
 
     {['GET', "/channels/(\\d+)/info"], fun(Req, [ChannelId]) ->
-	authorize(Req),
+        authorize(Req),
         Info = logplex_channel:info(list_to_binary(ChannelId)),
         Req:respond({200, [], mochijson2:encode({struct, Info})})
     end},
 
-    {['POST', "/channels/(\\d+)/drains"], fun(Req, _Match) ->
-	authorize(Req),
-        Req:respond({200, [], <<"OK">>})
+    {['POST', "/channels/(\\d+)/drains"], fun(Req, [ChannelId]) ->
+        authorize(Req),
+
+        {struct, Data} = mochijson2:decode(Req:recv_body()),
+        Host = proplists:get_value(<<"host">>, Data),
+        Port = proplists:get_value(<<"port">>, Data),
+        not is_binary(Host) andalso error_resp(Req, 400, <<"host is a required field">>),
+
+        DrainId = logplex_drain:create(list_to_binary(ChannelId), Host, Port),
+        not is_integer(DrainId) andalso error_resp(Req, 500, <<"server exception">>, DrainId),
+        Req:respond({201, [{"Content-Type", "text/html"}], <<>>})
     end},
 
-    {['GET', "/channels/(\\d+)/drains"], fun(Req, _Match) ->
-	authorize(Req),
-        Req:respond({200, [], <<"OK">>})
+    {['GET', "/channels/(\\d+)/drains"], fun(Req, [ChannelId]) ->
+        authorize(Req),
+        Drains = logplex_drain:lookup(list_to_binary(ChannelId)),
+        Req:respond({200, [], {struct, Drains}})
     end},
 
-    {['GET', "/channels/(\\d+)/drains/(\\w+)"], fun(Req, _Match) ->
-	authorize(Req),
-        Req:respond({200, [], <<"OK">>})
-    end},
-
-    {['DELETE', "/channels/(\\d+)/drains"], fun(Req, _Match) ->
-	authorize(Req),
+    {['DELETE', "/channels/(\\d+)/drains"], fun(Req, [ChannelId]) ->
+        authorize(Req),
+        Res = logplex_drain:delete(list_to_binary(ChannelId)),
+        Res =/= ok andalso error_resp(Req, 500, <<"server exception">>, Res),
         Req:respond({200, [], <<"OK">>})
     end}].
 
@@ -140,14 +146,18 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
 authorize(Req) ->
     AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
     case Req:get_header_value("Authorization") of
-	AuthKey ->
-	    true;
+    AuthKey ->
+        true;
         _ ->
             Req:respond({401, [{"Content-Type", "text/html"}], "Not Authorized"}),
-	    throw(normal)
+            throw(normal)
     end.
 
 error_resp(Req, RespCode, Body) ->
+    error_resp(Req, RespCode, Body, undefined).
+
+error_resp(Req, RespCode, Body, Error) ->
+    Error =/= undefined andalso io:format("server exception: ~1000p~n", [Error]),
     Req:respond({RespCode, [{"Content-Type", "text/html"}], Body}),
     throw(normal).
 

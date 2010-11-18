@@ -13,14 +13,14 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host), is_integer(Port) ->
+create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
     case redis:q([<<"INCR">>, <<"drain_index">>]) of
         {ok, DrainId} ->
             redis:q([<<"HMSET">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId)]),
                 <<"channel_id">>, ChannelId,
-                <<"host">>, Host,
-                <<"port">>, integer_to_list(Port)]),
-            redis:q([<<"SADD">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>]), integer_to_list(DrainId)]);
+                <<"host">>, Host] ++ lists:flatten([[<<"port">>, integer_to_list(Port)] || is_integer(Port)])),
+            redis:q([<<"SADD">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>]), integer_to_list(DrainId)]),
+            DrainId;
         Error ->
             Error
     end.
@@ -28,8 +28,11 @@ create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host), is_int
 delete(DrainId) when is_binary(DrainId) ->
     case lookup(DrainId) of
         [{channel_id, ChannelId},_] ->
-            redis:q([<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId])]),
-            redis:q([<<"SREM">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>])]);
+            redis:q([<<"SREM">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>])]),
+            case redis:q([<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId])]) of
+                {ok, <<"OK">>} -> ok;
+                Err -> Err
+            end;
         _ ->
             ok
     end.
