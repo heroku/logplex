@@ -42,6 +42,7 @@ init([]) ->
         {syslog_server, {syslog_server, start_link, []}, permanent, 2000, worker, [syslog_server]},
         {logplex_api, {logplex_api, start_link, [Opts]}, permanent, 2000, worker, [logplex_api]},
         %{logplex_ssl_api, {logplex_api, start_link, [SslOpts]}, permanent, 2000, worker, [logplex_api]},
+        {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]}
     ]}}.
