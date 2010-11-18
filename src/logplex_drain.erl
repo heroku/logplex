@@ -11,7 +11,7 @@
 
 %% API functions
 start_link() ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+	gen_server:start_link(?MODULE, [], []).
 
 create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
     case redis:q([<<"INCR">>, <<"drain_index">>]) of
@@ -53,7 +53,7 @@ lookup(DrainId) when is_binary(DrainId) ->
     end.
 
 route(Host, Port, Msg) when is_binary(Host), is_integer(Port), is_binary(Msg) ->
-    gen_server:cast(?MODULE, {route, Host, Port, Msg}).
+    gen_server:cast(pg2:get_closest_pid(?MODULE), {route, Host, Port, Msg}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -68,6 +68,8 @@ route(Host, Port, Msg) when is_binary(Host), is_integer(Port), is_binary(Msg) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    pg2:create(?MODULE),
+    pg2:join(?MODULE, self()),
     {ok, Socket} = gen_udp:open(0, [binary]),
 	{ok, #state{socket=Socket}}.
 

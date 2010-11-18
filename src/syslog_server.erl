@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--record(state, {socket}).
+-record(state, {socket, regexp}).
 
 %% API functions
 start_link() ->
@@ -24,8 +24,9 @@ start_link() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
     {ok, Socket} = gen_udp:open(9999, [binary, {active, true}]),
-	{ok, #state{socket=Socket}}.
+	{ok, #state{socket=Socket, regexp=RE}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -57,12 +58,14 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({udp, Socket, _IP, _InPortNo, Packet}, #state{socket=Socket}=State) ->
-    logplex_stats:incr(message_received),
-    case re:run(Packet, "^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) ", [{capture, all_but_first, list}]) of
-        {match, [Token]} -> logplex:route(list_to_binary(Token), Packet);
-        _ -> ok
-    end,
+handle_info({udp, Socket, _IP, _InPortNo, Packet}, #state{socket=Socket, regexp=RE}=State) ->
+    spawn_link(fun() ->
+        case re:run(Packet, RE, [{capture, all_but_first, list}]) of
+            {match, [Token]} -> logplex:route(list_to_binary(Token), Packet);
+            _ -> ok
+        end,
+        logplex_stats:incr(message_received)
+    end),
     {noreply, State};
 
 handle_info(_Info, State) ->

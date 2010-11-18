@@ -19,7 +19,8 @@ register(ChannelId) when is_binary(ChannelId) ->
     ok.
 
 route(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
-    gen_server:cast(?MODULE, {route, ChannelId, Msg}).
+    [Pid ! {log, Msg} || {_ChannelId, Pid} <- ets:lookup(?MODULE, ChannelId)],
+    ok.
 
 %%====================================================================
 %% gen_server callbacks
@@ -34,6 +35,7 @@ route(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    ets:new(?MODULE, [protected, named_table, bag]),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -56,10 +58,6 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({route, ChannelId, Msg}, Pids) ->
-    [Pid ! {log, Msg} || {Pid, ChannelId1} <- Pids, ChannelId1 == ChannelId],
-    {noreply, Pids};
-
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -70,9 +68,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({register, ChannelId, Pid}, Pids)->
+handle_info({register, ChannelId, Pid}, State)->
     io:format("register ~p ~p~n", [ChannelId, Pid]),
-    {noreply, [{Pid, ChannelId}|Pids]};
+    ets:insert(?MODULE, {ChannelId, Pid}),
+    {noreply, State};
 
 handle_info(_Info, State) ->
     {noreply, State}.

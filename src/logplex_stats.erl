@@ -7,15 +7,6 @@
 
 -export([healthcheck/0, incr/1, flush/0]).
 
--record(state, {http_server_started=0,
-                session_created=0,
-                session_accessed=0,
-                session_tailed=0,
-                message_routed=0,
-                message_processed=0,
-                syslog_server_started=0,
-                message_received=0}).
-
 %% API functions
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -25,10 +16,8 @@ healthcheck() ->
     Count.
 
 incr(Key) when is_atom(Key) ->
-    gen_server:cast(?MODULE, {incr, Key});
+    ets:update_counter(?MODULE, Key, 1).
 
-incr({Key, Value}) when is_atom(Key), is_atom(Value) ->
-    gen_server:cast(?MODULE, {incr, Key, Value}).
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -42,8 +31,14 @@ incr({Key, Value}) when is_atom(Key), is_atom(Value) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    ets:new(?MODULE, [public, named_table, set]),
+    ets:insert(?MODULE, {message_processed, 0}),
+    ets:insert(?MODULE, {session_accessed, 0}),
+    ets:insert(?MODULE, {session_tailed, 0}),
+    ets:insert(?MODULE, {message_routed, 0}),
+    ets:insert(?MODULE, {message_received, 0}),
     spawn_link(fun flush/0),
-	{ok, #state{}}.
+	{ok, []}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -65,21 +60,13 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({incr, message_received}, #state{message_received=Val}=State) ->
-    {noreply, State#state{message_received=Val+1}};
-
-handle_cast({incr, message_processed}, #state{message_processed=Val}=State) ->
-    {noreply, State#state{message_processed=Val+1}};
-
-handle_cast({incr, message_routed}, #state{message_routed=Val}=State) ->
-    {noreply, State#state{message_routed=Val+1}};
-
 handle_cast(flush, State) ->
-    io:format("message_received=~w message_processed=~w message_routed=~w~n", [
-        State#state.message_received,
-        State#state.message_processed,
-        State#state.message_routed]),
-    {noreply, #state{}};
+    Data = ets:tab2list(?MODULE),
+    [begin
+        ets:update_element(?MODULE, Key, {2, 0}),
+        io:format("logplex_stats ~p=~w~n", [Key, Val])
+    end || {Key, Val} <- Data],
+    {noreply, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
