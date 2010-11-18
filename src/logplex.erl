@@ -52,6 +52,7 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({route, Token, Msg}, State) ->
+    logplex_stats:incr(message_processed),
     Props = logplex_token:lookup(Token),
     ChannelId = proplists:get_value(channel_id, Props),
     Msg1 = re:replace(Msg, Token, proplists:get_value(token_name, Props, "")),

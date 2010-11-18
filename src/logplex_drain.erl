@@ -92,6 +92,7 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({route, Host, Port, Msg}, State) ->
+    logplex_stats:incr(message_routed),
     gen_udp:send(State#state.socket, binary_to_list(Host), Port, Msg),
     {noreply, State};
 

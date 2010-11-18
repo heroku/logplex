@@ -58,6 +58,7 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({udp, Socket, _IP, _InPortNo, Packet}, #state{socket=Socket}=State) ->
+    logplex_stats:incr(message_received),
     case re:run(Packet, "^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) ", [{capture, all_but_first, list}]) of
         {match, [Token]} -> logplex:route(list_to_binary(Token), Packet);
         _ -> ok
