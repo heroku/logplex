@@ -117,4 +117,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
-    ets:insert(?MODULE, redis_helper:lookup_tokens()).
+    Data = redis_helper:lookup_tokens(),
+    length(Data) > 0 andalso ets:insert(?MODULE, Data).

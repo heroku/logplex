@@ -130,4 +130,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
-    ets:insert(logplex_channel_drains, redis_helper:lookup_drains()).
+    Data = redis_helper:lookup_drains(),
+    length(Data) > 0 andalso ets:insert(?MODULE, Data).
