@@ -29,7 +29,7 @@ delete(TokenId) when is_binary(TokenId) ->
     end.
 
 lookup(Token) when is_binary(Token) ->
-    case ets:lookup(?MODULE, Token, 2) of
+    case ets:lookup(?MODULE, Token) of
         [Token1] when is_record(Token1, token) ->
             Token1;
         _ ->

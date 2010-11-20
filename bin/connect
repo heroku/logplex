@@ -1,0 +1,5 @@
+#!/bin/bash
+
+HOST=`hostname --fqdn`
+
+erl -name remsh@$HOST -remsh logplex@$HOST
