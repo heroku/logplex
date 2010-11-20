@@ -50,6 +50,7 @@ lookup(Token) when is_binary(Token) ->
 %%--------------------------------------------------------------------
 init([]) ->
     ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
+    populate_cache(),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -115,3 +116,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+populate_cache() ->
+    ets:insert(?MODULE, redis_helper:lookup_tokens()).

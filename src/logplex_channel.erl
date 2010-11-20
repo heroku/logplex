@@ -35,7 +35,6 @@ tokens(ChannelId) when is_binary(ChannelId) ->
 
 drains(ChannelId) when is_binary(ChannelId) ->
     ets:lookup(logplex_channel_drains, ChannelId).
-    %[logplex_drain:lookup(DrainId) || {ok, DrainId} <- redis:q([<<"SMEMBERS">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>])])].
 
 info(ChannelId) when is_binary(ChannelId) ->
     {ok, ChannelName} = redis:q([<<"GET">>, iolist_to_binary([<<"ch:">>, ChannelId])]),
@@ -58,6 +57,7 @@ info(ChannelId) when is_binary(ChannelId) ->
 %%--------------------------------------------------------------------
 init([]) ->
     ets:new(logplex_channel_drains, [protected, named_table, set, {keypos, 3}]),
+    populate_cache(),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -123,3 +123,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+populate_cache() ->
+    ets:insert(logplex_channel_drains, redis_helper:lookup_drains()).

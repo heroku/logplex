@@ -63,6 +63,7 @@ lookup(DrainId) when is_binary(DrainId) ->
 %%--------------------------------------------------------------------
 init([]) ->
     ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
+    populate_cache(),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -128,3 +129,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+populate_cache() ->
+    ets:insert(logplex_channel_drains, redis_helper:lookup_drains()).
