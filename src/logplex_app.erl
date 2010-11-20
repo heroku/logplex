@@ -28,7 +28,7 @@ init([]) ->
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]}
     ] ++ [
         {erlang:make_ref(), {logplex_drain_pool, start_link, []}, permanent, 2000, worker, [logplex_drain_pool]}
-    || _ <- lists:seq(1, 1000)]}}.
+    || _ <- lists:seq(1, 100)]}}.
 
 set_cookie() ->
     case os:getenv("ERLANG_COOKIE") of
