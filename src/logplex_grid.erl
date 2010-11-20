@@ -1,5 +1,5 @@
 -module(logplex_grid).
--export([start_link/0, init/1, loop/0]).
+-export([start_link/0, init/1, publish/2, loop/0]).
 
 start_link() ->
     proc_lib:start_link(?MODULE, init, [self()]).
@@ -7,6 +7,10 @@ start_link() ->
 init(Parent) ->
     proc_lib:init_ack(Parent, {ok, self()}),
     loop().
+
+publish(RegName, Msg) when is_atom(RegName), is_tuple(Msg) ->
+    [erlang:send({RegName, Node}, Msg) || Node <- [node()|nodes()]],
+    ok.
 
 loop() ->
     redis:q([<<"SETEX">>, iolist_to_binary([<<"node:">>, atom_to_binary(node(), utf8)]), <<"15">>, local_ip()]),

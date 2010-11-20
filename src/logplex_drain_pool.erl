@@ -1,53 +1,20 @@
--module(logplex_drain).
+-module(logplex_drain_pool).
 -behaviour(gen_server).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/3, delete/1, lookup/1]).
+-export([route/3]).
 
--include_lib("logplex.hrl").
+-record(state, {socket}).
 
 %% API functions
 start_link() ->
 	gen_server:start_link(?MODULE, [], []).
 
-create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
-    case redis_helper:drain_index() of
-        DrainId when is_binary(DrainId) ->
-            logplex_grid:publish(?MODULE, {create_drain, DrainId, ChannelId, Host, Port}),
-            logplex_grid:publish(logplex_channel, {add_drain_to_channel, DrainId, ChannelId, Host, Port}),
-            redis_helper:create_drain(DrainId, ChannelId, Host, Port),
-            DrainId;
-        Error ->
-            Error
-    end.
-
-delete(DrainId) when is_binary(DrainId) ->
-    case lookup(DrainId) of
-        #drain{channel_id=ChannelId} ->
-            logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
-            logplex_grid:publish(logplex_channel, {remove_drain_from_channel, ChannelId, DrainId}),
-            redis_helper:delete_drain(DrainId, ChannelId);
-        _ ->
-            ok
-    end.
-
-lookup(DrainId) when is_binary(DrainId) ->
-    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId])]) of
-        Fields when is_list(Fields), length(Fields) > 0 ->
-            [{channel_id, logplex_utils:field_val(<<"channel_id">>, Fields)},
-             {host, logplex_utils:field_val(<<"host">>, Fields)},
-             {port, begin
-                 case logplex_utils:field_val(<<"port">>, Fields) of
-                     <<"">> -> undefined;
-                     Val -> list_to_integer(binary_to_list(Val))
-                 end
-              end}];
-        _ ->
-            []
-    end.
+route(Host, Port, Msg) when is_binary(Host), is_integer(Port), is_binary(Msg) ->
+    gen_server:cast(pg2:get_closest_pid(?MODULE), {route, Host, Port, Msg}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -62,8 +29,10 @@ lookup(DrainId) when is_binary(DrainId) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
-	{ok, []}.
+    pg2:create(?MODULE),
+    pg2:join(?MODULE, self()),
+    {ok, Socket} = gen_udp:open(0, [binary]),
+	{ok, #state{socket=Socket}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -85,6 +54,11 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({route, Host, Port, Msg}, State) ->
+    logplex_stats:incr(message_routed),
+    gen_udp:send(State#state.socket, binary_to_list(Host), Port, Msg),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -95,14 +69,6 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({create_drain, DrainId, ChannelId, Host, Port}, State) ->
-    ets:insert(?MODULE, #drain{id=DrainId, channel_id=ChannelId, host=Host, port=Port}),
-    {noreply, State};
-
-handle_info({delete_drain, DrainId}, State) ->
-    ets:delete(?MODULE, DrainId),
-    {noreply, State};
-
 handle_info(_Info, State) ->
     {noreply, State}.
 

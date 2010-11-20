@@ -1,11 +1,18 @@
 -module(logplex_api).
--export([loop/1, start_link/1, stop/0]).
+-export([loop/1, start_link/0, stop/0]).
 
 -include_lib("logplex.hrl").
 
-start_link(Options) ->
+start_link() ->
+    Opts = [
+        {ip, "0.0.0.0"},
+        {port, 80},
+        {backlog, 1024},
+        {loop, {logplex_api, loop}},
+        {name, logplex_api}
+    ],
     io:format("START API~n"),
-    mochiweb_http:start(Options).
+    mochiweb_http:start(Opts).
 
 stop() ->
     LSock = mochiweb_socket_server:get(?MODULE, listen),

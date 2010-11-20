@@ -7,6 +7,8 @@
 
 -export([healthcheck/0, incr/1, flush/0]).
 
+-include_lib("logplex.hrl").
+
 %% API functions
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).

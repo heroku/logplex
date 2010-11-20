@@ -15,7 +15,7 @@ start_link() ->
 
 register(ChannelId) when is_binary(ChannelId) ->
     Self = self(),
-    [erlang:send({?MODULE, Node}, {register, ChannelId, Self}) || Node <- [node()|nodes()]],
+    logplex_grid:publish(?MODULE, {register, ChannelId, Self}),
     ok.
 
 route(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
