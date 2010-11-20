@@ -53,9 +53,9 @@ boot_redis() ->
                         _ ->
                             []
                     end,
-                    redis_pool:cycle_pool(Opts)
+                    redis_pool:cycle(Opts)
             end,
-            redis_pool:expand_pool(1);
+            redis_pool:expand(100);
         Err ->
             exit(Err)
     end.
