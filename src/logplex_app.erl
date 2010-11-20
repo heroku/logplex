@@ -39,23 +39,23 @@ set_cookie() ->
 boot_redis() ->
     case application:start(redis, temporary) of
         ok ->
-            case os:getenv("LOGPLEX_REDIS_URL") of
-                false -> ok;
-                Url ->
-                    Opts = case redis_uri:parse(Url) of
-                        {redis, UserInfo, Host, Port, _Path, _Query} ->
-                            Pass = 
-                                case UserInfo of
-                                    "" -> undefined;
-                                    Val -> list_to_binary(Val)
-                                end,
-                            [{ip, Host}, {port, Port}, {pass, Pass}];
-                        _ ->
-                            []
-                    end,
-                    redis_pool:cycle(Opts)
-            end,
-            redis_pool:expand(100);
+            Opts = 
+                case os:getenv("LOGPLEX_REDIS_URL") of
+                    false -> [];
+                    Url ->
+                        case redis_uri:parse(Url) of
+                            {redis, UserInfo, Host, Port, _Path, _Query} ->
+                                Pass = 
+                                    case UserInfo of
+                                        "" -> undefined;
+                                        Val -> list_to_binary(Val)
+                                    end,
+                                [{ip, Host}, {port, Port}, {pass, Pass}];
+                            _ ->
+                                []
+                        end
+                end,
+            redis_sup:add_pool(redis_pool, Opts, 100);
         Err ->
             exit(Err)
     end.
