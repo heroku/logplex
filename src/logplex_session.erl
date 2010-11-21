@@ -3,7 +3,7 @@
 
 create(Body) when is_binary(Body) ->
     Session = string:strip(os:cmd("uuidgen"), right, $\n),
-    redis_helper:create_session(Session, Body),
+    redis_helper:create_session(list_to_binary(Session), Body),
     iolist_to_binary([<<"/sessions/">>, Session]).
 
 lookup(Session) when is_binary(Session) ->

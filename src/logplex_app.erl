@@ -24,13 +24,14 @@ init([]) ->
         {logplex_channel, {logplex_channel, start_link, []}, permanent, 2000, worker, [logplex_channel]},
         {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
-        {syslog_server, {syslog_server, start_link, []}, permanent, 2000, worker, [syslog_server]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]}
     ] ++ [
         {erlang:make_ref(), {logplex_drain_pool, start_link, []}, permanent, 2000, worker, [logplex_drain_pool]}
-    || _ <- lists:seq(1, 100)]}}.
+    || _ <- lists:seq(1, 100)] ++ [
+        {syslog_server, {syslog_server, start_link, []}, permanent, 2000, worker, [syslog_server]}
+    ]}}.
 
 set_cookie() ->
     case os:getenv("ERLANG_COOKIE") of

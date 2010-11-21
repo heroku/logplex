@@ -131,6 +131,6 @@ populate_cache() ->
     length(Data) > 0 andalso ets:insert(logplex_channel_drains, Data).
 
 redis_pool() ->
-    {_,_,M} = timer:now(),
+    {_,_,M} = erlang:now(),
     N = (M rem ?NUM_REDIS_POOLS) + 1,
     list_to_existing_atom("spool_" ++ integer_to_list(N)).
