@@ -20,8 +20,7 @@ delete(ChannelId) when is_binary(ChannelId) ->
     redis_helper:delete_channel(ChannelId).
 
 push(ChannelId, Addon, Msg) when is_binary(ChannelId), is_binary(Msg) ->
-    redis_helper:push_msg(ChannelId, Msg),
-    redis_helper:trim_spool(ChannelId, spool_length(Addon)).
+    redis_helper:push_msg(ChannelId, Msg, spool_length(Addon)).
 
 logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis_helper:fetch_logs(ChannelId, Num).
