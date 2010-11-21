@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/1, delete/1, push/2, logs/2, tokens/1, drains/1, info/1]).
+-export([create/1, delete/1, push/3, logs/2, tokens/1, drains/1, info/1]).
 
 -include_lib("logplex.hrl").
 
@@ -19,8 +19,9 @@ create(ChannelName) when is_binary(ChannelName) ->
 delete(ChannelId) when is_binary(ChannelId) ->
     redis_helper:delete_channel(ChannelId).
 
-push(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
-    redis_helper:push_msg(ChannelId, Msg).
+push(ChannelId, Addon, Msg) when is_binary(ChannelId), is_binary(Msg) ->
+    redis_helper:push_msg(ChannelId, Msg),
+    redis_helper:trim_spool(ChannelId, spool_length(Addon)).
 
 logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis_helper:fetch_logs(ChannelId, Num).
@@ -85,8 +86,8 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({add_token_to_channel, ChannelId, TokenId, TokenName}, State) ->
-    ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName}),
+handle_info({add_token_to_channel, ChannelId, TokenId, TokenName, Addon}, State) ->
+    ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
     {noreply, State};
 
 handle_info({remove_token_from_channel, ChannelId, TokenId}, State) ->
@@ -129,3 +130,6 @@ code_change(_OldVsn, State, _Extra) ->
 populate_cache() ->
     Data = redis_helper:lookup_drains(),
     length(Data) > 0 andalso ets:insert(logplex_channel_drains, Data).
+
+spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
+spool_length(_) -> ?DEFAULT_LOG_HISTORY.

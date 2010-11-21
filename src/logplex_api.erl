@@ -54,7 +54,9 @@ handlers() ->
         {struct, Params} = mochijson2:decode(Req:recv_body()),
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
-        Token = logplex_token:create(list_to_binary(ChannelId), TokenName),
+        Addon = proplists:get_value(<<"addon">>, Params),
+        Addon == undefined andalso error_resp(Req, 400, <<"addon post param missing">>),
+        Token = logplex_token:create(list_to_binary(ChannelId), TokenName, Addon),
         not is_binary(Token) andalso error_resp(Req, 500, <<"failed to create token">>),
         Req:respond({200, [{"Content-Type", "text/html"}], Token})
     end},

@@ -38,6 +38,9 @@ delete_channel(ChannelId) when is_binary(ChannelId) ->
 push_msg(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
     redis:q(spool, [<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
 
+trim_spool(ChannelId, Length) when is_binary(ChannelId), is_integer(Length) ->
+    redis:q(spool, [<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))]).
+
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
 
@@ -63,8 +66,8 @@ lookup_channel_name(ChannelId) when is_binary(ChannelId) ->
 %%====================================================================
 %% TOKEN
 %%====================================================================
-create_token(ChannelId, TokenId, TokenName) when is_binary(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
-    redis:q([<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName]),
+create_token(ChannelId, TokenId, TokenName, Addon) when is_binary(ChannelId), is_binary(TokenId), is_binary(TokenName), is_binary(Addon) ->
+    redis:q([<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName, <<"addon">>, Addon]),
     redis:q([<<"SADD">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":tokens">>]), TokenId]),
     ok.
 
@@ -78,7 +81,8 @@ lookup_token(TokenId) when is_binary(TokenId) ->
         Fields when is_list(Fields), length(Fields) > 0 ->
             #token{id = TokenId,
                    channel_id = logplex_utils:field_val(<<"ch">>, Fields),
-                   name = logplex_utils:field_val(<<"name">>, Fields)
+                   name = logplex_utils:field_val(<<"name">>, Fields),
+                   addon = logplex_utils:field_val(<<"addon">>, Fields)
             };
         _ ->
             undefined

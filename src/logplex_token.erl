@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/2, lookup/1, delete/1]).
+-export([create/3, lookup/1, delete/1]).
 
 -include_lib("logplex.hrl").
 
@@ -13,11 +13,11 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-create(ChannelId, TokenName) when is_binary(ChannelId), is_binary(TokenName) ->
+create(ChannelId, TokenName, Addon) when is_binary(ChannelId), is_binary(TokenName), is_binary(Addon) ->
     TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-    logplex_grid:publish(?MODULE, {create_token, ChannelId, TokenId, TokenName}),
-    logplex_grid:publish(logplex_channel, {create_token, ChannelId, TokenId, TokenName}),
-    redis_helper:create_token(ChannelId, TokenId, TokenName),
+    logplex_grid:publish(?MODULE, {create_token, ChannelId, TokenId, TokenName, Addon}),
+    logplex_grid:publish(logplex_channel, {create_token, ChannelId, TokenId, TokenName, Addon}),
+    redis_helper:create_token(ChannelId, TokenId, TokenName, Addon),
     TokenId.
 
 delete(TokenId) when is_binary(TokenId) ->
@@ -85,8 +85,8 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({create_token, ChannelId, TokenId, TokenName}, State) ->
-    ets:insert(?MODULE, #token{id=TokenId, channel_id=ChannelId, name=TokenName}),
+handle_info({create_token, ChannelId, TokenId, TokenName, Addon}, State) ->
+    ets:insert(?MODULE, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
     {noreply, State};
 
 handle_info({delete_token, TokenId}, State) ->

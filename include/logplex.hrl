@@ -1,4 +1,6 @@
 -record(msg, {time, source, ps, content}).
--record(token, {id, channel_id, name}).
+-record(token, {id, channel_id, name, addon}).
 -record(drain, {id, channel_id, host, port}).
--define(NUM_REDIS_POOLS, 50).
+
+-define(DEFAULT_LOG_HISTORY, 500).
+-define(ADVANCED_LOG_HISTORY, 1500).
