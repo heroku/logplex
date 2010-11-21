@@ -19,7 +19,7 @@ create(ChannelName) when is_binary(ChannelName) ->
 delete(ChannelId) when is_binary(ChannelId) ->
     redis_helper:delete_channel(ChannelId).
 
-push(ChannelId, Addon, Msg) when is_binary(ChannelId), is_binary(Msg) ->
+push(ChannelId, Addon, Msg) when is_binary(ChannelId), is_binary(Addon), is_binary(Msg) ->
     redis_helper:push_msg(ChannelId, Msg),
     redis_helper:trim_spool(ChannelId, spool_length(Addon)).
 
