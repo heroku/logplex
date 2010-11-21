@@ -16,6 +16,7 @@ start_link() ->
 create(ChannelId, TokenName) when is_binary(ChannelId), is_binary(TokenName) ->
     TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
     logplex_grid:publish(?MODULE, {create_token, ChannelId, TokenId, TokenName}),
+    logplex_grid:publish(logplex_channel, {create_token, ChannelId, TokenId, TokenName}),
     redis_helper:create_token(ChannelId, TokenId, TokenName),
     TokenId.
 
@@ -23,6 +24,7 @@ delete(TokenId) when is_binary(TokenId) ->
     case lookup(TokenId) of
         #token{channel_id=ChannelId} ->
             logplex_grid:publish(?MODULE, {delete_token, TokenId}),
+            logplex_grid:publish(logplex_channel, {delete_token, ChannelId, TokenId}),
             redis_helper:delete_token(ChannelId, TokenId);
         _ ->
             ok

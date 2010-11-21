@@ -14,34 +14,28 @@ start_link() ->
 	gen_server:start_link(?MODULE, [], []).
 
 create(ChannelName) when is_binary(ChannelName) ->
-    case redis:q([<<"INCR">>, <<"channel_index">>]) of
-        {ok, ChannelId} ->
-            redis:q([<<"SET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId)]), ChannelName]),
-            ChannelId;
-        Error -> Error
-    end.
+    redis_helper:create_channel(ChannelName).
 
 delete(ChannelId) when is_binary(ChannelId) ->
-    redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId])]).
+    redis_helper:delete_channel(ChannelId).
 
 push(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
-    redis:q([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
+    redis_helper:push_msg(redis_pool(), ChannelId, Msg).
 
 logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
-    redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
+    redis_helper:fetch_logs(ChannelId, Num).
 
 tokens(ChannelId) when is_binary(ChannelId) ->
-    [Token || {ok, Token} <- redis:q([<<"SMEMBERS">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":tokens">>])])].
+    ets:lookup(logplex_channel_tokens, ChannelId).
 
 drains(ChannelId) when is_binary(ChannelId) ->
     ets:lookup(logplex_channel_drains, ChannelId).
 
 info(ChannelId) when is_binary(ChannelId) ->
-    {ok, ChannelName} = redis:q([<<"GET">>, iolist_to_binary([<<"ch:">>, ChannelId])]),
-    Tokens = tokens(ChannelId),
     [{channel_id, ChannelId},
-     {channel_name, ChannelName},
-     {tokens, Tokens}].
+     {channel_name, redis_helper:lookup_channel_name(ChannelId)},
+     {tokens, tokens(ChannelId)},
+     {drains, drains(ChannelId)}].
 
 %%====================================================================
 %% gen_server callbacks
@@ -56,6 +50,7 @@ info(ChannelId) when is_binary(ChannelId) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    ets:new(logplex_channel_tokens, [protected, named_table, set, {keypos, 3}]),
     ets:new(logplex_channel_drains, [protected, named_table, set, {keypos, 3}]),
     populate_cache(),
 	{ok, []}.
@@ -90,6 +85,14 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({add_token_to_channel, ChannelId, TokenId, TokenName}, State) ->
+    ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName}),
+    {noreply, State};
+
+handle_info({remove_token_from_channel, ChannelId, TokenId}, State) ->
+    ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_'}),
+    {noreply, State};
+
 handle_info({add_drain_to_channel, DrainId, ChannelId, Host, Port}, State) ->
     ets:insert(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, host=Host, port=Port}),
     {noreply, State};
@@ -126,3 +129,8 @@ code_change(_OldVsn, State, _Extra) ->
 populate_cache() ->
     Data = redis_helper:lookup_drains(),
     length(Data) > 0 andalso ets:insert(logplex_channel_drains, Data).
+
+redis_pool() ->
+    {_,_,M} = timer:now(),
+    N = (M rem ?NUM_REDIS_POOLS) + 1,
+    list_to_existing_atom("spool_" ++ integer_to_list(N)).

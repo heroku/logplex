@@ -35,19 +35,7 @@ delete(DrainId) when is_binary(DrainId) ->
     end.
 
 lookup(DrainId) when is_binary(DrainId) ->
-    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId])]) of
-        Fields when is_list(Fields), length(Fields) > 0 ->
-            [{channel_id, logplex_utils:field_val(<<"channel_id">>, Fields)},
-             {host, logplex_utils:field_val(<<"host">>, Fields)},
-             {port, begin
-                 case logplex_utils:field_val(<<"port">>, Fields) of
-                     <<"">> -> undefined;
-                     Val -> list_to_integer(binary_to_list(Val))
-                 end
-              end}];
-        _ ->
-            []
-    end.
+    redis_helper:lookup_drain(DrainId).
 
 %%====================================================================
 %% gen_server callbacks

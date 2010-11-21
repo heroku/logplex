@@ -1,3 +1,4 @@
 -record(msg, {time, source, ps, content}).
 -record(token, {id, channel_id, name}).
 -record(drain, {id, channel_id, host, port}).
+-define(NUM_REDIS_POOLS, 10).

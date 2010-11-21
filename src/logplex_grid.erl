@@ -13,8 +13,8 @@ publish(RegName, Msg) when is_atom(RegName), is_tuple(Msg) ->
     ok.
 
 loop() ->
-    redis:q([<<"SETEX">>, iolist_to_binary([<<"node:">>, atom_to_binary(node(), utf8)]), <<"15">>, local_ip()]),
-    [connect(Key) || {ok, Key} <- redis:q([<<"KEYS">>, <<"node:*">>])],
+    redis_helper:set_node_ex(atom_to_binary(node(), utf8), local_ip()),
+    [connect(Key) || {ok, Key} <- redis_helper:get_nodes()],
     receive
         {nodedown, _Node} ->
             ok
@@ -40,7 +40,7 @@ connect(<<"node:", BinNode/binary>> = Key) ->
             case net_adm:ping(Node) of
                 pong -> ok;
                 pang ->
-                    case redis:q([<<"GET">>, Key]) of
+                    case redis_helper:get_node(Key) of
                         {ok, Ip} ->
                             {ok, Addr} = inet:getaddr(binary_to_list(Ip), inet),
                             case re:run(StrNode, ".*@(.*)$", [{capture, all_but_first, list}]) of

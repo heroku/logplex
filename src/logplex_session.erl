@@ -3,11 +3,8 @@
 
 create(Body) when is_binary(Body) ->
     Session = string:strip(os:cmd("uuidgen"), right, $\n),
-    redis:q([<<"SETEX">>, Session, <<"360">>, Body]),
+    redis_helper:create_session(Session, Body),
     iolist_to_binary([<<"/sessions/">>, Session]).
 
 lookup(Session) when is_binary(Session) ->
-    case redis:q([<<"GET">>, Session]) of
-        {ok, Data} -> Data;
-        Error -> Error
-    end.
+    redis_helper:lookup_session(Session).

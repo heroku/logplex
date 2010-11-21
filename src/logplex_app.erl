@@ -4,6 +4,8 @@
 %% Application callbacks
 -export([start/2, stop/1, init/1]).
 
+-include_lib("logplex.hrl").
+
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
@@ -55,7 +57,9 @@ boot_redis() ->
                                 []
                         end
                 end,
-            redis_sup:add_pool(redis_pool, Opts, 100);
+            redis_sup:add_pool(redis_pool, Opts, 100),
+            [redis_sup:add_pool(list_to_atom("spool_" ++ integer_to_list(N)), Opts, 50) || N <- lists:seq(1, ?NUM_REDIS_POOLS)],
+            ok;
         Err ->
             exit(Err)
     end.

@@ -14,8 +14,7 @@ start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 healthcheck() ->
-    {ok, Count} = redis:q([<<"INCR">>, <<"healthcheck">>]),
-    Count.
+    redis_helper:healthcheck().
 
 incr(Key) when is_atom(Key) ->
     ets:update_counter(?MODULE, Key, 1).
