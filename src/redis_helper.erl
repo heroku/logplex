@@ -35,8 +35,8 @@ create_channel(ChannelName) when is_binary(ChannelName) ->
 delete_channel(ChannelId) when is_binary(ChannelId) ->
     redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId])]).
 
-push_msg(Pool, ChannelId, Msg) when is_atom(Pool), is_binary(ChannelId), is_binary(Msg) ->
-    redis:q(Pool, [<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
+push_msg(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
+    redis:q(spool, [<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
 
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).

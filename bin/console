@@ -1,3 +1,4 @@
 #!/bin/sh
 
-erl +K true +A30 +P500000 -env ERL_MAX_PORTS 65000 -name logplex_console@`hostname --fqdn` -pa ebin -pa deps/*/ebin -boot release/logplex-1.0
+ulimit -n 65535
+erl +K true +A30 +P500000 -env ERL_MAX_PORTS 65535 -name logplex_console@`hostname --fqdn` -pa ebin -pa deps/*/ebin -boot release/logplex-1.0

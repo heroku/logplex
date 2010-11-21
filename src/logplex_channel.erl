@@ -20,7 +20,7 @@ delete(ChannelId) when is_binary(ChannelId) ->
     redis_helper:delete_channel(ChannelId).
 
 push(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
-    redis_helper:push_msg(redis_pool(), ChannelId, Msg).
+    redis_helper:push_msg(ChannelId, Msg).
 
 logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis_helper:fetch_logs(ChannelId, Num).
@@ -129,8 +129,3 @@ code_change(_OldVsn, State, _Extra) ->
 populate_cache() ->
     Data = redis_helper:lookup_drains(),
     length(Data) > 0 andalso ets:insert(logplex_channel_drains, Data).
-
-redis_pool() ->
-    {_,_,M} = erlang:now(),
-    N = (M rem ?NUM_REDIS_POOLS) + 1,
-    list_to_existing_atom("spool_" ++ integer_to_list(N)).

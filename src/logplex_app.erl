@@ -59,7 +59,7 @@ boot_redis() ->
                         end
                 end,
             redis_sup:add_pool(redis_pool, Opts, 100),
-            [redis_sup:add_pool(list_to_atom("spool_" ++ integer_to_list(N)), Opts, 50) || N <- lists:seq(1, ?NUM_REDIS_POOLS)],
+            redis_sup:add_pool(spool, Opts, 1000),
             ok;
         Err ->
             exit(Err)
