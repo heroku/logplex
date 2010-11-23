@@ -23,6 +23,6 @@ route(Token, Msg) ->
     end.
 
 exceeded_threshold(_, <<"advanced">>) -> false;
-exceeded_threshold(Count, <<"expanded">>) when Count < 10000 -> false;
-exceeded_threshold(Count, <<"basic">>) when Count < 500 -> false;
+exceeded_threshold(Count, <<"expanded">>) when Count =< 10000 -> false;
+exceeded_threshold(Count, <<"basic">>) when Count =< 500 -> false;
 exceeded_threshold(_, _) -> true.
