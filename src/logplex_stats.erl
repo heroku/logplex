@@ -16,11 +16,14 @@ start_link() ->
 healthcheck() ->
     redis_helper:healthcheck().
 
-incr(Key) ->
-    ets:update_counter(?MODULE, Key, 1).
+incr(Key) when is_atom(Key) ->
+    ets:update_counter(?MODULE, Key, 1);
 
-init_stat_channel(Key) ->
-    gen_server:cast(?MODULE, {init_stat_channel, Key}).
+incr(ChannelId) when is_binary(ChannelId) ->
+    ets:update_counter(logplex_stats_channels, ChannelId, 1).
+
+init_stat_channel(ChannelId) when is_binary(ChannelId) ->
+    gen_server:cast(?MODULE, {init_stat_channel, ChannelId}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -36,13 +39,14 @@ init_stat_channel(Key) ->
 %%--------------------------------------------------------------------
 init([]) ->
     ets:new(?MODULE, [public, named_table, set]),
-    init_stat_channel1(message_processed),
-    init_stat_channel1(session_accessed),
-    init_stat_channel1(session_tailed),
-    init_stat_channel1(message_routed),
-    init_stat_channel1(message_received),
-    init_stat_channel1(message_pushed),
-    init_stat_channel1(push_timeout),
+    ets:new(logplex_stats_channels, [public, named_table, set]),
+    init_stat_channel1(?MODULE, message_processed),
+    init_stat_channel1(?MODULE, session_accessed),
+    init_stat_channel1(?MODULE, session_tailed),
+    init_stat_channel1(?MODULE, message_routed),
+    init_stat_channel1(?MODULE, message_received),
+    init_stat_channel1(?MODULE, message_pushed),
+    init_stat_channel1(?MODULE, push_timeout),
     spawn_link(fun flush/0),
 	{ok, []}.
 
@@ -67,15 +71,17 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast(flush, State) ->
-    Data = ets:tab2list(?MODULE),
     [begin
         ets:update_element(?MODULE, Key, {2, 0}),
         io:format("logplex_stats ~p=~w~n", [Key, Val])
-    end || {Key, Val} <- Data],
+    end || {Key, Val} <- ets:tab2list(?MODULE)],
+    [begin
+        ets:update_element(logplex_stats_channels, Key, {2, 0})
+    end || {Key, _Val} <- ets:tab2list(logplex_stats_channels)],
     {noreply, State};
 
 handle_cast({init_stat_channel, Key}, State) ->
-    init_stat_channel1(Key),
+    init_stat_channel1(logplex_stats_channels, Key),
     {noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -118,5 +124,5 @@ flush() ->
     gen_server:cast(?MODULE, flush),
     flush().
 
-init_stat_channel1(Key) ->
-    ets:insert(?MODULE, {Key, 0}).
+init_stat_channel1(Table, Key) ->
+    ets:insert(Table, {Key, 0}).
