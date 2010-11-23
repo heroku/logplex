@@ -38,6 +38,7 @@ init([]) ->
     ets:insert(?MODULE, {session_tailed, 0}),
     ets:insert(?MODULE, {message_routed, 0}),
     ets:insert(?MODULE, {message_received, 0}),
+    ets:insert(?MODULE, {message_pushed, 0}),
     spawn_link(fun flush/0),
 	{ok, []}.
 
