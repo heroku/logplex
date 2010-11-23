@@ -14,9 +14,7 @@ start_link() ->
 	gen_server:start_link(?MODULE, [], []).
 
 create(ChannelName) when is_binary(ChannelName) ->
-    ChannelId = redis_helper:create_channel(ChannelName),
-    logplex_grid:publish(?MODULE, {create, ChannelId, ChannelName}),
-    ChannelId.
+    redis_helper:create_channel(ChannelName).
 
 delete(ChannelId) when is_binary(ChannelId) ->
     redis_helper:delete_channel(ChannelId).
@@ -91,10 +89,6 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({create, ChannelId, _ChannelName}, State) ->
-    logplex_stats:init_stat_channel(ChannelId),
-    {noreply, State};
-
 handle_info({add_token_to_channel, ChannelId, TokenId, TokenName, Addon}, State) ->
     ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
     {noreply, State};
@@ -137,7 +131,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
-    [logplex_stats:init_stat_channel(ChannelId) || ChannelId <- redis_helper:lookup_channel_ids()],
     Drains = redis_helper:lookup_drains(),
     length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains).
 
