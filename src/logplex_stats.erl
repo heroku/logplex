@@ -16,7 +16,7 @@ start_link() ->
 healthcheck() ->
     redis_helper:healthcheck().
 
-incr(Key) when is_atom(Key) ->
+incr(Key) ->
     ets:update_counter(?MODULE, Key, 1).
 
 init_stat_channel(Key) ->
