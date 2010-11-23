@@ -131,6 +131,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
+    Tokens = redis_helper:lookup_tokens(),
+    length(Tokens) > 0 andalso ets:insert(logplex_channel_tokens, Tokens),
+
     Drains = redis_helper:lookup_drains(),
     length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains).
 
