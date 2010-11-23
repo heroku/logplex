@@ -89,19 +89,19 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({add_token_to_channel, ChannelId, TokenId, TokenName, Addon}, State) ->
+handle_info({create_token, ChannelId, TokenId, TokenName, Addon}, State) ->
     ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
     {noreply, State};
 
-handle_info({remove_token_from_channel, ChannelId, TokenId}, State) ->
+handle_info({delete_token, ChannelId, TokenId}, State) ->
     ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_'}),
     {noreply, State};
 
-handle_info({add_drain_to_channel, DrainId, ChannelId, Host, Port}, State) ->
+handle_info({create_drain, DrainId, ChannelId, Host, Port}, State) ->
     ets:insert(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, host=Host, port=Port}),
     {noreply, State};
 
-handle_info({remove_drain_from_channel, ChannelId, DrainId}, State) ->
+handle_info({delete_drain, ChannelId, DrainId}, State) ->
     ets:match_delete(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, host='_', port='_'}),
     {noreply, State};
 

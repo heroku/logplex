@@ -17,7 +17,7 @@ create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
     case redis_helper:drain_index() of
         DrainId when is_binary(DrainId) ->
             logplex_grid:publish(?MODULE, {create_drain, DrainId, ChannelId, Host, Port}),
-            logplex_grid:publish(logplex_channel, {add_drain_to_channel, DrainId, ChannelId, Host, Port}),
+            logplex_grid:publish(logplex_channel, {create_drain, DrainId, ChannelId, Host, Port}),
             redis_helper:create_drain(DrainId, ChannelId, Host, Port),
             DrainId;
         Error ->
@@ -28,7 +28,7 @@ delete(DrainId) when is_binary(DrainId) ->
     case lookup(DrainId) of
         #drain{channel_id=ChannelId} ->
             logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
-            logplex_grid:publish(logplex_channel, {remove_drain_from_channel, ChannelId, DrainId}),
+            logplex_grid:publish(logplex_channel, {delete_drain, ChannelId, DrainId}),
             redis_helper:delete_drain(DrainId, ChannelId);
         _ ->
             ok
