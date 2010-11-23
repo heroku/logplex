@@ -14,7 +14,9 @@ start_link() ->
 	gen_server:start_link(?MODULE, [], []).
 
 create(ChannelName) when is_binary(ChannelName) ->
-    redis_helper:create_channel(ChannelName).
+    ChannelId = redis_helper:create_channel(ChannelName),
+    logplex_grid:publish(?MODULE, {create, ChannelId, ChannelName}),
+    ChannelId.
 
 delete(ChannelId) when is_binary(ChannelId) ->
     redis_helper:delete_channel(ChannelId).
@@ -22,6 +24,7 @@ delete(ChannelId) when is_binary(ChannelId) ->
 push(ChannelId, Addon, Msg) when is_binary(ChannelId), is_binary(Msg) ->
     case redis_helper:push_msg(ChannelId, Msg, spool_length(Addon)) of
         {ok, _} -> logplex_stats:incr(message_pushed);
+        {error, timeout} -> logplex_stats:incr(push_timeout);
         _ -> ok
     end.
 
@@ -88,6 +91,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({create, ChannelId, _ChannelName}, State) ->
+    logplex_stats:init_stat_channel(ChannelId),
+    {noreply, State};
+
 handle_info({add_token_to_channel, ChannelId, TokenId, TokenName, Addon}, State) ->
     ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
     {noreply, State};
@@ -130,8 +137,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
-    Data = redis_helper:lookup_drains(),
-    length(Data) > 0 andalso ets:insert(logplex_channel_drains, Data).
+    [logplex_stats:init_stat_channel(ChannelId) || ChannelId <- redis_helper:lookup_channel_ids()],
+    Drains = redis_helper:lookup_drains(),
+    length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains).
 
 spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
 spool_length(_) -> ?DEFAULT_LOG_HISTORY.

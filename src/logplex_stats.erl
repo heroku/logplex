@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, incr/1, flush/0]).
+-export([healthcheck/0, incr/1, flush/0, init_stat_channel/1]).
 
 -include_lib("logplex.hrl").
 
@@ -18,6 +18,9 @@ healthcheck() ->
 
 incr(Key) when is_atom(Key) ->
     ets:update_counter(?MODULE, Key, 1).
+
+init_stat_channel(Key) ->
+    gen_server:cast(?MODULE, {init_stat_channel, Key}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -33,12 +36,13 @@ incr(Key) when is_atom(Key) ->
 %%--------------------------------------------------------------------
 init([]) ->
     ets:new(?MODULE, [public, named_table, set]),
-    ets:insert(?MODULE, {message_processed, 0}),
-    ets:insert(?MODULE, {session_accessed, 0}),
-    ets:insert(?MODULE, {session_tailed, 0}),
-    ets:insert(?MODULE, {message_routed, 0}),
-    ets:insert(?MODULE, {message_received, 0}),
-    ets:insert(?MODULE, {message_pushed, 0}),
+    init_stat_channel1(message_processed),
+    init_stat_channel1(session_accessed),
+    init_stat_channel1(session_tailed),
+    init_stat_channel1(message_routed),
+    init_stat_channel1(message_received),
+    init_stat_channel1(message_pushed),
+    init_stat_channel1(push_timeout),
     spawn_link(fun flush/0),
 	{ok, []}.
 
@@ -68,6 +72,10 @@ handle_cast(flush, State) ->
         ets:update_element(?MODULE, Key, {2, 0}),
         io:format("logplex_stats ~p=~w~n", [Key, Val])
     end || {Key, Val} <- Data],
+    {noreply, State};
+
+handle_cast({init_stat_channel, Key}, State) ->
+    init_stat_channel1(Key),
     {noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -109,3 +117,6 @@ flush() ->
     timer:sleep(60 * 1000),
     gen_server:cast(?MODULE, flush),
     flush().
+
+init_stat_channel1(Key) ->
+    ets:insert(?MODULE, {Key, 0}).

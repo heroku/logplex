@@ -43,6 +43,16 @@ push_msg(ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_i
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
 
+lookup_channel_ids() ->
+    lists:flatten(lists:foldl(
+        fun({ok, Key}, Acc) ->
+            case string:tokens(binary_to_list(Key), ":") of
+                ["ch", ChannelId] ->
+                    [list_to_binary(ChannelId)|Acc];
+                _ -> Acc
+            end
+        end, [], redis:q([<<"KEYS">>, <<"ch:*">>]))).
+
 lookup_drains() ->
     lists:flatten(lists:foldl(
         fun({ok, Key}, Acc) ->
