@@ -116,10 +116,12 @@ drain_index() ->
     end.
 
 create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(ChannelId), is_binary(Host), is_integer(Port) ->
-    Key = iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>]),
+    Key = iolist_to_binary([<<"drain:">>, DrainId, <<":data">>]),
     Res = redis:q([<<"HMSET">>, Key,
         <<"ch">>, ChannelId,
-        <<"host">>, Host] ++ lists:flatten([[<<"port">>, integer_to_list(Port)] || is_integer(Port)])),
+        <<"host">>, Host] ++
+        [<<"port">> || is_integer(Port)] ++
+        [integer_to_list(Port) || is_integer(Port)]),
     case Res of
         {ok, <<"OK">>} -> ok;
         Err -> Err
@@ -146,6 +148,7 @@ lookup_drain(DrainId) when is_binary(DrainId) ->
     case redis:q([<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #drain{
+                id = DrainId,
                 channel_id = logplex_utils:field_val(<<"ch">>, Fields),
                 host = logplex_utils:field_val(<<"host">>, Fields),
                 port =

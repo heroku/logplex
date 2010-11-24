@@ -11,7 +11,7 @@
 
 %% API functions
 start_link() ->
-	gen_server:start_link(?MODULE, [], []).
+	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 create(ChannelName) when is_binary(ChannelName) ->
     redis_helper:create_channel(ChannelName).
@@ -54,8 +54,8 @@ info(ChannelId) when is_binary(ChannelId) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(logplex_channel_tokens, [protected, named_table, set, {keypos, 3}]),
-    ets:new(logplex_channel_drains, [protected, named_table, set, {keypos, 3}]),
+    ets:new(logplex_channel_tokens, [protected, named_table, bag, {keypos, 3}]),
+    ets:new(logplex_channel_drains, [protected, named_table, bag, {keypos, 3}]),
     populate_cache(),
 	{ok, []}.
 

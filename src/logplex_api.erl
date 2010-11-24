@@ -121,8 +121,14 @@ handlers() ->
         not is_binary(Host) andalso error_resp(Req, 400, <<"host is a required field">>),
 
         DrainId = logplex_drain:create(list_to_binary(ChannelId), Host, Port),
-        not is_integer(DrainId) andalso error_resp(Req, 500, <<"server exception">>, DrainId),
-        Req:respond({201, [{"Content-Type", "text/html"}], <<>>})
+        case DrainId of
+            Int when is_integer(Int) ->
+                Req:respond({201, [{"Content-Type", "text/html"}], <<>>});
+            {error, already_exists} ->
+                Req:respond({400, [{"Content-Type", "text/html"}], <<"Drain already exists">>});
+            _ ->
+                error_resp(Req, 500, <<"server exception">>, DrainId)
+        end        
     end},
 
     {['GET', "/channels/(\\d+)/drains"], fun(Req, [ChannelId]) ->

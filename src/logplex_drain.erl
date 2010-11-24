@@ -11,17 +11,23 @@
 
 %% API functions
 start_link() ->
-	gen_server:start_link(?MODULE, [], []).
+	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
-    case redis_helper:drain_index() of
-        DrainId when is_binary(DrainId) ->
-            logplex_grid:publish(?MODULE, {create_drain, DrainId, ChannelId, Host, Port}),
-            logplex_grid:publish(logplex_channel, {create_drain, DrainId, ChannelId, Host, Port}),
-            redis_helper:create_drain(DrainId, ChannelId, Host, Port),
-            DrainId;
-        Error ->
-            Error
+    case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, host=Host, port=Port}) of
+        [_] ->
+            {error, already_exists};
+        [] ->
+            case redis_helper:drain_index() of
+                DrainId when is_integer(DrainId) ->
+                    BinDrainId = list_to_binary(integer_to_list(DrainId)),
+                    logplex_grid:publish(?MODULE, {create_drain, BinDrainId, ChannelId, Host, Port}),
+                    logplex_grid:publish(logplex_channel, {create_drain, BinDrainId, ChannelId, Host, Port}),
+                    redis_helper:create_drain(BinDrainId, ChannelId, Host, Port),
+                    DrainId;
+                Error ->
+                    Error
+            end
     end.
 
 delete(DrainId) when is_binary(DrainId) ->
