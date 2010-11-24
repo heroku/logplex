@@ -121,7 +121,7 @@ create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(
         <<"ch">>, ChannelId,
         <<"host">>, Host] ++
         [<<"port">> || is_integer(Port)] ++
-        [Port || is_integer(Port)]),
+        [integer_to_list(Port) || is_integer(Port)]),
     case Res of
         {ok, <<"OK">>} -> ok;
         Err -> Err
