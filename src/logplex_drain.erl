@@ -13,7 +13,7 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
+create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host), (is_binary(Port) orelse Port == undefined) ->
     case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, host=Host, port=Port}) of
         [_] ->
             {error, already_exists};

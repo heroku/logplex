@@ -115,13 +115,13 @@ drain_index() ->
         Err -> Err
     end.
 
-create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(ChannelId), is_binary(Host), is_integer(Port) ->
+create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(ChannelId), is_binary(Host) ->
     Key = iolist_to_binary([<<"drain:">>, DrainId, <<":data">>]),
     Res = redis:q([<<"HMSET">>, Key,
         <<"ch">>, ChannelId,
         <<"host">>, Host] ++
-        [<<"port">> || is_integer(Port)] ++
-        [integer_to_list(Port) || is_integer(Port)]),
+        [<<"port">> || is_binary(Port)] ++
+        [Port || is_binary(Port)]),
     case Res of
         {ok, <<"OK">>} -> ok;
         Err -> Err
