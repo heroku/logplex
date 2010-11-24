@@ -41,8 +41,17 @@ push_msg(ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_i
     Part1 = redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]),
     Part2 = redis:build_request([<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))]),
     case redis:q(spool, iolist_to_binary([Part1, Part2])) of
-        {ok, _} -> ok;
-        Err -> Err
+        {ok, _} ->
+            ok;
+        {error, timeout} ->
+            case application:get_env(logplex, spool_pool) of
+                {ok, Size} when Size < ?MAX_SPOOL_POOL_SIZE ->
+                    io:format("expanding spool redis pool to ~w~n", [Size+100]),
+                    redis_pool:expand(spool, Size + 100);
+                _ -> ok
+            end;
+        Err ->
+            Err
     end.
 
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->

@@ -34,7 +34,7 @@ init([]) ->
     ]}}.
 
 set_cookie() ->
-    case os:getenv("ERLANG_COOKIE") of
+    case os:getenv("LOGPLEX_COOKIE") of
         false -> ok;
         Cookie -> erlang:set_cookie(node(), list_to_atom(Cookie))
     end.
@@ -59,7 +59,8 @@ boot_redis() ->
                         end
                 end,
             redis_sup:add_pool(redis_pool, Opts, 100),
-            redis_sup:add_pool(spool, Opts, 500),
+            redis_sup:add_pool(spool, Opts, 100),
+            application:set_env(logplex, spool_pool, 100),
             ok;
         Err ->
             exit(Err)
