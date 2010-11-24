@@ -120,8 +120,8 @@ create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(
     Res = redis:q([<<"HMSET">>, Key,
         <<"ch">>, ChannelId,
         <<"host">>, Host] ++
-        [<<"port">> || is_binary(Port)] ++
-        [Port || is_binary(Port)]),
+        [<<"port">> || is_integer(Port)] ++
+        [Port || is_integer(Port)]),
     case Res of
         {ok, <<"OK">>} -> ok;
         Err -> Err
