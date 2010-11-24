@@ -12,8 +12,7 @@ create_session(Session, Body) when is_binary(Session), is_binary(Body) ->
 lookup_session(Session) when is_binary(Session) ->
     case redis:q([<<"GET">>, Session]) of
         {ok, Data} -> Data;
-        Error ->
-            exit(Error)
+        Err -> Err
     end.
 
 %%====================================================================
@@ -21,24 +20,30 @@ lookup_session(Session) when is_binary(Session) ->
 %%====================================================================
 channel_index() ->
     case redis:q([<<"INCR">>, <<"channel_index">>]) of
-        {ok, ChannelId} ->
-            ChannelId;
-        Error ->
-            exit(Error)
+        {ok, ChannelId} -> ChannelId;
+        Err -> Err
     end.
 
 create_channel(ChannelName) when is_binary(ChannelName) ->
     ChannelId = channel_index(),
-    redis:q([<<"SET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId)]), ChannelName]),
-    ChannelId.
+    case redis:q([<<"SET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":name">>]), ChannelName]) of
+        {ok, <<"OK">>} -> ChannelId;
+        Err -> Err
+    end.
 
 delete_channel(ChannelId) when is_binary(ChannelId) ->
-    redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId])]).
+    case redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":name">>])]) of
+        {ok, <<"OK">>} -> ok;
+        Err -> Err
+    end.
 
 push_msg(ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_integer(Length) ->
     Part1 = redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]),
     Part2 = redis:build_request([<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))]),
-    redis:q(spool, iolist_to_binary([Part1, Part2])).
+    case redis:q(spool, iolist_to_binary([Part1, Part2])) of
+        {ok, _} -> ok;
+        Err -> Err
+    end.
 
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
@@ -47,27 +52,14 @@ lookup_channel_ids() ->
     lists:flatten(lists:foldl(
         fun({ok, Key}, Acc) ->
             case string:tokens(binary_to_list(Key), ":") of
-                ["ch", ChannelId] ->
+                ["ch", ChannelId, "data"] ->
                     [list_to_binary(ChannelId)|Acc];
                 _ -> Acc
             end
-        end, [], redis:q([<<"KEYS">>, <<"ch:*">>]))).
-
-lookup_drains() ->
-    lists:flatten(lists:foldl(
-        fun({ok, Key}, Acc) ->
-            case string:tokens(binary_to_list(Key), ":") of
-                ["channel", ChannelId, "drains"] ->
-                    [lookup_drains(list_to_binary(ChannelId))|Acc];
-                _ -> Acc
-            end
-        end, [], redis:q([<<"KEYS">>, <<"channel:*:drains">>]))).
-
-lookup_drains(ChannelId) when is_binary(ChannelId) ->
-    [logplex_drain:lookup(DrainId) || {ok, DrainId} <- redis:q([<<"SMEMBERS">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>])])].
+        end, [], redis:q([<<"KEYS">>, <<"ch:*:data">>]))).
 
 lookup_channel_name(ChannelId) when is_binary(ChannelId) ->
-    case redis:q([<<"GET">>, iolist_to_binary([<<"ch:">>, ChannelId])]) of
+    case redis:q([<<"GET">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":name">>])]) of
         {ok, ChannelName} -> ChannelName;
         _ -> undefined
     end.
@@ -76,14 +68,17 @@ lookup_channel_name(ChannelId) when is_binary(ChannelId) ->
 %% TOKEN
 %%====================================================================
 create_token(ChannelId, TokenId, TokenName, Addon) when is_binary(ChannelId), is_binary(TokenId), is_binary(TokenName), is_binary(Addon) ->
-    redis:q([<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName, <<"addon">>, Addon]),
-    redis:q([<<"SADD">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":tokens">>]), TokenId]),
-    ok.
+    Res = redis:q([<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName, <<"addon">>, Addon]),
+    case Res of
+        {ok, <<"OK">>} -> ok;
+        Err -> Err
+    end.
 
 delete_token(ChannelId, TokenId) when is_binary(ChannelId), is_binary(TokenId) ->
-    redis:q([<<"DEL">>, TokenId]),
-    redis:q([<<"SREM">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":tokens">>]), TokenId]),
-    ok.
+    case redis:q([<<"DEL">>, TokenId]) of
+        {ok, <<"OK">>} -> ok;
+        Err -> Err
+    end.
 
 lookup_token(TokenId) when is_binary(TokenId) ->
     case redis:q([<<"HGETALL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
@@ -117,29 +112,41 @@ lookup_tokens() ->
 drain_index() ->
     case redis:q([<<"INCR">>, <<"drain_index">>]) of
         {ok, DrainId} -> DrainId;
-        Error -> Error
+        Err -> Err
     end.
 
 create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(ChannelId), is_binary(Host), is_integer(Port) ->
-    redis:q([<<"HMSET">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId)]),
-        <<"channel_id">>, ChannelId,
+    Key = iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>]),
+    Res = redis:q([<<"HMSET">>, Key,
+        <<"ch">>, ChannelId,
         <<"host">>, Host] ++ lists:flatten([[<<"port">>, integer_to_list(Port)] || is_integer(Port)])),
-    redis:q([<<"SADD">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>]), integer_to_list(DrainId)]),
-    ok.
+    case Res of
+        {ok, <<"OK">>} -> ok;
+        Err -> Err
+    end.
 
 delete_drain(DrainId, ChannelId) when is_binary(DrainId), is_binary(ChannelId) ->
-    redis:q([<<"SREM">>, iolist_to_binary([<<"channel:">>, ChannelId, <<":drains">>])]),
-    case redis:q([<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId])]) of
+    case redis:q([<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
         {ok, <<"OK">>} -> ok;
         Err -> Err
     end,
     ok.
 
+lookup_drains() ->
+    lists:foldl(
+        fun({ok, Key}, Acc) ->
+            case string:tokens(binary_to_list(Key), ":") of
+                ["drain", DrainId, "data"] ->
+                    [lookup_drain(list_to_binary(DrainId))|Acc];
+                _ -> Acc
+            end
+        end, [], redis:q([<<"KEYS">>, <<"drain:*:data">>])).
+
 lookup_drain(DrainId) when is_binary(DrainId) ->
-    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId])]) of
+    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #drain{
-                channel_id = logplex_utils:field_val(<<"channel_id">>, Fields),
+                channel_id = logplex_utils:field_val(<<"ch">>, Fields),
                 host = logplex_utils:field_val(<<"host">>, Fields),
                 port =
                  case logplex_utils:field_val(<<"port">>, Fields) of
