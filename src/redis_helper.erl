@@ -127,12 +127,11 @@ create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(
         Err -> Err
     end.
 
-delete_drain(DrainId, ChannelId) when is_binary(DrainId), is_binary(ChannelId) ->
+delete_drain(DrainId) when is_binary(DrainId) ->
     case redis:q([<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
         {ok, <<"OK">>} -> ok;
         Err -> Err
-    end,
-    ok.
+    end.
 
 lookup_drains() ->
     lists:foldl(

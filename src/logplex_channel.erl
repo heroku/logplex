@@ -101,8 +101,8 @@ handle_info({create_drain, DrainId, ChannelId, Host, Port}, State) ->
     ets:insert(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, host=Host, port=Port}),
     {noreply, State};
 
-handle_info({delete_drain, ChannelId, DrainId}, State) ->
-    ets:match_delete(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, host='_', port='_'}),
+handle_info({delete_drain, DrainId}, State) ->
+    ets:match_delete(logplex_channel_drains, #drain{id=DrainId, channel_id='_', host='_', port='_'}),
     {noreply, State};
 
 handle_info(_Info, State) ->

@@ -31,14 +31,9 @@ create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
     end.
 
 delete(DrainId) when is_binary(DrainId) ->
-    case lookup(DrainId) of
-        #drain{channel_id=ChannelId} ->
-            logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
-            logplex_grid:publish(logplex_channel, {delete_drain, ChannelId, DrainId}),
-            redis_helper:delete_drain(DrainId, ChannelId);
-        _ ->
-            ok
-    end.
+    logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
+    logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
+    redis_helper:delete_drain(DrainId).
 
 lookup(DrainId) when is_binary(DrainId) ->
     redis_helper:lookup_drain(DrainId).

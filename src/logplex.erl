@@ -29,7 +29,7 @@ route(Token, Msg) ->
 process(ChannelId, Addon, Msg) ->
     logplex_channel:push(ChannelId, Addon, Msg),
     logplex_tail:route(ChannelId, Msg),
-    [logplex_drain_pool:route(Host, Port, Msg) || [_Channel, {host, Host}, {port, Port}] <- logplex_channel:drains(ChannelId)],
+    [logplex_drain_pool:route(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
     ok.
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;
