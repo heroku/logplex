@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/3, delete/1, lookup/1]).
+-export([create/3, delete/3, lookup/1]).
 
 -include_lib("logplex.hrl").
 
@@ -30,10 +30,15 @@ create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
             end
     end.
 
-delete(DrainId) when is_binary(DrainId) ->
-    logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
-    logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
-    redis_helper:delete_drain(DrainId).
+delete(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
+    case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, host=Host, port=Port}) of
+        [#drain{id=DrainId}] ->
+            logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
+            logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
+            redis_helper:delete_drain(DrainId);
+        _ ->
+            {error, not_found}
+    end.
 
 lookup(DrainId) when is_binary(DrainId) ->
     redis_helper:lookup_drain(DrainId).

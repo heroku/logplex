@@ -139,7 +139,13 @@ handlers() ->
 
     {['DELETE', "/channels/(\\d+)/drains"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Res = logplex_drain:delete(list_to_binary(ChannelId)),
+        
+        {struct, Data} = mochijson2:decode(Req:recv_body()),
+        Host = proplists:get_value(<<"host">>, Data),
+        Port = proplists:get_value(<<"port">>, Data),
+        not is_binary(Host) andalso error_resp(Req, 400, <<"host is a required field">>),
+        
+        Res = logplex_drain:delete(list_to_binary(ChannelId), Host, Port),
         Res =/= ok andalso error_resp(Req, 500, <<"server exception">>, Res),
         Req:respond({200, [], <<"OK">>})
     end}].
