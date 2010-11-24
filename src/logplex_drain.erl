@@ -93,6 +93,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({delete_channel, ChannelId}, State) ->
+    ets:match_delete(?MODULE, #drain{id='_', channel_id=ChannelId, host='_', port='_'}),
+    {noreply, State};
+
 handle_info({create_drain, DrainId, ChannelId, Host, Port}, State) ->
     ets:insert(?MODULE, #drain{id=DrainId, channel_id=ChannelId, host=Host, port=Port}),
     {noreply, State};

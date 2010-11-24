@@ -33,7 +33,7 @@ create_channel(ChannelName) when is_binary(ChannelName) ->
 
 delete_channel(ChannelId) when is_binary(ChannelId) ->
     case redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":name">>])]) of
-        {ok, <<"OK">>} -> ok;
+        {ok, 1} -> ok;
         Err -> Err
     end.
 
@@ -76,7 +76,7 @@ create_token(ChannelId, TokenId, TokenName, Addon) when is_binary(ChannelId), is
 
 delete_token(ChannelId, TokenId) when is_binary(ChannelId), is_binary(TokenId) ->
     case redis:q([<<"DEL">>, TokenId]) of
-        {ok, <<"OK">>} -> ok;
+        {ok, 1} -> ok;
         Err -> Err
     end.
 
@@ -129,7 +129,7 @@ create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(
 
 delete_drain(DrainId) when is_binary(DrainId) ->
     case redis:q([<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
-        {ok, <<"OK">>} -> ok;
+        {ok, 1} -> ok;
         Err -> Err
     end.
 

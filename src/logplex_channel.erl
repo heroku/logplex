@@ -17,6 +17,9 @@ create(ChannelName) when is_binary(ChannelName) ->
     redis_helper:create_channel(ChannelName).
 
 delete(ChannelId) when is_binary(ChannelId) ->
+    logplex_grid:publish(?MODULE, {delete_channel, ChannelId}),
+    logplex_grid:publish(logplex_token, {delete_channel, ChannelId}),
+    logplex_grid:publish(logplex_drain, {delete_channel, ChannelId}),
     redis_helper:delete_channel(ChannelId).
 
 push(ChannelId, Addon, Msg) when is_binary(ChannelId), is_binary(Msg) ->
@@ -89,6 +92,11 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({delete_channel, ChannelId}, State) ->
+    ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', addon='_'}),
+    ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, host='_', port='_'}),
+    {noreply, State};
+
 handle_info({create_token, ChannelId, TokenId, TokenName, Addon}, State) ->
     ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
     {noreply, State};

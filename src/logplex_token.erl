@@ -85,6 +85,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({delete_channel, ChannelId}, State) ->
+    ets:match_delete(?MODULE, #token{id='_', channel_id=ChannelId, name='_', addon='_'}),
+    {noreply, State};
+
 handle_info({create_token, ChannelId, TokenId, TokenName, Addon}, State) ->
     ets:insert(?MODULE, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
     {noreply, State};
