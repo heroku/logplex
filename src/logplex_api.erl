@@ -43,13 +43,13 @@ handlers() ->
         Req:respond({200, [{"Content-Type", "text/html"}], integer_to_list(ChannelId)})
     end},
 
-    {['DELETE', "/channels/(\\d+)"], fun(Req, [ChannelId]) ->
+    {['DELETE', "/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         logplex_channel:delete(list_to_binary(ChannelId)),
         Req:respond({200, [], <<"OK">>})
     end},
 
-    {['POST', "/channels/(\\d+)/token"], fun(Req, [ChannelId]) ->
+    {['POST', "/channels/(\\d+)/token$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),
         TokenName = proplists:get_value(<<"name">>, Params),
@@ -61,7 +61,7 @@ handlers() ->
         Req:respond({200, [{"Content-Type", "text/html"}], Token})
     end},
 
-    {['POST', "/sessions"], fun(Req, _Match) ->
+    {['POST', "/sessions$"], fun(Req, _Match) ->
         authorize(Req),
         Body = Req:recv_body(),
         Session = logplex_session:create(Body),
@@ -69,7 +69,7 @@ handlers() ->
         Req:respond({200, [{"Content-Type", "text/html"}], Session})
     end},
 
-    {['GET', "/sessions/([\\w-]+)"], fun(Req, [Session]) ->
+    {['GET', "/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
         Body = logplex_session:lookup(list_to_binary(Session)),
         not is_binary(Body) andalso error_resp(Req, 404, <<"session not found">>),
 
@@ -106,13 +106,13 @@ handlers() ->
         end
     end},
 
-    {['GET', "/channels/(\\d+)/info"], fun(Req, [ChannelId]) ->
+    {['GET', "/channels/(\\d+)/info$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         Info = logplex_channel:info(list_to_binary(ChannelId)),
         Req:respond({200, [], mochijson2:encode({struct, Info})})
     end},
 
-    {['POST', "/channels/(\\d+)/drains"], fun(Req, [ChannelId]) ->
+    {['POST', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
 
         {struct, Data} = mochijson2:decode(Req:recv_body()),
@@ -131,13 +131,13 @@ handlers() ->
         end        
     end},
 
-    {['GET', "/channels/(\\d+)/drains"], fun(Req, [ChannelId]) ->
+    {['GET', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         Drains = logplex_drain:lookup(list_to_binary(ChannelId)),
         Req:respond({200, [], {struct, Drains}})
     end},
 
-    {['DELETE', "/channels/(\\d+)/drains"], fun(Req, [ChannelId]) ->
+    {['DELETE', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         
         {struct, Data} = mochijson2:decode(Req:recv_body()),
