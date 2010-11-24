@@ -31,7 +31,8 @@ create(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host), (is_in
     end.
 
 delete(ChannelId, Host, Port) when is_binary(ChannelId), is_binary(Host) ->
-    case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, host=Host, port=Port}) of
+    Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
+    case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, host=Host, port=Port1}) of
         [#drain{id=DrainId}] ->
             logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
             logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),

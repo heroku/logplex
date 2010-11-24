@@ -145,7 +145,7 @@ handlers() ->
         Port = proplists:get_value("port", Data),
         Host == "" andalso error_resp(Req, 400, <<"host is a required field">>),
         
-        Res = logplex_drain:delete(list_to_binary(ChannelId), list_to_binary(Host), list_to_binary(Port)),
+        Res = logplex_drain:delete(list_to_binary(ChannelId), list_to_binary(Host), Port),
         Res =/= ok andalso error_resp(Req, 500, <<"server exception">>, Res),
         Req:respond({200, [], <<"OK">>})
     end}].
