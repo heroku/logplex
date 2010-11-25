@@ -1,5 +1,7 @@
 #!/bin/bash
 
 HOST=`hostname --fqdn`
+COOKIE=`cat keys/LOGPLEX_COOKIE`
+HOME=/root
 
-erl -name remsh@$HOST -remsh logplex@$HOST
+erl -name remsh@$HOST -setcookie $COOKIE -remsh logplex@$HOST

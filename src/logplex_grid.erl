@@ -14,7 +14,12 @@ publish(RegName, Msg) when is_atom(RegName), is_tuple(Msg) ->
 
 loop() ->
     redis_helper:set_node_ex(atom_to_binary(node(), utf8), local_ip()),
-    [connect(Key) || {ok, Key} <- redis_helper:get_nodes()],
+    case redis_helper:get_nodes() of
+        Keys when is_list(Keys) ->
+            [connect(Key) || {ok, Key} <- Keys];
+        _Err ->
+            ok
+    end,
     receive
         {nodedown, _Node} ->
             ok

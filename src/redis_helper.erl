@@ -46,6 +46,7 @@ push_msg(ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_i
         {error, timeout} ->
             case application:get_env(logplex, spool_pool) of
                 {ok, Size} when Size < ?MAX_SPOOL_POOL_SIZE ->
+                    application:set_env(logplex, spool_pool, Size + 100),
                     io:format("expanding spool redis pool to ~w~n", [Size+100]),
                     redis_pool:expand(spool, Size + 100);
                 _ -> ok
