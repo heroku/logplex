@@ -37,23 +37,9 @@ delete_channel(ChannelId) when is_binary(ChannelId) ->
         Err -> Err
     end.
 
-push_msg(ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_integer(Length) ->
-    Part1 = redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]),
-    Part2 = redis:build_request([<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))]),
-    case redis:q(spool, iolist_to_binary([Part1, Part2])) of
-        {ok, _} ->
-            ok;
-        {error, timeout} ->
-            case application:get_env(logplex, spool_pool) of
-                {ok, Size} when Size < ?MAX_SPOOL_POOL_SIZE ->
-                    application:set_env(logplex, spool_pool, Size + 100),
-                    io:format("expanding spool redis pool to ~w~n", [Size+100]),
-                    redis_pool:expand(spool, Size + 100);
-                _ -> ok
-            end;
-        Err ->
-            Err
-    end.
+build_push_msg(ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_integer(Length) ->
+    [redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]),
+     redis:build_request([<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))])].
 
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).

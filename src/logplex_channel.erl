@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/1, delete/1, push/3, logs/2, tokens/1, drains/1, info/1]).
+-export([create/1, delete/1, logs/2, tokens/1, drains/1, info/1]).
 
 -include_lib("logplex.hrl").
 
@@ -21,13 +21,6 @@ delete(ChannelId) when is_binary(ChannelId) ->
     logplex_grid:publish(logplex_token, {delete_channel, ChannelId}),
     logplex_grid:publish(logplex_drain, {delete_channel, ChannelId}),
     redis_helper:delete_channel(ChannelId).
-
-push(ChannelId, Addon, Msg) when is_binary(ChannelId), is_binary(Msg) ->
-    case redis_helper:push_msg(ChannelId, Msg, spool_length(Addon)) of
-        {ok, _} -> logplex_stats:incr(message_pushed);
-        {error, timeout} -> logplex_stats:incr(push_timeout);
-        _ -> ok
-    end.
 
 logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis_helper:fetch_logs(ChannelId, Num).
@@ -144,6 +137,3 @@ populate_cache() ->
 
     Drains = redis_helper:lookup_drains(),
     length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains).
-
-spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
-spool_length(_) -> ?DEFAULT_LOG_HISTORY.

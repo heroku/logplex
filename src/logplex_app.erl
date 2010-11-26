@@ -59,8 +59,7 @@ boot_redis() ->
                         end
                 end,
             redis_sup:add_pool(redis_pool, Opts, 100),
-            redis_sup:add_pool(spool, Opts, 100),
-            application:set_env(logplex, spool_pool, 100),
+            redis_sup:add_pool(spool, Opts, 1),
             ok;
         Err ->
             exit(Err)

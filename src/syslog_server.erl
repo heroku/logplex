@@ -3,13 +3,13 @@
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
-	     handle_info/2, terminate/2, code_change/3]).
+         handle_info/2, terminate/2, code_change/3]).
 
--record(state, {socket, regexp}).
+-record(state, {socket, key='$end_of_table'}).
 
 %% API functions
 start_link() ->
-	gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
+    gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 %%====================================================================
 %% gen_server callbacks
@@ -24,9 +24,10 @@ start_link() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
+    ets:new(?MODULE, [set, protected]),
+    [start_worker() || _ <- lists:seq(1, 100)],
     {ok, Socket} = gen_udp:open(9999, [binary, {active, true}]),
-	{ok, #state{socket=Socket, regexp=RE}}.
+    {ok, #state{socket=Socket}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -58,15 +59,21 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({udp, Socket, _IP, _InPortNo, Packet}, #state{socket=Socket, regexp=RE}=State) ->
-    spawn_link(fun() ->
-        case re:run(Packet, RE, [{capture, all_but_first, list}]) of
-            {match, [Token]} -> logplex:route(list_to_binary(Token), Packet);
-            _ -> ok
-        end,
-        logplex_stats:incr(message_received)
-    end),
-    {noreply, State};
+handle_info({udp, Socket, _IP, _InPortNo, Packet}, #state{socket=Socket, key=Prev}=State) ->
+    {Pid, Next} = next(Prev),
+    logplex_worker:push(Pid, Packet),
+    {noreply, State#state{key=Next}};
+
+handle_info({'DOWN', MonitorRef, process, Pid, _Info}, #state{key=Prev}=State) ->
+    erlang:demonitor(MonitorRef),
+    ets:delete(?MODULE, Pid),
+    start_worker(),
+    case Prev == Pid of
+        true ->
+            {noreply, State#state{key='$end_of_table'}};
+        false ->
+            {noreply, State}
+    end;
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -93,3 +100,25 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+start_worker() ->
+    {ok, Pid} = logplex_worker:start_link(),
+    MonitorRef = erlang:monitor(process, Pid),
+    ets:insert(?MODULE, {Pid, MonitorRef}),
+    Pid.
+
+next('$end_of_table') ->
+    case ets:first(?MODULE) of
+        '$end_of_table' -> {undefined, '$end_of_table'};
+        Pid -> {Pid, Pid}
+    end;
+
+next(Prev) ->
+    case ets:next(?MODULE, Prev) of
+        '$end_of_table' ->
+            case ets:first(?MODULE) of
+                '$end_of_table' -> {undefined, '$end_of_table'};
+                Pid -> {Pid, Pid}
+            end;
+        Pid ->
+            {Pid, Pid}
+    end.
