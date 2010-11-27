@@ -46,7 +46,7 @@ connect(<<"node:", BinNode/binary>> = Key) ->
                 pong -> ok;
                 pang ->
                     case redis_helper:get_node(Key) of
-                        {ok, Ip} ->
+                        {ok, Ip} when is_binary(Ip) ->
                             {ok, Addr} = inet:getaddr(binary_to_list(Ip), inet),
                             case re:run(StrNode, ".*@(.*)$", [{capture, all_but_first, list}]) of
                                 {match, [Host]} ->
