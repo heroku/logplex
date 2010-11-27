@@ -5,8 +5,8 @@ OBJECTS := $(SOURCES:%.go=./%.out)
 
 all: $(OBJECTS)
 
-./%.6: %.go
-	6g $<
+./%.$(GOCOMPILER): %.go
+	$(GOCOMPILER)g $<
 
-./%.out: %.6
-	6l $<
+./%.out: %.$(GOCOMPILER)
+	$(GOCOMPILER)l $<
