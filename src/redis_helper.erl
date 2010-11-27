@@ -38,8 +38,8 @@ delete_channel(ChannelId) when is_binary(ChannelId) ->
     end.
 
 brpop_log(Pid) ->
-    case redis:q(Pid, [<<"BRPOP">>, <<"logs">>]) of
-        {ok, Log} -> Log;
+    case redis:q(Pid, [<<"BRPOP">>, <<"logs">>, <<"0">>]) of
+        [{ok, <<"logs">>}, {ok, Log}] -> Log;
         Err -> Err
     end.
 
