@@ -52,8 +52,19 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast(do_work, State) ->
-    timer:sleep(1000),
+handle_cast(do_work, #state{read_client=ReadClient, write_client=WriteClient, regexp=RE}=State) ->
+    case redis_helper:brpop_log(ReadClient) of
+        Log when is_binary(Log) ->
+            case re:run(Log, RE, [{capture, all_but_first, list}]) of
+                {match, [Token]} ->
+                    route(WriteClient, list_to_binary(Token), Log);
+                _ ->
+                    ok
+            end,
+            logplex_stats:incr(message_received);
+        _ ->
+            ok
+    end,
     gen_server:cast(self(), do_work),
     {noreply, State};
 
@@ -100,7 +111,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-route(ClientPid, Token, Packet) when is_binary(Token), is_binary(Packet) ->
+route(WriteClient, Token, Packet) when is_binary(Token), is_binary(Packet) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, addon=Addon} ->
             Count = logplex_stats:incr(ChannelId),
@@ -112,21 +123,21 @@ route(ClientPid, Token, Packet) when is_binary(Token), is_binary(Packet) ->
                     UTC = erlang:universaltime(),
                     {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
                     Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~w-~wT~w:~w:~w-0~w:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, Month, Day, Hour, Min, Sec, Offset, throughput(Addon)])),
-                    process(ClientPid, ChannelId, Msg1, Addon);
+                    process(WriteClient, ChannelId, Msg1, Addon);
                 false ->
                     Msg1 = re:replace(Packet, Token, TokenName),
                     Msg2 = iolist_to_binary(Msg1),
-                    process(ClientPid, ChannelId, Msg2, Addon)
+                    process(WriteClient, ChannelId, Msg2, Addon)
             end;
         _ ->
             ok
     end.
 
-process(ClientPid, ChannelId, Msg, Addon) ->
+process(WriteClient, ChannelId, Msg, Addon) ->
     logplex_stats:incr(message_processed),
     logplex_tail:route(ChannelId, Msg),
     [logplex_drain_pool:route(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
-    redis_helper:push_msg(ClientPid, ChannelId, Msg, spool_length(Addon)).
+    redis_helper:push_msg(WriteClient, ChannelId, Msg, spool_length(Addon)).
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;
 throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.
