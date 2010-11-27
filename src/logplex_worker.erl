@@ -5,11 +5,11 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([push/2, flush/1]).
+-export([push/2]).
 
 -include_lib("logplex.hrl").
 
--record(state, {redis_client, buffer=[], regexp}).
+-record(state, {redis_client, regexp}).
 
 %% API functions
 start_link() ->
@@ -31,10 +31,8 @@ push(Pid, Packet) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    Self = self(),
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
     {ok, Pid} = redis_pool:start_client(spool),
-    spawn_link(fun() -> flush(Self) end),
     {ok, #state{redis_client=Pid, regexp=RE}}.
 
 %%--------------------------------------------------------------------
@@ -57,29 +55,15 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({push, Packet}, #state{buffer=Buffer, regexp=RE}=State) ->
+handle_cast({push, Packet}, #state{redis_client=ClientPid, regexp=RE}=State) ->
     logplex_stats:incr(message_received),
     case re:run(Packet, RE, [{capture, all_but_first, list}]) of
         {match, [Token]} ->
-            case route(list_to_binary(Token), Packet) of
-                undefined ->
-                    {noreply, State};
-                {ChannelId, Addon, Msg} ->
-                    {noreply, State#state{buffer=[{ChannelId, Addon, Msg}|Buffer]}}
-                end;
+            route(ClientPid, list_to_binary(Token), Packet);
         _ ->
-            {noreply, State}
-    end;
-
-handle_cast(flush, #state{redis_client=ClientPid, buffer=Buffer}=State) ->    
-    Packet = lists:foldl(
-        fun({ChannelId, Addon, Msg}, Acc) ->
-            logplex_stats:incr(message_processed),
-            [logplex_drain_pool:route(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
-            [redis_helper:build_push_msg(ChannelId, Msg, spool_length(Addon))|Acc]
-        end, [], Buffer),
-    length(Packet) > 0 andalso redis:q(ClientPid, iolist_to_binary(Packet)),
-    {noreply, State#state{buffer=[]}};
+            ok
+    end,
+    {noreply, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -120,34 +104,33 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-flush(Pid) ->
-    timer:sleep(1000),
-    gen_server2:cast(Pid, flush),
-    flush(Pid).
-
-route(Token, Packet) when is_binary(Token), is_binary(Packet) ->
+route(ClientPid, Token, Packet) when is_binary(Token), is_binary(Packet) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, addon=Addon} ->
             Count = logplex_stats:incr(ChannelId),
             case exceeded_threshold(Count, Addon) of
                 true ->
-                    undefined;
+                    ok;
                 notify ->
                     {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
                     UTC = erlang:universaltime(),
                     {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
                     Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~w-~wT~w:~w:~w-0~w:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, Month, Day, Hour, Min, Sec, Offset, throughput(Addon)])),
-                    logplex_tail:route(ChannelId, Msg1),
-                    {ChannelId, Addon, Msg1};
+                    process(ClientPid, ChannelId, Msg1, Addon);
                 false ->
                     Msg1 = re:replace(Packet, Token, TokenName),
                     Msg2 = iolist_to_binary(Msg1),
-                    logplex_tail:route(ChannelId, Msg2),
-                    {ChannelId, Addon, Msg2}
+                    process(ClientPid, ChannelId, Msg2, Addon)
             end;
         _ ->
-            undefined
+            ok
     end.
+
+process(ClientPid, ChannelId, Msg, Addon) ->
+    logplex_stats:incr(message_processed),
+    logplex_tail:route(ChannelId, Msg),
+    [logplex_drain_pool:route(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
+    redis_helper:push_msg(ClientPid, ChannelId, Msg, spool_length(Addon)).
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;
 throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.

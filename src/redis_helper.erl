@@ -37,9 +37,13 @@ delete_channel(ChannelId) when is_binary(ChannelId) ->
         Err -> Err
     end.
 
-build_push_msg(ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_integer(Length) ->
-    [redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]),
-     redis:build_request([<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))])].
+push_msg(ClientPid, ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_integer(Length) ->
+    Packet = [redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]),
+              redis:build_request([<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))])],
+    case redis:q(ClientPid, iolist_to_binary(Packet)) of
+        {ok, _} -> ok;
+        Err -> Err
+    end.
 
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
