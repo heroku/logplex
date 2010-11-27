@@ -50,7 +50,7 @@ connect(<<"node:", BinNode/binary>> = Key) ->
                             {ok, Addr} = inet:getaddr(binary_to_list(Ip), inet),
                             case re:run(StrNode, ".*@(.*)$", [{capture, all_but_first, list}]) of
                                 {match, [Host]} ->
-                                    io:format("add host ~p -> ~p~n", [Host, Addr]),
+                                    %io:format("add host ~p -> ~p~n", [Host, Addr]),
                                     inet_db:add_host(Addr, [Host]),
                                     case net_adm:ping(Node) of
                                         pong ->
