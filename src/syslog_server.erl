@@ -24,7 +24,7 @@ start_link() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [set, protected]),
+    ets:new(?MODULE, [set, named_table, protected]),
     [start_worker() || _ <- lists:seq(1, 100)],
     {ok, Socket} = gen_udp:open(9999, [binary, {active, true}]),
     {ok, #state{socket=Socket}}.

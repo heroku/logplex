@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([push/2, flush/0]).
+-export([push/2, flush/1]).
 
 -include_lib("logplex.hrl").
 
@@ -31,9 +31,10 @@ push(Pid, Packet) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    Self = self(),
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
     {ok, Pid} = redis_pool:start_client(spool),
-    spawn_link(fun flush/0),
+    spawn_link(fun() -> flush(Self) end),
     {ok, #state{redis_client=Pid, regexp=RE}}.
 
 %%--------------------------------------------------------------------
@@ -77,7 +78,7 @@ handle_cast(flush, #state{redis_client=ClientPid, buffer=Buffer}=State) ->
             [logplex_drain_pool:route(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
             [redis_helper:build_push_msg(ChannelId, Msg, spool_length(Addon))|Acc]
         end, [], Buffer),
-    redis:q(ClientPid, iolist_to_binary(Packet)),
+    length(Packet) > 0 andalso redis:q(ClientPid, iolist_to_binary(Packet)),
     {noreply, State#state{buffer=[]}};
 
 handle_cast(_Msg, State) ->
@@ -119,10 +120,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-flush() ->
+flush(Pid) ->
     timer:sleep(1000),
-    gen_server2:cast(self(), flush),
-    flush().
+    gen_server2:cast(Pid, flush),
+    flush(Pid).
 
 route(Token, Packet) when is_binary(Token), is_binary(Packet) ->
     case logplex_token:lookup(Token) of
