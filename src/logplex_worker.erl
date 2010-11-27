@@ -5,18 +5,13 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([push/2]).
-
 -include_lib("logplex.hrl").
 
--record(state, {redis_client, regexp}).
+-record(state, {read_client, write_client, regexp}).
 
 %% API functions
 start_link() ->
-    gen_server2:start_link(?MODULE, [], []).
-
-push(Pid, Packet) ->
-    gen_server2:cast(Pid, {push, Packet}).
+    gen_server:start_link(?MODULE, [], []).
 
 %%====================================================================
 %% gen_server callbacks
@@ -32,8 +27,10 @@ push(Pid, Packet) ->
 %%--------------------------------------------------------------------
 init([]) ->
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
-    {ok, Pid} = redis_pool:start_client(spool),
-    {ok, #state{redis_client=Pid, regexp=RE}}.
+    {ok, ReadClient} = redis_pool:start_client(read),
+    {ok, WriteClient} = redis_pool:start_client(write),
+    gen_server:cast(self(), do_work),
+    {ok, #state{read_client=ReadClient, write_client=WriteClient, regexp=RE}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -55,14 +52,9 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({push, Packet}, #state{redis_client=ClientPid, regexp=RE}=State) ->
-    logplex_stats:incr(message_received),
-    case re:run(Packet, RE, [{capture, all_but_first, list}]) of
-        {match, [Token]} ->
-            route(ClientPid, list_to_binary(Token), Packet);
-        _ ->
-            ok
-    end,
+handle_cast(do_work, State) ->
+    timer:sleep(1000),
+    gen_server:cast(self(), do_work),
     {noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -75,9 +67,13 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({'DOWN', _MonitorRef, process, Pid, _Info}, State) ->
-    {ok, Pid} = redis_pool:start_client(spool),
-    {noreply, State#state{redis_client=Pid}};
+handle_info({'DOWN', _MonitorRef, process, Pid, _Info}, #state{read_client=Pid}=State) ->
+    {ok, Pid} = redis_pool:start_client(read),
+    {noreply, State#state{read_client=Pid}};
+
+handle_info({'DOWN', _MonitorRef, process, Pid, _Info}, #state{write_client=Pid}=State) ->
+    {ok, Pid} = redis_pool:start_client(write),
+    {noreply, State#state{write_client=Pid}};
 
 handle_info(_Info, State) ->
     {noreply, State}.

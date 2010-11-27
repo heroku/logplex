@@ -26,11 +26,8 @@ init([]) ->
         {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
-        {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]}
-    ] ++ [
-        {erlang:make_ref(), {logplex_drain_pool, start_link, []}, permanent, 2000, worker, [logplex_drain_pool]}
-    || _ <- lists:seq(1, 100)] ++ [
-        {syslog_server, {syslog_server, start_link, []}, permanent, 2000, worker, [syslog_server]}
+        {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]}] ++ [
+        {erlang:make_ref(), {logplex_worker, start_link, []}, permanent, 2000, worker, [logplex_worker]} || _ <- lists:seq(1,100)
     ]}}.
 
 set_cookie() ->
@@ -59,7 +56,8 @@ boot_redis() ->
                         end
                 end,
             redis_sup:add_pool(redis_pool, Opts, 100),
-            redis_sup:add_pool(spool, Opts, 1),
+            redis_sup:add_pool(write, Opts, 1),
+            redis_sup:add_pool(read, [], 1),
             ok;
         Err ->
             exit(Err)
