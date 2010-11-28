@@ -14,7 +14,7 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     boot_redis(),
     {ok, Pid} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
-    [add_reader() || _ <- lists:seq(1, 100)],
+    [add_worker() || _ <- lists:seq(1, 1000)],
     {ok, Pid}.
 
 stop(_State) ->
@@ -28,7 +28,9 @@ init([]) ->
         {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
-        {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]}
+        {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
+        {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]},
+        {syslog_acceptor, {syslog_acceptor, start_link, []}, permanent, 2000, worker, [syslog_acceptor]}
     ]}}.
 
 set_cookie() ->
@@ -64,5 +66,5 @@ boot_redis() ->
             exit(Err)
     end.
 
-add_reader() ->
-    supervisor:start_child(?MODULE, {logplex_reader, {logplex_reader, start_link, []}, permanent, 2000, worker, [logplex_reader]}).
+add_worker() ->
+    supervisor:start_child(?MODULE, {logplex_worker, {logplex_worker, start_link, []}, permanent, 2000, worker, [logplex_worker]}).
