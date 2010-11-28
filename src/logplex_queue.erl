@@ -53,6 +53,7 @@ handle_call(out, _From, #state{queue=Queue, length=Length, active=false, last_no
     case should_notify(Secs) of
         true ->
             syslog_acceptor:active(true),
+            error_logger:info_msg("queue under capacity ~w~n", [Length]),
             {_,Secs1,_} = now(),
             {reply, Out, State#state{queue=Queue1, length=Length1, active=true, last_notified=Secs1}};
         false ->
@@ -80,6 +81,7 @@ handle_cast({in, _Packet}, #state{length=?MAX_LENGTH, last_notified=Secs}=State)
     case should_notify(Secs) of
         true ->
             syslog_acceptor:active(false),
+            error_logger:info_msg("queue over capacity~n"),
             {_,Secs1,_} = now(),
             {noreply, State#state{last_notified=Secs1, active=false}};
         false ->
