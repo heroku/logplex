@@ -53,7 +53,8 @@ boot_redis() ->
                                         "" -> undefined;
                                         Val -> list_to_binary(Val)
                                     end,
-                                [{ip, Host}, {port, Port}, {pass, Pass}];
+                                {ok, Ip} = inet:getaddr(Host, inet),
+                                [{ip, Ip}, {port, Port}, {pass, Pass}];
                             _ ->
                                 []
                         end

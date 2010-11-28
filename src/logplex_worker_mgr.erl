@@ -62,9 +62,10 @@ handle_info({'EXIT', {M,F,A}, _Reason}, State) ->
     spawn_worker({M,F,A}),
     {noreply, State};
 
-handle_info({'EXIT', Pid, _Reason}, State) ->
+handle_info({'EXIT', Pid, Reason}, State) ->
     case ets:lookup(?MODULE, Pid) of
         [{Pid, {M,F,A}}] ->
+            error_logger:error_msg("worker (~p) died: ~1000p~n", [M, Reason]),
             spawn_worker({M,F,A});
         _ ->
             ok
