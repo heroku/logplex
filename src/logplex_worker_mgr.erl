@@ -23,7 +23,7 @@ start_link(RedisOpts) ->
 %%--------------------------------------------------------------------
 init([RedisOpts]) ->
     process_flag(trap_exit, true),
-    [logplex_worker:start_link(RedisOpts) || _ <- lists:seq(1, 1000)],
+    [self() ! {'EXIT', undefined, undefined} || _ <- lists:seq(1, 1000)],
     {ok, RedisOpts}.
 
 %%--------------------------------------------------------------------
