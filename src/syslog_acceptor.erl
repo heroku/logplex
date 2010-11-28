@@ -5,16 +5,11 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
          handle_info/2, terminate/2, code_change/3]).
 
--export([active/1]).
-
--record(state, {socket, active}).
+-record(state, {socket}).
 
 %% API functions
 start_link() ->
     gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-active(Active) when is_boolean(Active) ->
-    gen_server2:cast(?MODULE, {active, Active}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -30,7 +25,7 @@ active(Active) when is_boolean(Active) ->
 %%--------------------------------------------------------------------
 init([]) ->
     {ok, Socket} = gen_udp:open(9999, [binary, {active, true}]),
-	{ok, #state{socket=Socket, active=true}}.
+	{ok, #state{socket=Socket}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -52,9 +47,6 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({active, Active}, State) ->
-    {noreply, State#state{active=Active}};
-
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -65,8 +57,8 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({udp, Socket, _IP, _InPortNo, Packet}, #state{socket=Socket, active=Active}=State) ->
-    Active andalso logplex_queue:in(Packet),
+handle_info({udp, Socket, _IP, _InPortNo, Packet}, #state{socket=Socket}=State) ->
+    logplex_queue:in(Packet),
     logplex_stats:incr(message_received),
     {noreply, State};
 

@@ -9,7 +9,7 @@
 
 -record(state, {queue, length}).
 
--define(MAX_LENGTH, 500).
+-define(MAX_LENGTH, 1000).
 
 %% API functions
 start_link() ->
@@ -66,6 +66,9 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({in, _Packet}, #state{length=Length}=State) when Length >= ?MAX_LENGTH ->
+    {noreply, State};
+
 handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
     Queue1 = queue:in(Packet, Queue),
     {noreply, State#state{queue=Queue1, length=Length+1}};
