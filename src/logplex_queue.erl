@@ -48,14 +48,13 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call(out, _From, #state{queue=Queue, length=Length, active=false, last_notified=Secs}=State) ->
+handle_call(out, _From, #state{queue=Queue, length=Length, active=false, last_notified=Last}=State) ->
     {Out, Queue1, Length1} = dequeue(Queue, Length),
-    case should_notify(Secs) of
+    case should_notify(Last, 200000) of
         true ->
             syslog_acceptor:active(true),
-            error_logger:info_msg("queue under capacity ~w~n", [Length]),
-            {_,Secs1,_} = now(),
-            {reply, Out, State#state{queue=Queue1, length=Length1, active=true, last_notified=Secs1}};
+            error_logger:info_msg("queue under capacity ~p~n", [Length]),
+            {reply, Out, State#state{queue=Queue1, length=Length1, active=true, last_notified=now()}};
         false ->
             {reply, Out, State#state{queue=Queue1, length=Length1}}
     end;
@@ -77,13 +76,12 @@ handle_call(_Msg, _From, State) ->
 handle_cast({in, _Packet}, #state{active=false}=State) ->
     {noreply, State};
 
-handle_cast({in, _Packet}, #state{length=?MAX_LENGTH, last_notified=Secs}=State) ->
-    case should_notify(Secs) of
+handle_cast({in, _Packet}, #state{length=Length, last_notified=Last}=State) when Length >= ?MAX_LENGTH ->
+    case should_notify(Last, 1000000) of
         true ->
             syslog_acceptor:active(false),
             error_logger:info_msg("queue over capacity~n"),
-            {_,Secs1,_} = now(),
-            {noreply, State#state{last_notified=Secs1, active=false}};
+            {noreply, State#state{last_notified=now(), active=false}};
         false ->
             {noreply, State}
     end;
@@ -139,10 +137,9 @@ dequeue(Queue, Length) ->
             {undefined, Queue, Length}
     end.
 
-should_notify(undefined) -> true;
-should_notify(Secs) ->
-    {_, Secs1, _} = now(),
-    Secs1 > (Secs + 5).
+should_notify(undefined, _) -> true;
+should_notify(Last, MicroSecs) ->
+    timer:now_diff(now(), Last) > MicroSecs.
 
 report_stats(Pid) ->
     timer:sleep(60000),
