@@ -6,6 +6,7 @@
     gen_server2,
     logplex_api,
     logplex_app,
+    logplex_buffer,
     logplex_channel,
     logplex_drain,
     logplex_drain_pool,
@@ -18,6 +19,7 @@
     logplex_utils,
     logplex_worker,
     logplex_worker_mgr,
+    logplex_writer,
     redis_helper,
     syslog_acceptor
   ]},
