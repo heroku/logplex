@@ -7,7 +7,7 @@
 
 %% API functions
 start_link() ->
-    proc_lib:spawn_link(?MODULE, init, [self()]).
+    proc_lib:start_link(?MODULE, init, [self()]).
 
 init(Parent) ->
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
