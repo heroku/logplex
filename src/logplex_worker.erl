@@ -7,7 +7,7 @@
 
 %% API functions
 start_link(RedisOpts) ->
-    proc_lib:start_link(?MODULE, init, [self(), RedisOpts]).
+    proc_lib:start_link(?MODULE, init, [self(), RedisOpts], 5000).
 
 init(Parent, RedisOpts) ->
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
