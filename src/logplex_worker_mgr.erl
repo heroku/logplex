@@ -7,7 +7,7 @@
 
 %% API functions
 start_link(RedisOpts) ->
-    gen_server2:start_link({local, ?MODULE}, ?MODULE, [RedisOpts], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [RedisOpts], []).
 
 %%====================================================================
 %% gen_server callbacks
