@@ -78,13 +78,10 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast(flush, State) ->
-    [begin
-        ets:update_element(?MODULE, Key, {2, 0}),
-        io:format("logplex_stats ~p=~w~n", [Key, Val])
-    end || {Key, Val} <- ets:tab2list(?MODULE)],
-    [begin
-        ets:update_element(logplex_stats_channels, Key, {2, 0})
-    end || {Key, _Val} <- ets:tab2list(logplex_stats_channels)],
+    Props = ets:tab2list(?MODULE),
+    [ets:update_element(?MODULE, Key, {2, 0}) || {Key, _Val} <- Props],
+    io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Props])]),
+    [ets:update_element(logplex_stats_channels, Key, {2, 0}) || {Key, _Val} <- ets:tab2list(logplex_stats_channels)],
     {noreply, State};
 
 handle_cast(_Msg, State) ->
