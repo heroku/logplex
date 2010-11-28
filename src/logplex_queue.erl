@@ -66,7 +66,7 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({in, _Packet}, #state{length=?MAX_LENGTH, notify=Notify}=State) ->
-    Notify andalso syslog_acceptor:active(false),
+    Notify andalso begin error_logger:info_msg("queue over capacity~n"), syslog_acceptor:active(false) end,
     {noreply, State#state{notify=false}};
 
 handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->

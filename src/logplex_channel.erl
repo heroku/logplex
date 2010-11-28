@@ -53,6 +53,7 @@ init([]) ->
     ets:new(logplex_channel_tokens, [protected, named_table, bag, {keypos, 3}]),
     ets:new(logplex_channel_drains, [protected, named_table, bag, {keypos, 3}]),
     populate_cache(),
+    spawn_link(fun() -> truncate_logs() end),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -137,3 +138,23 @@ populate_cache() ->
 
     Drains = redis_helper:lookup_drains(),
     length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains).
+
+truncate_logs() ->
+    timer:sleep(1000),
+    Packet = lists:foldl(
+        fun({ChannelId, _}, Acc) ->
+            case ets:lookup(logplex_channel_tokens, ChannelId) of
+                [#token{addon=Addon}] ->
+                    [redis:build_request([
+                        <<"LTRIM">>,
+                        iolist_to_binary(["ch:", ChannelId, ":spool"]),
+                        <<"0">>,
+                        list_to_binary(integer_to_list(spool_length(Addon) - 1))])|Acc];
+                _ -> Acc
+            end
+        end, [], ets:tab2list(logplex_stats_channels)),
+    length(Packet) > 0 andalso redis:q(redis_pool, Packet, 10000),
+    truncate_logs().
+
+spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
+spool_length(_) -> ?DEFAULT_LOG_HISTORY.

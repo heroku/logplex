@@ -12,9 +12,9 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
-    boot_redis(),
+    RedisOpts = boot_redis(),
     {ok, Pid} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
-    [add_worker() || _ <- lists:seq(1, 1000)],
+    [add_worker(RedisOpts) || _ <- lists:seq(1, 1000)],
     {ok, Pid}.
 
 stop(_State) ->
@@ -59,12 +59,10 @@ boot_redis() ->
                         end
                 end,
             redis_sup:add_pool(redis_pool, Opts, 100),
-            redis_sup:add_pool(write, Opts, 1),
-            redis_sup:add_pool(read, [], 1),
-            ok;
+            Opts;
         Err ->
             exit(Err)
     end.
 
-add_worker() ->
-    supervisor:start_child(?MODULE, {logplex_worker, {logplex_worker, start_link, []}, permanent, 2000, worker, [logplex_worker]}).
+add_worker(RedisOpts) ->
+    supervisor:start_child(?MODULE, {logplex_worker, {logplex_worker, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_worker]}).

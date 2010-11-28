@@ -1,33 +1,43 @@
 -module(logplex_worker).
--export([start_link/0, init/1, loop/1]).
+-export([start_link/1, init/2, loop/1]).
 
 -include_lib("logplex.hrl").
 
--record(state, {regexp}).
+-record(state, {socket, regexp}).
 
 %% API functions
-start_link() ->
-    proc_lib:start_link(?MODULE, init, [self()]).
+start_link(RedisOpts) ->
+    proc_lib:start_link(?MODULE, init, [self(), RedisOpts]).
 
-init(Parent) ->
+init(Parent, RedisOpts) ->
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
+    Socket = open_socket(RedisOpts),
     proc_lib:init_ack(Parent, {ok, self()}),
-    loop(#state{regexp=RE}).
+    loop(#state{socket=Socket, regexp=RE}).
 
-loop(#state{regexp=RE}=State) ->
+loop(#state{socket=Socket, regexp=RE}=State) ->
     case logplex_queue:out() of
         undefined -> timer:sleep(10);
         Msg ->
             case re:run(Msg, RE, [{capture, all_but_first, list}]) of
                 {match, [Token]} ->
-                    logplex_stats:incr(message_processed);
+                    route(Socket, list_to_binary(Token), Msg);
                 _ ->
                     ok
             end
     end,
     loop(State).
 
-route(WriteClient, Token, Packet) when is_binary(Token), is_binary(Packet) ->
+open_socket(Opts) ->
+    Ip = proplists:get_value(ip, Opts),
+    Port = proplists:get_value(port, Opts),
+    Pass = proplists:get_value(pass, Opts),
+    case redis:connect(Ip, Port, Pass) of
+        {ok, Socket} -> Socket;
+        Err -> exit(Err)
+    end.
+
+route(Socket, Token, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, addon=Addon} ->
             Count = logplex_stats:incr(ChannelId),
@@ -39,21 +49,23 @@ route(WriteClient, Token, Packet) when is_binary(Token), is_binary(Packet) ->
                     UTC = erlang:universaltime(),
                     {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
                     Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~w-~wT~w:~w:~w-0~w:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, Month, Day, Hour, Min, Sec, Offset, throughput(Addon)])),
-                    process(WriteClient, ChannelId, Msg1, Addon);
+                    process(Socket, ChannelId, Msg1);
                 false ->
-                    Msg1 = re:replace(Packet, Token, TokenName),
+                    Msg1 = re:replace(Msg, Token, TokenName),
                     Msg2 = iolist_to_binary(Msg1),
-                    process(WriteClient, ChannelId, Msg2, Addon)
+                    process(Socket, ChannelId, Msg2)
             end;
         _ ->
             ok
     end.
 
-process(WriteClient, ChannelId, Msg, Addon) ->
-    logplex_stats:incr(message_processed),
+process(Socket, ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
     [logplex_drain_pool:route(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
-    redis_helper:push_msg(WriteClient, ChannelId, Msg, spool_length(Addon)).
+    case gen_tcp:send(Socket, redis_helper:build_push_msg(ChannelId, Msg)) of
+        ok -> logplex_stats:incr(message_processed);
+        Err -> exit(Err)
+    end.
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;
 throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.
@@ -64,6 +76,3 @@ exceeded_threshold(Count, <<"expanded">>) when Count == (?EXPANDED_THROUGHPUT + 
 exceeded_threshold(Count, <<"basic">>) when Count =< ?BASIC_THROUGHPUT -> false;
 exceeded_threshold(Count, <<"basic">>) when Count == (?BASIC_THROUGHPUT + 1) -> notify;
 exceeded_threshold(_, _) -> true.
-
-spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
-spool_length(_) -> ?DEFAULT_LOG_HISTORY.
