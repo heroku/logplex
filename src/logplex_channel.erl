@@ -153,7 +153,7 @@ truncate_logs() ->
                 _ -> Acc
             end
         end, [], ets:tab2list(logplex_stats_channels)),
-    length(Packet) > 0 andalso redis:q(redis_pool, Packet, 10000),
+    length(Packet) > 0 andalso redis:q(redis_pool, iolist_to_binary(Packet), 10000),
     truncate_logs().
 
 spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
