@@ -13,16 +13,11 @@ init(Parent, RedisOpts) ->
     loop(Socket).
 
 loop(Socket) ->
-    A = now(),
-    case logplex_buffer:out() of
+    case logplex_buffer:out(100) of
         undefined -> timer:sleep(10);
-        Logs ->
-            B = now(),
+        {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of
-                ok ->
-                    C = now(),
-                    io:format("~p/~p~n", [timer:now_diff(B,A), timer:now_diff(C,B)]),
-                    logplex_stats:incr(message_processed);
+                ok -> logplex_stats:incr(message_processed, NumItems);
                 Err -> exit(Err)
             end
     end,

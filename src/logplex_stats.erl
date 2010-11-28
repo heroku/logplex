@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, incr/1, flush/0]).
+-export([healthcheck/0, incr/1, incr/2, flush/0]).
 
 -include_lib("logplex.hrl").
 
@@ -16,9 +16,6 @@ start_link() ->
 healthcheck() ->
     redis_helper:healthcheck().
 
-incr(Key) when is_atom(Key) ->
-    ets:update_counter(?MODULE, Key, 1);
-
 incr(ChannelId) when is_binary(ChannelId) ->
     case (catch ets:update_counter(logplex_stats_channels, ChannelId, 1)) of
         {'EXIT', _} ->
@@ -26,7 +23,14 @@ incr(ChannelId) when is_binary(ChannelId) ->
             incr(ChannelId);
         Res ->
             Res
-    end.
+    end;
+
+incr(Key) when is_atom(Key) ->
+    incr(Key, 1).
+
+incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
+    ets:update_counter(?MODULE, Key, Inc).
+
 
 %%====================================================================
 %% gen_server callbacks

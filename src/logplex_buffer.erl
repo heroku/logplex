@@ -5,11 +5,11 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([in/1, out/0]).
+-export([in/1, out/1]).
 
 -record(state, {queue, length}).
 
--define(MAX_LENGTH, 1000).
+-define(MAX_LENGTH, 2000).
 
 %% API functions
 start_link() ->
@@ -18,8 +18,8 @@ start_link() ->
 in(Packet) ->
     gen_server2:cast(?MODULE, {in, Packet}).
 
-out() ->
-    gen_server2:call(?MODULE, out, 30000).
+out(Num) when is_integer(Num) ->
+    gen_server2:call(?MODULE, {out, Num}, 30000).
 
 %%====================================================================
 %% gen_server callbacks
@@ -48,10 +48,11 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
-    case drain(Queue, 10) of
+handle_call({out, Num}, _From, #state{queue=Queue, length=Length}=State) ->
+    case drain(Queue, Num) of
         {Items, Queue1} when length(Items) > 0 ->
-            {reply, lists:reverse(Items), State#state{queue=Queue1, length=Length-length(Items)}};
+            NumItems = length(Items),
+            {reply, {NumItems, lists:reverse(Items)}, State#state{queue=Queue1, length=Length-NumItems}};
         _ ->
             {reply, undefined, State}
     end;
