@@ -26,8 +26,8 @@ init([]) ->
         {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
-        {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]}] ++ [
-        {erlang:make_ref(), {logplex_worker, start_link, []}, permanent, 2000, worker, [logplex_worker]} || _ <- lists:seq(1,100)
+        {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
+        {logplex_reader, {logplex_reader, start_link, []}, permanent, 2000, worker, [logplex_reader]}
     ]}}.
 
 set_cookie() ->
