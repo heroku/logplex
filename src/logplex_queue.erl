@@ -48,20 +48,24 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call(out, _From, #state{queue=Queue, length=?MAX_LENGTH, notify=in}=State) ->
-    error_logger:info_msg("queue under capacity~n"),
-    syslog_acceptor:active(true),
+handle_call(out, _From, #state{queue=Queue, length=?MAX_LENGTH, notify=Notify}=State) ->
+    Notify == in andalso begin error_logger:info_msg("queue under capacity~n"), syslog_acceptor:active(true) end,
     case queue:out(Queue) of
         {{value, Out}, Queue1} ->
-            {reply, Out, State#state{queue=Queue1, length=?MAX_LENGTH-1, notify=undefined}};
+            {reply, Out, State#state{queue=Queue1, length=?MAX_LENGTH-1, notify=out}};
         {empty, _Queue} ->
-            {reply, undefined, State#state{notify=undefined}}
+            {reply, undefined, State#state{notify=out}}
     end;
 
 handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
     case queue:out(Queue) of
         {{value, Out}, Queue1} ->
-            {reply, Out, State#state{queue=Queue1, length=Length-1}};
+            case Length == ?MAX_LENGTH - 10 of
+                true ->
+                    {reply, Out, State#state{queue=Queue1, length=Length-1, notify=undefined}};
+                false ->
+                    {reply, Out, State#state{queue=Queue1, length=Length-1}}
+            end;
         {empty, _Queue} ->
             {reply, undefined, State}
     end;
