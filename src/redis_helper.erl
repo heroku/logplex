@@ -43,6 +43,9 @@ brpop_log(Pid) ->
         Err -> Err
     end.
 
+build_push_msg(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
+    redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
+
 push_msg(WriteClient, ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_integer(Length) ->
     Packet = [redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]),
               redis:build_request([<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))])],
