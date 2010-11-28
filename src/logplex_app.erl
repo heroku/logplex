@@ -27,8 +27,8 @@ init([RedisOpts]) ->
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
-        {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]}] ++ [
-        {erlang:make_ref(), {logplex_worker, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_worker]} || _ <- lists:seq(1,1000)] ++ [
+        {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]},
+        {logplex_worker_mgr, {logplex_worker_mgr, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_worker_mgr]},
         {syslog_acceptor, {syslog_acceptor, start_link, []}, permanent, 2000, worker, [syslog_acceptor]}
     ]}}.
 
