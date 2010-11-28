@@ -9,7 +9,7 @@
 
 -record(state, {queue, length, active, last_notified}).
 
--define(MAX_LENGTH, 500).
+-define(MAX_LENGTH, 1500).
 
 %% API functions
 start_link() ->
@@ -50,7 +50,7 @@ init([]) ->
 %%--------------------------------------------------------------------
 handle_call(out, _From, #state{queue=Queue, length=Length, active=false, last_notified=Last}=State) ->
     {Out, Queue1, Length1} = dequeue(Queue, Length),
-    case should_notify(Last, 200000) of
+    case should_notify(Last, 100000) of
         true ->
             syslog_acceptor:active(true),
             error_logger:info_msg("queue under capacity ~p~n", [Length]),
@@ -77,7 +77,7 @@ handle_cast({in, _Packet}, #state{active=false}=State) ->
     {noreply, State};
 
 handle_cast({in, _Packet}, #state{length=Length, last_notified=Last}=State) when Length >= ?MAX_LENGTH ->
-    case should_notify(Last, 1000000) of
+    case should_notify(Last, 5000000) of
         true ->
             syslog_acceptor:active(false),
             error_logger:info_msg("queue over capacity~n"),
