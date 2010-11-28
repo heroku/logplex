@@ -24,7 +24,7 @@ start_link(RedisOpts) ->
 init([RedisOpts]) ->
     process_flag(trap_exit, true),
     ets:new(?MODULE, [protected, named_table, set]),
-    [self() ! {'EXIT', {logplex_worker, start_link, []}, undefined} || _ <- lists:seq(1, 100)],
+    [self() ! {'EXIT', {logplex_worker, start_link, []}, undefined} || _ <- lists:seq(1, 300)],
     [self() ! {'EXIT', {logplex_writer, start_link, [RedisOpts]}, undefined} || _ <- lists:seq(1, 100)],
     {ok, []}.
 

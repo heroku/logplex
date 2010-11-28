@@ -53,7 +53,6 @@ handle_call(out, _From, #state{queue=Queue, length=Length, active=false, last_no
     case should_notify(Last, 100000) of
         true ->
             syslog_acceptor:active(true),
-            error_logger:info_msg("queue under capacity ~p~n", [Length]),
             {reply, Out, State#state{queue=Queue1, length=Length1, active=true, last_notified=now()}};
         false ->
             {reply, Out, State#state{queue=Queue1, length=Length1}}
