@@ -67,6 +67,7 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({in, _Packet}, #state{length=Length}=State) when Length >= ?MAX_LENGTH ->
+    logplex_stats:incr(message_dropped2),
     {noreply, State};
 
 handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
