@@ -86,7 +86,7 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info(report_stats, #state{length=Length}=State) ->
-    io:format("logplex_stats logplex_buffer length=~w~n", [Length]),
+    ets:insert(logplex_stats, {logplex_buffer, Length}),
     {noreply, State};
 
 handle_info(_Info, State) ->
