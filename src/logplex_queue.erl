@@ -34,7 +34,7 @@ out() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-	{ok, #state{queue=queue:empty(), length=0, notify=true}}.
+	{ok, #state{queue=queue:new(), length=0, notify=true}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
