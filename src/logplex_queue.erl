@@ -7,7 +7,7 @@
 
 -export([in/1, out/0]).
 
--record(state, {queue, length, notify}).
+-record(state, {queue, length, active, last_notified}).
 
 -define(MAX_LENGTH, 500).
 
@@ -36,7 +36,7 @@ out() ->
 init([]) ->
     Self = self(),
     spawn_link(fun() -> report_stats(Self) end),
-	{ok, #state{queue=queue:new(), length=0, notify=undefined}}.
+	{ok, #state{queue=queue:new(), length=0, active=true}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -48,27 +48,20 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call(out, _From, #state{queue=Queue, length=?MAX_LENGTH, notify=Notify}=State) ->
-    Notify == in andalso begin error_logger:info_msg("queue under capacity~n"), syslog_acceptor:active(true) end,
-    case queue:out(Queue) of
-        {{value, Out}, Queue1} ->
-            {reply, Out, State#state{queue=Queue1, length=?MAX_LENGTH-1, notify=out}};
-        {empty, _Queue} ->
-            {reply, undefined, State#state{notify=out}}
+handle_call(out, _From, #state{queue=Queue, length=Length, active=false, last_notified=Secs}=State) ->
+    {Out, Queue1, Length1} = dequeue(Queue, Length),
+    case should_notify(Secs) of
+        true ->
+            syslog_acceptor:active(true),
+            {_,Secs1,_} = now(),
+            {reply, Out, State#state{queue=Queue1, length=Length1, active=true, last_notified=Secs1}};
+        false ->
+            {reply, Out, State#state{queue=Queue1, length=Length1}}
     end;
 
 handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
-    case queue:out(Queue) of
-        {{value, Out}, Queue1} ->
-            case Length == ?MAX_LENGTH - 10 of
-                true ->
-                    {reply, Out, State#state{queue=Queue1, length=Length-1, notify=undefined}};
-                false ->
-                    {reply, Out, State#state{queue=Queue1, length=Length-1}}
-            end;
-        {empty, _Queue} ->
-            {reply, undefined, State}
-    end;
+    {Out, Queue1, Length1} = dequeue(Queue, Length),
+    {reply, Out, State#state{queue=Queue1, length=Length1}};
 
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
@@ -80,13 +73,16 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({in, _Packet}, #state{length=?MAX_LENGTH, notify=Notify}=State) ->
-    case Notify of
-        undefined ->
-            error_logger:info_msg("queue over capacity~n"),
+handle_cast({in, _Packet}, #state{active=false}=State) ->
+    {noreply, State};
+
+handle_cast({in, _Packet}, #state{length=?MAX_LENGTH, last_notified=Secs}=State) ->
+    case should_notify(Secs) of
+        true ->
             syslog_acceptor:active(false),
-            {noreply, State#state{notify=in}};
-        _ ->
+            {_,Secs1,_} = now(),
+            {noreply, State#state{last_notified=Secs1}};
+        false ->
             {noreply, State}
     end;
 
@@ -133,6 +129,19 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+dequeue(Queue, Length) ->
+    case queue:out(Queue) of
+        {{value, Out}, Queue1} ->
+            {Out, Queue1, Length-1};
+        {empty, _Queue} ->
+            {undefined, Queue, Length}
+    end.
+
+should_notify(undefined) -> true;
+should_notify(Secs) ->
+    {_, Secs1, _} = now(),
+    Secs1 > (Secs + 5).
+
 report_stats(Pid) ->
     timer:sleep(60000),
     Pid ! report_stats,

@@ -14,6 +14,8 @@ start_link() ->
     gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 active(Active) when is_boolean(Active) ->
+    Active == true andalso error_logger:info_msg("queue under capacity~n"),
+    Active == false andalso error_logger:info_msg("queue over capacity~n"),
     gen_server2:cast(?MODULE, {active, Active}).
 
 %%====================================================================
