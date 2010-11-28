@@ -81,7 +81,7 @@ handle_cast({in, _Packet}, #state{length=?MAX_LENGTH, last_notified=Secs}=State)
         true ->
             syslog_acceptor:active(false),
             {_,Secs1,_} = now(),
-            {noreply, State#state{last_notified=Secs1}};
+            {noreply, State#state{last_notified=Secs1, active=false}};
         false ->
             {noreply, State}
     end;
