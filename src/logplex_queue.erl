@@ -34,6 +34,8 @@ out() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    Self = self(),
+    spawn_link(fun() -> report_stats(Self) end),
 	{ok, #state{queue=queue:new(), length=0, notify=true}}.
 
 %%--------------------------------------------------------------------
@@ -47,7 +49,7 @@ init([]) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
-    Length == ?MAX_LENGTH andalso syslog_acceptor:active(true),
+    Length == ?MAX_LENGTH andalso begin error_logger:info_msg("queue under capacity~n"), syslog_acceptor:active(true) end,
     case queue:out(Queue) of
         {{value, Out}, Queue1} ->
             {reply, Out, State#state{queue=Queue1, length=Length-1}};
@@ -83,6 +85,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info(report_stats, #state{length=Length}=State) ->
+    io:format("logplex_stats logplex_queue length=~w~n", [Length]),
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -108,3 +114,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+report_stats(Pid) ->
+    timer:sleep(60000),
+    Pid ! report_stats,
+    report_stats(Pid).

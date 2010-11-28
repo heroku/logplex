@@ -23,8 +23,10 @@ start_link(RedisOpts) ->
 %%--------------------------------------------------------------------
 init([RedisOpts]) ->
     process_flag(trap_exit, true),
-    [self() ! {'EXIT', undefined, undefined} || _ <- lists:seq(1, 1000)],
-    {ok, RedisOpts}.
+    ets:new(?MODULE, [protected, named_table, set]),
+    [self() ! {'EXIT', {logplex_worker, start_link, []}, undefined} || _ <- lists:seq(1, 100)],
+    [self() ! {'EXIT', {logplex_writer, start_link, [RedisOpts]}, undefined} || _ <- lists:seq(1, 100)],
+    {ok, []}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -56,12 +58,19 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({'EXIT', _From, _Reason}, RedisOpts) ->
-    case (catch logplex_worker:start_link(RedisOpts)) of
-        {'EXIT', _} -> erlang:send_after(1000, self(), {'EXIT', undefined, undefined});
-        _ -> ok
+handle_info({'EXIT', {M,F,A}, _Reason}, State) ->
+    spawn_worker({M,F,A}),
+    {noreply, State};
+
+handle_info({'EXIT', Pid, _Reason}, State) ->
+    case ets:lookup(?MODULE, Pid) of
+        [{Pid, {M,F,A}}] ->
+            spawn_worker({M,F,A});
+        _ ->
+            ok
     end,
-    {noreply, RedisOpts};
+    ets:delete(?MODULE, Pid),
+    {noreply, State};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -88,3 +97,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+spawn_worker({M,F,A}) ->
+    case (catch erlang:apply(M,F,A)) of
+        {ok, Pid} ->
+            ets:insert(?MODULE, {Pid, {M,F,A}});
+        _ ->
+            erlang:send_after(1000, self(), {'EXIT', {M,F,A}, undefined})
+    end.
