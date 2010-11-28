@@ -57,7 +57,10 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({'EXIT', _From, _Reason}, RedisOpts) ->
-    logplex_worker:start_link(RedisOpts),
+    case (catch logplex_worker:start_link(RedisOpts)) of
+        {'EXIT', _} -> erlang:send_after(1000, self(), {'EXIT', undefined, undefined});
+        _ -> ok
+    end,
     {noreply, RedisOpts};
 
 handle_info(_Info, State) ->
