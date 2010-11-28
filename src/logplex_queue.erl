@@ -36,7 +36,7 @@ out() ->
 init([]) ->
     Self = self(),
     spawn_link(fun() -> report_stats(Self) end),
-	{ok, #state{queue=queue:new(), length=0, notify=true}}.
+	{ok, #state{queue=queue:new(), length=0, notify=undefined}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -48,8 +48,17 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call(out, _From, #state{queue=Queue, length=?MAX_LENGTH, notify=in}=State) ->
+    error_logger:info_msg("queue under capacity~n"),
+    syslog_acceptor:active(true),
+    case queue:out(Queue) of
+        {{value, Out}, Queue1} ->
+            {reply, Out, State#state{queue=Queue1, length=?MAX_LENGTH-1, notify=undefined}};
+        {empty, _Queue} ->
+            {reply, undefined, State#state{notify=undefined}}
+    end;
+
 handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
-    Length == ?MAX_LENGTH andalso begin error_logger:info_msg("queue under capacity~n"), syslog_acceptor:active(true) end,
     case queue:out(Queue) of
         {{value, Out}, Queue1} ->
             {reply, Out, State#state{queue=Queue1, length=Length-1}};
@@ -68,8 +77,8 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({in, _Packet}, #state{length=?MAX_LENGTH, notify=Notify}=State) ->
-    Notify andalso begin error_logger:info_msg("queue over capacity~n"), syslog_acceptor:active(false) end,
-    {noreply, State#state{notify=false}};
+    Notify == undefined andalso begin error_logger:info_msg("queue over capacity~n"), syslog_acceptor:active(false) end,
+    {noreply, State#state{notify=in}};
 
 handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
     Queue1 = queue:in(Packet, Queue),
