@@ -140,7 +140,7 @@ populate_cache() ->
     length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains).
 
 truncate_logs() ->
-    timer:sleep(1000),
+    timer:sleep(2000),
     Packet = lists:foldl(
         fun({ChannelId, _}, Acc) ->
             case ets:lookup(logplex_channel_tokens, ChannelId) of
