@@ -144,7 +144,7 @@ truncate_logs() ->
     Packet = lists:foldl(
         fun({ChannelId, _}, Acc) ->
             case ets:lookup(logplex_channel_tokens, ChannelId) of
-                [#token{addon=Addon}] ->
+                [#token{addon=Addon}|_] ->
                     [redis:build_request([
                         <<"LTRIM">>,
                         iolist_to_binary(["ch:", ChannelId, ":spool"]),
