@@ -25,6 +25,7 @@ init([RedisOpts]) ->
         {logplex_channel, {logplex_channel, start_link, []}, permanent, 2000, worker, [logplex_channel]},
         {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
+        {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
         {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]},
