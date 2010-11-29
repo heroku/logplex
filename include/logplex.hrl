@@ -1,4 +1,5 @@
 -record(msg, {time, source, ps, content}).
+-record(channel, {id, name, app_id}).
 -record(token, {id, channel_id, name, addon}).
 -record(drain, {id, channel_id, host, port}).
 

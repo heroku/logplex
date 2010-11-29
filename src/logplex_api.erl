@@ -36,9 +36,13 @@ handlers() ->
     {['POST', "/channels$"], fun(Req, _Match) ->
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),
+
         ChannelName = proplists:get_value(<<"name">>, Params),
         ChannelName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
-        ChannelId = logplex_channel:create(ChannelName),
+
+        AppId = proplists:get_value(<<"app_id">>, Params),
+
+        ChannelId = logplex_channel:create(ChannelName, AppId),
         not is_integer(ChannelId) andalso error_resp(Req, 500, <<"failed to create channel">>),
         Req:respond({200, [{"Content-Type", "text/html"}], integer_to_list(ChannelId)})
     end},

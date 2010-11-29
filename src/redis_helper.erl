@@ -24,39 +24,42 @@ channel_index() ->
         Err -> Err
     end.
 
-create_channel(ChannelName) when is_binary(ChannelName) ->
+create_channel(ChannelName, AppId) when is_binary(ChannelName) ->
     ChannelId = channel_index(),
-    case redis:q([<<"SET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":name">>]), ChannelName]) of
-        {ok, <<"OK">>} -> ChannelId;
+    case redis:q([<<"HMSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
+            <<"name">>, ChannelName] ++
+            [<<"app_id">> || is_integer(AppId)] ++
+            [integer_to_list(AppId) || is_integer(AppId)]) of
+        {ok, _} -> ChannelId;
         Err -> Err
     end.
 
 delete_channel(ChannelId) when is_binary(ChannelId) ->
-    case redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":name">>])]) of
+    case redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
         {ok, 1} -> ok;
-        Err -> Err
-    end.
-
-brpop_log(Pid) ->
-    case redis:q(Pid, [<<"BRPOP">>, <<"logs">>, <<"0">>], infinity) of
-        [{ok, <<"logs">>}, {ok, Log}] -> Log;
         Err -> Err
     end.
 
 build_push_msg(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
     redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
 
-push_msg(WriteClient, ChannelId, Msg, Length) when is_binary(ChannelId), is_binary(Msg), is_integer(Length) ->
-    Packet = [redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]),
-              redis:build_request([<<"LTRIM">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Length - 1))])],
-    case redis:q(WriteClient, iolist_to_binary(Packet)) of
-        {ok, _} -> ok;
-        Err -> Err
-    end.
-
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
 
+lookup_channels() ->
+    lists:flatten(lists:foldl(
+        fun({ok, Key}, Acc) ->
+            case string:tokens(binary_to_list(Key), ":") of
+                ["ch", ChannelId, "data"] ->
+                    case lookup_channel(list_to_binary(ChannelId)) of
+                        undefined -> Acc;
+                        Channel -> [Channel|Acc]
+                    end;
+                _ ->
+                    Acc
+            end
+        end, [], redis:q([<<"KEYS">>, <<"ch:*:data">>]))).
+ 
 lookup_channel_ids() ->
     lists:flatten(lists:foldl(
         fun({ok, Key}, Acc) ->
@@ -67,10 +70,20 @@ lookup_channel_ids() ->
             end
         end, [], redis:q([<<"KEYS">>, <<"ch:*:data">>]))).
 
-lookup_channel_name(ChannelId) when is_binary(ChannelId) ->
-    case redis:q([<<"GET">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":name">>])]) of
-        {ok, ChannelName} -> ChannelName;
-        _ -> undefined
+lookup_channel(ChannelId) when is_binary(ChannelId) ->
+    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
+        Fields when is_list(Fields), length(Fields) > 0 ->
+            #channel{
+                id = ChannelId,
+                name = logplex_utils:field_val(<<"name">>, Fields),
+                app_id =
+                 case logplex_utils:field_val(<<"app_id">>, Fields) of
+                     <<"">> -> undefined;
+                     Val -> list_to_integer(binary_to_list(Val))
+                 end
+            };
+        _ ->
+            undefined
     end.
 
 %%====================================================================

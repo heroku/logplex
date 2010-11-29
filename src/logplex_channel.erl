@@ -5,7 +5,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/1, delete/1, logs/2, tokens/1, drains/1, info/1]).
+-export([create/2, delete/1, lookup/1, logs/2, tokens/1, drains/1, info/1]).
 
 -include_lib("logplex.hrl").
 
@@ -13,14 +13,26 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-create(ChannelName) when is_binary(ChannelName) ->
-    redis_helper:create_channel(ChannelName).
+create(ChannelName, AppId) when is_binary(ChannelName) ->
+    case redis_helper:create_channel(ChannelName, AppId) of
+        ChannelId when is_integer(ChannelId) ->
+            logplex_grid:publish(?MODULE, {create, ChannelId, ChannelName, AppId}),
+            ChannelId;
+        Err ->
+            Err
+    end.
 
 delete(ChannelId) when is_binary(ChannelId) ->
     logplex_grid:publish(?MODULE, {delete_channel, ChannelId}),
     logplex_grid:publish(logplex_token, {delete_channel, ChannelId}),
     logplex_grid:publish(logplex_drain, {delete_channel, ChannelId}),
     redis_helper:delete_channel(ChannelId).
+
+lookup(ChannelId) when is_binary(ChannelId) ->
+    case ets:lookup(?MODULE, ChannelId) of
+        [Channel] -> Channel;
+        _ -> undefined
+    end.
 
 logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     redis_helper:fetch_logs(ChannelId, Num).
@@ -32,10 +44,16 @@ drains(ChannelId) when is_binary(ChannelId) ->
     ets:lookup(logplex_channel_drains, ChannelId).
 
 info(ChannelId) when is_binary(ChannelId) ->
-    [{channel_id, ChannelId},
-     {channel_name, redis_helper:lookup_channel_name(ChannelId)},
-     {tokens, tokens(ChannelId)},
-     {drains, drains(ChannelId)}].
+    case lookup(ChannelId) of
+        #channel{name=ChannelName, app_id=AppId} ->
+            [{channel_id, ChannelId},
+             {channel_name, ChannelName},
+             {app_id, AppId},
+             {tokens, tokens(ChannelId)},
+             {drains, drains(ChannelId)}];
+        _ ->
+            []
+    end.
 
 %%====================================================================
 %% gen_server callbacks
@@ -50,6 +68,7 @@ info(ChannelId) when is_binary(ChannelId) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
     ets:new(logplex_channel_tokens, [protected, named_table, bag, {keypos, 3}]),
     ets:new(logplex_channel_drains, [protected, named_table, bag, {keypos, 3}]),
     populate_cache(),
@@ -86,6 +105,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({create, ChannelId, ChannelName, AppId}, State) ->
+    ets:insert(?MODULE, #channel{id=ChannelId, name=ChannelName, app_id=AppId}),
+    {noreply, State};
+
 handle_info({delete_channel, ChannelId}, State) ->
     ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', addon='_'}),
     ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, host='_', port='_'}),
@@ -137,7 +160,10 @@ populate_cache() ->
     length(Tokens) > 0 andalso ets:insert(logplex_channel_tokens, Tokens),
 
     Drains = redis_helper:lookup_drains(),
-    length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains).
+    length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains),
+
+    Channels = redis_helper:lookup_channels(),
+    length(Channels) > 0 andalso ets:insert(?MODULE, Channels).
 
 truncate_logs() ->
     timer:sleep(2000),
