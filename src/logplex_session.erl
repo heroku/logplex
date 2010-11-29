@@ -40,7 +40,9 @@ lookup(Session) when is_binary(Session) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    Self = self(),
     ets:new(?MODULE, [protected, named_table, set]),
+    spawn_link(fun() -> expire_session_cache(Self) end),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -73,6 +75,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info(expire_session_cache, State) ->
+    ets:delete_all_objects(?MODULE),
+    {noreply, State};
+
 handle_info({create, Session, Body}, State) ->
     ets:insert(?MODULE, {Session, Body}),
     {noreply, State};
@@ -102,3 +108,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+expire_session_cache(Pid) ->
+    timer:sleep(20 * 60 * 1000),
+    Pid ! expire_session_cache,
+    expire_session_cache(Pid).
