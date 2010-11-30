@@ -102,8 +102,9 @@ lookup_channel(ChannelId) when is_binary(ChannelId) ->
                 name = logplex_utils:field_val(<<"name">>, Fields),
                 app_id =
                  case logplex_utils:field_val(<<"app_id">>, Fields) of
-                     <<"">> -> undefined;
-                     Val -> list_to_integer(binary_to_list(Val))
+                     Val when is_binary(Val), size(Val) > 0 ->
+                         list_to_integer(binary_to_list(Val));
+                     _ -> undefined
                  end
             };
         _ ->
