@@ -69,19 +69,23 @@ connect(<<"node:", BinNode/binary>> = Key) ->
                 pang ->
                     case redis_helper:get_node(Key) of
                         {ok, Ip} when is_binary(Ip) ->
-                            {ok, Addr} = inet:getaddr(binary_to_list(Ip), inet),
-                            case re:run(StrNode, ".*@(.*)$", [{capture, all_but_first, list}]) of
-                                {match, [Host]} ->
-                                    %io:format("add host ~p -> ~p~n", [Host, Addr]),
-                                    inet_db:add_host(Addr, [Host]),
-                                    case net_adm:ping(Node) of
-                                        pong ->
-                                            erlang:monitor_node(Node, true);
-                                        pang ->
-                                            {error, {ping_failed, Node}}
+                            case inet:getaddr(binary_to_list(Ip), inet) of
+                                {ok, Addr} ->
+                                    case re:run(StrNode, ".*@(.*)$", [{capture, all_but_first, list}]) of
+                                        {match, [Host]} ->
+                                            %io:format("add host ~p -> ~p~n", [Host, Addr]),
+                                            inet_db:add_host(Addr, [Host]),
+                                            case net_adm:ping(Node) of
+                                                pong ->
+                                                    erlang:monitor_node(Node, true);
+                                                pang ->
+                                                    {error, {ping_failed, Node}}
+                                            end;
+                                        _ ->
+                                            error_logger:error_msg("failed_to_parse_host: ~p~n", [StrNode])
                                     end;
-                                _ ->
-                                    {error, {failed_to_parse_host, StrNode}}
+                                Err ->
+                                    error_logger:error_msg("failed to resolve ~p: ~p~n", [Ip, Err])
                             end;
                         _ ->
                             undefined
