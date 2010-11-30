@@ -23,6 +23,8 @@
 -module(syslog_acceptor).
 -export([start_link/0, init/1, loop/1]).
 
+-include_lib("logplex.hrl").
+
 %% API functions
 start_link() ->
     proc_lib:start_link(?MODULE, init, [self()], 5000).
@@ -30,7 +32,7 @@ start_link() ->
 init(Parent) ->
     Self = self(),
     register(?MODULE, Self),
-    {ok, Socket} = gen_udp:open(9999, [binary, {active, true}]),
+    {ok, Socket} = gen_udp:open(?UDP_PORT, [binary, {active, true}]),
     proc_lib:init_ack(Parent, {ok, self()}),
     ?MODULE:loop(Socket).
 
