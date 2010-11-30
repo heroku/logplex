@@ -43,6 +43,7 @@ stop(_State) ->
 init([RedisOpts]) ->
     {ok, {{one_for_one, 5, 10}, [
         {logplex_grid, {logplex_grid, start_link, []}, permanent, 2000, worker, [logplex_grid]},
+        {logplex_realtime, {logplex_realtime, start_link, []}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
         {logplex_channel, {logplex_channel, start_link, []}, permanent, 2000, worker, [logplex_channel]},
         {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},

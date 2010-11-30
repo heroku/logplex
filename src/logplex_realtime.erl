@@ -20,40 +20,35 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_stats).
+-module(logplex_realtime).
 -behaviour(gen_server).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, incr/1, incr/2, flush/0]).
+-export([incr/1, incr/2]).
 
 -include_lib("logplex.hrl").
 
+-record(state, {
+    message_received=0,
+    message_processed=0,
+    message_routed=0,
+    queue_dropped=0,
+    drain_buffer_dropped=0,
+    redis_buffer_dropped=0
+}).
+
 %% API functions
 start_link() ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-healthcheck() ->
-    redis_helper:healthcheck().
-
-incr(ChannelId) when is_binary(ChannelId) ->
-    case (catch ets:update_counter(logplex_stats_channels, ChannelId, 1)) of
-        {'EXIT', _} ->
-            ets:insert(logplex_stats_channels, {ChannelId, 0}),
-            incr(ChannelId);
-        Res ->
-            Res
-    end;
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 incr(Key) when is_atom(Key) ->
     incr(Key, 1).
 
 incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
-    logplex_realtime:incr(Key, Inc),
-    ets:update_counter(?MODULE, Key, Inc).
-
+    gen_server:cast(?MODULE, {incr, Key, Inc}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -68,18 +63,9 @@ incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [public, named_table, set]),
-    ets:new(logplex_stats_channels, [public, named_table, set]),
-    ets:insert(?MODULE, {message_processed, 0}),
-    ets:insert(?MODULE, {session_accessed, 0}),
-    ets:insert(?MODULE, {session_tailed, 0}),
-    ets:insert(?MODULE, {message_routed, 0}),
-    ets:insert(?MODULE, {message_received, 0}),
-    ets:insert(?MODULE, {queue_dropped, 0}),
-    ets:insert(?MODULE, {drain_buffer_dropped, 0}),
-    ets:insert(?MODULE, {redis_buffer_dropped, 0}),
-    spawn_link(fun flush/0),
-	{ok, []}.
+    Self = self(),
+    spawn_link(fun() -> flush(Self) end),
+    {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -101,12 +87,23 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast(flush, State) ->
-    Props = ets:tab2list(?MODULE),
-    [ets:update_element(?MODULE, Key, {2, 0}) || {Key, _Val} <- Props],
-    io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Props, Value > 0])]),
-    [ets:update_element(logplex_stats_channels, Key, {2, 0}) || {Key, _Val} <- ets:tab2list(logplex_stats_channels)],
-    {noreply, State};
+handle_cast({incr, message_received, Incr}, #state{message_received=Count}=State) ->
+    {noreply, State#state{message_received=Count+Incr}};
+
+handle_cast({incr, message_processed, Incr}, #state{message_processed=Count}=State) ->
+    {noreply, State#state{message_processed=Count+Incr}};
+
+handle_cast({incr, message_routed, Incr}, #state{message_routed=Count}=State) ->
+    {noreply, State#state{message_routed=Count+Incr}};
+
+handle_cast({incr, queue_dropped, Incr}, #state{queue_dropped=Count}=State) ->
+    {noreply, State#state{queue_dropped=Count+Incr}};
+
+handle_cast({incr, drain_buffer_dropped, Incr}, #state{drain_buffer_dropped=Count}=State) ->
+    {noreply, State#state{drain_buffer_dropped=Count+Incr}};
+
+handle_cast({incr, redis_buffer_dropped, Incr}, #state{redis_buffer_dropped=Count}=State) ->
+    {noreply, State#state{redis_buffer_dropped=Count+Incr}};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -118,6 +115,20 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info(flush, State) ->
+    spawn(fun() ->
+        Json = iolist_to_binary(mochijson2:encode({struct, [
+            {message_received, State#state.message_received},
+            {message_processed, State#state.message_processed},
+            {message_routed, State#state.message_routed},
+            {queue_dropped, State#state.queue_dropped},
+            {drain_buffer_dropped, State#state.drain_buffer_dropped},
+            {redis_buffer_dropped, State#state.redis_buffer_dropped}
+        ]})),
+        redis_helper:publish_stats(instance_name(), Json)
+    end),
+    {noreply, #state{}};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -143,7 +154,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-flush() ->
-    timer:sleep(60 * 1000),
-    gen_server:cast(?MODULE, flush),
-    flush().
+flush(Pid) ->
+    timer:sleep(1000),
+    Pid ! flush,
+    flush(Pid).
+
+instance_name() ->
+    case get(instance_name) of
+        undefined ->
+            InstanceName = os:getenv("INSTANCE_NAME"),
+            put(instance_name, InstanceName),
+            InstanceName;
+        InstanceName -> InstanceName
+    end.

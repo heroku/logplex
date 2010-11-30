@@ -227,3 +227,9 @@ healthcheck() ->
         {ok, Count} -> Count;
         Error -> exit(Error)
     end.
+
+%%====================================================================
+%% STATS
+%%====================================================================
+publish_stats(InstanceName, Json) when is_list(InstanceName), is_binary(Json) ->
+    redis:q([<<"PUBLISH">>, iolist_to_binary([<<"stats.">>, InstanceName]), Json]).
