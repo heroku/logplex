@@ -64,9 +64,9 @@ set_max_length(MaxLength) when is_integer(MaxLength) ->
 init([]) ->
     Self = self(),
     MaxLength =
-        case application:get_env(logplex, max_queue_length) of
-            undefined -> 2000;
-            {ok, Val} -> Val
+        case os:getenv("LOGPLEX_QUEUE_LENGTH") of
+            false -> 2000;
+            StrNum -> list_to_integer(StrNum)
         end,
     spawn_link(fun() -> report_stats(Self) end),
 	{ok, #state{queue=queue:new(), length=0, max_length=MaxLength}}.

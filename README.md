@@ -27,6 +27,8 @@
 * LOCAL\_IP - ip to register with other logplex nodes (default: 127.0.0.1)
 * LOGPLEX\_WORKERS - number of workers pulling from queue (default: 10)
 * LOGPLEX\_WRITERS - number of writers pulling from buffer and writing to redis (default: 100)
+* LOGPLEX\_QUEUE\_LENGTH - max length of read queue (default: 2000)
+* LOGPLEX\_BUFFER\_LENGTH - max length of write buffer (default: 2000)
 
 # License
 
