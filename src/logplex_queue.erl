@@ -21,66 +21,138 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_queue).
--export([start_link/0, init/1, loop/1]).
+-behaviour(gen_server).
 
--export([in/1, out/0]).
+%% gen_server callbacks
+-export([start_link/0, init/1, handle_call/3, handle_cast/2, 
+	     handle_info/2, terminate/2, code_change/3]).
 
--record(state, {queue, length}).
+-export([in/1, out/0, info/0, set_max_length/1]).
 
--define(MAX_LENGTH, 2000).
+-record(state, {queue, length, max_length}).
+
+-define(TIMEOUT, 30000).
 
 %% API functions
 start_link() ->
-    proc_lib:start_link(?MODULE, init, [self()], 5000).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 in(Packet) ->
-    whereis(?MODULE) ! {undefined, {in, Packet}}.
+    gen_server:cast(?MODULE, {in, Packet}).
 
 out() ->
-    Pid = whereis(?MODULE),
-    Pid ! {self(), out},
-    receive {Pid, Reply} -> Reply after 30000 -> {error, timeout} end.
+    gen_server:call(?MODULE, out, ?TIMEOUT).
 
-init(Parent) ->
+info() ->
+    gen_server:call(?MODULE, info, ?TIMEOUT).
+
+set_max_length(MaxLength) when is_integer(MaxLength) ->
+    gen_server:cast(?MODULE, {max_length, MaxLength}).
+
+%%====================================================================
+%% gen_server callbacks
+%%====================================================================
+
+%%--------------------------------------------------------------------
+%% Function: init(Args) -> {ok, State} |
+%%                         {ok, State, Timeout} |
+%%                         ignore               |
+%%                         {stop, Reason}
+%% Description: Initiates the server
+%% @hidden
+%%--------------------------------------------------------------------
+init([]) ->
     Self = self(),
-    register(?MODULE, Self),
+    MaxLength =
+        case application:get_env(logplex, max_queue_length) of
+            undefined -> 2000;
+            {ok, Val} -> Val
+        end,
     spawn_link(fun() -> report_stats(Self) end),
-    proc_lib:init_ack(Parent, {ok, self()}),
-    ?MODULE:loop(#state{queue=queue:new(), length=0}).
+	{ok, #state{queue=queue:new(), length=0, max_length=MaxLength}}.
 
-loop(State) ->
-    State1 = receive Msg -> handle(Msg, State) end,
-    ?MODULE:loop(State1).
-
-handle({undefined, {in, _Packet}}, #state{length=Length}=State) when Length >= ?MAX_LENGTH ->
-    logplex_stats:incr(queue_dropped),
-    State;
-
-handle({undefined, {in, Packet}}, #state{queue=Queue, length=Length}=State) ->
-    Queue1 = queue:in(Packet, Queue),
-    State#state{queue=Queue1, length=Length+1};
-
-handle({From, out}, #state{queue=Queue, length=Length}=State) ->
+%%--------------------------------------------------------------------
+%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
+%%                                      {reply, Reply, State, Timeout} |
+%%                                      {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, Reply, State} |
+%%                                      {stop, Reason, State}
+%% Description: Handling call messages
+%% @hidden
+%%--------------------------------------------------------------------
+handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
     case queue:out(Queue) of
         {{value, Out}, Queue1} ->
-            From ! {self(), Out},
-            State#state{queue=Queue1, length=Length-1};
+            {reply, Out, State#state{queue=Queue1, length=Length-1}};
         {empty, _Queue} ->
-            From ! {self(), undefined},
-            State
+            {reply, undefined, State}
     end;
 
-handle({undefined, report_stats}, #state{length=Length}=State) ->
-    ets:insert(logplex_stats, {queue_length, Length}),
-    State;
+handle_call(info, _From, #state{length=Length, max_length=MaxLength}=State) ->
+    {reply, {Length, MaxLength}, State};
 
-handle(_, State) ->
-    State.
+handle_call(_Msg, _From, State) ->
+    {reply, {error, invalid_call}, State}.
+
+%%--------------------------------------------------------------------
+%% Function: handle_cast(Msg, State) -> {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, State}
+%% Description: Handling cast messages
+%% @hidden
+%%--------------------------------------------------------------------
+handle_cast({in, _Packet}, #state{length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
+    logplex_stats:incr(queue_dropped),
+    {noreply, State};
+
+handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
+    Queue1 = queue:in(Packet, Queue),
+    {noreply, State#state{queue=Queue1, length=Length+1}};
+
+handle_cast({max_length, MaxLength}, State) ->
+    {noreply, State#state{max_length=MaxLength}};
+
+handle_cast(_Msg, State) ->
+    {noreply, State}.
+
+%%--------------------------------------------------------------------
+%% Function: handle_info(Info, State) -> {noreply, State} |
+%%                                       {noreply, State, Timeout} |
+%%                                       {stop, Reason, State}
+%% Description: Handling all non call/cast messages
+%% @hidden
+%%--------------------------------------------------------------------
+handle_info(report_stats, #state{length=Length}=State) ->
+    ets:insert(logplex_stats, {queue_length, Length}),
+    {noreply, State};
+
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+%%--------------------------------------------------------------------
+%% Function: terminate(Reason, State) -> void()
+%% Description: This function is called by a gen_server when it is about to
+%% terminate. It should be the opposite of Module:init/1 and do any necessary
+%% cleaning up. When it returns, the gen_server terminates with Reason.
+%% The return value is ignored.
+%% @hidden
+%%--------------------------------------------------------------------
+terminate(_Reason, _State) -> 
+    ok.
+
+%%--------------------------------------------------------------------
+%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
+%% Description: Convert process state when code is changed
+%% @hidden
+%%--------------------------------------------------------------------
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
 
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
 report_stats(Pid) ->
     timer:sleep(60000),
-    Pid ! {undefined, report_stats},
+    Pid ! report_stats,
     report_stats(Pid).
