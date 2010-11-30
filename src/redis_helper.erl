@@ -70,7 +70,7 @@ fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
 
 lookup_channels() ->
     lists:flatten(lists:foldl(
-        fun({ok, Key}, Acc) ->
+        fun ({ok, Key}, Acc) when is_binary(Key) ->
             case string:tokens(binary_to_list(Key), ":") of
                 ["ch", ChannelId, "data"] ->
                     case lookup_channel(list_to_binary(ChannelId)) of
@@ -79,7 +79,9 @@ lookup_channels() ->
                     end;
                 _ ->
                     Acc
-            end
+            end;
+            (_, Acc) ->
+                Acc
         end, [], redis:q([<<"KEYS">>, <<"ch:*:data">>]))).
  
 lookup_channel_ids() ->
