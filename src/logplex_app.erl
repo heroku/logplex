@@ -67,7 +67,7 @@ boot_redis() ->
         ok ->
             Opts = 
                 case os:getenv("LOGPLEX_REDIS_URL") of
-                    false -> [];
+                    false -> [{ip, "127.0.0.1"}, {port, 6379}];
                     Url ->
                         case redis_uri:parse(Url) of
                             {redis, UserInfo, Host, Port, _Path, _Query} ->
@@ -79,7 +79,7 @@ boot_redis() ->
                                 {ok, Ip} = inet:getaddr(Host, inet),
                                 [{ip, Ip}, {port, Port}, {pass, Pass}];
                             _ ->
-                                []
+                                [{ip, "127.0.0.1"}, {port, 6379}]
                         end
                 end,
             redis_sup:add_pool(redis_pool, Opts, 100),

@@ -1,4 +1,11 @@
 #!/bin/sh
 
+unamestr=`uname`
+if [[ "$unamestr" == 'Darwin' ]]; then
+   hostname=`hostname`
+else
+   hostname=`hostname --fqdn`
+fi
+
 ulimit -n 65535
-erl +K true +A30 +P500000 -env ERL_MAX_PORTS 65535 -name logplex_console@`hostname --fqdn` -pa ebin -pa deps/*/ebin -boot release/logplex-1.0
+erl +K true +A30 +P500000 -env ERL_MAX_PORTS 65535 -env HTTP_PORT 8001 -name logplex_console@$hostname -pa ebin -pa deps/*/ebin -boot release/logplex-1.0

@@ -46,8 +46,18 @@ start_link(RedisOpts) ->
 init([RedisOpts]) ->
     process_flag(trap_exit, true),
     ets:new(?MODULE, [protected, named_table, set]),
-    [self() ! {'EXIT', {logplex_worker, start_link, []}, undefined} || _ <- lists:seq(1, 300)],
-    [self() ! {'EXIT', {logplex_writer, start_link, [RedisOpts]}, undefined} || _ <- lists:seq(1, 800)],
+    NumWorkers =
+        case os:getenv("LOGPLEX_WORKERS") of
+            false -> 10;
+            StrNum1 -> list_to_integer(StrNum1)
+        end,
+    NumWriters =
+        case os:getenv("LOGPLEX_WRITERS") of
+            false -> 100;
+            StrNum2 -> list_to_integer(StrNum2)
+        end,
+    [self() ! {'EXIT', {logplex_worker, start_link, []}, undefined} || _ <- lists:seq(1, NumWorkers)],
+    [self() ! {'EXIT', {logplex_writer, start_link, [RedisOpts]}, undefined} || _ <- lists:seq(1, NumWriters)],
     {ok, []}.
 
 %%--------------------------------------------------------------------

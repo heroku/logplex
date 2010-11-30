@@ -26,9 +26,14 @@
 -include_lib("logplex.hrl").
 
 start_link() ->
+    Port =
+        case os:getenv("HTTP_PORT") of
+            false -> 80;
+            Val -> list_to_integer(Val)
+        end,
     Opts = [
         {ip, "0.0.0.0"},
-        {port, 80},
+        {port, Port},
         {backlog, 1024},
         {loop, {logplex_api, loop}},
         {name, logplex_api}
@@ -193,8 +198,8 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
 authorize(Req) ->
     AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
     case Req:get_header_value("Authorization") of
-    AuthKey ->
-        true;
+        AuthKey ->
+            true;
         _ ->
             Req:respond({401, [{"Content-Type", "text/html"}], "Not Authorized"}),
             throw(normal)

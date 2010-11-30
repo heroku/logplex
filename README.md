@@ -1,4 +1,32 @@
+# Setup
 
+    $ git submodule update --init
+    $ make
+
+# Test
+
+    $ bin/test.escript
+
+# Run
+
+## Development
+
+    $ bin/console
+
+## Production
+
+    $ initctl [start|stop|restart] logplex
+    $ bin/connect ('ctrl-g q' to exit)
+
+## Environment Variables
+
+* LOGPLEX\_COOKIE - Erlang cookie, important for multiple node grid (not required)
+* LOGPLEX\_REDIS_URL - redis url (default: redis://127.0.0.1:6379)
+* HTTP_PORT - http port (default: 80)
+* LOGPLEX\_AUTH_KEY - api http header 'Authorization' == LOGPLEX\_AUTH\_KEY (required)
+* LOCAL\_IP - ip to register with other logplex nodes (default: 127.0.0.1)
+* LOGPLEX\_WORKERS - number of workers pulling from queue (default: 10)
+* LOGPLEX\_WRITERS - number of writers pulling from buffer and writing to redis (default: 100)
 
 # License
 
