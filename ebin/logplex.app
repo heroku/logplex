@@ -3,7 +3,6 @@
   {description, "Log multiplexer"},
   {vsn, "1.0"},
   {modules, [
-    gen_server2,
     logplex_api,
     logplex_app,
     logplex_buffer,
