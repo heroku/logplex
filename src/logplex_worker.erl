@@ -73,8 +73,8 @@ route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
 
 process(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
-    [logplex_drain_pool:route(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
-    logplex_buffer:in(redis_helper:build_push_msg(ChannelId, Msg)).
+    [logplex_drain_buffer:in(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
+    logplex_redis_buffer:in(redis_helper:build_push_msg(ChannelId, Msg)).
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;
 throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.

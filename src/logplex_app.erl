@@ -48,11 +48,11 @@ init([RedisOpts]) ->
         {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
         {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
-        {logplex_drain_pool, {logplex_drain_pool, start_link, []}, permanent, 2000, worker, [logplex_drain_pool]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
         {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]},
-        {logplex_buffer, {logplex_buffer, start_link, []}, permanent, 2000, worker, [logplex_buffer]},
+        {logplex_drain_buffer, {logplex_drain_buffer, start_link, []}, permanent, 2000, worker, [logplex_drain_buffer]},
+        {logplex_redis_buffer, {logplex_redis_buffer, start_link, []}, permanent, 2000, worker, [logplex_redis_buffer]},
         {logplex_worker_mgr, {logplex_worker_mgr, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_worker_mgr]},
         {syslog_acceptor, {syslog_acceptor, start_link, []}, permanent, 2000, worker, [syslog_acceptor]}
     ]}}.

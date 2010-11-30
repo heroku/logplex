@@ -20,14 +20,14 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_buffer).
+-module(logplex_drain_buffer).
 -behaviour(gen_server).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([in/1, out/1, info/0, set_max_length/1]).
+-export([in/3, out/0, info/0, set_max_length/1]).
 
 -record(state, {queue, length, max_length}).
 
@@ -37,11 +37,11 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-in(Packet) ->
-    gen_server:cast(?MODULE, {in, Packet}).
+in(Host, Port, Msg) when is_binary(Host), is_integer(Port), is_binary(Msg) ->
+    gen_server:cast(?MODULE, {in, {Host, Port, Msg}}).
 
-out(Num) when is_integer(Num) ->
-    gen_server:call(?MODULE, {out, Num}, 30000).
+out() ->
+    gen_server:call(?MODULE, out, 30000).
 
 info() ->
     gen_server:call(?MODULE, info, ?TIMEOUT).
@@ -64,7 +64,7 @@ set_max_length(MaxLength) when is_integer(MaxLength) ->
 init([]) ->
     Self = self(),
     MaxLength =
-        case os:getenv("LOGPLEX_BUFFER_LENGTH") of
+        case os:getenv("LOGPLEX_DRAIN_BUFFER_LENGTH") of
             false -> 2000;
             StrNum -> list_to_integer(StrNum)
         end,
@@ -81,12 +81,11 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({out, Num}, _From, #state{queue=Queue, length=Length}=State) ->
-    case drain(Queue, Num) of
-        {Items, Queue1} when length(Items) > 0 ->
-            NumItems = length(Items),
-            {reply, {NumItems, lists:reverse(Items)}, State#state{queue=Queue1, length=Length-NumItems}};
-        _ ->
+handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
+    case queue:out(Queue) of
+        {{value, Out}, Queue1} ->
+            {reply, Out, State#state{queue=Queue1, length=Length-1}};
+        {empty, _Queue} ->
             {reply, undefined, State}
     end;
 
@@ -104,7 +103,7 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({in, _Packet}, #state{length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
-    logplex_stats:incr(buffer_dropped),
+    logplex_stats:incr(drain_buffer_dropped),
     {noreply, State};
 
 handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
@@ -125,7 +124,7 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info(report_stats, #state{length=Length}=State) ->
-    ets:insert(logplex_stats, {buffer_length, Length}),
+    ets:insert(logplex_stats, {drain_buffer_length, Length}),
     {noreply, State};
 
 handle_info(_Info, State) ->
@@ -153,20 +152,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-drain(Queue, N) ->
-    drain(Queue, N, []).
-
-drain(Queue, 0, Acc) ->
-    {Acc, Queue};
-
-drain(Queue, N, Acc) ->
-    case queue:out(Queue) of
-        {{value, Out}, Queue1} ->
-            drain(Queue1, N-1, [Out|Acc]);
-        {empty, _Queue} ->
-            {Acc, Queue}
-    end.
-
 report_stats(Pid) ->
     timer:sleep(60000),
     Pid ! report_stats,

@@ -20,23 +20,34 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_drain_pool).
+-module(logplex_redis_buffer).
 -behaviour(gen_server).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([route/3]).
+-export([in/1, out/1, info/0, set_max_length/1]).
 
--record(state, {socket}).
+-record(state, {queue, length, max_length}).
+
+-define(TIMEOUT, 30000).
 
 %% API functions
 start_link() ->
-	gen_server:start_link(?MODULE, [], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-route(Host, Port, Msg) when is_binary(Host), is_integer(Port), is_binary(Msg) ->
-    gen_server:cast(pg2:get_closest_pid(?MODULE), {route, Host, Port, Msg}).
+in(Packet) ->
+    gen_server:cast(?MODULE, {in, Packet}).
+
+out(Num) when is_integer(Num) ->
+    gen_server:call(?MODULE, {out, Num}, 30000).
+
+info() ->
+    gen_server:call(?MODULE, info, ?TIMEOUT).
+
+set_max_length(MaxLength) when is_integer(MaxLength) ->
+    gen_server:cast(?MODULE, {max_length, MaxLength}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -51,10 +62,14 @@ route(Host, Port, Msg) when is_binary(Host), is_integer(Port), is_binary(Msg) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    pg2:create(?MODULE),
-    pg2:join(?MODULE, self()),
-    {ok, Socket} = gen_udp:open(0, [binary]),
-	{ok, #state{socket=Socket}}.
+    Self = self(),
+    MaxLength =
+        case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
+            false -> 2000;
+            StrNum -> list_to_integer(StrNum)
+        end,
+    spawn_link(fun() -> report_stats(Self) end),
+    {ok, #state{queue=queue:new(), length=0, max_length=MaxLength}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -66,6 +81,18 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call({out, Num}, _From, #state{queue=Queue, length=Length}=State) ->
+    case drain(Queue, Num) of
+        {Items, Queue1} when length(Items) > 0 ->
+            NumItems = length(Items),
+            {reply, {NumItems, lists:reverse(Items)}, State#state{queue=Queue1, length=Length-NumItems}};
+        _ ->
+            {reply, undefined, State}
+    end;
+
+handle_call(info, _From, #state{length=Length, max_length=MaxLength}=State) ->
+    {reply, {Length, MaxLength}, State};
+
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -76,10 +103,16 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({route, Host, Port, Msg}, State) ->
-    logplex_stats:incr(message_routed),
-    gen_udp:send(State#state.socket, binary_to_list(Host), Port, Msg),
+handle_cast({in, _Packet}, #state{length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
+    logplex_stats:incr(redis_buffer_dropped),
     {noreply, State};
+
+handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
+    Queue1 = queue:in(Packet, Queue),
+    {noreply, State#state{queue=Queue1, length=Length+1}};
+
+handle_cast({max_length, MaxLength}, State) ->
+    {noreply, State#state{max_length=MaxLength}};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -91,6 +124,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info(report_stats, #state{length=Length}=State) ->
+    ets:insert(logplex_stats, {redis_buffer_length, Length}),
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -116,3 +153,21 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+drain(Queue, N) ->
+    drain(Queue, N, []).
+
+drain(Queue, 0, Acc) ->
+    {Acc, Queue};
+
+drain(Queue, N, Acc) ->
+    case queue:out(Queue) of
+        {{value, Out}, Queue1} ->
+            drain(Queue1, N-1, [Out|Acc]);
+        {empty, _Queue} ->
+            {Acc, Queue}
+    end.
+
+report_stats(Pid) ->
+    timer:sleep(60000),
+    Pid ! report_stats,
+    report_stats(Pid).

@@ -20,7 +20,7 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_writer).
+-module(logplex_redis_writer).
 -export([start_link/1, init/2, loop/1]).
 
 -include_lib("logplex.hrl").
@@ -35,7 +35,7 @@ init(Parent, RedisOpts) ->
     loop(Socket).
 
 loop(Socket) ->
-    case logplex_buffer:out(100) of
+    case logplex_redis_buffer:out(100) of
         undefined -> timer:sleep(10);
         {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of

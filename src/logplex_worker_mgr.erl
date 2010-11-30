@@ -51,13 +51,19 @@ init([RedisOpts]) ->
             false -> 10;
             StrNum1 -> list_to_integer(StrNum1)
         end,
-    NumWriters =
-        case os:getenv("LOGPLEX_WRITERS") of
+    NumDrainWriters =
+        case os:getenv("LOGPLEX_DRAIN_WRITERS") of
             false -> 100;
             StrNum2 -> list_to_integer(StrNum2)
         end,
+    NumRedisWriters =
+        case os:getenv("LOGPLEX_REDIS_WRITERS") of
+            false -> 100;
+            StrNum3 -> list_to_integer(StrNum3)
+        end,        
     [self() ! {'EXIT', {logplex_worker, start_link, []}, undefined} || _ <- lists:seq(1, NumWorkers)],
-    [self() ! {'EXIT', {logplex_writer, start_link, [RedisOpts]}, undefined} || _ <- lists:seq(1, NumWriters)],
+    [self() ! {'EXIT', {logplex_drain_writer, start_link, []}, undefined} || _ <- lists:seq(1, NumDrainWriters)],
+    [self() ! {'EXIT', {logplex_redis_writer, start_link, [RedisOpts]}, undefined} || _ <- lists:seq(1, NumRedisWriters)],
     {ok, []}.
 
 %%--------------------------------------------------------------------
