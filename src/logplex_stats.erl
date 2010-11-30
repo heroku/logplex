@@ -75,7 +75,8 @@ init([]) ->
     ets:insert(?MODULE, {message_routed, 0}),
     ets:insert(?MODULE, {message_received, 0}),
     ets:insert(?MODULE, {queue_dropped, 0}),
-    ets:insert(?MODULE, {buffer_dropped, 0}),
+    ets:insert(?MODULE, {drain_buffer_dropped, 0}),
+    ets:insert(?MODULE, {redis_buffer_dropped, 0}),
     spawn_link(fun flush/0),
 	{ok, []}.
 
