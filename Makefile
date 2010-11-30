@@ -5,6 +5,6 @@ all:
 	@escript release/build_rel.escript boot logplex `pwd`/ebin
 
 clean:
-	rm -f ebin/*.beam
+	rm -f ebin/*.beam erl_crash.dump
 	(cd deps/redis_pool;$(MAKE) clean)
 	(cd deps/mochiweb;$(MAKE) clean)
