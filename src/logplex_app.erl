@@ -34,6 +34,7 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
+    ok = error_logger:add_report_handler(logplex_logger),
     RedisOpts = boot_redis(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, [RedisOpts]).
 

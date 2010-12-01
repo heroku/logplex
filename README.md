@@ -32,6 +32,18 @@
 * LOGPLEX\_DRAIN\_BUFFER\_LENGTH - max length of drain write buffer (default: 2000)
 * LOGPLEX\_REDIS\_BUFFER\_LENGTH - max length of redis write buffer (default: 2000)
 
+## Redis Keys
+
+    ch:336:data (hash)
+    drain:57:data (hash)
+    tok:t.abcdefghijklmnopqrstuvwxyz:data (hash)
+    ch:17:spool (list)
+    /sessions/09743165504ecc6c4db21cbb0083c030 (string)
+    drain_index (counter)
+    channel_index (counter)
+    healthcheck (counter)
+    node:heroku.com:10.100.0.1 (string)
+
 # License
 
 Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>  

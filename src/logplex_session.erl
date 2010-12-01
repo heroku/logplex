@@ -36,10 +36,10 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 create(Body) when is_binary(Body) ->
-    Session = list_to_binary(string:strip(os:cmd("uuidgen"), right, $\n)),
+    Session = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
     redis_helper:create_session(Session, Body),
     logplex_grid:publish(?MODULE, {create, Session, Body}),
-    iolist_to_binary([<<"/sessions/">>, Session]).
+    Session.
 
 lookup(Session) when is_binary(Session) ->
     case ets:lookup(?MODULE, Session) of
