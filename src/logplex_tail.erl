@@ -91,7 +91,6 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({register, ChannelId, Pid}, State)->
-    io:format("register ~p ~p~n", [ChannelId, Pid]),
     ets:insert(?MODULE, {ChannelId, Pid}),
     {noreply, State};
 

@@ -23,6 +23,8 @@
 -module(logplex_grid).
 -export([start_link/0, init/1, publish/2, loop/3]).
 
+-include_lib("logplex.hrl").
+
 start_link() ->
     proc_lib:start_link(?MODULE, init, [self()]).
 
@@ -80,7 +82,6 @@ connect(Size, Key) ->
                                         {ok, Addr} ->
                                             case re:run(StrNode, ".*@(.*)$", [{capture, all_but_first, list}]) of
                                                 {match, [Host]} ->
-                                                    %io:format("add host ~p -> ~p~n", [Host, Addr]),
                                                     inet_db:add_host(Addr, [Host]),
                                                     case net_adm:ping(Node) of
                                                         pong ->
@@ -89,10 +90,10 @@ connect(Size, Key) ->
                                                             {error, {ping_failed, Node}}
                                                     end;
                                                 _ ->
-                                                    error_logger:error_msg("failed_to_parse_host: ~p~n", [StrNode])
+                                                    log(error, "failed_to_parse_host: ~p", [StrNode])
                                             end;
                                         Err ->
-                                            error_logger:error_msg("failed to resolve ~p: ~p~n", [Ip, Err])
+                                            log(error, "failed to resolve ~p: ~p", [Ip, Err])
                                     end;
                                 _ ->
                                     undefined

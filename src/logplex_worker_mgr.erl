@@ -27,6 +27,8 @@
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, 
          handle_info/2, terminate/2, code_change/3]).
 
+-include_lib("logplex.hrl").
+
 %% API functions
 start_link(RedisOpts) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [RedisOpts], []).
@@ -103,7 +105,7 @@ handle_info({'EXIT', {M,F,A}, _Reason}, State) ->
 handle_info({'EXIT', Pid, Reason}, State) ->
     case ets:lookup(?MODULE, Pid) of
         [{Pid, {M,F,A}}] ->
-            error_logger:error_msg("worker (~p) died: ~1000p~n", [M, Reason]),
+            log(error, "worker (~p) died: ~1000p", [M, Reason]),
             spawn_worker({M,F,A});
         _ ->
             ok

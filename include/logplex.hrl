@@ -1,3 +1,5 @@
+-import(hermes_log, [log/1, log/2, log/3]).
+
 -record(msg, {time, source, ps, content}).
 -record(channel, {id, name, app_id}).
 -record(token, {id, channel_id, name, addon}).

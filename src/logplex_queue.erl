@@ -29,6 +29,8 @@
 
 -export([in/1, out/0, info/0, set_max_length/1]).
 
+-include_lib("logplex.hrl").
+
 -record(state, {queue, length, max_length}).
 
 -define(TIMEOUT, 30000).

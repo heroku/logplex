@@ -38,7 +38,7 @@ start_link() ->
         {loop, {logplex_api, loop}},
         {name, logplex_api}
     ],
-    io:format("START API~n"),
+    log("START API"),
     mochiweb_http:start(Opts).
 
 stop() ->
@@ -49,7 +49,7 @@ stop() ->
 loop(Req) ->
     Method = Req:get(method),
     Path = Req:get(path),
-    io:format("REQ: ~p ~p~n", [Method, Path]),
+    log("REQ: ~p ~p", [Method, Path]),
     serve(handlers(), Method, Path, Req),
     ok.
 
@@ -209,7 +209,7 @@ error_resp(Req, RespCode, Body) ->
     error_resp(Req, RespCode, Body, undefined).
 
 error_resp(Req, RespCode, Body, Error) ->
-    Error =/= undefined andalso io:format("server exception: ~1000p~n", [Error]),
+    Error =/= undefined andalso log(error, "server exception: ~1000p~n", [Error]),
     Req:respond({RespCode, [{"Content-Type", "text/html"}], Body}),
     throw(normal).
 
@@ -221,7 +221,7 @@ tail_loop(Socket, Filters) ->
             logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1)),
             tail_loop(Socket, Filters);
         {tcp_closed, Socket} ->
-            io:format("client closed socket~n")
+            ok
     end.
 
 filters(Data) ->
