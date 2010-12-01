@@ -69,25 +69,30 @@ set_cookie() ->
 boot_redis() ->
     case application:start(redis, temporary) of
         ok ->
-            Opts = 
-                case os:getenv("LOGPLEX_REDIS_URL") of
-                    false -> [{ip, "127.0.0.1"}, {port, 6379}];
-                    Url ->
-                        case redis_uri:parse(Url) of
-                            {redis, UserInfo, Host, Port, _Path, _Query} ->
-                                Pass = 
-                                    case UserInfo of
-                                        "" -> undefined;
-                                        Val -> list_to_binary(Val)
-                                    end,
-                                {ok, Ip} = inet:getaddr(Host, inet),
-                                [{ip, Ip}, {port, Port}, {pass, Pass}];
-                            _ ->
-                                [{ip, "127.0.0.1"}, {port, 6379}]
-                        end
-                end,
-            redis_sup:add_pool(redis_pool, Opts, 100),
-            Opts;
+            Opts1 = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+            Opts2 = redis_opts("LOGPLEX_REDIS_URL"),
+            redis_sup:add_pool(config_pool, Opts1, 25),
+            redis_sup:add_pool(log_pool, Opts2, 75),
+            Opts2;
         Err ->
             exit(Err)
+    end.
+
+redis_opts(ConfigVar) when is_list(ConfigVar) ->
+    case os:getenv(ConfigVar) of
+        false ->
+            [{ip, "127.0.0.1"}, {port, 6379}];
+        Url ->
+            case redis_uri:parse(Url) of
+                {redis, UserInfo, Host, Port, _Path, _Query} ->
+                    Pass = 
+                        case UserInfo of
+                            "" -> undefined;
+                            Val -> list_to_binary(Val)
+                        end,
+                    {ok, Ip} = inet:getaddr(Host, inet),
+                    [{ip, Ip}, {port, Port}, {pass, Pass}];
+                _ ->
+                    [{ip, "127.0.0.1"}, {port, 6379}]
+            end
     end.

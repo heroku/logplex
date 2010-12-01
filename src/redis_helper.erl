@@ -29,10 +29,10 @@
 %% SESSION
 %%====================================================================
 create_session(Session, Body) when is_binary(Session), is_binary(Body) ->
-    redis:q([<<"SETEX">>, Session, <<"360">>, Body]).
+    redis:q(config_pool, [<<"SETEX">>, Session, <<"360">>, Body]).
 
 lookup_session(Session) when is_binary(Session) ->
-    case redis:q([<<"GET">>, Session]) of
+    case redis:q(config_pool, [<<"GET">>, Session]) of
         {ok, Data} -> Data;
         Err -> Err
     end.
@@ -41,14 +41,14 @@ lookup_session(Session) when is_binary(Session) ->
 %% CHANNEL
 %%====================================================================
 channel_index() ->
-    case redis:q([<<"INCR">>, <<"channel_index">>]) of
+    case redis:q(config_pool, [<<"INCR">>, <<"channel_index">>]) of
         {ok, ChannelId} -> ChannelId;
         Err -> Err
     end.
 
 create_channel(ChannelName, AppId) when is_binary(ChannelName) ->
     ChannelId = channel_index(),
-    case redis:q([<<"HMSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
+    case redis:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
             <<"name">>, ChannelName] ++
             [<<"app_id">> || is_integer(AppId)] ++
             [integer_to_list(AppId) || is_integer(AppId)]) of
@@ -57,7 +57,7 @@ create_channel(ChannelName, AppId) when is_binary(ChannelName) ->
     end.
 
 delete_channel(ChannelId) when is_binary(ChannelId) ->
-    case redis:q([<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
+    case redis:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
         {ok, 1} -> ok;
         Err -> Err
     end.
@@ -66,7 +66,10 @@ build_push_msg(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
     redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
 
 fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
-    redis:q([<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
+    redis:q(log_pool, [<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
+
+truncate_logs(Packet) when is_binary(Packet) ->
+    redis:q(log_pool, iolist_to_binary(Packet), 10000).
 
 lookup_channels() ->
     lists:flatten(lists:foldl(
@@ -82,7 +85,7 @@ lookup_channels() ->
             end;
             (_, Acc) ->
                 Acc
-        end, [], redis:q([<<"KEYS">>, <<"ch:*:data">>]))).
+        end, [], redis:q(config_pool, [<<"KEYS">>, <<"ch:*:data">>]))).
  
 lookup_channel_ids() ->
     lists:flatten(lists:foldl(
@@ -92,10 +95,10 @@ lookup_channel_ids() ->
                     [list_to_binary(ChannelId)|Acc];
                 _ -> Acc
             end
-        end, [], redis:q([<<"KEYS">>, <<"ch:*:data">>]))).
+        end, [], redis:q(config_pool, [<<"KEYS">>, <<"ch:*:data">>]))).
 
 lookup_channel(ChannelId) when is_binary(ChannelId) ->
-    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
+    case redis:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #channel{
                 id = ChannelId,
@@ -115,20 +118,20 @@ lookup_channel(ChannelId) when is_binary(ChannelId) ->
 %% TOKEN
 %%====================================================================
 create_token(ChannelId, TokenId, TokenName, Addon) when is_binary(ChannelId), is_binary(TokenId), is_binary(TokenName), is_binary(Addon) ->
-    Res = redis:q([<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName, <<"addon">>, Addon]),
+    Res = redis:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName, <<"addon">>, Addon]),
     case Res of
         {ok, <<"OK">>} -> ok;
         Err -> Err
     end.
 
 delete_token(ChannelId, TokenId) when is_binary(ChannelId), is_binary(TokenId) ->
-    case redis:q([<<"DEL">>, TokenId]) of
+    case redis:q(config_pool, [<<"DEL">>, TokenId]) of
         {ok, 1} -> ok;
         Err -> Err
     end.
 
 lookup_token(TokenId) when is_binary(TokenId) ->
-    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
+    case redis:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #token{id = TokenId,
                    channel_id = logplex_utils:field_val(<<"ch">>, Fields),
@@ -151,20 +154,20 @@ lookup_tokens() ->
                 _ ->
                     Acc
             end
-        end, [], redis:q([<<"KEYS">>, <<"tok:*:data">>]))).
+        end, [], redis:q(config_pool, [<<"KEYS">>, <<"tok:*:data">>]))).
 
 %%====================================================================
 %% DRAIN
 %%====================================================================
 drain_index() ->
-    case redis:q([<<"INCR">>, <<"drain_index">>]) of
+    case redis:q(config_pool, [<<"INCR">>, <<"drain_index">>]) of
         {ok, DrainId} -> DrainId;
         Err -> Err
     end.
 
 create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(ChannelId), is_binary(Host) ->
     Key = iolist_to_binary([<<"drain:">>, DrainId, <<":data">>]),
-    Res = redis:q([<<"HMSET">>, Key,
+    Res = redis:q(config_pool, [<<"HMSET">>, Key,
         <<"ch">>, ChannelId,
         <<"host">>, Host] ++
         [<<"port">> || is_integer(Port)] ++
@@ -175,7 +178,7 @@ create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(
     end.
 
 delete_drain(DrainId) when is_binary(DrainId) ->
-    case redis:q([<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
+    case redis:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
         {ok, 1} -> ok;
         Err -> Err
     end.
@@ -188,10 +191,10 @@ lookup_drains() ->
                     [lookup_drain(list_to_binary(DrainId))|Acc];
                 _ -> Acc
             end
-        end, [], redis:q([<<"KEYS">>, <<"drain:*:data">>])).
+        end, [], redis:q(config_pool, [<<"KEYS">>, <<"drain:*:data">>])).
 
 lookup_drain(DrainId) when is_binary(DrainId) ->
-    case redis:q([<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
+    case redis:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #drain{
                 id = DrainId,
@@ -211,19 +214,19 @@ lookup_drain(DrainId) when is_binary(DrainId) ->
 %% GRID
 %%====================================================================
 set_node_ex(Node, Ip, Domain) when is_binary(Node), is_binary(Ip), is_binary(Domain) ->
-    redis:q([<<"SETEX">>, iolist_to_binary([<<"node:">>, Domain, <<":">>, Node]), <<"60">>, Ip]).
+    redis:q(config_pool, [<<"SETEX">>, iolist_to_binary([<<"node:">>, Domain, <<":">>, Node]), <<"60">>, Ip]).
 
 get_nodes(Domain) when is_binary(Domain) ->
-    redis:q([<<"KEYS">>, iolist_to_binary([<<"node:">>, Domain, <<":*">>])]).
+    redis:q(config_pool, [<<"KEYS">>, iolist_to_binary([<<"node:">>, Domain, <<":*">>])]).
 
 get_node(Node) when is_binary(Node) ->
-    redis:q([<<"GET">>, Node]).
+    redis:q(config_pool, [<<"GET">>, Node]).
 
 %%====================================================================
 %% HEALTHCHECK
 %%====================================================================
 healthcheck() ->
-    case redis:q([<<"INCR">>, <<"healthcheck">>]) of
+    case redis:q(config_pool, [<<"INCR">>, <<"healthcheck">>]) of
         {ok, Count} -> Count;
         Error -> exit(Error)
     end.
@@ -232,4 +235,4 @@ healthcheck() ->
 %% STATS
 %%====================================================================
 publish_stats(InstanceName, Json) when is_list(InstanceName), is_binary(Json) ->
-    redis:q([<<"PUBLISH">>, iolist_to_binary([<<"stats.">>, InstanceName]), Json]).
+    redis:q(config_pool, [<<"PUBLISH">>, iolist_to_binary([<<"stats.">>, InstanceName]), Json]).
