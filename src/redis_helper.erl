@@ -210,11 +210,11 @@ lookup_drain(DrainId) when is_binary(DrainId) ->
 %%====================================================================
 %% GRID
 %%====================================================================
-set_node_ex(Node, Ip) when is_binary(Node), is_binary(Ip) ->
-    redis:q([<<"SETEX">>, iolist_to_binary([<<"node:">>, Node]), <<"15">>, Ip]).
+set_node_ex(Node, Ip, Domain) when is_binary(Node), is_binary(Ip), is_binary(Domain) ->
+    redis:q([<<"SETEX">>, iolist_to_binary([<<"node:">>, Domain, <<":">>, Node]), <<"60">>, Ip]).
 
-get_nodes() ->
-    redis:q([<<"KEYS">>, <<"node:*">>]).
+get_nodes(Domain) when is_binary(Domain) ->
+    redis:q([<<"KEYS">>, iolist_to_binary([<<"node:">>, Domain, <<":*">>])]).
 
 get_node(Node) when is_binary(Node) ->
     redis:q([<<"GET">>, Node]).
