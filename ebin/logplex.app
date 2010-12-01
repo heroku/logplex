@@ -10,6 +10,7 @@
     logplex_drain_buffer,
     logplex_drain_writer,
     logplex_grid,
+    logplex_logger,
     logplex_queue,
     logplex_redis_buffer,
     logplex_redis_writer,
