@@ -44,28 +44,33 @@ create(ChannelName, AppId) when is_binary(ChannelName) ->
             Err
     end.
 
-delete(ChannelId) when is_binary(ChannelId) ->
-    logplex_grid:publish(?MODULE, {delete_channel, ChannelId}),
-    logplex_grid:publish(logplex_token, {delete_channel, ChannelId}),
-    logplex_grid:publish(logplex_drain, {delete_channel, ChannelId}),
-    redis_helper:delete_channel(ChannelId).
+delete(ChannelId) when is_integer(ChannelId) ->
+    case lookup(ChannelId) of
+        undefined ->
+            {error, not_found};
+        _ ->
+            logplex_grid:publish(?MODULE, {delete_channel, ChannelId}),
+            logplex_grid:publish(logplex_token, {delete_channel, ChannelId}),
+            logplex_grid:publish(logplex_drain, {delete_channel, ChannelId}),
+            redis_helper:delete_channel(ChannelId)
+    end.
 
-lookup(ChannelId) when is_binary(ChannelId) ->
+lookup(ChannelId) when is_integer(ChannelId) ->
     case ets:lookup(?MODULE, ChannelId) of
         [Channel] -> Channel;
         _ -> undefined
     end.
 
-logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
+logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     redis_helper:fetch_logs(ChannelId, Num).
 
-tokens(ChannelId) when is_binary(ChannelId) ->
+tokens(ChannelId) when is_integer(ChannelId) ->
     ets:lookup(logplex_channel_tokens, ChannelId).
 
-drains(ChannelId) when is_binary(ChannelId) ->
+drains(ChannelId) when is_integer(ChannelId) ->
     ets:lookup(logplex_channel_drains, ChannelId).
 
-info(ChannelId) when is_binary(ChannelId) ->
+info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
         #channel{name=ChannelName, app_id=AppId} ->
             [{channel_id, ChannelId},

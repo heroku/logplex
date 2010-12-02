@@ -35,7 +35,7 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-create(ChannelId, TokenName, Addon) when is_binary(ChannelId), is_binary(TokenName), is_binary(Addon) ->
+create(ChannelId, TokenName, Addon) when is_integer(ChannelId), is_binary(TokenName), is_binary(Addon) ->
     TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
     logplex_grid:publish(?MODULE, {create_token, ChannelId, TokenId, TokenName, Addon}),
     logplex_grid:publish(logplex_channel, {create_token, ChannelId, TokenId, TokenName, Addon}),
@@ -47,7 +47,7 @@ delete(TokenId) when is_binary(TokenId) ->
         #token{channel_id=ChannelId} ->
             logplex_grid:publish(?MODULE, {delete_token, TokenId}),
             logplex_grid:publish(logplex_channel, {delete_token, ChannelId, TokenId}),
-            redis_helper:delete_token(ChannelId, TokenId);
+            redis_helper:delete_token(TokenId);
         _ ->
             ok
     end.

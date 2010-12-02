@@ -38,7 +38,7 @@ start_link() ->
 healthcheck() ->
     redis_helper:healthcheck().
 
-incr(ChannelId) when is_binary(ChannelId) ->
+incr(ChannelId) when is_integer(ChannelId) ->
     case (catch ets:update_counter(logplex_stats_channels, ChannelId, 1)) of
         {'EXIT', _} ->
             ets:insert(logplex_stats_channels, {ChannelId, 0}),

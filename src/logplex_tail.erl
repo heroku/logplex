@@ -35,12 +35,12 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-register(ChannelId) when is_binary(ChannelId) ->
+register(ChannelId) when is_integer(ChannelId) ->
     Self = self(),
     logplex_grid:publish(?MODULE, {register, ChannelId, Self}),
     ok.
 
-route(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
+route(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
     [Pid ! {log, Msg} || {_ChannelId, Pid} <- ets:lookup(?MODULE, ChannelId)],
     ok.
 

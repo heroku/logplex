@@ -8,7 +8,7 @@ all:
 clean:
 	rm -f ebin/*.beam erl_crash.dump
 
-clean_all clean:
+clean_all: clean
 	(cd deps/erlang_syslog;$(MAKE) clean)
 	(cd deps/redis_pool;$(MAKE) clean)
 	(cd deps/mochiweb;$(MAKE) clean)

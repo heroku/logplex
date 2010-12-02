@@ -25,6 +25,8 @@
 
 -include_lib("logplex.hrl").
 
+-define(HDR, [{"Content-Type", "text/html"}]).
+
 start_link() ->
     Port =
         case os:getenv("HTTP_PORT") of
@@ -49,15 +51,24 @@ stop() ->
 loop(Req) ->
     Method = Req:get(method),
     Path = Req:get(path),
-    log("REQ: ~p ~p", [Method, Path]),
-    serve(handlers(), Method, Path, Req),
-    ok.
+    try
+        {Code, Body} = serve(handlers(), Method, Path, Req),
+        log("logpex_api method=~p path=~s resp_code=~w body=~1000p", [Method, Path, Code, Body]),
+        Req:respond({Code, ?HDR, Body})
+    catch 
+        exit:normal ->
+            ok;
+        Class:Exception ->
+            log(error, "logplex_api method=~p path=~s exception=~1000p:~1000p", [Method, Path, Class, Exception]),
+            Req:respond({500, ?HDR, ""})
+    end.
 
 handlers() ->
     [{['GET', "/healthcheck"], fun(Req, _Match) ->
         authorize(Req),
         Count = logplex_stats:healthcheck(),
-        Req:respond({200, [], integer_to_list(Count)})
+        not is_integer(Count) andalso exit({expected_integer, Count}),
+        {200, integer_to_list(Count)}
     end},
 
     {['POST', "/channels$"], fun(Req, _Match) ->
@@ -65,49 +76,57 @@ handlers() ->
         {struct, Params} = mochijson2:decode(Req:recv_body()),
 
         ChannelName = proplists:get_value(<<"name">>, Params),
-        ChannelName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
+        ChannelName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
         AppId = proplists:get_value(<<"app_id">>, Params),
 
         ChannelId = logplex_channel:create(ChannelName, AppId),
-        not is_integer(ChannelId) andalso error_resp(Req, 500, <<"failed to create channel">>),
-        Req:respond({200, [{"Content-Type", "text/html"}], integer_to_list(ChannelId)})
+        not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
+
+        {201, integer_to_list(ChannelId)}
     end},
 
     {['DELETE', "/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        logplex_channel:delete(list_to_binary(ChannelId)),
-        Req:respond({200, [], <<"OK">>})
+        case logplex_channel:delete(list_to_integer(ChannelId)) of
+            ok -> {200, ""};
+            {error, not_found} -> {404, <<"not found">>}
+        end
     end},
 
     {['POST', "/channels/(\\d+)/token$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),
+
         TokenName = proplists:get_value(<<"name">>, Params),
-        TokenName == undefined andalso error_resp(Req, 400, <<"name post param missing">>),
+        TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
+
         Addon = proplists:get_value(<<"addon">>, Params),
-        Addon == undefined andalso error_resp(Req, 400, <<"addon post param missing">>),
-        Token = logplex_token:create(list_to_binary(ChannelId), TokenName, Addon),
-        not is_binary(Token) andalso error_resp(Req, 500, <<"failed to create token">>),
-        Req:respond({200, [{"Content-Type", "text/html"}], Token})
+        Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
+
+        Token = logplex_token:create(list_to_integer(ChannelId), TokenName, Addon),
+        not is_binary(Token) andalso exit({expected_binary, Token}),
+
+        {201, Token}
     end},
 
     {['POST', "/sessions$"], fun(Req, _Match) ->
         authorize(Req),
         Body = Req:recv_body(),
         Session = logplex_session:create(Body),
-        not is_binary(Session) andalso error_resp(Req, 500, <<"failed to create session">>),
-        Req:respond({200, [{"Content-Type", "text/html"}], Session})
+        not is_binary(Session) andalso exit({expected_binary, Session}),
+        {201, Session}
     end},
 
     {['GET', "/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
-        Body = logplex_session:lookup(list_to_binary(Session)),
-        not is_binary(Body) andalso error_resp(Req, 404, <<"session not found">>),
+        Body = logplex_session:lookup(list_to_binary("/sessions/" ++ Session)),
+        not is_binary(Body) andalso error_resp(404, <<"not found">>),
 
         {struct, Data} = mochijson2:decode(Body),
-        ChannelId = proplists:get_value(<<"channel_id">>, Data),
-        not is_binary(ChannelId) andalso error_resp(Req, 400, <<"session missing channel_id">>),
-
+        ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
+        not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
+        ChannelId = list_to_integer(binary_to_list(ChannelId0)),
+        
         Filters = filters(Data),
         Num0 =
             case proplists:get_value(<<"num">>, Data) of
@@ -120,7 +139,7 @@ handlers() ->
 
         Logs = logplex_channel:logs(ChannelId, Num),
         Socket = Req:get(socket),
-        Req:start_response({200, [{"Content-Type", "text/html"}]}),
+        Req:start_response({200, ?HDR}),
 
         [begin
             Msg1 = logplex_utils:parse_msg(Msg),
@@ -134,13 +153,17 @@ handlers() ->
                 logplex_stats:incr(session_tailed),
                 logplex_tail:register(ChannelId),
                 tail_loop(Socket, Filters)
-        end
+        end,
+
+        {200, ""}
     end},
 
     {['GET', "/channels/(\\d+)/info$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Info = logplex_channel:info(list_to_binary(ChannelId)),
-        Req:respond({200, [], mochijson2:encode({struct, Info})})
+        Info = logplex_channel:info(list_to_integer(ChannelId)),
+        not is_list(Info) andalso exit({expected_list, Info}),
+
+        {200, mochijson2:encode({struct, Info})}
     end},
 
     {['POST', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
@@ -149,23 +172,22 @@ handlers() ->
         {struct, Data} = mochijson2:decode(Req:recv_body()),
         Host = proplists:get_value(<<"host">>, Data),
         Port = proplists:get_value(<<"port">>, Data),
-        not is_binary(Host) andalso error_resp(Req, 400, <<"host is a required field">>),
+        not is_binary(Host) andalso error_resp(400, <<"'host' param is missing">>),
 
-        DrainId = logplex_drain:create(list_to_binary(ChannelId), Host, Port),
+        DrainId = logplex_drain:create(list_to_integer(ChannelId), Host, Port),
         case DrainId of
             Int when is_integer(Int) ->
-                Req:respond({201, [{"Content-Type", "text/html"}], <<>>});
+                {201, ""};
             {error, already_exists} ->
-                Req:respond({400, [{"Content-Type", "text/html"}], <<"Drain already exists">>});
-            _ ->
-                error_resp(Req, 500, <<"server exception">>, DrainId)
+                {400, <<"Drain already exists">>}
         end        
     end},
 
     {['GET', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Drains = logplex_drain:lookup(list_to_binary(ChannelId)),
-        Req:respond({200, [], {struct, Drains}})
+        Drains = logplex_drain:lookup(list_to_integer(ChannelId)),
+        not is_list(Drains) andalso exit({expected_list, Drains}),
+        {200, mochijson2:encode({struct, Drains})}
     end},
 
     {['DELETE', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
@@ -174,22 +196,33 @@ handlers() ->
         Data = Req:parse_qs(),
         Host = proplists:get_value("host", Data),
         Port = proplists:get_value("port", Data),
-        Host == "" andalso error_resp(Req, 400, <<"host is a required field">>),
+        Host == "" andalso error_resp(400, <<"'host' param is missing">>),
         
-        Res = logplex_drain:delete(list_to_binary(ChannelId), list_to_binary(Host), Port),
-        Res =/= ok andalso error_resp(Req, 500, <<"server exception">>, Res),
-        Req:respond({200, [], <<"OK">>})
+        case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of
+            ok -> {200, ""};
+            {error, not_found} -> {404, <<"not found">>}
+        end
     end}].
 
-serve([], _Method, _Path, Req) ->
-    Req:respond({404, [], <<"Not Found.">>});
+serve([], _Method, _Path, _Req) ->
+    {404, <<"Not Found.">>};
 
 serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
     case re:run(Path, Regexp, [{capture, all_but_first, list}]) of
         {match, Captured} when HMethod == Method ->
             case catch Fun(Req, Captured) of
-                {'EXIT', Reason} -> exit(Reason);
-                _ -> ok
+                {'EXIT', {Code, Body}} when is_integer(Code), is_binary(Body) ->
+                    {Code, Body};
+                {'EXIT', {Code, Body}} when is_integer(Code), is_list(Body) ->
+                    {Code, Body};
+                {'EXIT', Err} ->
+                    exit(Err);
+                {Code, Body} when is_integer(Code), is_binary(Body) ->
+                    {Code, Body};
+                {Code, Body} when is_integer(Code), is_list(Body) ->
+                    {Code, Body};
+                Other ->
+                    exit({unexpected, Other})
             end;
         _ ->
             serve(Tail, Method, Path, Req)
@@ -201,17 +234,15 @@ authorize(Req) ->
         AuthKey ->
             true;
         _ ->
-            Req:respond({401, [{"Content-Type", "text/html"}], "Not Authorized"}),
-            throw(normal)
+            throw({401, <<"Not Authorized">>})
     end.
 
-error_resp(Req, RespCode, Body) ->
-    error_resp(Req, RespCode, Body, undefined).
+error_resp(RespCode, Body) ->
+    error_resp(RespCode, Body, undefined).
 
-error_resp(Req, RespCode, Body, Error) ->
+error_resp(RespCode, Body, Error) ->
     Error =/= undefined andalso log(error, "server exception: ~1000p~n", [Error]),
-    Req:respond({RespCode, [{"Content-Type", "text/html"}], Body}),
-    throw(normal).
+    throw({RespCode, Body}).
 
 tail_loop(Socket, Filters) ->
     inet:setopts(Socket, [{packet, raw}, {active, once}]),

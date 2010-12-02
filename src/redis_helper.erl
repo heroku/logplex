@@ -56,17 +56,17 @@ create_channel(ChannelName, AppId) when is_binary(ChannelName) ->
         Err -> Err
     end.
 
-delete_channel(ChannelId) when is_binary(ChannelId) ->
-    case redis:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
+delete_channel(ChannelId) when is_integer(ChannelId) ->
+    case redis:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
         {ok, 1} -> ok;
         Err -> Err
     end.
 
-build_push_msg(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
-    redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), Msg]).
+build_push_msg(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
+    redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), Msg]).
 
-fetch_logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
-    redis:q(log_pool, [<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
+fetch_logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
+    redis:q(log_pool, [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
 
 truncate_logs(Packet) when is_binary(Packet) ->
     redis:q(log_pool, iolist_to_binary(Packet), 10000).
@@ -76,7 +76,7 @@ lookup_channels() ->
         fun ({ok, Key}, Acc) when is_binary(Key) ->
             case string:tokens(binary_to_list(Key), ":") of
                 ["ch", ChannelId, "data"] ->
-                    case lookup_channel(list_to_binary(ChannelId)) of
+                    case lookup_channel(list_to_integer(ChannelId)) of
                         undefined -> Acc;
                         Channel -> [Channel|Acc]
                     end;
@@ -92,13 +92,13 @@ lookup_channel_ids() ->
         fun({ok, Key}, Acc) ->
             case string:tokens(binary_to_list(Key), ":") of
                 ["ch", ChannelId, "data"] ->
-                    [list_to_binary(ChannelId)|Acc];
+                    [list_to_integer(ChannelId)|Acc];
                 _ -> Acc
             end
         end, [], redis:q(config_pool, [<<"KEYS">>, <<"ch:*:data">>]))).
 
-lookup_channel(ChannelId) when is_binary(ChannelId) ->
-    case redis:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
+lookup_channel(ChannelId) when is_integer(ChannelId) ->
+    case redis:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #channel{
                 id = ChannelId,
@@ -117,14 +117,14 @@ lookup_channel(ChannelId) when is_binary(ChannelId) ->
 %%====================================================================
 %% TOKEN
 %%====================================================================
-create_token(ChannelId, TokenId, TokenName, Addon) when is_binary(ChannelId), is_binary(TokenId), is_binary(TokenName), is_binary(Addon) ->
-    Res = redis:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName, <<"addon">>, Addon]),
+create_token(ChannelId, TokenId, TokenName, Addon) when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName), is_binary(Addon) ->
+    Res = redis:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName, <<"addon">>, Addon]),
     case Res of
         {ok, <<"OK">>} -> ok;
         Err -> Err
     end.
 
-delete_token(ChannelId, TokenId) when is_binary(ChannelId), is_binary(TokenId) ->
+delete_token(TokenId) when is_binary(TokenId) ->
     case redis:q(config_pool, [<<"DEL">>, TokenId]) of
         {ok, 1} -> ok;
         Err -> Err
@@ -165,10 +165,10 @@ drain_index() ->
         Err -> Err
     end.
 
-create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(ChannelId), is_binary(Host) ->
-    Key = iolist_to_binary([<<"drain:">>, DrainId, <<":data">>]),
+create_drain(DrainId, ChannelId, Host, Port) when is_integer(DrainId), is_integer(ChannelId), is_binary(Host) ->
+    Key = iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>]),
     Res = redis:q(config_pool, [<<"HMSET">>, Key,
-        <<"ch">>, ChannelId,
+        <<"ch">>, integer_to_list(ChannelId),
         <<"host">>, Host] ++
         [<<"port">> || is_integer(Port)] ++
         [integer_to_list(Port) || is_integer(Port)]),
@@ -177,8 +177,8 @@ create_drain(DrainId, ChannelId, Host, Port) when is_binary(DrainId), is_binary(
         Err -> Err
     end.
 
-delete_drain(DrainId) when is_binary(DrainId) ->
-    case redis:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
+delete_drain(DrainId) when is_integer(DrainId) ->
+    case redis:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
         {ok, 1} -> ok;
         Err -> Err
     end.
@@ -188,17 +188,17 @@ lookup_drains() ->
         fun({ok, Key}, Acc) ->
             case string:tokens(binary_to_list(Key), ":") of
                 ["drain", DrainId, "data"] ->
-                    [lookup_drain(list_to_binary(DrainId))|Acc];
+                    [lookup_drain(list_to_integer(DrainId))|Acc];
                 _ -> Acc
             end
         end, [], redis:q(config_pool, [<<"KEYS">>, <<"drain:*:data">>])).
 
-lookup_drain(DrainId) when is_binary(DrainId) ->
-    case redis:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"drain:">>, DrainId, <<":data">>])]) of
+lookup_drain(DrainId) when is_integer(DrainId) ->
+    case redis:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #drain{
                 id = DrainId,
-                channel_id = logplex_utils:field_val(<<"ch">>, Fields),
+                channel_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"ch">>, Fields))),
                 host = logplex_utils:field_val(<<"host">>, Fields),
                 port =
                  case logplex_utils:field_val(<<"port">>, Fields) of
