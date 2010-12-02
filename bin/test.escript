@@ -43,11 +43,24 @@ main(_) ->
             {"port", 514}
         ]}))}, [], []),
 
-    {ok,{{_,200,_},_,_}} = httpc:request(get, {"http://localhost:8002" ++ Session, headers()}, [], []),
+    {ok, UdpSock} = gen_udp:open(0),
 
-    {ok,{{_,200,_},_,_}} = httpc:request(delete, {"http://localhost:8002/channels/" ++ ChannelId, headers()}, [], []),
+    Msgs = [
+        "State changed from created to starting",
+        "State changed from starting to up"
+    ],
+
+    [gen_udp:send(UdpSock, "127.0.0.1", 9999, iolist_to_binary(["<40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 ", Token, " web.1 - - ", Msg])) || Msg <- Msgs],
+
+    timer:sleep(100),
+
+    {ok,{{_,200,_},_,Logs}} = httpc:request(get, {"http://localhost:8002" ++ Session, headers()}, [], []),
+    Logs1 = lists:flatten(["2010-11-10T17:16:33-08:00 app[web.1]: " ++ Msg ++ "\n" || Msg <- Msgs]),
+    Logs1 = Logs,
 
     {ok,{{_,200,_},_,_}} = httpc:request(delete, {"http://localhost:8002/channels/" ++ ChannelId ++ "/drains?host=127.0.0.1&port=514", headers()}, [], []),
+
+    {ok,{{_,200,_},_,_}} = httpc:request(delete, {"http://localhost:8002/channels/" ++ ChannelId, headers()}, [], []),
 
     %% write more tests... %%
 
