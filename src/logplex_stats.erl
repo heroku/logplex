@@ -105,7 +105,10 @@ handle_cast(flush, State) ->
     Props = ets:tab2list(?MODULE),
     [ets:update_element(?MODULE, Key, {2, 0}) || {Key, _Val} <- Props],
     io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Props, Value > 0])]),
-    [ets:update_element(logplex_stats_channels, Key, {2, 0}) || {Key, _Val} <- ets:tab2list(logplex_stats_channels)],
+    [begin
+        io:format("logplex_channel_stats channel_id=~w message_processed=~w~n", [Key, Val]),
+        ets:update_element(logplex_stats_channels, Key, {2, 0})
+    end || {Key, Val} <- ets:tab2list(logplex_stats_channels), Val > 0],
     {noreply, State};
 
 handle_cast(_Msg, State) ->
