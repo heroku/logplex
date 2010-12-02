@@ -134,7 +134,7 @@ lookup_token(TokenId) when is_binary(TokenId) ->
     case redis:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #token{id = TokenId,
-                   channel_id = logplex_utils:field_val(<<"ch">>, Fields),
+                   channel_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"ch">>, Fields))),
                    name = logplex_utils:field_val(<<"name">>, Fields),
                    addon = logplex_utils:field_val(<<"addon">>, Fields)
             };
