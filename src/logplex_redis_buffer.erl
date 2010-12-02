@@ -24,7 +24,7 @@
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
+-export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
 -export([in/1, out/1, info/0, set_max_length/1]).
@@ -36,8 +36,8 @@
 -define(TIMEOUT, 30000).
 
 %% API functions
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(RedisOpts) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [RedisOpts], []).
 
 in(Packet) ->
     gen_server:cast(?MODULE, {in, Packet}).
@@ -63,8 +63,9 @@ set_max_length(MaxLength) when is_integer(MaxLength) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init([]) ->
+init([RedisOpts]) ->
     Self = self(),
+    start_workers(RedisOpts),
     MaxLength =
         case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
             false -> 2000;
@@ -155,6 +156,29 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+start_workers(RedisOpts) ->
+    NumWorkers =
+        case os:getenv("LOGPLEX_REDIS_WRITERS") of
+            false -> 100;
+            StrNum -> list_to_integer(StrNum)
+        end,
+    lists:foldl(
+        fun (_, Acc) ->
+            case start_worker(RedisOpts) of
+                undefined -> Acc;
+                Pid -> [Pid|Acc]
+            end
+        end, [], lists:seq(1,NumWorkers)).
+
+start_worker(RedisOpts) ->
+    case logplex_redis_sup:start_child(RedisOpts) of
+        {ok, Pid} -> Pid;
+        {ok, Pid, _Info} -> Pid;
+        {error, Reason} ->
+            log(error, "failed to start drain writer: ~p", [Reason]),
+            undefined
+    end.
+
 drain(Queue, N) ->
     drain(Queue, N, []).
 

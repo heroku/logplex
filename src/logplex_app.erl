@@ -53,10 +53,12 @@ init([RedisOpts]) ->
         {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
+        {logplex_worker_sup, {logplex_worker_sup, start_link, []}, permanent, 2000, worker, [logplex_worker_sup]},
         {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]},
+        {logplex_drain_sup, {logplex_drain_sup, start_link, []}, permanent, 2000, worker, [logplex_drain_sup]},
         {logplex_drain_buffer, {logplex_drain_buffer, start_link, []}, permanent, 2000, worker, [logplex_drain_buffer]},
-        {logplex_redis_buffer, {logplex_redis_buffer, start_link, []}, permanent, 2000, worker, [logplex_redis_buffer]},
-        {logplex_worker_mgr, {logplex_worker_mgr, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_worker_mgr]},
+        {logplex_redis_sup, {logplex_redis_sup, start_link, []}, permanent, 2000, worker, [logplex_redis_sup]},
+        {logplex_redis_buffer, {logplex_redis_buffer, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_redis_buffer]},
         {syslog_acceptor, {syslog_acceptor, start_link, []}, permanent, 2000, worker, [syslog_acceptor]}
     ]}}.
 

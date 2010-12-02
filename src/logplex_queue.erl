@@ -65,6 +65,7 @@ set_max_length(MaxLength) when is_integer(MaxLength) ->
 %%--------------------------------------------------------------------
 init([]) ->
     Self = self(),
+    start_workers(),
     MaxLength =
         case os:getenv("LOGPLEX_QUEUE_LENGTH") of
             false -> 2000;
@@ -154,6 +155,29 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+start_workers() ->
+    NumWorkers =
+        case os:getenv("LOGPLEX_WORKERS") of
+            false -> 10;
+            StrNum -> list_to_integer(StrNum)
+        end,
+    lists:foldl(
+        fun (_, Acc) ->
+            case start_worker() of
+                undefined -> Acc;
+                Pid -> [Pid|Acc]
+            end
+        end, [], lists:seq(1,NumWorkers)).
+
+start_worker() ->
+    case logplex_worker_sup:start_child() of
+        {ok, Pid} -> Pid;
+        {ok, Pid, _Info} -> Pid;
+        {error, Reason} ->
+            log(error, "failed to start worker: ~p", [Reason]),
+            undefined
+    end.
+
 report_stats(Pid) ->
     timer:sleep(60000),
     Pid ! report_stats,
