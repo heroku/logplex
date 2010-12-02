@@ -174,7 +174,7 @@ start_worker() ->
         {ok, Pid} -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->
-            log(error, "failed to start worker: ~p", [Reason]),
+            error_logger:error_msg("failed to start worker: ~p~n", [Reason]),
             undefined
     end.
 

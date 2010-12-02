@@ -174,7 +174,7 @@ start_worker() ->
         {ok, Pid} -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->
-            log(error, "failed to start drain writer: ~p", [Reason]),
+            io:format("failed to start drain writer: ~p", [Reason]),
             undefined
     end.
 

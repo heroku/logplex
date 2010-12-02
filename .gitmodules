@@ -4,6 +4,3 @@
 [submodule "deps/mochiweb"]
 	path = deps/mochiweb
 	url = git://github.com/mochi/mochiweb.git
-[submodule "deps/erlang_syslog"]
-	path = deps/erlang_syslog
-	url = git://github.com/JacobVorreuter/erlang_syslog.git

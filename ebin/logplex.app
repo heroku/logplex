@@ -11,7 +11,6 @@
     logplex_drain_sup,
     logplex_drain_writer,
     logplex_grid,
-    logplex_logger,
     logplex_queue,
     logplex_redis_buffer,
     logplex_redis_sup,

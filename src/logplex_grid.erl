@@ -90,10 +90,10 @@ connect(Size, Key) ->
                                                             {error, {ping_failed, Node}}
                                                     end;
                                                 _ ->
-                                                    log(error, "failed_to_parse_host: ~p", [StrNode])
+                                                    error_logger:error_msg("failed_to_parse_host: ~p~n", [StrNode])
                                             end;
                                         Err ->
-                                            log(error, "failed to resolve ~p: ~p", [Ip, Err])
+                                            error_logger:error_msg("failed to resolve ~p: ~p~n", [Ip, Err])
                                     end;
                                 _ ->
                                     undefined

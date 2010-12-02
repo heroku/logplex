@@ -34,7 +34,6 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
-    ok = error_logger:add_report_handler(logplex_logger),
     RedisOpts = boot_redis(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, [RedisOpts]).
 
@@ -43,7 +42,6 @@ stop(_State) ->
 
 init([RedisOpts]) ->
     {ok, {{one_for_one, 5, 10}, [
-        {syslog, {syslog, start_link, []}, transient, 2000, worker, [syslog]},
         {logplex_grid, {logplex_grid, start_link, []}, permanent, 2000, worker, [logplex_grid]},
         {logplex_realtime, {logplex_realtime, start_link, []}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
