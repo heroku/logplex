@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/2, delete/1, lookup/1, logs/2, tokens/1, drains/1, info/1]).
+-export([create/3, delete/1, lookup/1, logs/2, tokens/1, drains/1, info/1]).
 
 -include_lib("logplex.hrl").
 
@@ -35,10 +35,10 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-create(ChannelName, AppId) when is_binary(ChannelName) ->
-    case redis_helper:create_channel(ChannelName, AppId) of
+create(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
+    case redis_helper:create_channel(ChannelName, AppId, Addon) of
         ChannelId when is_integer(ChannelId) ->
-            logplex_grid:publish(?MODULE, {create, ChannelId, ChannelName, AppId}),
+            logplex_grid:publish(?MODULE, {create, ChannelId, ChannelName, AppId, Addon}),
             ChannelId;
         Err ->
             Err
@@ -72,12 +72,13 @@ drains(ChannelId) when is_integer(ChannelId) ->
 
 info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
-        #channel{name=ChannelName, app_id=AppId} ->
+        #channel{name=ChannelName, app_id=AppId, addon=Addon} ->
             [{channel_id, ChannelId},
              {channel_name, ChannelName},
              {app_id, AppId},
-             {tokens, tokens(ChannelId)},
-             {drains, drains(ChannelId)}];
+             {addon, Addon},
+             {tokens, [Token || #token{id=Token} <- tokens(ChannelId)]},
+             {drains, [iolist_to_binary([Host, ":", integer_to_list(Port)]) || #drain{host=Host, port=Port} <- drains(ChannelId)]}];
         _ ->
             []
     end.
@@ -132,8 +133,8 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({create, ChannelId, ChannelName, AppId}, State) ->
-    ets:insert(?MODULE, #channel{id=ChannelId, name=ChannelName, app_id=AppId}),
+handle_info({create, ChannelId, ChannelName, AppId, Addon}, State) ->
+    ets:insert(?MODULE, #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon}),
     {noreply, State};
 
 handle_info({delete_channel, ChannelId}, State) ->
@@ -146,7 +147,7 @@ handle_info({create_token, ChannelId, TokenId, TokenName, Addon}, State) ->
     {noreply, State};
 
 handle_info({delete_token, ChannelId, TokenId}, State) ->
-    ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_'}),
+    ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_', addon='_'}),
     {noreply, State};
 
 handle_info({create_drain, DrainId, ChannelId, Host, Port}, State) ->

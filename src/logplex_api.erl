@@ -79,8 +79,12 @@ handlers() ->
         ChannelName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
         AppId = proplists:get_value(<<"app_id">>, Params),
+        AppId == undefined andalso error_resp(400, <<"'app_id' post param missing">>),
 
-        ChannelId = logplex_channel:create(ChannelName, AppId),
+        Addon = proplists:get_value(<<"addon">>, Params),
+        Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
+
+        ChannelId = logplex_channel:create(ChannelName, AppId, Addon),
         not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
 
         {201, integer_to_list(ChannelId)}
@@ -101,10 +105,7 @@ handlers() ->
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
-        Addon = proplists:get_value(<<"addon">>, Params),
-        Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
-
-        Token = logplex_token:create(list_to_integer(ChannelId), TokenName, Addon),
+        Token = logplex_token:create(list_to_integer(ChannelId), TokenName),
         not is_binary(Token) andalso exit({expected_binary, Token}),
 
         {201, Token}
@@ -163,7 +164,7 @@ handlers() ->
         Info = logplex_channel:info(list_to_integer(ChannelId)),
         not is_list(Info) andalso exit({expected_list, Info}),
 
-        {200, mochijson2:encode({struct, Info})}
+        {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
     end},
 
     {['POST', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->

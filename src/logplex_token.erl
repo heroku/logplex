@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/3, lookup/1, delete/1]).
+-export([create/2, lookup/1, delete/1]).
 
 -include_lib("logplex.hrl").
 
@@ -35,12 +35,17 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-create(ChannelId, TokenName, Addon) when is_integer(ChannelId), is_binary(TokenName), is_binary(Addon) ->
-    TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-    logplex_grid:publish(?MODULE, {create_token, ChannelId, TokenId, TokenName, Addon}),
-    logplex_grid:publish(logplex_channel, {create_token, ChannelId, TokenId, TokenName, Addon}),
-    redis_helper:create_token(ChannelId, TokenId, TokenName, Addon),
-    TokenId.
+create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
+    case logplex_channel:lookup(ChannelId) of
+        #channel{addon=Addon} ->
+            TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+            logplex_grid:publish(?MODULE, {create_token, ChannelId, TokenId, TokenName, Addon}),
+            logplex_grid:publish(logplex_channel, {create_token, ChannelId, TokenId, TokenName, Addon}),
+            redis_helper:create_token(ChannelId, TokenId, TokenName),
+            TokenId;
+        _ ->
+            {error, not_found}
+    end.
 
 delete(TokenId) when is_binary(TokenId) ->
     case lookup(TokenId) of

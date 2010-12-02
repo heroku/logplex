@@ -46,12 +46,12 @@ channel_index() ->
         Err -> Err
     end.
 
-create_channel(ChannelName, AppId) when is_binary(ChannelName) ->
+create_channel(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
     ChannelId = channel_index(),
     case redis:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
-            <<"name">>, ChannelName] ++
-            [<<"app_id">> || is_integer(AppId)] ++
-            [integer_to_list(AppId) || is_integer(AppId)]) of
+            <<"name">>, ChannelName,
+            <<"app_id">>, integer_to_list(AppId),
+            <<"addon">>, Addon]) of
         {ok, _} -> ChannelId;
         Err -> Err
     end.
@@ -108,7 +108,8 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
                      Val when is_binary(Val), size(Val) > 0 ->
                          list_to_integer(binary_to_list(Val));
                      _ -> undefined
-                 end
+                 end,
+                addon = logplex_utils:field_val(<<"addon">>, Fields)
             };
         _ ->
             undefined
@@ -117,8 +118,8 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
 %%====================================================================
 %% TOKEN
 %%====================================================================
-create_token(ChannelId, TokenId, TokenName, Addon) when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName), is_binary(Addon) ->
-    Res = redis:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName, <<"addon">>, Addon]),
+create_token(ChannelId, TokenId, TokenName) when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
+    Res = redis:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName]),
     case Res of
         {ok, <<"OK">>} -> ok;
         Err -> Err
@@ -135,8 +136,7 @@ lookup_token(TokenId) when is_binary(TokenId) ->
         Fields when is_list(Fields), length(Fields) > 0 ->
             #token{id = TokenId,
                    channel_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"ch">>, Fields))),
-                   name = logplex_utils:field_val(<<"name">>, Fields),
-                   addon = logplex_utils:field_val(<<"addon">>, Fields)
+                   name = logplex_utils:field_val(<<"name">>, Fields)
             };
         _ ->
             undefined

@@ -14,19 +14,18 @@ main(_) ->
     {ok,{{_,201,_},_,ChannelId}} = httpc:request(post, 
         {"http://localhost:8002/channels", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
             {"app_id", 1},
+            {"addon", <<"advanced">>},
             {"name", <<"app1@logplex.heroku.com">>}
         ]}))}, [], []),
 
     {ok,{{_,201,_},_,Token}} = httpc:request(post, 
         {"http://localhost:8002/channels/" ++ ChannelId ++ "/token", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
-            {"addon", <<"advanced">>},
             {"channel_id", list_to_binary(ChannelId)},
             {"name", <<"app">>}
         ]}))}, [], []),
 
     {ok,{{_,201,_},_,HerokuToken}} = httpc:request(post, 
         {"http://localhost:8002/channels/" ++ ChannelId ++ "/token", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
-            {"addon", <<"advanced">>},
             {"channel_id", list_to_binary(ChannelId)},
             {"name", <<"heroku">>}
         ]}))}, [], []),
@@ -42,6 +41,8 @@ main(_) ->
             {"host", <<"127.0.0.1">>},
             {"port", 514}
         ]}))}, [], []),
+    
+    {ok,{{_,200,_},_,_}} = httpc:request(get, {"http://localhost:8002/channels/" ++ ChannelId ++ "/info", headers()}, [], []),
 
     {ok, UdpSock} = gen_udp:open(0),
 
