@@ -4,6 +4,7 @@
     $ make
 
 # Test
+prereq: start a local redis server on the default port 6379
 
     $ bin/test.escript
 
