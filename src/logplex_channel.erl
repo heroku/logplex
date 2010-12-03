@@ -143,6 +143,7 @@ handle_info({create, ChannelId, ChannelName, AppId, Addon}, State) ->
     {noreply, State};
 
 handle_info({delete_channel, ChannelId}, State) ->
+    ets:delete(?MODULE, ChannelId),
     ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', addon='_'}),
     ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, host='_', port='_'}),
     {noreply, State};
