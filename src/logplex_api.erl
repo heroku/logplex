@@ -189,9 +189,11 @@ handlers() ->
 
     {['GET', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Drains = logplex_drain:lookup(list_to_integer(ChannelId)),
+        Drains = logplex_channel:drains(list_to_integer(ChannelId)),
         not is_list(Drains) andalso exit({expected_list, Drains}),
-        {200, mochijson2:encode({struct, Drains})}
+        
+        Drains1 = [{struct, [{host, Host}, {port, Port}]} || #drain{host=Host, port=Port} <- Drains],
+        {200, iolist_to_binary(mochijson2:encode(Drains1))}
     end},
 
     {['DELETE', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
