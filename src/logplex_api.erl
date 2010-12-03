@@ -175,6 +175,8 @@ handlers() ->
         Host = proplists:get_value(<<"host">>, Data),
         Port = proplists:get_value(<<"port">>, Data),
         not is_binary(Host) andalso error_resp(400, <<"'host' param is missing">>),
+        Host == <<"localhost">> andalso error_resp(400, <<"Invalid drain">>),
+        Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
 
         DrainId = logplex_drain:create(list_to_integer(ChannelId), Host, Port),
         case DrainId of
