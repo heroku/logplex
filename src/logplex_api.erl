@@ -180,7 +180,9 @@ handlers() ->
             Int when is_integer(Int) ->
                 {201, ""};
             {error, already_exists} ->
-                {400, <<"Drain already exists">>}
+                {400, <<"Drain already exists">>};
+            {error, invalid_drain} ->
+                {400, <<"Invalid drain">>}
         end        
     end},
 

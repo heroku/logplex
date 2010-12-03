@@ -40,14 +40,20 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
         [_] ->
             {error, already_exists};
         [] ->
-            case redis_helper:drain_index() of
-                DrainId when is_integer(DrainId) ->
-                    logplex_grid:publish(?MODULE, {create_drain, DrainId, ChannelId, Host, Port}),
-                    logplex_grid:publish(logplex_channel, {create_drain, DrainId, ChannelId, Host, Port}),
-                    redis_helper:create_drain(DrainId, ChannelId, Host, Port),
-                    DrainId;
-                Error ->
-                    Error
+            case inet:getaddr(binary_to_list(Host), inet) of
+                {ok, _Ip} ->
+                    case redis_helper:drain_index() of
+                        DrainId when is_integer(DrainId) ->
+                            logplex_grid:publish(?MODULE, {create_drain, DrainId, ChannelId, Host, Port}),
+                            logplex_grid:publish(logplex_channel, {create_drain, DrainId, ChannelId, Host, Port}),
+                            redis_helper:create_drain(DrainId, ChannelId, Host, Port),
+                            DrainId;
+                        Error ->
+                            Error
+                    end;
+                Err ->
+                    error_logger:error_msg("invalid drain: ~p:~p ~p~n", [Host, Port, Err]),
+                    {error, invalid_drain}
             end
     end.
 
@@ -150,5 +156,11 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
-    Data = redis_helper:lookup_drains(),
+    Data = lists:foldl(
+        fun(#drain{host=Host}=Drain, Acc) ->
+            case inet:getaddr(binary_to_list(Host), inet) of
+                {ok, _Ip} -> [Drain|Acc];
+                _ -> Acc
+            end
+        end, [], redis_helper:lookup_drains()),
     length(Data) > 0 andalso ets:insert(?MODULE, Data).
