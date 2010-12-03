@@ -40,6 +40,7 @@ init(Parent) ->
             false -> <<"">>;
             Val2 -> list_to_binary(Val2)
         end,
+    register(?MODULE, self()),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(BinNode, LocalIp, Domain).
 
