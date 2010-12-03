@@ -206,7 +206,7 @@ truncate_logs() ->
                 [#token{addon=Addon}|_] ->
                     [redis:build_request([
                         <<"LTRIM">>,
-                        iolist_to_binary(["ch:", ChannelId, ":spool"]),
+                        iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]),
                         <<"0">>,
                         list_to_binary(integer_to_list(spool_length(Addon) - 1))])|Acc];
                 _ -> Acc
