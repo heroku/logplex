@@ -51,7 +51,7 @@ loop(Socket) ->
                     end
             end
     end,
-    loop(Socket).
+    ?MODULE:loop(Socket).
 
 open_socket(Opts) ->
     Ip = proplists:get_value(ip, Opts),

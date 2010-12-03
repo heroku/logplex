@@ -48,7 +48,7 @@ loop(#state{regexp=RE}=State) ->
                     ok
             end
     end,
-    loop(State).
+    ?MODULE:loop(State).
 
 route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of

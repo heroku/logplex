@@ -45,4 +45,4 @@ loop(Socket) ->
                 Err -> exit(Err)
             end
     end,
-    loop(Socket).
+    ?MODULE:loop(Socket).
