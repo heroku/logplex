@@ -192,7 +192,13 @@ populate_cache() ->
     end || Token <- redis_helper:lookup_tokens()],
     length(Tokens) > 0 andalso ets:insert(logplex_channel_tokens, Tokens),
 
-    Drains = redis_helper:lookup_drains(),
+    Drains = lists:foldl(
+        fun(#drain{host=Host}=Drain, Acc) ->
+            case inet:getaddr(binary_to_list(Host), inet) of
+                {ok, _Ip} -> [Drain|Acc];
+                _ -> Acc
+            end
+        end, [], redis_helper:lookup_drains()),
     length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains),
 
     Channels = redis_helper:lookup_channels(),
