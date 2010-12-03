@@ -44,6 +44,7 @@ loop(Socket) ->
                 Err -> exit(Err)
             end
     end,
+    receive _X -> ok after 0 -> ok end,
     loop(Socket).
 
 open_socket(Opts) ->
@@ -51,6 +52,9 @@ open_socket(Opts) ->
     Port = proplists:get_value(port, Opts),
     Pass = proplists:get_value(pass, Opts),
     case redis:connect(Ip, Port, Pass) of
-        {ok, Socket} -> Socket;
-        Err -> exit(Err)
+        {ok, Socket} ->
+            inet:setopts(Socket, [{active, true}, {nodelay, true}]),
+            Socket;
+        Err ->
+            exit(Err)
     end.
