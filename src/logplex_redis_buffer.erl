@@ -175,7 +175,7 @@ start_worker(RedisOpts) ->
         {ok, Pid} -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->
-            error_logger:error_msg("failed to start drain writer: ~p~n", [Reason]),
+            error_logger:error_msg("failed to start redis writer: ~p~n", [Reason]),
             undefined
     end.
 
