@@ -53,6 +53,8 @@ init([RedisOpts]) ->
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
         {logplex_worker_sup, {logplex_worker_sup, start_link, []}, permanent, 2000, worker, [logplex_worker_sup]},
         {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]},
+        {logplex_reader_sup, {logplex_reader_sup, start_link, []}, permanent, 2000, worker, [logplex_reader_sup]},
+        {logplex_read_queue, {logplex_read_queue, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_read_queue]},
         {logplex_drain_sup, {logplex_drain_sup, start_link, []}, permanent, 2000, worker, [logplex_drain_sup]},
         {logplex_drain_buffer, {logplex_drain_buffer, start_link, []}, permanent, 2000, worker, [logplex_drain_buffer]},
         {logplex_redis_sup, {logplex_redis_sup, start_link, []}, permanent, 2000, worker, [logplex_redis_sup]},

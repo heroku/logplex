@@ -20,40 +20,37 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_stats).
+-module(logplex_read_queue).
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
+-export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, incr/1, incr/2, flush/0]).
+-export([in/2, out/0, info/0, set_max_length/1]).
 
 -include_lib("logplex.hrl").
 
+-record(state, {queue, length, max_length}).
+
+-define(TIMEOUT, 30000).
+
 %% API functions
-start_link() ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(RedisOpts) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [RedisOpts], []).
 
-healthcheck() ->
-    redis_helper:healthcheck().
+in(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
+    Packet = redis:build_request([<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]),
+    gen_server:cast(?MODULE, {in, {self(), Packet}}).
 
-incr(ChannelId) when is_integer(ChannelId) ->
-    case (catch ets:update_counter(logplex_stats_channels, ChannelId, 1)) of
-        {'EXIT', _} ->
-            ets:insert(logplex_stats_channels, {ChannelId, 0}),
-            incr(ChannelId);
-        Res ->
-            Res
-    end;
+out() ->
+    gen_server:call(?MODULE, out, ?TIMEOUT).
 
-incr(Key) when is_atom(Key) ->
-    incr(Key, 1).
+info() ->
+    gen_server:call(?MODULE, info, ?TIMEOUT).
 
-incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
-    logplex_realtime:incr(Key, Inc),
-    ets:update_counter(?MODULE, Key, Inc).
-
+set_max_length(MaxLength) when is_integer(MaxLength) ->
+    gen_server:cast(?MODULE, {max_length, MaxLength}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -67,20 +64,12 @@ incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init([]) ->
-    ets:new(?MODULE, [public, named_table, set]),
-    ets:new(logplex_stats_channels, [public, named_table, set]),
-    ets:insert(?MODULE, {message_processed, 0}),
-    ets:insert(?MODULE, {session_accessed, 0}),
-    ets:insert(?MODULE, {session_tailed, 0}),
-    ets:insert(?MODULE, {message_routed, 0}),
-    ets:insert(?MODULE, {message_received, 0}),
-    ets:insert(?MODULE, {queue_dropped, 0}),
-    ets:insert(?MODULE, {read_queue_dropped, 0}),
-    ets:insert(?MODULE, {drain_buffer_dropped, 0}),
-    ets:insert(?MODULE, {redis_buffer_dropped, 0}),
-    spawn_link(fun flush/0),
-	{ok, []}.
+init([RedisOpts]) ->
+    Self = self(),
+    start_workers(RedisOpts),
+    MaxLength = 2000,
+    spawn_link(fun() -> report_stats(Self) end),
+	{ok, #state{queue=queue:new(), length=0, max_length=MaxLength}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -92,6 +81,17 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
+    case queue:out(Queue) of
+        {{value, Out}, Queue1} ->
+            {reply, Out, State#state{queue=Queue1, length=Length-1}};
+        {empty, _Queue} ->
+            {reply, undefined, State}
+    end;
+
+handle_call(info, _From, #state{length=Length, max_length=MaxLength}=State) ->
+    {reply, {Length, MaxLength}, State};
+
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -102,15 +102,16 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast(flush, State) ->
-    Props = ets:tab2list(?MODULE),
-    [ets:update_element(?MODULE, Key, {2, 0}) || {Key, _Val} <- Props],
-    io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Props, Value > 0])]),
-    [begin
-        io:format("logplex_channel_stats channel_id=~w message_processed=~w~n", [Key, Val]),
-        ets:update_element(logplex_stats_channels, Key, {2, 0})
-    end || {Key, Val} <- ets:tab2list(logplex_stats_channels), Val > 0],
+handle_cast({in, _Packet}, #state{length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
+    logplex_stats:incr(read_queue_dropped),
     {noreply, State};
+
+handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
+    Queue1 = queue:in(Packet, Queue),
+    {noreply, State#state{queue=Queue1, length=Length+1}};
+
+handle_cast({max_length, MaxLength}, State) ->
+    {noreply, State#state{max_length=MaxLength}};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -122,6 +123,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info(report_stats, #state{length=Length}=State) ->
+    ets:insert(logplex_stats, {queue_length, Length}),
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -147,7 +152,26 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-flush() ->
-    timer:sleep(60 * 1000),
-    gen_server:cast(?MODULE, flush),
-    flush().
+start_workers(RedisOpts) ->
+    NumWorkers = 100,
+    lists:foldl(
+        fun (_, Acc) ->
+            case start_worker(RedisOpts) of
+                undefined -> Acc;
+                Pid -> [Pid|Acc]
+            end
+        end, [], lists:seq(1,NumWorkers)).
+
+start_worker(RedisOpts) ->
+    case logplex_reader_sup:start_child(RedisOpts) of
+        {ok, Pid} -> Pid;
+        {ok, Pid, _Info} -> Pid;
+        {error, Reason} ->
+            error_logger:error_msg("failed to start reader: ~p~n", [Reason]),
+            undefined
+    end.
+
+report_stats(Pid) ->
+    timer:sleep(60000),
+    Pid ! report_stats,
+    report_stats(Pid).

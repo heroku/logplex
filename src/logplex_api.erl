@@ -127,31 +127,37 @@ handlers() ->
         ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
         not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
         ChannelId = list_to_integer(binary_to_list(ChannelId0)),
-        
-        Filters = filters(Data),
-        Num0 =
-            case proplists:get_value(<<"num">>, Data) of
-                undefined -> 20;
-                BinNum -> list_to_integer(binary_to_list(BinNum))
-            end,
-        Num = ternary(Filters == [], Num0 - 1, -1),
 
         logplex_stats:incr(session_accessed),
 
-        Logs = logplex_channel:logs(ChannelId, Num),
-        Socket = Req:get(socket),
-        Req:start_response({200, ?HDR}),
-
-        [begin
-            Msg1 = logplex_utils:parse_msg(Msg),
-            logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1))
-        end || {ok, Msg} <- lists:reverse(Logs)],
+        Filters = filters(Data),
 
         case proplists:get_value(<<"tail">>, Data) of
             undefined ->
+                Num0 =
+                    case proplists:get_value(<<"num">>, Data) of
+                        undefined -> 20;
+                        BinNum -> list_to_integer(binary_to_list(BinNum))
+                    end,
+                Num = ternary(Filters == [], Num0 - 1, -1),
+
+                Logs = logplex_channel:logs(ChannelId, Num),
+                Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
+                not is_list(Logs) andalso exit({expected_list, Logs}),
+
+                Socket = Req:get(socket),
+                Req:start_response({200, ?HDR}),
+
+                [begin
+                    Msg1 = logplex_utils:parse_msg(Msg),
+                    logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1))
+                end || Msg <- Logs],
+
                 gen_tcp:close(Socket);
             _ ->
                 logplex_stats:incr(session_tailed),
+                Socket = Req:get(socket),
+                Req:start_response({200, ?HDR}),
                 logplex_tail:register(ChannelId),
                 tail_loop(Socket, Filters)
         end,

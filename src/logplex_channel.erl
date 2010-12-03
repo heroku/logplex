@@ -62,7 +62,12 @@ lookup(ChannelId) when is_integer(ChannelId) ->
     end.
 
 logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
-    redis_helper:fetch_logs(ChannelId, Num).
+    logplex_read_queue:in(ChannelId, Num),
+    receive
+        {logs, Logs} -> Logs
+    after 60000 ->
+        {error, timeout}
+    end.
 
 tokens(ChannelId) when is_integer(ChannelId) ->
     ets:lookup(logplex_channel_tokens, ChannelId).
