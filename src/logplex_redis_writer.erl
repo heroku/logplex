@@ -30,6 +30,7 @@ start_link(RedisOpts) ->
     proc_lib:start_link(?MODULE, init, [self(), RedisOpts], 5000).
 
 init(Parent, RedisOpts) ->
+    io:format("init ~p~n", [?MODULE]),
     Socket = open_socket(RedisOpts),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(Socket).

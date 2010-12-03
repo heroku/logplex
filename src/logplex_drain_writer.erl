@@ -30,6 +30,7 @@ start_link() ->
     proc_lib:start_link(?MODULE, init, [self()], 5000).
 
 init(Parent) ->
+    io:format("init ~p~n", [?MODULE]),
     {ok, Socket} = gen_udp:open(0, [binary]),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(Socket).

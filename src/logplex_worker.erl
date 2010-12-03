@@ -32,6 +32,7 @@ start_link() ->
     proc_lib:start_link(?MODULE, init, [self()], 5000).
 
 init(Parent) ->
+    io:format("init ~p~n", [?MODULE]),
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(#state{regexp=RE}).
