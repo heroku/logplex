@@ -62,6 +62,12 @@ delete_channel(ChannelId) when is_integer(ChannelId) ->
         Err -> Err
     end.
 
+update_channel_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
+    case redis:q(config_pool, [<<"HSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]), <<"addon">>, Addon]) of
+        {ok, _} -> ok;
+        Err -> Err
+    end.
+
 build_push_msg(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
     redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), Msg]).
 

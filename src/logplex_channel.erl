@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/3, delete/1, lookup/1, logs/2, tokens/1, drains/1, info/1]).
+-export([create/3, delete/1, update_addon/2, lookup/1, logs/2, tokens/1, drains/1, info/1]).
 
 -include_lib("logplex.hrl").
 
@@ -53,6 +53,16 @@ delete(ChannelId) when is_integer(ChannelId) ->
             logplex_grid:publish(logplex_token, {delete_channel, ChannelId}),
             logplex_grid:publish(logplex_drain, {delete_channel, ChannelId}),
             redis_helper:delete_channel(ChannelId)
+    end.
+
+update_addon(ChannelId, Addon) when is_binary(ChannelId), is_binary(Addon) ->
+    case lookup(ChannelId) of
+        undefined ->
+            {error, not_found};
+        Channel ->
+            logplex_grid:publish(?MODULE, {update_channel, Channel#channel{addon=Addon}}),
+            logplex_grid:publish(logplex_token, {update_addon, ChannelId, Addon}),
+            redis_helper:update_channel_addon(ChannelId, Addon)
     end.
 
 lookup(ChannelId) when is_integer(ChannelId) ->
@@ -140,6 +150,11 @@ handle_cast(_Msg, State) ->
 %%--------------------------------------------------------------------
 handle_info({create, ChannelId, ChannelName, AppId, Addon}, State) ->
     ets:insert(?MODULE, #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon}),
+    {noreply, State};
+
+handle_info({update_channel, Channel}, State) ->
+    ets:insert(?MODULE, Channel),
+    ets:update_element(logplex_channel_tokens, Channel#channel.id, {5, Channel#channel.addon}),
     {noreply, State};
 
 handle_info({delete_channel, ChannelId}, State) ->

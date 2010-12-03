@@ -124,6 +124,12 @@ handle_info({delete_token, TokenId}, State) ->
     ets:delete(?MODULE, TokenId),
     {noreply, State};
 
+handle_info({update_addon, ChannelId, Addon}, State) ->
+    [begin
+        ets:insert(?MODULE, Token#token{addon=Addon})
+    end || Token <- ets:match_object(?MODULE, #token{id='_', channel_id=ChannelId, name='_', addon='_'})],
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
