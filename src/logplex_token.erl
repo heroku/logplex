@@ -150,5 +150,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
-    Data = redis_helper:lookup_tokens(),
+    Data = [begin
+        case logplex_channel:lookup(Token#token.channel_id) of
+            #channel{addon=Addon} -> Token#token{addon=Addon};
+            _ -> Token
+        end
+    end || Token <- redis_helper:lookup_tokens()],
     length(Data) > 0 andalso ets:insert(?MODULE, Data).
