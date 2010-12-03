@@ -248,18 +248,22 @@ error_resp(RespCode, Body, Error) ->
     Error =/= undefined andalso io:format("server exception: ~1000p~n", [Error]),
     throw({RespCode, Body}).
 
-filter_and_send_logs(_Socket, _Logs, _Filters, 0) -> ok;
+filter_and_send_logs(Socket, Logs, [], _Num) ->
+    [gen_tcp:send(Socket, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- Logs];
 
-filter_and_send_logs(_Socket, [], _Filters, _Num) -> ok;
+filter_and_send_logs(Socket, Logs, Filters, Num) ->
+    filter_and_send_logs(Socket, lists:reverse(Logs), Filters, Num, []).
 
-filter_and_send_logs(Socket, [Msg|Tail], Filters, Num) ->
+filter_and_send_logs(Socket, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
+    gen_tcp:send(Socket, Acc);
+
+filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
     Msg1 = logplex_utils:parse_msg(Msg),
     case logplex_utils:filter(Msg1, Filters) of
         true ->
-            gen_tcp:send(Socket, logplex_utils:format(Msg1)),
-            filter_and_send_logs(Socket, Tail, Filters, Num-1);
+            filter_and_send_logs(Socket, Tail, Filters, Num-1, [logplex_utils:format(Msg1)|Acc]);
         false ->
-            filter_and_send_logs(Socket, Tail, Filters, Num)
+            filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
     end.
     
 tail_loop(Socket, Filters) ->
