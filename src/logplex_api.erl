@@ -132,32 +132,27 @@ handlers() ->
 
         Filters = filters(Data),
 
+        Num0 =
+            case proplists:get_value(<<"num">>, Data) of
+                undefined -> 20;
+                BinNum -> list_to_integer(binary_to_list(BinNum))
+            end,
+        Num = ternary(Filters == [], Num0 - 1, -1),
+
+        Logs = logplex_channel:logs(ChannelId, Num),
+        Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
+        not is_list(Logs) andalso exit({expected_list, Logs}),
+
+        Socket = Req:get(socket),
+        Req:start_response({200, ?HDR}),
+
+        filter_and_send_logs(Socket, Logs, Filters, Num0),
+
         case proplists:get_value(<<"tail">>, Data) of
             undefined ->
-                Num0 =
-                    case proplists:get_value(<<"num">>, Data) of
-                        undefined -> 20;
-                        BinNum -> list_to_integer(binary_to_list(BinNum))
-                    end,
-                Num = ternary(Filters == [], Num0 - 1, -1),
-
-                Logs = logplex_channel:logs(ChannelId, Num),
-                Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
-                not is_list(Logs) andalso exit({expected_list, Logs}),
-
-                Socket = Req:get(socket),
-                Req:start_response({200, ?HDR}),
-
-                [begin
-                    Msg1 = logplex_utils:parse_msg(Msg),
-                    logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1))
-                end || Msg <- Logs],
-
                 gen_tcp:close(Socket);
             _ ->
                 logplex_stats:incr(session_tailed),
-                Socket = Req:get(socket),
-                Req:start_response({200, ?HDR}),
                 logplex_tail:register(ChannelId),
                 tail_loop(Socket, Filters)
         end,
@@ -253,6 +248,20 @@ error_resp(RespCode, Body, Error) ->
     Error =/= undefined andalso io:format("server exception: ~1000p~n", [Error]),
     throw({RespCode, Body}).
 
+filter_and_send_logs(_Socket, _Logs, _Filters, 0) -> ok;
+
+filter_and_send_logs(_Socket, [], _Filters, _Num) -> ok;
+
+filter_and_send_logs(Socket, [Msg|Tail], Filters, Num) ->
+    Msg1 = logplex_utils:parse_msg(Msg),
+    case logplex_utils:filter(Msg1, Filters) of
+        true ->
+            gen_tcp:send(Socket, logplex_utils:format(Msg1)),
+            filter_and_send_logs(Socket, Tail, Filters, Num-1);
+        false ->
+            filter_and_send_logs(Socket, Tail, Filters, Num)
+    end.
+    
 tail_loop(Socket, Filters) ->
     inet:setopts(Socket, [{packet, raw}, {active, once}]),
     receive
@@ -270,14 +279,14 @@ filters(Data) ->
 filters([], Filters) ->
     Filters;
 
-filters([{"ps", Ps}|Tail], Filters) ->
+filters([{<<"ps">>, Ps}|Tail], Filters) ->
     Filters1 = [
         fun(Msg) ->
             Msg#msg.ps == Ps
         end | Filters],
     filters(Tail, Filters1);
 
-filters([{"source", Source}|Tail], Filters) ->
+filters([{<<"source">>, Source}|Tail], Filters) ->
     Filters1 = [
         fun(Msg) ->
             Msg#msg.source == Source
