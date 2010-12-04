@@ -55,7 +55,7 @@ loop(Req) ->
     try
         {Code, Body} = serve(handlers(), Method, Path, Req),
         Time = timer:now_diff(now(), Start) div 1000,
-        io:format("logpex_api method=~p path=~s resp_code=~w time=~w body=~1000p~n", [Method, Path, Code, Time, Body]),
+        io:format("logplex_api method=~p path=~s resp_code=~w time=~w body=~1000p~n", [Method, Path, Code, Time, Body]),
         Req:respond({Code, ?HDR, Body})
     catch 
         exit:normal ->
