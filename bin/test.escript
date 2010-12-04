@@ -38,7 +38,7 @@ main(_) ->
 
     {ok,{{_,201,_},_,_}} = httpc:request(post, 
         {"http://localhost:8002/channels/" ++ ChannelId ++ "/drains", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
-            {"host", <<"127.0.0.1">>},
+            {"host", <<"10.0.0.1">>},
             {"port", 514}
         ]}))}, [], []),
     
@@ -59,7 +59,7 @@ main(_) ->
     Logs1 = lists:flatten(["2010-11-10T17:16:33-08:00 app[web.1]: " ++ Msg ++ "\n" || Msg <- Msgs]),
     Logs1 = Logs,
 
-    {ok,{{_,200,_},_,_}} = httpc:request(delete, {"http://localhost:8002/channels/" ++ ChannelId ++ "/drains?host=127.0.0.1&port=514", headers()}, [], []),
+    {ok,{{_,200,_},_,_}} = httpc:request(delete, {"http://localhost:8002/channels/" ++ ChannelId ++ "/drains?host=10.0.0.1&port=514", headers()}, [], []),
 
     {ok,{{_,200,_},_,_}} = httpc:request(delete, {"http://localhost:8002/channels/" ++ ChannelId, headers()}, [], []),
 
