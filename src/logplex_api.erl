@@ -52,17 +52,19 @@ loop(Req) ->
     Start = now(),
     Method = Req:get(method),
     Path = Req:get(path),
+    AppId = header_value(Req, "App", ""),
+    ChannelId = header_value(Req, "Channel", ""),
     try
         {Code, Body} = serve(handlers(), Method, Path, Req),
         Time = timer:now_diff(now(), Start) div 1000,
-        io:format("logplex_api method=~p path=~s resp_code=~w time=~w body=~1000p~n", [Method, Path, Code, Time, Body]),
+        io:format("logplex_api app_id=~s channel_id=~s method=~p path=~s resp_code=~w time=~w body=~s~n", [AppId, ChannelId, Method, Path, Code, Time, Body]),
         Req:respond({Code, ?HDR, Body})
     catch 
         exit:normal ->
             ok;
         Class:Exception ->
             Time1 = timer:now_diff(now(), Start) div 1000,
-            io:format("logplex_api method=~p path=~s time=~w exception=~1000p:~1000p~n", [Method, Path, Time1, Class, Exception]),
+            io:format("logplex_api app_id=~s channel_id=~s method=~p path=~s time=~w exception=~1000p:~1000p~n", [AppId, ChannelId, Method, Path, Time1, Class, Exception]),
             Req:respond({500, ?HDR, ""})
     end.
 
@@ -322,3 +324,9 @@ filters([_|Tail], Filters) ->
 
 ternary(true, A, _B) -> A;
 ternary(_, _A, B) -> B.
+
+header_value(Req, Key, Default) ->
+    case Req:get_header_value(Key) of
+        undefined -> Default;
+        Val -> Val
+    end.
