@@ -55,7 +55,7 @@ delete(ChannelId) when is_integer(ChannelId) ->
             redis_helper:delete_channel(ChannelId)
     end.
 
-update_addon(ChannelId, Addon) when is_binary(ChannelId), is_binary(Addon) ->
+update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
     case lookup(ChannelId) of
         undefined ->
             {error, not_found};
@@ -152,9 +152,9 @@ handle_info({create, ChannelId, ChannelName, AppId, Addon}, State) ->
     ets:insert(?MODULE, #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon}),
     {noreply, State};
 
-handle_info({update_channel, Channel}, State) ->
+handle_info({update_channel, #channel{id=ChannelId, addon=Addon}=Channel}, State) ->
     ets:insert(?MODULE, Channel),
-    ets:update_element(logplex_channel_tokens, Channel#channel.id, {5, Channel#channel.addon}),
+    [ets:insert(logplex_channel_tokens, Token#token{addon=Addon}) || Token <- ets:lookup(logplex_channel_tokens, ChannelId)],
     {noreply, State};
 
 handle_info({delete_channel, ChannelId}, State) ->
