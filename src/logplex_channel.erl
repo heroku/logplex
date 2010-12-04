@@ -154,7 +154,10 @@ handle_info({create, ChannelId, ChannelName, AppId, Addon}, State) ->
 
 handle_info({update_channel, #channel{id=ChannelId, addon=Addon}=Channel}, State) ->
     ets:insert(?MODULE, Channel),
-    [ets:insert(logplex_channel_tokens, Token#token{addon=Addon}) || Token <- ets:lookup(logplex_channel_tokens, ChannelId)],
+    [begin
+        ets:delete_object(logplex_channel_tokens, Token),
+        ets:insert(logplex_channel_tokens, Token#token{addon=Addon})
+    end || Token <- ets:lookup(logplex_channel_tokens, ChannelId)],
     {noreply, State};
 
 handle_info({delete_channel, ChannelId}, State) ->
