@@ -208,6 +208,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
+    Channels = redis_helper:lookup_channels(),
+    length(Channels) > 0 andalso ets:insert(?MODULE, Channels),
+
     Tokens = [begin
         case logplex_channel:lookup(Token#token.channel_id) of
             #channel{addon=Addon} -> Token#token{addon=Addon};
@@ -225,8 +228,7 @@ populate_cache() ->
         end, [], redis_helper:lookup_drains()),
     length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains),
 
-    Channels = redis_helper:lookup_channels(),
-    length(Channels) > 0 andalso ets:insert(?MODULE, Channels).
+    ok.
 
 truncate_logs() ->
     timer:sleep(2000),
