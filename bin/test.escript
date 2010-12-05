@@ -14,7 +14,7 @@ main(_) ->
     {ok,{{_,201,_},_,ChannelId}} = httpc:request(post, 
         {"http://localhost:8002/channels", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
             {"app_id", 1},
-            {"addon", <<"advanced">>},
+            {"addon", <<"expanded">>},
             {"name", <<"app1@logplex.heroku.com">>}
         ]}))}, [], []),
 
@@ -30,6 +30,11 @@ main(_) ->
             {"name", <<"heroku">>}
         ]}))}, [], []),
 
+    {ok,{{_,200,_},_,_}} = httpc:request(post, 
+        {"http://localhost:8002/channels/" ++ ChannelId ++ "/addon", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
+            {"addon", <<"advanced">>}
+        ]}))}, [], []),
+
     {ok,{{_,201,_},_,Session}} = httpc:request(post, 
         {"http://localhost:8002/sessions", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
             {"channel_id", list_to_binary(ChannelId)},
@@ -43,6 +48,8 @@ main(_) ->
         ]}))}, [], []),
     
     {ok,{{_,200,_},_,_}} = httpc:request(get, {"http://localhost:8002/channels/" ++ ChannelId ++ "/info", headers()}, [], []),
+
+    {ok,{{_,200,_},_,_}} = httpc:request(get, {"http://localhost:8002/channels/" ++ ChannelId ++ "/drains", headers()}, [], []),
 
     {ok, UdpSock} = gen_udp:open(0),
 
