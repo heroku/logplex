@@ -20,38 +20,26 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_stats).
+-module(logplex_rate_limit).
 -behaviour(gen_server).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, incr/1, incr/2, incr/3, flush/0]).
+-export([lock/1, clear_all/0]).
 
 -include_lib("logplex.hrl").
 
 %% API functions
 start_link() ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-healthcheck() ->
-    redis_helper:healthcheck().
+lock(ChannelId) when is_integer(ChannelId) ->
+    gen_server:call(?MODULE, {lock, ChannelId}, 10000).
 
-incr(Key) ->
-    incr(?MODULE, Key).
-
-incr(Table, Key) ->
-    incr(Table, Key, 1).
-
-incr(Table, Key, Incr) when is_atom(Table), is_integer(Incr) ->
-    case (catch ets:update_counter(Table, Key, Incr)) of
-        {'EXIT', _} ->
-            ets:insert(Table, {Key, 0}),
-            incr(Table, Key, Incr);
-        Res ->
-            Res
-    end.
+clear_all() ->
+    gen_server:cast(?MODULE, clear_all).
 
 %%====================================================================
 %% gen_server callbacks
@@ -66,9 +54,6 @@ incr(Table, Key, Incr) when is_atom(Table), is_integer(Incr) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [public, named_table, set]),
-    ets:new(logplex_stats_channels, [public, named_table, set]),
-    spawn_link(fun flush/0),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -81,6 +66,10 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call({lock, ChannelId}, _From, State) ->
+    Res = global:set_lock({ChannelId, node()}, [node()|nodes()], 0),
+    {reply, Res, State};
+
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -91,20 +80,9 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast(flush, State) ->
-    logplex_rate_limit:clear_all(),
-
-    Stats = ets:tab2list(logplex_stats),
-    ets:delete_all_objects(logplex_stats),
-    io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Stats, Value > 0])]),
-
-    ChannelStats = ets:tab2list(logplex_stats_channels),
-    ets:delete_all_objects(logplex_stats_channels),
-
-    [begin
-        io:format("logplex_channel_stats app_id=~w channel_id=~w message_processed=~w~n", [AppId, ChannelId, Val])
-    end || {{message_processed, AppId, ChannelId}, Val} <- ChannelStats, Val > 0],
-
+handle_cast(clear_all, State) ->
+    Local = node(),
+    [global:del_lock({ChannelId, Node}, [Node|nodes()]) || {ChannelId, Node, _Pids} <- ets:tab2list(global_locks), Node == Local],
     {noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -142,7 +120,3 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-flush() ->
-    timer:sleep(60 * 1000),
-    gen_server:cast(?MODULE, flush),
-    flush().
