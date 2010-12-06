@@ -162,7 +162,7 @@ handle_info({update_channel, #channel{id=ChannelId, addon=Addon}=Channel}, State
 
 handle_info({delete_channel, ChannelId}, State) ->
     ets:delete(?MODULE, ChannelId),
-    ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', addon='_'}),
+    ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}),
     ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, host='_', port='_'}),
     {noreply, State};
 
@@ -171,7 +171,7 @@ handle_info({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, State) 
     {noreply, State};
 
 handle_info({delete_token, ChannelId, TokenId}, State) ->
-    ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_', addon='_'}),
+    ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_', app_id='_', addon='_'}),
     {noreply, State};
 
 handle_info({create_drain, DrainId, ChannelId, Host, Port}, State) ->

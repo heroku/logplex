@@ -113,7 +113,7 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({delete_channel, ChannelId}, State) ->
-    ets:match_delete(?MODULE, #token{id='_', channel_id=ChannelId, name='_', addon='_'}),
+    ets:match_delete(?MODULE, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}),
     {noreply, State};
 
 handle_info({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, State) ->
@@ -127,7 +127,7 @@ handle_info({delete_token, TokenId}, State) ->
 handle_info({update_addon, ChannelId, Addon}, State) ->
     [begin
         ets:insert(?MODULE, Token#token{addon=Addon})
-    end || Token <- ets:match_object(?MODULE, #token{id='_', channel_id=ChannelId, name='_', addon='_'})],
+    end || Token <- ets:match_object(?MODULE, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'})],
     {noreply, State};
 
 handle_info(_Info, State) ->
