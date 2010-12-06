@@ -40,7 +40,7 @@ loop(Socket) ->
         undefined -> timer:sleep(10);
         {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of
-                ok -> logplex_stats:incr(message_processed, NumItems);
+                ok -> logplex_stats:incr(logplex_stats, message_processed, NumItems);
                 Err -> exit(Err)
             end
     end,

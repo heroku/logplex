@@ -68,8 +68,12 @@ update_channel_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Add
         Err -> Err
     end.
 
-build_push_msg(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
-    redis:build_request([<<"LPUSH">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), Msg]).
+build_push_msg(ChannelId, Length, Msg) when is_integer(ChannelId), is_binary(Length), is_binary(Msg) ->
+    Key = iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]),
+    iolist_to_binary([
+        redis:build_request([<<"LPUSH">>, Key, Msg]),
+        redis:build_request([<<"LTRIM">>, Key, <<"0">>, Length])
+    ]).
 
 fetch_logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     redis:q(log_pool, [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).

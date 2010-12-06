@@ -53,36 +53,49 @@ loop(#state{regexp=RE}=State) ->
 route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon} ->
-            Count = logplex_stats:incr({AppId, ChannelId}),
-            case exceeded_threshold(Count, Addon) of
+            Count = logplex_stats:incr(logplex_stats_channels, {message_received, AppId, ChannelId}),
+            case exceeded_threshold(ChannelId, Count, Addon) of
                 true ->
                     ok;
                 notify ->
-                    {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
-                    UTC = erlang:universaltime(),
-                    {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
-                    Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~w-~wT~w:~w:~w-0~w:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, Month, Day, Hour, Min, Sec, Offset, throughput(Addon)])),
-                    process(ChannelId, Msg1);
+                    case global:set_lock({ChannelId, node()}, [node()|nodes()], 0) of
+                        true ->
+                            {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
+                            UTC = erlang:universaltime(),
+                            {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
+                            Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~w-~wT~w:~w:~w-0~w:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, Month, Day, Hour, Min, Sec, Offset, throughput(Addon)])),
+                            process(ChannelId, Addon, Msg1);
+                        false ->
+                            ok
+                    end;
                 false ->
+                    logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
                     Msg1 = re:replace(Msg, Token, TokenName),
                     Msg2 = iolist_to_binary(Msg1),
-                    process(ChannelId, Msg2)
+                    process(ChannelId, Addon, Msg2)
             end;
         _ ->
             ok
     end.
 
-process(ChannelId, Msg) ->
+process(ChannelId, Addon, Msg) ->
     logplex_tail:route(ChannelId, Msg),
     [logplex_drain_buffer:in(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
-    logplex_redis_buffer:in(redis_helper:build_push_msg(ChannelId, Msg)).
+    logplex_redis_buffer:in(redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)).
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;
 throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.
 
-exceeded_threshold(_, <<"advanced">>) -> false;
+exceeded_threshold(_ChannelId, _Count, <<"advanced">>) ->
+    false;
+exceeded_threshold(ChannelId, Count, Addon) ->
+    ets:member(global_locks, ChannelId) orelse exceeded_threshold(Count, Addon).
+
 exceeded_threshold(Count, <<"expanded">>) when Count =< ?EXPANDED_THROUGHPUT -> false;
 exceeded_threshold(Count, <<"expanded">>) when Count == (?EXPANDED_THROUGHPUT + 1) -> notify;
 exceeded_threshold(Count, <<"basic">>) when Count =< ?BASIC_THROUGHPUT -> false;
 exceeded_threshold(Count, <<"basic">>) when Count == (?BASIC_THROUGHPUT + 1) -> notify;
 exceeded_threshold(_, _) -> true.
+
+spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
+spool_length(_) -> ?DEFAULT_LOG_HISTORY.

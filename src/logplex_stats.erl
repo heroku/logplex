@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, incr/1, incr/2, flush/0]).
+-export([healthcheck/0, incr/1, incr/2, incr/3, flush/0]).
 
 -include_lib("logplex.hrl").
 
@@ -38,22 +38,20 @@ start_link() ->
 healthcheck() ->
     redis_helper:healthcheck().
 
-incr({AppId, ChannelId}) when is_integer(AppId), is_integer(ChannelId) ->
-    case (catch ets:update_counter(logplex_stats_channels, {AppId, ChannelId}, 1)) of
+incr(Key) ->
+    incr(?MODULE, Key).
+
+incr(Table, Key) ->
+    incr(Table, Key, 1).
+
+incr(Table, Key, Incr) when is_atom(Table), is_integer(Incr) ->
+    case (catch ets:update_counter(Table, Key, Incr)) of
         {'EXIT', _} ->
-            ets:insert(logplex_stats_channels, {{AppId, ChannelId}, 0}),
-            incr({AppId, ChannelId});
+            ets:insert(Table, {Key, 0}),
+            incr(Table, Key, Incr);
         Res ->
             Res
-    end;
-
-incr(Key) when is_atom(Key) ->
-    incr(Key, 1).
-
-incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
-    logplex_realtime:incr(Key, Inc),
-    ets:update_counter(?MODULE, Key, Inc).
-
+    end.
 
 %%====================================================================
 %% gen_server callbacks
@@ -70,15 +68,6 @@ incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
 init([]) ->
     ets:new(?MODULE, [public, named_table, set]),
     ets:new(logplex_stats_channels, [public, named_table, set]),
-    ets:insert(?MODULE, {message_processed, 0}),
-    ets:insert(?MODULE, {session_accessed, 0}),
-    ets:insert(?MODULE, {session_tailed, 0}),
-    ets:insert(?MODULE, {message_routed, 0}),
-    ets:insert(?MODULE, {message_received, 0}),
-    ets:insert(?MODULE, {queue_dropped, 0}),
-    ets:insert(?MODULE, {read_queue_dropped, 0}),
-    ets:insert(?MODULE, {drain_buffer_dropped, 0}),
-    ets:insert(?MODULE, {redis_buffer_dropped, 0}),
     spawn_link(fun flush/0),
 	{ok, []}.
 
@@ -103,13 +92,17 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast(flush, State) ->
-    Props = ets:tab2list(?MODULE),
-    [ets:update_element(?MODULE, Key, {2, 0}) || {Key, _Val} <- Props],
-    io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Props, Value > 0])]),
+    Stats = ets:tab2list(logplex_stats),
+    ets:delete_all_objects(logplex_stats),
+    io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Stats, Value > 0])]),
+
+    ChannelStats = ets:tab2list(logplex_stats_channels),
+    ets:delete_all_objects(logplex_stats_channels),
+    Local = node(),
+    [global:del_lock({ChannelId, Node}, [Node|nodes()]) || {ChannelId, Node, _Pids} <- ets:tab2list(global_locks), Node == Local],
     [begin
-        io:format("logplex_channel_stats app_id=~w channel_id=~w message_processed=~w~n", [AppId, ChannelId, Val]),
-        ets:update_element(logplex_stats_channels, {AppId, ChannelId}, {2, 0})
-    end || {{AppId, ChannelId}, Val} <- ets:tab2list(logplex_stats_channels), Val > 0],
+        io:format("logplex_channel_stats app_id=~w channel_id=~w message_processed=~w~n", [AppId, ChannelId, Val])
+    end || {{message_processed, AppId, ChannelId}, Val} <- ChannelStats, Val > 0],
     {noreply, State};
 
 handle_cast(_Msg, State) ->
