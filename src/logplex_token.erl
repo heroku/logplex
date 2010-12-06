@@ -37,10 +37,10 @@ start_link() ->
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     case logplex_channel:lookup(ChannelId) of
-        #channel{addon=Addon} ->
+        #channel{app_id=AppId, addon=Addon} ->
             TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-            logplex_grid:publish(?MODULE, {create_token, ChannelId, TokenId, TokenName, Addon}),
-            logplex_grid:publish(logplex_channel, {create_token, ChannelId, TokenId, TokenName, Addon}),
+            logplex_grid:publish(?MODULE, {create_token, ChannelId, TokenId, TokenName, AppId, Addon}),
+            logplex_grid:publish(logplex_channel, {create_token, ChannelId, TokenId, TokenName, AppId, Addon}),
             redis_helper:create_token(ChannelId, TokenId, TokenName),
             TokenId;
         _ ->
@@ -116,8 +116,8 @@ handle_info({delete_channel, ChannelId}, State) ->
     ets:match_delete(?MODULE, #token{id='_', channel_id=ChannelId, name='_', addon='_'}),
     {noreply, State};
 
-handle_info({create_token, ChannelId, TokenId, TokenName, Addon}, State) ->
-    ets:insert(?MODULE, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
+handle_info({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, State) ->
+    ets:insert(?MODULE, #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon}),
     {noreply, State};
 
 handle_info({delete_token, TokenId}, State) ->
@@ -158,7 +158,7 @@ code_change(_OldVsn, State, _Extra) ->
 populate_cache() ->
     Data = [begin
         case logplex_channel:lookup(Token#token.channel_id) of
-            #channel{addon=Addon} -> Token#token{addon=Addon};
+            #channel{app_id=AppId, addon=Addon} -> Token#token{app_id=AppId, addon=Addon};
             _ -> Token
         end
     end || Token <- redis_helper:lookup_tokens()],

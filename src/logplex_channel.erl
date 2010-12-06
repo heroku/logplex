@@ -166,8 +166,8 @@ handle_info({delete_channel, ChannelId}, State) ->
     ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, host='_', port='_'}),
     {noreply, State};
 
-handle_info({create_token, ChannelId, TokenId, TokenName, Addon}, State) ->
-    ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, addon=Addon}),
+handle_info({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, State) ->
+    ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon}),
     {noreply, State};
 
 handle_info({delete_token, ChannelId, TokenId}, State) ->
@@ -213,7 +213,7 @@ populate_cache() ->
 
     Tokens = [begin
         case logplex_channel:lookup(Token#token.channel_id) of
-            #channel{addon=Addon} -> Token#token{addon=Addon};
+            #channel{app_id=AppId, addon=Addon} -> Token#token{app_id=AppId, addon=Addon};
             _ -> Token
         end
     end || Token <- redis_helper:lookup_tokens()],

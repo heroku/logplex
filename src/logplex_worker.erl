@@ -52,8 +52,8 @@ loop(#state{regexp=RE}=State) ->
 
 route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
-        #token{channel_id=ChannelId, name=TokenName, addon=Addon} ->
-            Count = logplex_stats:incr(ChannelId),
+        #token{channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon} ->
+            Count = logplex_stats:incr({AppId, ChannelId}),
             case exceeded_threshold(Count, Addon) of
                 true ->
                     ok;

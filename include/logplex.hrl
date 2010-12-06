@@ -1,6 +1,6 @@
 -record(msg, {time, source, ps, content}).
 -record(channel, {id, name, app_id, addon}).
--record(token, {id, channel_id, name, addon}).
+-record(token, {id, channel_id, name, app_id, addon}).
 -record(drain, {id, channel_id, host, port}).
 
 -define(UDP_PORT, 9999).

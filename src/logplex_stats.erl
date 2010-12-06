@@ -38,11 +38,11 @@ start_link() ->
 healthcheck() ->
     redis_helper:healthcheck().
 
-incr(ChannelId) when is_integer(ChannelId) ->
-    case (catch ets:update_counter(logplex_stats_channels, ChannelId, 1)) of
+incr({AppId, ChannelId}) when is_integer(AppId), is_integer(ChannelId) ->
+    case (catch ets:update_counter(logplex_stats_channels, {AppId, ChannelId}, 1)) of
         {'EXIT', _} ->
-            ets:insert(logplex_stats_channels, {ChannelId, 0}),
-            incr(ChannelId);
+            ets:insert(logplex_stats_channels, {{AppId, ChannelId}, 0}),
+            incr({AppId, ChannelId});
         Res ->
             Res
     end;
@@ -107,9 +107,9 @@ handle_cast(flush, State) ->
     [ets:update_element(?MODULE, Key, {2, 0}) || {Key, _Val} <- Props],
     io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Props, Value > 0])]),
     [begin
-        io:format("logplex_channel_stats channel_id=~w message_processed=~w~n", [Key, Val]),
-        ets:update_element(logplex_stats_channels, Key, {2, 0})
-    end || {Key, Val} <- ets:tab2list(logplex_stats_channels), Val > 0],
+        io:format("logplex_channel_stats app_id=~w channel_id=~w message_processed=~w~n", [AppId, ChannelId, Val]),
+        ets:update_element(logplex_stats_channels, {AppId, ChannelId}, {2, 0})
+    end || {{AppId, ChannelId}, Val} <- ets:tab2list(logplex_stats_channels), Val > 0],
     {noreply, State};
 
 handle_cast(_Msg, State) ->
