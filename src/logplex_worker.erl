@@ -63,7 +63,8 @@ route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
                             {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
                             UTC = erlang:universaltime(),
                             {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
-                            Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~w-~wT~w:~w:~w-0~w:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, Month, Day, Hour, Min, Sec, Offset, throughput(Addon)])),
+                            DateFormat = fun(Int) -> string:right(integer_to_list(Int), 2, $0) end,
+                            Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~s-~sT~s:~s:~s-~s:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, DateFormat(Month), DateFormat(Day), DateFormat(Hour), DateFormat(Min), DateFormat(Sec), DateFormat(Offset), throughput(Addon)])),
                             process(ChannelId, Addon, Msg1);
                         false ->
                             ok
