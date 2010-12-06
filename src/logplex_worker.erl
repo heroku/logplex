@@ -58,16 +58,16 @@ route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
                 true ->
                     ok;
                 notify ->
-                    case global:set_lock({ChannelId, node()}, [node()|nodes()], 0) of
-                        true ->
+                    %case global:set_lock({ChannelId, node()}, [node()|nodes()], 0) of
+                    %    true ->
                             {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
                             UTC = erlang:universaltime(),
                             {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
                             Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~w-~wT~w:~w:~w-0~w:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, Month, Day, Hour, Min, Sec, Offset, throughput(Addon)])),
                             process(ChannelId, Addon, Msg1);
-                        false ->
-                            ok
-                    end;
+                    %    false ->
+                    %        ok
+                    %end;
                 false ->
                     logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
                     Msg1 = re:replace(Msg, Token, TokenName),
@@ -88,8 +88,9 @@ throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.
 
 exceeded_threshold(_ChannelId, _Count, <<"advanced">>) ->
     false;
-exceeded_threshold(ChannelId, Count, Addon) ->
-    ets:member(global_locks, ChannelId) orelse exceeded_threshold(Count, Addon).
+exceeded_threshold(_ChannelId, Count, Addon) ->
+    %%ets:member(global_locks, ChannelId) orelse
+    exceeded_threshold(Count, Addon).
 
 exceeded_threshold(Count, <<"expanded">>) when Count =< ?EXPANDED_THROUGHPUT -> false;
 exceeded_threshold(Count, <<"expanded">>) when Count == (?EXPANDED_THROUGHPUT + 1) -> notify;

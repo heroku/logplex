@@ -98,8 +98,8 @@ handle_cast(flush, State) ->
 
     ChannelStats = ets:tab2list(logplex_stats_channels),
     ets:delete_all_objects(logplex_stats_channels),
-    Local = node(),
-    [global:del_lock({ChannelId, Node}, [Node|nodes()]) || {ChannelId, Node, _Pids} <- ets:tab2list(global_locks), Node == Local],
+    %Local = node(),
+    %[global:del_lock({ChannelId, Node}, [Node|nodes()]) || {ChannelId, Node, _Pids} <- ets:tab2list(global_locks), Node == Local],
     [begin
         io:format("logplex_channel_stats app_id=~w channel_id=~w message_processed=~w~n", [AppId, ChannelId, Val])
     end || {{message_processed, AppId, ChannelId}, Val} <- ChannelStats, Val > 0],
