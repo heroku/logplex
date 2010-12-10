@@ -25,7 +25,7 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {regexp}).
+-record(state, {regexp, map, interval}).
 
 %% API functions
 start_link() ->
@@ -34,25 +34,29 @@ start_link() ->
 init(Parent) ->
     io:format("init ~p~n", [?MODULE]),
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
+    RedisBuffers = [{logplex_redis_buffer:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
+    {ok, Map, Interval} = redis_shard:generate_map_and_interval(RedisBuffers),
+    io:format("map ~p~n", [dict:to_list(Map)]),
     proc_lib:init_ack(Parent, {ok, self()}),
-    loop(#state{regexp=RE}).
+    loop(#state{regexp=RE, map=Map, interval=Interval}).
 
-loop(#state{regexp=RE}=State) ->
+loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
     case logplex_queue:out() of
         undefined -> timer:sleep(10);
         Msg ->
             case re:run(Msg, RE, [{capture, all_but_first, list}]) of
                 {match, [Token]} ->
-                    route(list_to_binary(Token), Msg);
+                    route(list_to_binary(Token), Map, Interval, Msg);
                 _ ->
                     ok
             end
     end,
     ?MODULE:loop(State).
 
-route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
+route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon} ->
+            BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             Count = logplex_stats:incr(logplex_stats_channels, {message_received, AppId, ChannelId}),
             case exceeded_threshold(ChannelId, Count, Addon) of
                 true ->
@@ -65,7 +69,7 @@ route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
                             {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
                             DateFormat = fun(Int) -> string:right(integer_to_list(Int), 2, $0) end,
                             Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~s-~sT~s:~s:~s-~s:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, DateFormat(Month), DateFormat(Day), DateFormat(Hour), DateFormat(Min), DateFormat(Sec), DateFormat(Offset), throughput(Addon)])),
-                            process(ChannelId, Addon, Msg1);
+                            process(ChannelId, BufferPid, Addon, Msg1);
                         false ->
                             ok
                     end;
@@ -73,16 +77,16 @@ route(Token, Msg) when is_binary(Token), is_binary(Msg) ->
                     logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
                     Msg1 = re:replace(Msg, Token, TokenName),
                     Msg2 = iolist_to_binary(Msg1),
-                    process(ChannelId, Addon, Msg2)
+                    process(ChannelId, BufferPid, Addon, Msg2)
             end;
         _ ->
             ok
     end.
 
-process(ChannelId, Addon, Msg) ->
+process(ChannelId, BufferPid, Addon, Msg) ->
     logplex_tail:route(ChannelId, Msg),
     [logplex_drain_buffer:in(Host, Port, Msg) || #drain{host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
-    logplex_redis_buffer:in(redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)).
+    logplex_redis_buffer:in(BufferPid, redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)).
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;
 throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.

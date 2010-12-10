@@ -3,6 +3,10 @@
     $ git submodule update --init
     $ make
 
+# Erlang version
+
+Tested on Erlang R13B04
+
 # Test
 prereq: start a local redis server on the default port 6379
 
@@ -22,7 +26,6 @@ prereq: start a local redis server on the default port 6379
 ## Environment Variables
 
 * LOGPLEX\_COOKIE - Erlang cookie, important for multiple node grid (not required)
-* LOGPLEX\_REDIS\_URL - redis url (default: redis://127.0.0.1:6379)
 * LOGPLEX\_CONFIG\_REDIS\_URL - config data redis url (default: redis://127.0.0.1:6379)
 * HTTP_PORT - http port (default: 80)
 * LOGPLEX\_AUTH\_KEY - api http header 'Authorization' == LOGPLEX\_AUTH\_KEY (required)

@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_utils).
--export([parse_msg/1, filter/2, format/1, field_val/2, field_val/3]).
+-export([parse_msg/1, filter/2, format/1, field_val/2, field_val/3, parse_redis_url/1]).
 
 -include_lib("logplex.hrl").
 
@@ -62,3 +62,17 @@ field_val(Key, [_, _ | Tail], Default) ->
 
 field_val(_Key, _, Default) ->
     Default.
+
+parse_redis_url(Url) ->
+    case redis_uri:parse(Url) of
+        {redis, UserInfo, Host, Port, _Path, _Query} ->
+            Pass = 
+                case UserInfo of
+                    "" -> undefined;
+                    Val -> list_to_binary(Val)
+                end,
+            {ok, Ip} = inet:getaddr(Host, inet),
+            [{ip, Ip}, {port, Port}, {pass, Pass}];
+        _ ->
+            [{ip, "127.0.0.1"}, {port, 6379}]
+    end.

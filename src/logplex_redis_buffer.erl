@@ -27,29 +27,32 @@
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([in/1, out/1, info/0, set_max_length/1]).
+-export([in/2, out/2, url/1, info/1, set_max_length/2]).
 
 -include_lib("logplex.hrl").
 
--record(state, {queue, length, max_length}).
+-record(state, {redis_url, queue, length, max_length}).
 
 -define(TIMEOUT, 30000).
 
 %% API functions
-start_link(RedisOpts) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [RedisOpts], []).
+start_link(Url) ->
+    gen_server:start_link(?MODULE, [Url], []).
 
-in(Packet) ->
-    gen_server:cast(?MODULE, {in, Packet}).
+in(Pid, Packet) when is_pid(Pid), is_binary(Packet) ->
+    gen_server:cast(Pid, {in, Packet}).
 
-out(Num) when is_integer(Num) ->
-    gen_server:call(?MODULE, {out, Num}, 30000).
+out(Pid, Num) when is_pid(Pid), is_integer(Num) ->
+    gen_server:call(Pid, {out, Num}, 30000).
 
-info() ->
-    gen_server:call(?MODULE, info, ?TIMEOUT).
+url(Pid) when is_pid(Pid) ->
+    gen_server:call(Pid, url, ?TIMEOUT).
 
-set_max_length(MaxLength) when is_integer(MaxLength) ->
-    gen_server:cast(?MODULE, {max_length, MaxLength}).
+info(Pid) when is_pid(Pid) ->
+    gen_server:call(Pid, info, ?TIMEOUT).
+
+set_max_length(Pid, MaxLength) when is_pid(Pid), is_integer(MaxLength) ->
+    gen_server:cast(Pid, {max_length, MaxLength}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -63,16 +66,18 @@ set_max_length(MaxLength) when is_integer(MaxLength) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init([RedisOpts]) ->
+init([Url]) ->
+    io:format("init ~p~n", [?MODULE]),
     Self = self(),
-    start_workers(RedisOpts),
     MaxLength =
         case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
             false -> 2000;
             StrNum -> list_to_integer(StrNum)
         end,
+    RedisOpts = logplex_utils:parse_redis_url(Url),
+    start_workers(RedisOpts),
     spawn_link(fun() -> report_stats(Self) end),
-    {ok, #state{queue=queue:new(), length=0, max_length=MaxLength}}.
+    {ok, #state{redis_url=Url, queue=queue:new(), length=0, max_length=MaxLength}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -95,6 +100,9 @@ handle_call({out, Num}, _From, #state{queue=Queue, length=Length}=State) ->
 
 handle_call(info, _From, #state{length=Length, max_length=MaxLength}=State) ->
     {reply, {Length, MaxLength}, State};
+
+handle_call(url, _From, #state{redis_url=Url}=State) ->
+    {reply, Url, State};
 
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
@@ -159,7 +167,7 @@ code_change(_OldVsn, State, _Extra) ->
 start_workers(RedisOpts) ->
     NumWorkers =
         case os:getenv("LOGPLEX_REDIS_WRITERS") of
-            false -> 100;
+            false -> 10;
             StrNum -> list_to_integer(StrNum)
         end,
     lists:foldl(
@@ -171,7 +179,7 @@ start_workers(RedisOpts) ->
         end, [], lists:seq(1,NumWorkers)).
 
 start_worker(RedisOpts) ->
-    case logplex_redis_sup:start_child(RedisOpts) of
+    case logplex_sup:start_child(logplex_redis_writer_sup, [self(), RedisOpts]) of
         {ok, Pid} -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->

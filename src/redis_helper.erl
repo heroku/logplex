@@ -75,12 +75,6 @@ build_push_msg(ChannelId, Length, Msg) when is_integer(ChannelId), is_binary(Len
         redis:build_request([<<"LTRIM">>, Key, <<"0">>, Length])
     ]).
 
-fetch_logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
-    redis:q(log_pool, [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
-
-truncate_logs(Packet) when is_binary(Packet) ->
-    redis:q(log_pool, iolist_to_binary(Packet), 10000).
-
 lookup_channels() ->
     lists:flatten(lists:foldl(
         fun ({ok, Key}, Acc) when is_binary(Key) ->
@@ -231,6 +225,9 @@ get_nodes(Domain) when is_binary(Domain) ->
 
 get_node(Node) when is_binary(Node) ->
     redis:q(config_pool, [<<"GET">>, Node]).
+
+shard_urls() ->
+    redis:q(config_pool, [<<"SMEMBERS">>, <<"redis:shard:urls">>]).
 
 %%====================================================================
 %% HEALTHCHECK

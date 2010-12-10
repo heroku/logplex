@@ -170,7 +170,7 @@ start_workers() ->
         end, [], lists:seq(1,NumWorkers)).
 
 start_worker() ->
-    case logplex_worker_sup:start_child() of
+    case logplex_sup:start_child(logplex_worker_sup, []) of
         {ok, Pid} -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->

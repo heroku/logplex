@@ -20,18 +20,18 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_reader_sup).
+-module(logplex_sup).
 -behavior(supervisor).
 
--export([start_link/0, init/1, start_child/1]).
+-export([start_link/2, start_child/2, init/1]).
 
-start_link() ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+start_link(Name, Mod) ->
+    supervisor:start_link({local, Name}, ?MODULE, [Mod]).
 
-start_child(RedisOpts) ->
-    supervisor:start_child(?MODULE, [RedisOpts]).
+start_child(Name, Args) ->
+    supervisor:start_child(Name, Args).
 
-init([]) ->
+init([Mod]) ->
     {ok, {{simple_one_for_one, 100, 1}, [
-        {logplex_reader, {logplex_reader, start_link, []}, transient, 2000, worker, [logplex_reader]}
+        {Mod, {Mod, start_link, []}, transient, 2000, worker, [Mod]}
     ]}}.

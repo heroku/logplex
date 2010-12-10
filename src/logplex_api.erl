@@ -40,6 +40,7 @@ start_link() ->
         {loop, {logplex_api, loop}},
         {name, logplex_api}
     ],
+
     io:format("START API~n"),
     mochiweb_http:start(Opts).
 

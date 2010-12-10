@@ -34,32 +34,40 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
-    RedisOpts = boot_redis(),
-    supervisor:start_link({local, ?MODULE}, ?MODULE, [RedisOpts]).
+    boot_redis(),
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
     ok.
 
-init([RedisOpts]) ->
+init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         {logplex_grid, {logplex_grid, start_link, []}, permanent, 2000, worker, [logplex_grid]},
         {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
         {logplex_realtime, {logplex_realtime, start_link, []}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
+
         {logplex_channel, {logplex_channel, start_link, []}, permanent, 2000, worker, [logplex_channel]},
         {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
         {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
-        {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
-        {logplex_worker_sup, {logplex_worker_sup, start_link, []}, permanent, 2000, worker, [logplex_worker_sup]},
+
+        {logplex_redis_writer_sup, {logplex_sup, start_link, [logplex_redis_writer_sup, logplex_redis_writer]}, permanent, 2000, worker, [logplex_redis_writer_sup]},
+        {logplex_redis_buffer_sup, {logplex_sup, start_link, [logplex_redis_buffer_sup, logplex_redis_buffer]}, permanent, 2000, worker, [logplex_redis_buffer_sup]},
+        {logplex_read_queue_sup, {logplex_sup, start_link, [logplex_read_queue_sup, logplex_read_queue]}, permanent, 2000, worker, [logplex_read_queue_sup]},
+        {logplex_reader_sup, {logplex_sup, start_link, [logplex_reader_sup, logplex_reader]}, permanent, 2000, worker, [logplex_reader_sup]},
+        {logplex_worker_sup, {logplex_sup, start_link, [logplex_worker_sup, logplex_worker]}, permanent, 2000, worker, [logplex_worker_sup]},
+        {logplex_drain_sup, {logplex_sup, start_link, [logplex_drain_sup, logplex_drain_writer]}, permanent, 2000, worker, [logplex_drain_sup]},
+
+        {logplex_shard, {logplex_shard, start_link, []}, permanent, 2000, worker, [logplex_shard]},
+
         {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]},
-        {logplex_reader_sup, {logplex_reader_sup, start_link, []}, permanent, 2000, worker, [logplex_reader_sup]},
-        {logplex_read_queue, {logplex_read_queue, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_read_queue]},
-        {logplex_drain_sup, {logplex_drain_sup, start_link, []}, permanent, 2000, worker, [logplex_drain_sup]},
         {logplex_drain_buffer, {logplex_drain_buffer, start_link, []}, permanent, 2000, worker, [logplex_drain_buffer]},
-        {logplex_redis_sup, {logplex_redis_sup, start_link, []}, permanent, 2000, worker, [logplex_redis_sup]},
-        {logplex_redis_buffer, {logplex_redis_buffer, start_link, [RedisOpts]}, permanent, 2000, worker, [logplex_redis_buffer]},
+        %% logplex_redis_buffer supervised by logplex_redis_buffer_sup
+        %% logplex_read_queue supervised by logplex_read_queue_sup
+
+        {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {syslog_acceptor, {syslog_acceptor, start_link, []}, permanent, 2000, worker, [syslog_acceptor]}
     ]}}.
 
@@ -72,11 +80,8 @@ set_cookie() ->
 boot_redis() ->
     case application:start(redis, temporary) of
         ok ->
-            Opts1 = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-            Opts2 = redis_opts("LOGPLEX_REDIS_URL"),
-            redis_sup:add_pool(config_pool, Opts1, 25),
-            redis_sup:add_pool(log_pool, Opts2, 75),
-            Opts2;
+            Opts = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+            redis_sup:add_pool(config_pool, Opts, 25);
         Err ->
             exit(Err)
     end.
@@ -86,16 +91,5 @@ redis_opts(ConfigVar) when is_list(ConfigVar) ->
         false ->
             [{ip, "127.0.0.1"}, {port, 6379}];
         Url ->
-            case redis_uri:parse(Url) of
-                {redis, UserInfo, Host, Port, _Path, _Query} ->
-                    Pass = 
-                        case UserInfo of
-                            "" -> undefined;
-                            Val -> list_to_binary(Val)
-                        end,
-                    {ok, Ip} = inet:getaddr(Host, inet),
-                    [{ip, Ip}, {port, Port}, {pass, Pass}];
-                _ ->
-                    [{ip, "127.0.0.1"}, {port, 6379}]
-            end
+            logplex_utils:parse_redis_url(Url)
     end.

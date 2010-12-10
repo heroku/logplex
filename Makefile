@@ -5,7 +5,7 @@ all:
 	@escript release/build_rel.escript boot logplex `pwd`/ebin
 
 clean:
-	rm -f ebin/*.beam erl_crash.dump
+	rm -f ebin/*.beam erl_crash.dump release/*.boot
 
 clean_all: clean
 	(cd deps/redis_pool;$(MAKE) clean)

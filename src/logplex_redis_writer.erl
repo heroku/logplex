@@ -21,22 +21,22 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_redis_writer).
--export([start_link/1, init/2, loop/1]).
+-export([start_link/2, init/3, loop/2]).
 
 -include_lib("logplex.hrl").
 
 %% API functions
-start_link(RedisOpts) ->
-    proc_lib:start_link(?MODULE, init, [self(), RedisOpts], 5000).
+start_link(BufferPid, RedisOpts) ->
+    proc_lib:start_link(?MODULE, init, [self(), BufferPid, RedisOpts], 5000).
 
-init(Parent, RedisOpts) ->
+init(Parent, BufferPid, RedisOpts) ->
     io:format("init ~p~n", [?MODULE]),
     Socket = open_socket(RedisOpts),
     proc_lib:init_ack(Parent, {ok, self()}),
-    loop(Socket).
+    loop(BufferPid, Socket).
 
-loop(Socket) ->
-    case logplex_redis_buffer:out(100) of
+loop(BufferPid, Socket) ->
+    case logplex_redis_buffer:out(BufferPid, 100) of
         undefined -> timer:sleep(10);
         {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of
@@ -45,7 +45,7 @@ loop(Socket) ->
             end
     end,
     receive _X -> ok after 0 -> ok end,
-    ?MODULE:loop(Socket).
+    ?MODULE:loop(BufferPid, Socket).
 
 open_socket(Opts) ->
     Ip = proplists:get_value(ip, Opts),
