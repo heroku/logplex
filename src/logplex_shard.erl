@@ -61,7 +61,7 @@ lookup(Key, Map, Interval) ->
 init([]) ->
     io:format("init ~p~n", [?MODULE]),
     Urls =
-        case [Url || {ok, Url} <- redis_helper:shard_urls()] of
+        case [binary_to_list(Url) || {ok, Url} <- redis_helper:shard_urls()] of
             [] ->
                 case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
                     false -> ["redis://127.0.0.1:6379/"];
