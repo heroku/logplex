@@ -41,11 +41,14 @@ init(Parent) ->
 
 loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
     case logplex_queue:out() of
-        undefined -> timer:sleep(10);
+        undefined ->
+            logplex_stats:incr(worker_idle),
+            timer:sleep(10);
         Msg ->
-            case re:run(Msg, RE, [{capture, all_but_first, list}]) of
+            logplex_stats:incr(message_received),
+            case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
                 {match, [Token]} ->
-                    route(list_to_binary(Token), Map, Interval, Msg);
+                    route(Token, Map, Interval, Msg);
                 _ ->
                     ok
             end
@@ -55,7 +58,6 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
 route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon} ->
-            BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             Count = logplex_stats:incr(logplex_stats_channels, {message_received, AppId, ChannelId}),
             case exceeded_threshold(ChannelId, Count, Addon) of
                 true ->
@@ -63,6 +65,7 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
                 notify ->
                     case logplex_rate_limit:lock(ChannelId) of
                         true ->
+                            BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
                             {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
                             UTC = erlang:universaltime(),
                             {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
@@ -73,10 +76,10 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
                             ok
                     end;
                 false ->
+                    BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
                     logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
-                    Msg1 = re:replace(Msg, Token, TokenName),
-                    Msg2 = iolist_to_binary(Msg1),
-                    process(ChannelId, BufferPid, Addon, Msg2)
+                    Msg1 = iolist_to_binary(re:replace(Msg, Token, TokenName)),
+                    process(ChannelId, BufferPid, Addon, Msg1)
             end;
         _ ->
             ok

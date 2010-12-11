@@ -33,7 +33,7 @@
 
 %% API functions
 start_link() ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 register(ChannelId) when is_integer(ChannelId) ->
     Self = self(),
