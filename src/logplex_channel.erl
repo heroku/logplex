@@ -141,6 +141,11 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({resolve_host, Ip, Drain}, State) ->
+    ets:delete_object(logplex_channel_drains, Drain),
+    ets:insert(logplex_channel_drains, Drain#drain{resolved_host=Ip}),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -238,9 +243,7 @@ refresh_dns() ->
     [begin
         case logplex_utils:resolve_host(Host) of
             undefined -> ok;
-            Ip ->
-                ets:delete_object(logplex_channel_drains, Drain),
-                ets:insert(logplex_channel_drains, Drain#drain{resolved_host=Ip})
+            Ip -> gen_server:cast(?MODULE, {resolve_host, Ip, Drain})
         end
     end || #drain{host=Host}=Drain <- ets:tab2list(logplex_channel_drains)],
     ?MODULE:refresh_dns().
