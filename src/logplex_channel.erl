@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/3, delete/1, update_addon/2, lookup/1, logs/2, tokens/1, drains/1, info/1]).
+-export([create/3, delete/1, update_addon/2, lookup/1, logs/2, tokens/1, drains/1, info/1, refresh_dns/0]).
 
 -include_lib("logplex.hrl").
 
@@ -118,7 +118,8 @@ init([]) ->
     ets:new(logplex_channel_tokens, [protected, named_table, bag, {keypos, 3}]),
     ets:new(logplex_channel_drains, [protected, named_table, bag, {keypos, 3}]),
     populate_cache(),
-	{ok, []}.
+    spawn_link(fun refresh_dns/0),
+    {ok, []}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -165,7 +166,7 @@ handle_info({update_channel, #channel{id=ChannelId, addon=Addon}=Channel}, State
 handle_info({delete_channel, ChannelId}, State) ->
     ets:delete(?MODULE, ChannelId),
     ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}),
-    ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, host='_', port='_'}),
+    ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
     {noreply, State};
 
 handle_info({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, State) ->
@@ -176,12 +177,12 @@ handle_info({delete_token, ChannelId, TokenId}, State) ->
     ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_', app_id='_', addon='_'}),
     {noreply, State};
 
-handle_info({create_drain, DrainId, ChannelId, Host, Port}, State) ->
-    ets:insert(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, host=Host, port=Port}),
+handle_info({create_drain, DrainId, ChannelId, ResolvedHost, Host, Port}, State) ->
+    ets:insert(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, resolved_host=ResolvedHost, host=Host, port=Port}),
     {noreply, State};
 
 handle_info({delete_drain, DrainId}, State) ->
-    ets:match_delete(logplex_channel_drains, #drain{id=DrainId, channel_id='_', host='_', port='_'}),
+    ets:match_delete(logplex_channel_drains, #drain{id=DrainId, channel_id='_', resolved_host='_', host='_', port='_'}),
     {noreply, State};
 
 handle_info(_Info, State) ->
@@ -223,11 +224,23 @@ populate_cache() ->
 
     Drains = lists:foldl(
         fun(#drain{host=Host}=Drain, Acc) ->
-            case inet:getaddr(binary_to_list(Host), inet) of
-                {ok, _Ip} -> [Drain|Acc];
-                _ -> Acc
+            case logplex_utils:resolve_host(Host) of
+                undefined -> Acc;
+                Ip -> [Drain#drain{resolved_host=Ip}|Acc]
             end
         end, [], redis_helper:lookup_drains()),
     length(Drains) > 0 andalso ets:insert(logplex_channel_drains, Drains),
 
     ok.
+
+refresh_dns() ->
+    timer:sleep(60 * 1000),
+    [begin
+        case logplex_utils:resolve_host(Host) of
+            undefined -> ok;
+            Ip ->
+                ets:delete_object(logplex_channel_drains, Drain),
+                ets:insert(logplex_channel_drains, Drain#drain{resolved_host=Ip})
+        end
+    end || #drain{host=Host}=Drain <- ets:tab2list(logplex_channel_drains)],
+    ?MODULE:refresh_dns().

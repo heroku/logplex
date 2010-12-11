@@ -21,9 +21,15 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_utils).
--export([parse_msg/1, filter/2, format/1, field_val/2, field_val/3, parse_redis_url/1]).
+-export([resolve_host/1, parse_msg/1, filter/2, format/1, field_val/2, field_val/3, parse_redis_url/1]).
 
 -include_lib("logplex.hrl").
+
+resolve_host(Host) when is_binary(Host) ->
+    case inet:getaddr(binary_to_list(Host), inet) of
+        {ok, Ip} -> Ip;
+        _ -> undefined
+    end.
 
 parse_msg(Msg) when is_binary(Msg) ->
     case re:run(Msg, "^<(\\d+)>(\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (.*)", [{capture, all_but_first, binary}]) of

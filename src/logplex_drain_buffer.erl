@@ -39,7 +39,7 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-in(Host, Port, Msg) when is_binary(Host), is_integer(Port), is_binary(Msg) ->
+in(Host, Port, Msg) when is_tuple(Host), is_integer(Port), is_binary(Msg) ->
     gen_server:cast(?MODULE, {in, {Host, Port, Msg}}).
 
 out() ->
