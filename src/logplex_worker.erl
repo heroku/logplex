@@ -36,7 +36,6 @@ init(Parent) ->
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
     RedisBuffers = [{logplex_redis_buffer:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
     {ok, Map, Interval} = redis_shard:generate_map_and_interval(RedisBuffers),
-    io:format("map ~p~n", [dict:to_list(Map)]),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(#state{regexp=RE, map=Map, interval=Interval}).
 
