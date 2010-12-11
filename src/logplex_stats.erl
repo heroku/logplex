@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, incr/1, incr/2, incr/3, flush/0]).
+-export([healthcheck/0, workers/0, incr/1, incr/2, incr/3, flush/0]).
 
 -include_lib("logplex.hrl").
 
@@ -37,6 +37,10 @@ start_link() ->
 
 healthcheck() ->
     redis_helper:healthcheck().
+
+workers() ->
+    Sups = [logplex_redis_writer_sup, logplex_redis_buffer_sup, logplex_read_queue_sup, logplex_reader_sup, logplex_worker_sup, logplex_drain_sup],
+    [{Sup, length(supervisor:which_children(Sup))} || Sup <- Sups].
 
 incr(Key) ->
     incr(?MODULE, Key).
