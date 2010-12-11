@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([lookup/3]).
+-export([lookup/3, lookup_urls/0, list_diff/2, poll_shard_urls/0]).
 
 -include_lib("logplex.hrl").
 
@@ -60,30 +60,17 @@ lookup(Key, Map, Interval) ->
 %%--------------------------------------------------------------------
 init([]) ->
     io:format("init ~p~n", [?MODULE]),
-    Urls =
-        case [binary_to_list(Url) || {ok, Url} <- redis_helper:shard_urls()] of
-            [] ->
-                case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
-                    false -> ["redis://127.0.0.1:6379/"];
-                    Url -> [Url]
-                end;
-            Urls0 ->
-                Urls0
-        end,
+    Urls = lookup_urls(),
 
     [logplex_sup:start_child(logplex_read_queue_sup, [Url]) || Url <- Urls],
     [logplex_sup:start_child(logplex_redis_buffer_sup, [Url]) || Url <- Urls],
 
-    ReadQueues = [{logplex_read_queue:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
-    {ok, Map1, Interval1} = redis_shard:generate_map_and_interval(ReadQueues),
-
-    RedisBuffers = [{logplex_redis_buffer:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
-    {ok, Map2, Interval2} = redis_shard:generate_map_and_interval(RedisBuffers),
-
     ets:new(logplex_shard_info, [protected, set, named_table]),
-    ets:insert(logplex_shard_info, {logplex_read_queue_map, {Map1, Interval1}}),
-    ets:insert(logplex_shard_info, {logplex_redis_buffer_map, {Map2, Interval2}}),
-    
+
+    populate_info_table(),
+
+    spawn_link(fun poll_shard_urls/0),
+
     {ok, #state{urls=Urls}}.
 
 %%--------------------------------------------------------------------
@@ -106,6 +93,34 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast(poll_shard_urls, #state{urls=Urls}=State) ->
+    case lookup_urls() of
+        Urls ->
+            {noreply, State};
+        NewList ->
+            {Removed, Added} = list_diff(Urls, NewList),
+            [begin
+                logplex_sup:start_child(logplex_read_queue_sup, [Url]),
+                logplex_sup:start_child(logplex_redis_buffer_sup, [Url])
+            end || Url <- Added],
+            [begin
+                [begin
+                    case logplex_read_queue:url(Pid) of
+                        Url -> supervisor:terminate_child(logplex_read_queue_sup, Id);
+                        _ -> ok
+                    end
+                end || {Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
+                [begin
+                    case logplex_redis_buffer:url(Pid) of
+                        Url -> supervisor:terminate_child(logplex_redis_buffer_sup, Id);
+                        _ -> ok
+                    end
+                end || {Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)]
+            end || Url <- Removed],
+            populate_info_table(),
+            {noreply, State#state{urls=NewList}}
+    end;
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -141,3 +156,52 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+lookup_urls() ->
+    case lists:sort([binary_to_list(Url) || {ok, Url} <- redis_helper:shard_urls()]) of
+        [] ->
+            case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
+                false -> ["redis://127.0.0.1:6379/"];
+                Url -> [Url]
+            end;
+        Urls ->
+            Urls
+    end.
+
+populate_info_table() ->
+    ReadQueues = [{logplex_read_queue:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
+    {ok, Map1, Interval1} = redis_shard:generate_map_and_interval(ReadQueues),
+
+    RedisBuffers = [{logplex_redis_buffer:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
+    {ok, Map2, Interval2} = redis_shard:generate_map_and_interval(RedisBuffers),
+
+    ets:delete_all_objects(logplex_shard_info),
+    ets:insert(logplex_shard_info, {logplex_read_queue_map, {Map1, Interval1}}),
+    ets:insert(logplex_shard_info, {logplex_redis_buffer_map, {Map2, Interval2}}),
+
+    ok.
+
+list_diff(List1, List2) ->
+    list_diff(List1, List2, {[], []}).
+
+list_diff([], [], Acc) ->
+    Acc;
+
+list_diff([A|Tail1], [A|Tail2], Acc) ->
+    list_diff(Tail1, Tail2, Acc);
+
+list_diff([A|Tail1], [B|Tail2]=List2, {Acc1, Acc2}) ->
+    case lists:member(A, List2) of
+        true -> list_diff([A|Tail1], Tail2, {Acc1, [B|Acc2]});
+        false -> list_diff(Tail1, List2, {[A|Acc1], Acc2})
+    end;
+
+list_diff([], List2, {Acc1, Acc2}) ->
+    {Acc1, List2 ++ Acc2};
+
+list_diff(List1, [], {Acc1, Acc2}) ->
+    {List1 ++ Acc1, Acc2}.
+
+poll_shard_urls() ->
+    timer:sleep(20 * 1000),
+    gen_server:cast(?MODULE, poll_shard_urls),
+    ?MODULE:poll_shard_urls().
