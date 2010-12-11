@@ -27,7 +27,7 @@
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([in/2, out/2, url/1, info/1, set_max_length/2]).
+-export([in/2, out/2, url/1, info/1, set_max_length/2, stop/1]).
 
 -include_lib("logplex.hrl").
 
@@ -53,6 +53,9 @@ info(Pid) when is_pid(Pid) ->
 
 set_max_length(Pid, MaxLength) when is_pid(Pid), is_integer(MaxLength) ->
     gen_server:cast(Pid, {max_length, MaxLength}).
+
+stop(Pid) ->
+    gen_server:cast(Pid, stop).
 
 %%====================================================================
 %% gen_server callbacks
@@ -124,6 +127,9 @@ handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
 
 handle_cast({max_length, MaxLength}, State) ->
     {noreply, State#state{max_length=MaxLength}};
+
+handle_cast(stop, State) ->
+    {stop, normal, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.

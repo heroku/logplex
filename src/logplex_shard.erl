@@ -72,7 +72,7 @@ init([]) ->
 
     populate_info_table(),
 
-    spawn_link(fun poll_shard_urls/0),
+    %% spawn_link(fun poll_shard_urls/0),
 
     {ok, #state{urls=Urls}}.
 
@@ -112,16 +112,16 @@ handle_cast(poll_shard_urls, #state{urls=Urls}=State) ->
             [begin
                 [begin
                     case logplex_read_queue:url(Pid) of
-                        Url -> supervisor:terminate_child(logplex_read_queue_sup, Id);
+                        Url -> logplex_read_queue:stop(Pid);
                         _ -> ok
                     end
-                end || {Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
+                end || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
                 [begin
                     case logplex_redis_buffer:url(Pid) of
-                        Url -> supervisor:terminate_child(logplex_redis_buffer_sup, Id);
+                        Url -> logplex_redis_buffer:stop(Pid);
                         _ -> ok
                     end
-                end || {Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)]
+                end || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)]
             end || Url <- Removed],
             populate_info_table(),
             {noreply, State#state{urls=NewList}}
