@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([lookup/3, lookup_urls/0, list_diff/2, poll_shard_urls/0]).
+-export([lookup/3, lookup_urls/0, urls/0, list_diff/2, poll_shard_urls/0]).
 
 -include_lib("logplex.hrl").
 
@@ -45,6 +45,9 @@ lookup(Key, Map, Interval) ->
         {_RedisUrl, Pid} -> Pid;
         Other -> exit({shard_not_found, Other})
     end.
+
+urls() ->
+    gen_server:call(?MODULE, urls).
 
 %%====================================================================
 %% gen_server callbacks
@@ -83,6 +86,9 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call(urls, _From, State) ->
+    {reply, State#state.urls, State};
+
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
