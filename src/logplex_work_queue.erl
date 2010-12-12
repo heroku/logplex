@@ -20,7 +20,7 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_queue).
+-module(logplex_work_queue).
 -behaviour(gen_server).
 
 %% gen_server callbacks
@@ -31,7 +31,7 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {queue, length, max_length}).
+-record(state, {queue, length, max_length, waiting}).
 
 -define(TIMEOUT, 30000).
 
@@ -43,7 +43,16 @@ in(Packet) ->
     gen_server:cast(?MODULE, {in, Packet}).
 
 out() ->
-    gen_server:call(?MODULE, out, ?TIMEOUT).
+    case gen_server:call(?MODULE, out, ?TIMEOUT) of
+        empty ->
+            receive
+                {_From, Packet} -> Packet
+            after 60 * 1000 ->
+                timeout
+            end;
+        Packet ->
+            Packet
+    end.
 
 info() ->
     gen_server:call(?MODULE, info, ?TIMEOUT).
@@ -72,7 +81,7 @@ init([]) ->
             StrNum -> list_to_integer(StrNum)
         end,
     spawn_link(fun() -> report_stats(Self) end),
-	{ok, #state{queue=queue:new(), length=0, max_length=MaxLength}}.
+	{ok, #state{queue=queue:new(), length=0, max_length=MaxLength, waiting=queue:new()}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -84,12 +93,12 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
+handle_call(out, {From, _Mref}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
     case queue:out(Queue) of
         {{value, Out}, Queue1} ->
             {reply, Out, State#state{queue=Queue1, length=Length-1}};
         {empty, _Queue} ->
-            {reply, undefined, State}
+            {reply, empty, State#state{waiting=queue:in(From, Waiting)}}
     end;
 
 handle_call(info, _From, #state{length=Length, max_length=MaxLength}=State) ->
@@ -109,9 +118,15 @@ handle_cast({in, _Packet}, #state{length=Length, max_length=MaxLength}=State) wh
     logplex_stats:incr(queue_dropped),
     {noreply, State};
 
-handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
-    Queue1 = queue:in(Packet, Queue),
-    {noreply, State#state{queue=Queue1, length=Length+1}};
+handle_cast({in, Packet}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
+    case queue:out(Waiting) of
+        {empty, _} ->
+            Queue1 = queue:in(Packet, Queue),
+            {noreply, State#state{queue=Queue1, length=Length+1}};
+        {{value, Pid}, Waiting1} ->
+            Pid ! {self(), Packet},
+            {noreply, State#state{waiting=Waiting1}}
+    end;
 
 handle_cast({max_length, MaxLength}, State) ->
     {noreply, State#state{max_length=MaxLength}};

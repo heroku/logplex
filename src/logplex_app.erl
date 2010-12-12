@@ -62,7 +62,7 @@ init([]) ->
 
         {logplex_shard, {logplex_shard, start_link, []}, permanent, 2000, worker, [logplex_shard]},
 
-        {logplex_queue, {logplex_queue, start_link, []}, permanent, 2000, worker, [logplex_queue]},
+        {logplex_work_queue, {logplex_work_queue, start_link, []}, permanent, 2000, worker, [logplex_work_queue]},
         {logplex_drain_buffer, {logplex_drain_buffer, start_link, []}, permanent, 2000, worker, [logplex_drain_buffer]},
         %% logplex_redis_buffer supervised by logplex_redis_buffer_sup
         %% logplex_read_queue supervised by logplex_read_queue_sup

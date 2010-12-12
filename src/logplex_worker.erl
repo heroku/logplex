@@ -40,10 +40,9 @@ init(Parent) ->
     loop(#state{regexp=RE, map=Map, interval=Interval}).
 
 loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
-    case logplex_queue:out() of
-        undefined ->
-            logplex_stats:incr(worker_idle),
-            timer:sleep(10);
+    case logplex_work_queue:out() of
+        timeout ->
+            ok;
         Msg ->
             logplex_stats:incr(message_received),
             case re:run(Msg, RE, [{capture, all_but_first, binary}]) of

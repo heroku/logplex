@@ -10,7 +10,6 @@
     logplex_drain_buffer,
     logplex_drain_writer,
     logplex_grid,
-    logplex_queue,
     logplex_rate_limit,
     logplex_read_queue,
     logplex_reader,
@@ -25,6 +24,7 @@
     logplex_token,
     logplex_utils,
     logplex_worker,
+    logplex_work_queue,
     redis_helper,
     syslog_acceptor
   ]},

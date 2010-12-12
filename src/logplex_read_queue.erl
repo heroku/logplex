@@ -31,7 +31,7 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {queue, length, max_length, redis_url}).
+-record(state, {queue, length, max_length, redis_url, waiting}).
 
 -define(TIMEOUT, 30000).
 
@@ -41,10 +41,24 @@ start_link(Url) ->
 
 in(Pid, ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     Packet = redis:build_request([<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]),
-    gen_server:cast(Pid, {in, {self(), Packet}}).
+    gen_server:cast(Pid, {in, {self(), Packet}}),
+    receive
+        {logs, Logs} -> Logs
+    after 60 * 1000 ->
+        {error, timeout}
+    end.
 
 out(Pid) ->
-    gen_server:call(Pid, out, ?TIMEOUT).
+    case gen_server:call(Pid, out, ?TIMEOUT) of
+        empty ->
+            receive
+                {_From, Packet} -> Packet
+            after 60 * 1000 ->
+                timeout
+            end;
+        Packet ->
+            Packet
+    end.
 
 url(Pid) ->
     gen_server:call(Pid, url, ?TIMEOUT).
@@ -76,7 +90,7 @@ init([Url]) ->
     start_workers(RedisOpts),
     MaxLength = 2000,
     spawn_link(fun() -> report_stats(Self) end),
-	{ok, #state{queue=queue:new(), length=0, max_length=MaxLength, redis_url=Url}}.
+	{ok, #state{queue=queue:new(), length=0, max_length=MaxLength, redis_url=Url, waiting=queue:new()}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -88,12 +102,12 @@ init([Url]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call(out, _From, #state{queue=Queue, length=Length}=State) ->
+handle_call(out, {From, _Mref}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
     case queue:out(Queue) of
         {{value, Out}, Queue1} ->
             {reply, Out, State#state{queue=Queue1, length=Length-1}};
         {empty, _Queue} ->
-            {reply, undefined, State}
+            {reply, empty, State#state{waiting=queue:in(From, Waiting)}}
     end;
 
 handle_call(url, _From, #state{redis_url=Url}=State) ->
@@ -116,9 +130,15 @@ handle_cast({in, _Packet}, #state{length=Length, max_length=MaxLength}=State) wh
     logplex_stats:incr(read_queue_dropped),
     {noreply, State};
 
-handle_cast({in, Packet}, #state{queue=Queue, length=Length}=State) ->
-    Queue1 = queue:in(Packet, Queue),
-    {noreply, State#state{queue=Queue1, length=Length+1}};
+handle_cast({in, Packet}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
+    case queue:out(Waiting) of
+        {empty, _} ->
+            Queue1 = queue:in(Packet, Queue),
+            {noreply, State#state{queue=Queue1, length=Length+1}};
+        {{value, Pid}, Waiting1} ->
+            Pid ! {self(), Packet},
+            {noreply, State#state{waiting=Waiting1}}
+    end;
 
 handle_cast({max_length, MaxLength}, State) ->
     {noreply, State#state{max_length=MaxLength}};
