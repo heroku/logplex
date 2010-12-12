@@ -37,7 +37,7 @@ init(Parent, BufferPid, RedisOpts) ->
 
 loop(BufferPid, Socket) ->
     case logplex_redis_buffer:out(BufferPid, 100) of
-        empty -> ok;
+        timeout -> ok;
         {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of
                 ok -> logplex_stats:incr(logplex_stats, message_processed, NumItems);

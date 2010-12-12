@@ -37,7 +37,7 @@ init(Parent, QueuePid, RedisOpts) ->
 
 loop(QueuePid, Socket) ->
     case logplex_read_queue:out(QueuePid) of
-        empty -> ok;
+        timeout -> ok;
         {ClientPid, Packet} ->
             case process_info(ClientPid) of
                 undefined -> ok;

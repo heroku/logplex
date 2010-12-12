@@ -37,7 +37,7 @@ init(Parent) ->
 
 loop(Socket) ->
     case logplex_drain_buffer:out() of
-        empty -> ok;
+        timeout -> ok;
         {Host, Port, Msg} ->
             case gen_udp:send(Socket, Host, Port, Msg) of
                 ok -> logplex_stats:incr(message_routed);
