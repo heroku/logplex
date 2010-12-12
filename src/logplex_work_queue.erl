@@ -142,7 +142,7 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info(report_stats, #state{length=Length}=State) ->
-    ets:insert(logplex_stats, {queue_length, Length}),
+    ets:insert(logplex_stats, {work_queue_length, Length}),
     {noreply, State};
 
 handle_info(_Info, State) ->
