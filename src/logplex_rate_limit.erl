@@ -27,19 +27,33 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([lock/1, clear_all/0]).
+-export([lock/1, set_lock/1, clear_all/0]).
 
 -include_lib("logplex.hrl").
+
+-define(TIMEOUT, 10000).
 
 %% API functions
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 lock(ChannelId) when is_integer(ChannelId) ->
-    gen_server:call(?MODULE, {lock, ChannelId}, 10000).
+    Nodes = lists:sort([node()|nodes()]),
+    Index = (ChannelId rem length(Nodes)) + 1,
+    Node = lists:nth(Index, Nodes),
+    case rpc:call(Node, ?MODULE, set_lock, [ChannelId], ?TIMEOUT) of
+        {badrpc, Reason} ->
+            error_logger:error_msg("badrpc (~p): ~p~n", [Node, Reason]),
+            true;
+        Res ->
+            Res
+    end.
+
+set_lock(ChannelId) when is_integer(ChannelId) ->
+    gen_server:call(?MODULE, {set_lock, ChannelId}, ?TIMEOUT).
 
 clear_all() ->
-    gen_server:cast(?MODULE, clear_all).
+    gen_server:abcast([node()|nodes()], ?MODULE, clear_all).
 
 %%====================================================================
 %% gen_server callbacks
@@ -54,7 +68,8 @@ clear_all() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-	{ok, []}.
+    ets:new(?MODULE, [protected, named_table, set]),
+    {ok, []}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -66,9 +81,15 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({lock, ChannelId}, _From, State) ->
-    Res = global:set_lock({ChannelId, node()}, [node()|nodes()], 0),
-    {reply, Res, State};
+handle_call({set_lock, ChannelId}, _From, State) ->
+    Result =
+    case ets:lookup(?MODULE, ChannelId) of
+        [{ChannelId, true}] -> false;
+        [] ->
+            ets:insert(?MODULE, {ChannelId, true}),
+            true
+    end,
+    {reply, Result, State};
 
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
@@ -81,8 +102,7 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast(clear_all, State) ->
-    Local = node(),
-    [global:del_lock({ChannelId, Node}, [Node|nodes()]) || {ChannelId, Node, _Pids} <- ets:tab2list(global_locks), Node == Local],
+    ets:delete_all_objects(?MODULE),
     {noreply, State};
 
 handle_cast(_Msg, State) ->
