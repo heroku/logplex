@@ -20,30 +20,36 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_redis_buffer).
+-module(logplex_queue).
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/1, init/1, handle_call/3, handle_cast/2, 
+-export([start_link/1, start_link/2, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([in/2, out/2, url/1, info/1, set_max_length/2, stop/1]).
+-export([in/2, out/1, out/2, info/1, get/2, set_max_length/2, stop/1]).
 
 -include_lib("logplex.hrl").
 
--record(state, {redis_url, queue, length, max_length, waiting}).
+-record(state, {dropped_stat_key, length_stat_key, queue, length, max_length, waiting, dict}).
 
 -define(TIMEOUT, 30000).
 
 %% API functions
-start_link(Url) ->
-    gen_server:start_link(?MODULE, [Url], []).
+start_link(Props) when is_list(Props) ->
+    gen_server:start_link(?MODULE, [Props], []).
 
-in(Pid, Packet) when is_pid(Pid), is_binary(Packet) ->
-    gen_server:cast(Pid, {in, Packet}).
+start_link(Name, Props) when is_atom(Name), is_list(Props) ->
+    gen_server:start_link({local, Name}, ?MODULE, [Props], []).
 
-out(Pid, Num) when is_pid(Pid), is_integer(Num) ->
-    case gen_server:call(Pid, {out, Num}, ?TIMEOUT) of
+in(NameOrPid, Packet) when is_atom(NameOrPid); is_pid(NameOrPid) ->
+    gen_server:cast(NameOrPid, {in, Packet}).
+
+out(NameOrPid) ->
+    out(NameOrPid, 1).
+
+out(NameOrPid, Num) when (is_atom(NameOrPid) orelse is_pid(NameOrPid)) andalso is_integer(Num) ->
+    case gen_server:call(NameOrPid, {out, Num}, ?TIMEOUT) of
         empty ->
             receive
                 {_From, Packet} -> Packet
@@ -54,17 +60,17 @@ out(Pid, Num) when is_pid(Pid), is_integer(Num) ->
             Packet
     end.
 
-url(Pid) when is_pid(Pid) ->
-    gen_server:call(Pid, url, ?TIMEOUT).
+info(NameOrPid) when is_atom(NameOrPid); is_pid(NameOrPid) ->
+    gen_server:call(NameOrPid, info, ?TIMEOUT).
 
-info(Pid) when is_pid(Pid) ->
-    gen_server:call(Pid, info, ?TIMEOUT).
+get(NameOrPid, redis_url) when is_atom(NameOrPid); is_pid(NameOrPid) ->
+    gen_server:call(NameOrPid, {get, redis_url}, ?TIMEOUT).
 
-set_max_length(Pid, MaxLength) when is_pid(Pid), is_integer(MaxLength) ->
-    gen_server:cast(Pid, {max_length, MaxLength}).
+set_max_length(NameOrPid, MaxLength) when (is_atom(NameOrPid) orelse is_pid(NameOrPid)) andalso is_integer(MaxLength) ->
+    gen_server:cast(NameOrPid, {max_length, MaxLength}).
 
-stop(Pid) ->
-    gen_server:cast(Pid, stop).
+stop(NameOrPid) when is_atom(NameOrPid); is_pid(NameOrPid) ->
+    gen_server:cast(NameOrPid, stop).
 
 %%====================================================================
 %% gen_server callbacks
@@ -78,18 +84,25 @@ stop(Pid) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init([Url]) ->
-    io:format("init ~p~n", [?MODULE]),
+init([Props]) ->
+    Name = proplists:get_value(name, Props),
+    io:format("init logplex_queue: ~p~n", [Name]),
     Self = self(),
-    MaxLength =
-        case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
-            false -> 2000;
-            StrNum -> list_to_integer(StrNum)
-        end,
-    RedisOpts = logplex_utils:parse_redis_url(Url),
-    start_workers(RedisOpts),
+    State = #state{
+        dropped_stat_key = build_stat_key(Name, "dropped"),
+        length_stat_key = build_stat_key(Name, "length"),
+        queue = queue:new(),
+        length = 0,
+        max_length = proplists:get_value(max_length, Props),
+        waiting = queue:new(),
+        dict = proplists:get_value(dict, Props)
+    },
+    WorkerSup = proplists:get_value(worker_sup, Props),
+    NumWorkers = proplists:get_value(num_workers, Props),
+    WorkerArgs = proplists:get_value(worker_args, Props),
+    start_workers(WorkerSup, NumWorkers, WorkerArgs),
     spawn_link(fun() -> report_stats(Self) end),
-    {ok, #state{redis_url=Url, queue=queue:new(), length=0, max_length=MaxLength, waiting=queue:new()}}.
+    {ok, State}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -103,7 +116,7 @@ init([Url]) ->
 %%--------------------------------------------------------------------
 handle_call({out, Num}, {From, _Mref}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
     case drain(Queue, Num) of
-        {Items, Queue1} when length(Items) > 0 ->
+        {Items, Queue1} when is_list(Items), length(Items) > 0 ->
             NumItems = length(Items),
             {reply, {NumItems, lists:reverse(Items)}, State#state{queue=Queue1, length=Length-NumItems}};
         _ ->
@@ -113,8 +126,13 @@ handle_call({out, Num}, {From, _Mref}, #state{queue=Queue, length=Length, waitin
 handle_call(info, _From, #state{length=Length, max_length=MaxLength}=State) ->
     {reply, {Length, MaxLength}, State};
 
-handle_call(url, _From, #state{redis_url=Url}=State) ->
-    {reply, Url, State};
+handle_call({get, Key}, _From, #state{dict=Dict}=State) ->
+    Result =
+        case dict:find(Key, Dict) of
+            {ok, Value} -> Value;
+            error -> undefined
+        end,
+    {reply, Result, State};
 
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
@@ -126,8 +144,8 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({in, _Packet}, #state{length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
-    logplex_stats:incr(redis_buffer_dropped),
+handle_cast({in, _Packet}, #state{dropped_stat_key=StatKey, length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
+    logplex_stats:incr(StatKey),
     {noreply, State};
 
 handle_cast({in, Packet}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
@@ -136,7 +154,7 @@ handle_cast({in, Packet}, #state{queue=Queue, length=Length, waiting=Waiting}=St
             Queue1 = queue:in(Packet, Queue),
             {noreply, State#state{queue=Queue1, length=Length+1}};
         {{value, Pid}, Waiting1} ->
-            Pid ! {self(), {1, Packet}},
+            Pid ! {self(), {1, [Packet]}},
             {noreply, State#state{waiting=Waiting1}}
     end;
 
@@ -156,8 +174,8 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info(report_stats, #state{length=Length}=State) ->
-    ets:insert(logplex_stats, {redis_buffer_length, Length}),
+handle_info(report_stats, #state{length_stat_key=StatKey, length=Length}=State) ->
+    ets:insert(logplex_stats, {StatKey, Length}),
     {noreply, State};
 
 handle_info(_Info, State) ->
@@ -185,26 +203,27 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-start_workers(RedisOpts) ->
-    NumWorkers =
-        case os:getenv("LOGPLEX_REDIS_WRITERS") of
-            false -> 10;
-            StrNum -> list_to_integer(StrNum)
-        end,
+build_stat_key(Name, Postfix) when is_list(Name), is_list(Postfix) ->
+    Name ++ "_" ++ Postfix;
+
+build_stat_key(Name, Postfix) ->
+    exit({poorly_formatted_stat_key, Name, Postfix}).
+    
+start_workers(WorkerSup, NumWorkers, WorkerArgs) ->
     lists:foldl(
         fun (_, Acc) ->
-            case start_worker(RedisOpts) of
+            case start_worker(WorkerSup, WorkerArgs) of
                 undefined -> Acc;
                 Pid -> [Pid|Acc]
             end
-        end, [], lists:seq(1,NumWorkers)).
+        end, [], lists:seq(1, NumWorkers)).
 
-start_worker(RedisOpts) ->
-    case logplex_sup:start_child(logplex_redis_writer_sup, [self(), RedisOpts]) of
+start_worker(WorkerSup, WorkerArgs) ->
+    case logplex_worker_sup:start_child(WorkerSup, [self() | WorkerArgs]) of
         {ok, Pid} -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->
-            error_logger:error_msg("failed to start redis writer: ~p~n", [Reason]),
+            error_logger:error_msg("~p failed to start worker: ~p~n", [WorkerSup, Reason]),
             undefined
     end.
 

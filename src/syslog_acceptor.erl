@@ -41,7 +41,7 @@ loop(Socket) ->
         Msg ->
             case Msg of
                 {udp, Socket, _IP, _InPortNo, Packet} ->
-                    logplex_work_queue:in(Packet);
+                    logplex_queue:in(logplex_work_queue, Packet);
                 _ ->
                     ok
             end

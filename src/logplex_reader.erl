@@ -36,12 +36,13 @@ init(Parent, QueuePid, RedisOpts) ->
     loop(QueuePid, Socket).
 
 loop(QueuePid, Socket) ->
-    case logplex_read_queue:out(QueuePid) of
+    case logplex_queue:out(QueuePid) of
         timeout -> ok;
-        {ClientPid, Packet} ->
-            case process_info(ClientPid) of
-                undefined -> ok;
-                _ ->
+        Out ->
+             {1, [{ClientPid, Packet}]} = Out,
+            case is_process_alive(ClientPid) of
+                false -> ok;
+                true ->
                     case gen_tcp:send(Socket, Packet) of
                         ok ->
                             Logs = recv_logs(Socket),

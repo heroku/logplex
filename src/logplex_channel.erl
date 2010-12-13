@@ -75,7 +75,13 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     [{logplex_read_queue_map, {Map, Interval}}] = ets:lookup(logplex_shard_info, logplex_read_queue_map),
     Index = redis_shard:key_to_index(integer_to_list(ChannelId)),
     {_RedisUrl, QueuePid} = redis_shard:get_matching_pool(Index, Map, Interval),
-    logplex_read_queue:in(QueuePid, ChannelId, Num).
+    Packet = redis:build_request([<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]),
+    logplex_queue:in(QueuePid, {self(), Packet}),
+    receive
+        {logs, Logs} -> Logs
+    after 60 * 1000 ->
+        {error, timeout}
+    end.
 
 tokens(ChannelId) when is_integer(ChannelId) ->
     ets:lookup(logplex_channel_tokens, ChannelId).

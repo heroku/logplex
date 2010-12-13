@@ -65,8 +65,8 @@ init([]) ->
     io:format("init ~p~n", [?MODULE]),
     Urls = lookup_urls(),
 
-    [logplex_sup:start_child(logplex_read_queue_sup, [Url]) || Url <- Urls],
-    [logplex_sup:start_child(logplex_redis_buffer_sup, [Url]) || Url <- Urls],
+    [logplex_queue_sup:start_child(logplex_read_queue_sup, [read_queue_args(Url)]) || Url <- Urls],
+    [logplex_queue_sup:start_child(logplex_redis_buffer_sup, [redis_buffer_args(Url)]) || Url <- Urls],
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
@@ -106,19 +106,19 @@ handle_cast(poll_shard_urls, #state{urls=Urls}=State) ->
         NewList ->
             {Removed, Added} = list_diff(Urls, NewList),
             [begin
-                logplex_sup:start_child(logplex_read_queue_sup, [Url]),
-                logplex_sup:start_child(logplex_redis_buffer_sup, [Url])
+                logplex_worker_sup:start_child(logplex_read_queue_sup, [Url]),
+                logplex_worker_sup:start_child(logplex_redis_buffer_sup, [Url])
             end || Url <- Added],
             [begin
                 [begin
-                    case logplex_read_queue:url(Pid) of
-                        Url -> logplex_read_queue:stop(Pid);
+                    case logplex_queue:get(Pid, redis_url) of
+                        Url -> logplex_queue:stop(Pid);
                         _ -> ok
                     end
                 end || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
                 [begin
-                    case logplex_redis_buffer:url(Pid) of
-                        Url -> logplex_redis_buffer:stop(Pid);
+                    case logplex_queue:get(Pid, redis_url) of
+                        Url -> logplex_queue:stop(Pid);
                         _ -> ok
                     end
                 end || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)]
@@ -174,10 +174,10 @@ lookup_urls() ->
     end.
 
 populate_info_table() ->
-    ReadQueues = [{logplex_read_queue:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
+    ReadQueues = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
     {ok, Map1, Interval1} = redis_shard:generate_map_and_interval(ReadQueues),
 
-    RedisBuffers = [{logplex_redis_buffer:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
+    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
     {ok, Map2, Interval2} = redis_shard:generate_map_and_interval(RedisBuffers),
 
     ets:delete_all_objects(logplex_shard_info),
@@ -211,3 +211,37 @@ poll_shard_urls() ->
     timer:sleep(20 * 1000),
     gen_server:cast(?MODULE, poll_shard_urls),
     ?MODULE:poll_shard_urls().
+
+read_queue_args(Url) ->
+    MaxLength = 2000,
+    NumWorkers = 100,
+    RedisOpts = logplex_utils:parse_redis_url(Url),
+    [{name, "logplex_read_queue"},
+     {max_length, MaxLength},
+     {num_workers, NumWorkers},
+     {worker_sup, logplex_reader_sup},
+     {worker_args, [RedisOpts]},
+     {dict, dict:from_list([
+        {redis_url, Url}
+     ])}].
+
+redis_buffer_args(Url) ->
+    MaxLength =
+        case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
+            false -> 2000;
+            StrNum1 -> list_to_integer(StrNum1)
+        end,
+    NumWorkers =
+        case os:getenv("LOGPLEX_REDIS_WRITERS") of
+            false -> 10;
+            StrNum2 -> list_to_integer(StrNum2)
+        end,
+    RedisOpts = logplex_utils:parse_redis_url(Url),
+    [{name, "logplex_redis_buffer"},
+     {max_length, MaxLength},
+     {num_workers, NumWorkers},
+     {worker_sup, logplex_redis_writer_sup},
+     {worker_args, [RedisOpts]},
+     {dict, dict:from_list([
+        {redis_url, Url}
+     ])}].

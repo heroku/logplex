@@ -20,7 +20,7 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_sup).
+-module(logplex_worker_sup).
 -behavior(supervisor).
 
 -export([start_link/2, start_child/2, init/1]).

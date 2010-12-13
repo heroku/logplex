@@ -27,6 +27,7 @@
 
 %% API functions
 start_link(BufferPid, RedisOpts) ->
+    io:format("logplex_redis_writer start_link ~p~n", [RedisOpts]),
     proc_lib:start_link(?MODULE, init, [self(), BufferPid, RedisOpts], 5000).
 
 init(Parent, BufferPid, RedisOpts) ->
@@ -36,7 +37,7 @@ init(Parent, BufferPid, RedisOpts) ->
     loop(BufferPid, Socket).
 
 loop(BufferPid, Socket) ->
-    case logplex_redis_buffer:out(BufferPid, 100) of
+    case logplex_queue:out(BufferPid, 100) of
         timeout -> ok;
         {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of

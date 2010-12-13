@@ -21,29 +21,29 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_worker).
--export([start_link/0, init/1, loop/1]).
+-export([start_link/1, init/1, loop/1]).
 
 -include_lib("logplex.hrl").
 
 -record(state, {regexp, map, interval}).
 
 %% API functions
-start_link() ->
+start_link(_QueuePid) ->
     proc_lib:start_link(?MODULE, init, [self()], 5000).
 
 init(Parent) ->
     io:format("init ~p~n", [?MODULE]),
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
-    RedisBuffers = [{logplex_redis_buffer:url(Pid), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
+    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
     {ok, Map, Interval} = redis_shard:generate_map_and_interval(RedisBuffers),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(#state{regexp=RE, map=Map, interval=Interval}).
 
 loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
-    case logplex_work_queue:out() of
+    case logplex_queue:out(logplex_work_queue) of
         timeout ->
             ok;
-        Msg ->
+        {1, [Msg]} ->
             logplex_stats:incr(message_received),
             case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
                 {match, [Token]} ->
@@ -86,8 +86,8 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
 
 process(ChannelId, BufferPid, Addon, Msg) ->
     logplex_tail:route(ChannelId, Msg),
-    [logplex_drain_buffer:in(Host, Port, Msg) || #drain{resolved_host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
-    logplex_redis_buffer:in(BufferPid, redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)).
+    [logplex_queue:in(logplex_drain_buffer, {Host, Port, Msg}) || #drain{resolved_host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
+    logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)).
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;
 throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.

@@ -20,29 +20,18 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_drain_writer).
--export([start_link/1, init/1, loop/1]).
+-module(logplex_queue_sup).
+-behavior(supervisor).
 
--include_lib("logplex.hrl").
+-export([start_link/2, start_child/2, init/1]).
 
-%% API functions
-start_link(_BufferPid) ->
-    proc_lib:start_link(?MODULE, init, [self()], 5000).
+start_link(SupName, QueueName) ->
+    supervisor:start_link({local, SupName}, ?MODULE, [QueueName]).
 
-init(Parent) ->
-    io:format("init ~p~n", [?MODULE]),
-    {ok, Socket} = gen_udp:open(0, [binary]),
-    proc_lib:init_ack(Parent, {ok, self()}),
-    loop(Socket).
+start_child(SupName, Args) ->
+    supervisor:start_child(SupName, Args).
 
-loop(Socket) ->
-    case logplex_queue:out(logplex_drain_buffer) of
-        timeout -> ok;
-        {1, [{Host, Port, Msg}]} ->
-            case gen_udp:send(Socket, Host, Port, Msg) of
-                ok -> logplex_stats:incr(message_routed);
-                {error, nxdomain} -> error_logger:error_msg("nxdomin ~s:~w~n", [Host, Port]);
-                Err -> exit(Err)
-            end
-    end,
-    ?MODULE:loop(Socket).
+init([QueueName]) ->
+    {ok, {{simple_one_for_one, 1000, 1}, [
+        {QueueName, {logplex_queue, start_link, []}, transient, 2000, worker, [logplex_queue]}
+    ]}}.

@@ -37,6 +37,10 @@ prereq: start a local redis server on the default port 6379
 * LOGPLEX\_DRAIN\_BUFFER\_LENGTH - max length of drain write buffer (default: 2000)
 * LOGPLEX\_REDIS\_BUFFER\_LENGTH - max length of redis write buffer (default: 2000)
 
+## Sharding
+
+sadd redis:shard:urls redis://password@hostname:6379/
+
 ## Redis Keys
 
     ch:336:data (hash)

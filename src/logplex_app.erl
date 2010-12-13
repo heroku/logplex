@@ -53,17 +53,17 @@ init([]) ->
         {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
 
-        {logplex_redis_writer_sup, {logplex_sup, start_link, [logplex_redis_writer_sup, logplex_redis_writer]}, permanent, 2000, worker, [logplex_redis_writer_sup]},
-        {logplex_redis_buffer_sup, {logplex_sup, start_link, [logplex_redis_buffer_sup, logplex_redis_buffer]}, permanent, 2000, worker, [logplex_redis_buffer_sup]},
-        {logplex_read_queue_sup, {logplex_sup, start_link, [logplex_read_queue_sup, logplex_read_queue]}, permanent, 2000, worker, [logplex_read_queue_sup]},
-        {logplex_reader_sup, {logplex_sup, start_link, [logplex_reader_sup, logplex_reader]}, permanent, 2000, worker, [logplex_reader_sup]},
-        {logplex_worker_sup, {logplex_sup, start_link, [logplex_worker_sup, logplex_worker]}, permanent, 2000, worker, [logplex_worker_sup]},
-        {logplex_drain_sup, {logplex_sup, start_link, [logplex_drain_sup, logplex_drain_writer]}, permanent, 2000, worker, [logplex_drain_sup]},
+        {logplex_redis_writer_sup, {logplex_worker_sup, start_link, [logplex_redis_writer_sup, logplex_redis_writer]}, permanent, 2000, worker, [logplex_redis_writer_sup]},
+        {logplex_redis_buffer_sup, {logplex_queue_sup, start_link, [logplex_redis_buffer_sup, logplex_redis_buffer]}, permanent, 2000, worker, [logplex_redis_buffer_sup]},
+        {logplex_read_queue_sup, {logplex_queue_sup, start_link, [logplex_read_queue_sup, logplex_read_queue]}, permanent, 2000, worker, [logplex_read_queue_sup]},
+        {logplex_reader_sup, {logplex_worker_sup, start_link, [logplex_reader_sup, logplex_reader]}, permanent, 2000, worker, [logplex_reader_sup]},
+        {logplex_worker_sup, {logplex_worker_sup, start_link, [logplex_worker_sup, logplex_worker]}, permanent, 2000, worker, [logplex_worker_sup]},
+        {logplex_drain_sup, {logplex_worker_sup, start_link, [logplex_drain_sup, logplex_drain_writer]}, permanent, 2000, worker, [logplex_drain_sup]},
 
         {logplex_shard, {logplex_shard, start_link, []}, permanent, 2000, worker, [logplex_shard]},
 
-        {logplex_work_queue, {logplex_work_queue, start_link, []}, permanent, 2000, worker, [logplex_work_queue]},
-        {logplex_drain_buffer, {logplex_drain_buffer, start_link, []}, permanent, 2000, worker, [logplex_drain_buffer]},
+        {logplex_work_queue, {logplex_queue, start_link, [logplex_work_queue, logplex_work_queue_args()]}, permanent, 2000, worker, [logplex_work_queue]},
+        {logplex_drain_buffer, {logplex_queue, start_link, [logplex_drain_buffer, logplex_drain_buffer_args()]}, permanent, 2000, worker, [logplex_drain_buffer]},
         %% logplex_redis_buffer supervised by logplex_redis_buffer_sup
         %% logplex_read_queue supervised by logplex_read_queue_sup
 
@@ -93,3 +93,37 @@ redis_opts(ConfigVar) when is_list(ConfigVar) ->
         Url ->
             logplex_utils:parse_redis_url(Url)
     end.
+
+logplex_work_queue_args() ->
+    MaxLength =
+        case os:getenv("LOGPLEX_QUEUE_LENGTH") of
+            false -> 2000;
+            StrNum1 -> list_to_integer(StrNum1)
+        end,
+    NumWorkers =
+        case os:getenv("LOGPLEX_WORKERS") of
+            false -> 10;
+            StrNum2 -> list_to_integer(StrNum2)
+        end,
+    [{name, "logplex_work_queue"},
+     {max_length, MaxLength},
+     {num_workers, NumWorkers},
+     {worker_sup, logplex_worker_sup},
+     {worker_args, []}].
+
+logplex_drain_buffer_args() ->
+    MaxLength =
+        case os:getenv("LOGPLEX_DRAIN_BUFFER_LENGTH") of
+            false -> 2000;
+            StrNum1 -> list_to_integer(StrNum1)
+        end,
+    NumWorkers =
+        case os:getenv("LOGPLEX_DRAIN_WRITERS") of
+            false -> 100;
+            StrNum2 -> list_to_integer(StrNum2)
+        end,
+    [{name, "logplex_drain_buffer"},
+     {max_length, MaxLength},
+     {num_workers, NumWorkers},
+     {worker_sup, logplex_drain_sup},
+     {worker_args, []}].
