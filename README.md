@@ -48,6 +48,7 @@ prereq: start a local redis server on the default port 6379
     channel_index (counter)
     healthcheck (counter)
     node:heroku.com:10.100.0.1 (string)
+    redis:shard:urls (set)
 
 # License
 
