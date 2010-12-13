@@ -40,11 +40,13 @@ loop(BufferPid, Socket) ->
         timeout -> ok;
         {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of
-                ok -> logplex_stats:incr(logplex_stats, message_processed, NumItems);
+                ok ->
+                    logplex_stats:incr(logplex_stats, message_processed, NumItems),
+                    receive _X -> ok after 0 -> ok end,
+                    inet:setopts(Socket, [{active, once}]);
                 Err -> exit(Err)
             end
     end,
-    receive _X -> ok after 0 -> ok end,
     ?MODULE:loop(BufferPid, Socket).
 
 open_socket(Opts) ->
@@ -53,7 +55,7 @@ open_socket(Opts) ->
     Pass = proplists:get_value(pass, Opts),
     case redis:connect(Ip, Port, Pass) of
         {ok, Socket} ->
-            inet:setopts(Socket, [{active, true}, {nodelay, true}]),
+            inet:setopts(Socket, [{active, once}, {nodelay, true}]),
             Socket;
         Err ->
             exit(Err)
