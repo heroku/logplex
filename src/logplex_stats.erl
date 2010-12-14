@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, workers/0, incr/1, incr/2, incr/3, flush/0]).
+-export([healthcheck/0, workers/0, incr/1, incr/2, incr/3]).
 
 -include_lib("logplex.hrl").
 
@@ -72,8 +72,8 @@ incr(Table, Key, Incr) when is_atom(Table), is_integer(Incr) ->
 init([]) ->
     ets:new(?MODULE, [public, named_table, set]),
     ets:new(logplex_stats_channels, [public, named_table, set]),
-    spawn_link(fun flush/0),
-	{ok, []}.
+    start_timer(),
+    {ok, []}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -95,7 +95,19 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast(flush, State) ->
+handle_cast(_Msg, State) ->
+    {noreply, State}.
+
+%%--------------------------------------------------------------------
+%% Function: handle_info(Info, State) -> {noreply, State} |
+%%                                       {noreply, State, Timeout} |
+%%                                       {stop, Reason, State}
+%% Description: Handling all non call/cast messages
+%% @hidden
+%%--------------------------------------------------------------------
+handle_info(flush, State) ->
+    start_timer(),
+
     logplex_rate_limit:clear_all(),
 
     Stats = ets:tab2list(logplex_stats),
@@ -111,16 +123,6 @@ handle_cast(flush, State) ->
 
     {noreply, State};
 
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: handle_info(Info, State) -> {noreply, State} |
-%%                                       {noreply, State, Timeout} |
-%%                                       {stop, Reason, State}
-%% Description: Handling all non call/cast messages
-%% @hidden
-%%--------------------------------------------------------------------
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -146,7 +148,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-flush() ->
-    timer:sleep(60 * 1000),
-    gen_server:cast(?MODULE, flush),
-    flush().
+start_timer() ->
+    {_Mega, Secs, Micro} = now(),
+    Time = 60000 - ((Secs rem 60 * 1000) + (Micro div 1000)),
+    erlang:start_timer(Time, ?MODULE, flush).

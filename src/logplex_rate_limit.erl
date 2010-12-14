@@ -53,7 +53,7 @@ set_lock(ChannelId) when is_integer(ChannelId) ->
     gen_server:call(?MODULE, {set_lock, ChannelId}, ?TIMEOUT).
 
 clear_all() ->
-    gen_server:abcast([node()|nodes()], ?MODULE, clear_all).
+    gen_server:cast(?MODULE, clear_all).
 
 is_locked(ChannelId) when is_integer(ChannelId) ->
     case ets:lookup(?MODULE, ChannelId) of
