@@ -35,7 +35,7 @@
     message_received=0,
     message_processed=0,
     message_routed=0,
-    queue_dropped=0,
+    work_queue_dropped=0,
     drain_buffer_dropped=0,
     redis_buffer_dropped=0
 }).
@@ -96,8 +96,8 @@ handle_cast({incr, message_processed, Incr}, #state{message_processed=Count}=Sta
 handle_cast({incr, message_routed, Incr}, #state{message_routed=Count}=State) ->
     {noreply, State#state{message_routed=Count+Incr}};
 
-handle_cast({incr, queue_dropped, Incr}, #state{queue_dropped=Count}=State) ->
-    {noreply, State#state{queue_dropped=Count+Incr}};
+handle_cast({incr, work_queue_dropped, Incr}, #state{work_queue_dropped=Count}=State) ->
+    {noreply, State#state{work_queue_dropped=Count+Incr}};
 
 handle_cast({incr, drain_buffer_dropped, Incr}, #state{drain_buffer_dropped=Count}=State) ->
     {noreply, State#state{drain_buffer_dropped=Count+Incr}};
@@ -121,7 +121,7 @@ handle_info(flush, State) ->
             {message_received, State#state.message_received},
             {message_processed, State#state.message_processed},
             {message_routed, State#state.message_routed},
-            {queue_dropped, State#state.queue_dropped},
+            {work_queue_dropped, State#state.work_queue_dropped},
             {drain_buffer_dropped, State#state.drain_buffer_dropped},
             {redis_buffer_dropped, State#state.redis_buffer_dropped}
         ]})),
