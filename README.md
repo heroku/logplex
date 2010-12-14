@@ -1,3 +1,5 @@
+### *Note: Additional information can be found in the Logplex Administration Guide on the Heroku internal wiki
+
 # Setup
 
     $ git submodule update --init
