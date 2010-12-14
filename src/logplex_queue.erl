@@ -52,6 +52,7 @@ out(NameOrPid, Num) when (is_atom(NameOrPid) orelse is_pid(NameOrPid)) andalso i
     case gen_server:call(NameOrPid, {out, Num}, ?TIMEOUT) of
         empty ->
             receive
+                stop -> exit(normal);
                 {_From, Packet} -> Packet
             after 60 * 1000 ->
                 timeout
@@ -86,8 +87,9 @@ stop(NameOrPid) when is_atom(NameOrPid); is_pid(NameOrPid) ->
 %%--------------------------------------------------------------------
 init([Props]) ->
     Name = proplists:get_value(name, Props),
-    io:format("init logplex_queue: ~p~n", [Name]),
     Self = self(),
+    io:format("init logplex_queue ~p (~p)~n", [Name, Self]),
+    pg2:create(Self),
     State = #state{
         dropped_stat_key = build_stat_key(Name, "dropped"),
         length_stat_key = build_stat_key(Name, "length"),

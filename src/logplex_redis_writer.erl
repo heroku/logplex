@@ -32,6 +32,7 @@ start_link(BufferPid, RedisOpts) ->
 
 init(Parent, BufferPid, RedisOpts) ->
     io:format("init ~p~n", [?MODULE]),
+    pg2:join(BufferPid, self()),
     Socket = open_socket(RedisOpts),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(BufferPid, Socket).
@@ -48,6 +49,7 @@ loop(BufferPid, Socket) ->
                 Err -> exit(Err)
             end
     end,
+    receive stop -> exit(normal) after 0 -> ok end,
     ?MODULE:loop(BufferPid, Socket).
 
 open_socket(Opts) ->

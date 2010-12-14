@@ -72,7 +72,7 @@ init([]) ->
 
     populate_info_table(),
 
-    %% spawn_link(fun poll_shard_urls/0),
+    spawn_link(fun poll_shard_urls/0),
 
     {ok, #state{urls=Urls}}.
 
@@ -106,22 +106,26 @@ handle_cast(poll_shard_urls, #state{urls=Urls}=State) ->
         NewList ->
             {Removed, Added} = list_diff(Urls, NewList),
             [begin
-                logplex_worker_sup:start_child(logplex_read_queue_sup, [Url]),
-                logplex_worker_sup:start_child(logplex_redis_buffer_sup, [Url])
+                logplex_queue_sup:start_child(logplex_read_queue_sup, [read_queue_args(Url)]),
+                logplex_queue_sup:start_child(logplex_redis_buffer_sup, [redis_buffer_args(Url)])
             end || Url <- Added],
             [begin
                 [begin
                     case logplex_queue:get(Pid, redis_url) of
-                        Url -> logplex_queue:stop(Pid);
+                        Url ->
+                            [Pid1 ! stop || Pid1 <- pg2:get_local_members(Pid)],
+                            logplex_queue:stop(Pid);
                         _ -> ok
                     end
-                end || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
+                end || {_, Pid, worker, _} <- supervisor:which_children(logplex_read_queue_sup)],
                 [begin
                     case logplex_queue:get(Pid, redis_url) of
-                        Url -> logplex_queue:stop(Pid);
+                        Url ->
+                            [Pid1 ! stop || Pid1 <- pg2:get_local_members(Pid)],
+                            logplex_queue:stop(Pid);
                         _ -> ok
                     end
-                end || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)]
+                end || {_, Pid, worker, _} <- supervisor:which_children(logplex_redis_buffer_sup)]
             end || Url <- Removed],
             populate_info_table(),
             {noreply, State#state{urls=NewList}}
@@ -213,8 +217,16 @@ poll_shard_urls() ->
     ?MODULE:poll_shard_urls().
 
 read_queue_args(Url) ->
-    MaxLength = 2000,
-    NumWorkers = 100,
+    MaxLength =
+        case os:getenv("LOGPLEX_READ_QUEUE_LENGTH") of
+            false -> 2000;
+            StrNum1 -> list_to_integer(StrNum1)
+        end,
+    NumWorkers =
+        case os:getenv("LOGPLEX_READERS") of
+            false -> 100;
+            StrNum2 -> list_to_integer(StrNum2)
+        end,
     RedisOpts = logplex_utils:parse_redis_url(Url),
     [{name, "logplex_read_queue"},
      {max_length, MaxLength},

@@ -35,9 +35,11 @@ prereq: start a local redis server on the default port 6379
 * LOGPLEX\_WORKERS - number of workers pulling from queue (default: 10)
 * LOGPLEX\_DRAIN\_WRITERS - number of writers pulling from buffer and writing to drains (default: 100)
 * LOGPLEX\_REDIS\_WRITERS - number of writers pulling from buffer and writing to redis (default: 100)
+* LOGPLEX\_READERS - number of readers pulling from read queue (default: 100)
 * LOGPLEX\_QUEUE\_LENGTH - max length of read queue (default: 2000)
 * LOGPLEX\_DRAIN\_BUFFER\_LENGTH - max length of drain write buffer (default: 2000)
 * LOGPLEX\_REDIS\_BUFFER\_LENGTH - max length of redis write buffer (default: 2000)
+* LOGPLEX\_READ\_QUEUE\_LENGTH - max length of read queue (default: 2000)
 
 ## Sharding
 
