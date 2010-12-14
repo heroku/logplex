@@ -105,7 +105,7 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info(flush, State) ->
+handle_info({timeout, _TimerRef, flush}, State) ->
     start_timer(),
 
     logplex_rate_limit:clear_all(),
