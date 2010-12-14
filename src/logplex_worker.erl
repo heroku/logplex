@@ -95,7 +95,7 @@ throughput(<<"expanded">>) -> ?EXPANDED_THROUGHPUT.
 exceeded_threshold(_ChannelId, _Count, <<"advanced">>) ->
     false;
 exceeded_threshold(ChannelId, Count, Addon) ->
-    ets:member(global_locks, ChannelId) orelse exceeded_threshold(Count, Addon).
+    logplex_rate_limit:is_locked(ChannelId) orelse exceeded_threshold(Count, Addon).
 
 exceeded_threshold(Count, <<"expanded">>) when Count =< ?EXPANDED_THROUGHPUT -> false;
 exceeded_threshold(Count, <<"expanded">>) when Count == (?EXPANDED_THROUGHPUT + 1) -> notify;

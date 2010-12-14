@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([lock/1, set_lock/1, clear_all/0]).
+-export([lock/1, set_lock/1, clear_all/0, is_locked/1]).
 
 -include_lib("logplex.hrl").
 
@@ -54,6 +54,12 @@ set_lock(ChannelId) when is_integer(ChannelId) ->
 
 clear_all() ->
     gen_server:abcast([node()|nodes()], ?MODULE, clear_all).
+
+is_locked(ChannelId) when is_integer(ChannelId) ->
+    case ets:lookup(?MODULE, ChannelId) of
+        [{ChannelId, true}] -> true;
+        [] -> false
+    end.
 
 %%====================================================================
 %% gen_server callbacks
@@ -82,14 +88,14 @@ init([]) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_call({set_lock, ChannelId}, _From, State) ->
-    Result =
-    case ets:lookup(?MODULE, ChannelId) of
-        [{ChannelId, true}] -> false;
-        [] ->
+    case is_locked(ChannelId) of
+        true ->
+            {reply, false, State};
+        false ->
             ets:insert(?MODULE, {ChannelId, true}),
-            true
-    end,
-    {reply, Result, State};
+            gen_server:abcast(nodes(), ?MODULE, {insert_lock, ChannelId}),
+            {reply, true, State}
+    end;
 
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
@@ -101,6 +107,10 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({insert_lock, ChannelId}, State) ->
+    ets:insert(?MODULE, {ChannelId, true}),
+    {noreply, State};
+
 handle_cast(clear_all, State) ->
     ets:delete_all_objects(?MODULE),
     {noreply, State};
