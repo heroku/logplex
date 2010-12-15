@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, workers/0, incr/1, incr/2, incr/3]).
+-export([healthcheck/0, workers/0, incr/1, incr/2, incr/3, cached/0]).
 
 -include_lib("logplex.hrl").
 
@@ -57,6 +57,9 @@ incr(Table, Key, Incr) when is_atom(Table), is_integer(Incr) ->
             Res
     end.
 
+cached() ->
+    gen_server:call(?MODULE, cached, 30000).
+
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -85,6 +88,9 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call(cached, _From, Stats) ->
+    {reply, Stats, Stats};
+
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -105,7 +111,7 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({timeout, _TimerRef, flush}, State) ->
+handle_info({timeout, _TimerRef, flush}, _State) ->
     start_timer(),
 
     logplex_rate_limit:clear_all(),
@@ -121,7 +127,7 @@ handle_info({timeout, _TimerRef, flush}, State) ->
         io:format("logplex_channel_stats app_id=~w\tchannel_id=~w\tmessage_processed=~w~n", [AppId, ChannelId, Val])
     end || {{message_processed, AppId, ChannelId}, Val} <- ChannelStats, Val > 0],
 
-    {noreply, State};
+    {noreply, Stats};
 
 handle_info(_Info, State) ->
     {noreply, State}.

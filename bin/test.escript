@@ -1,6 +1,6 @@
 #!/usr/bin/env escript
 %% -*- erlang -*-
-%%! -name logplex_console@`hostname` -env HTTP_PORT 8002 -env LOGPLEX_AUTH_KEY secret -env LOGPLEX_WORKERS 1 -env LOGPLEX_DRAIN_WRITERS 1 -env LOGPLEX_REDIS_WRITERS 1 -pa ebin -pa deps/mochiweb/ebin -pa deps/redis_pool/ebin -pa deps/erlang_syslog/ebin
+%%! -name logplex_console@`hostname` -env INSTANCE_NAME localhost -env HTTP_PORT 8002 -env LOGPLEX_AUTH_KEY secret -env LOGPLEX_WORKERS 1 -env LOGPLEX_DRAIN_WRITERS 1 -env LOGPLEX_REDIS_WRITERS 1 -pa ebin -pa deps/mochiweb/ebin -pa deps/redis_pool/ebin -pa deps/erlang_syslog/ebin
 
 main(_) ->
     ok = application:start(sasl),
@@ -10,6 +10,7 @@ main(_) ->
     ok = application:start(logplex),
 
     {ok,{{_,200,_},_,_}} = http:request(get, {"http://localhost:8002/healthcheck", headers()}, [], []),
+    {ok,{{_,200,_},_,_}} = http:request(get, {"http://localhost:8002/cloudkick", headers()}, [], []),
 
     {ok,{{_,201,_},_,ChannelId}} = http:request(post, 
         {"http://localhost:8002/channels", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
