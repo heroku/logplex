@@ -137,7 +137,7 @@ handlers() ->
         
         case logplex_channel:update_addon(list_to_integer(ChannelId), Addon) of
             ok -> {200, <<"OK">>};
-            {error, not_found} -> {404, <<"not found">>}
+            {error, not_found} -> {404, <<"Not found">>}
         end
     end},
 
@@ -145,7 +145,7 @@ handlers() ->
         authorize(Req),
         case logplex_channel:delete(list_to_integer(ChannelId)) of
             ok -> {200, <<"OK">>};
-            {error, not_found} -> {404, <<"not found">>}
+            {error, not_found} -> {404, <<"Not found">>}
         end
     end},
 
@@ -172,7 +172,7 @@ handlers() ->
 
     {['GET', "/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
         Body = logplex_session:lookup(list_to_binary("/sessions/" ++ Session)),
-        not is_binary(Body) andalso error_resp(404, <<"not found">>),
+        not is_binary(Body) andalso error_resp(404, <<"Not found">>),
 
         {struct, Data} = mochijson2:decode(Body),
         ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
@@ -259,12 +259,12 @@ handlers() ->
         
         case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of
             ok -> {200, <<"OK">>};
-            {error, not_found} -> {404, <<"not found">>}
+            {error, not_found} -> {404, <<"Not found">>}
         end
     end}].
 
 serve([], _Method, _Path, _Req) ->
-    {404, <<"Not Found.">>};
+    {404, <<"Not found">>};
 
 serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
     case re:run(Path, Regexp, [{capture, all_but_first, list}]) of

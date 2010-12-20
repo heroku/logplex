@@ -72,6 +72,12 @@ logplex_api_test_() ->
                     {"http://localhost:8002/channels/" ++ get(channel_id) ++ "/addon", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
                         {"addon", <<"advanced">>}
                     ]}))}, [], []))},
+         {"Upgrade addon for non-existent channel",
+           ?_assertMatch({ok,{{_,404,_},_,"Not found"}},
+               http:request(post, 
+                   {"http://localhost:8002/channels/0/addon", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
+                       {"addon", <<"advanced">>}
+                   ]}))}, [], []))},
          {"Create session",
             fun() ->
                 Ret = http:request(post, 
@@ -90,6 +96,20 @@ logplex_api_test_() ->
                         {"host", <<"10.0.0.1">>},
                         {"port", 514}
                     ]}))}, [], []))},
+         {"Create duplicate drain",
+            ?_assertMatch({ok,{{_,400,_},_,"Drain already exists"}},
+                http:request(post, 
+                    {"http://localhost:8002/channels/" ++ get(channel_id) ++ "/drains", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
+                        {"host", <<"10.0.0.1">>},
+                        {"port", 514}
+                    ]}))}, [], []))},
+         {"Create invalid drain",
+           ?_assertMatch({ok,{{_,400,_},_,"Invalid drain"}},
+               http:request(post, 
+                   {"http://localhost:8002/channels/" ++ get(channel_id) ++ "/drains", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
+                       {"host", <<"donkey">>},
+                       {"port", 514}
+                   ]}))}, [], []))},
          {"Get info",
             fun() ->
                 Ret = http:request(get, {"http://localhost:8002/channels/" ++ get(channel_id) ++ "/info", headers()}, [], []),
@@ -221,12 +241,20 @@ logplex_api_test_() ->
          {"Delete drain",
             ?_assertMatch({ok,{{_,200,_},_,_}},
                 http:request(delete, {"http://localhost:8002/channels/" ++ get(channel_id) ++ "/drains?host=10.0.0.1&port=514", headers()}, [], []))},
+         {"Delete non-existent drain",
+            ?_assertMatch({ok,{{_,404,_},_,"Not found"}},
+                http:request(delete, {"http://localhost:8002/channels/" ++ get(channel_id) ++ "/drains?host=10.0.0.1&port=514", headers()}, [], []))},
          {"Delete channel",
             ?_assertMatch({ok,{{_,200,_},_,_}},
-                http:request(delete, {"http://localhost:8002/channels/" ++ get(channel_id), headers()}, [], []))}
-        
-         %% test healthcheck 'Zero child processes running'
-         %% test healthcheck 'Process dead'
+                http:request(delete, {"http://localhost:8002/channels/" ++ get(channel_id), headers()}, [], []))},
+         {"Delete non-existent channel",
+            ?_assertMatch({ok,{{_,404,_},_,"Not found"}},
+               http:request(delete, {"http://localhost:8002/channels/" ++ get(channel_id), headers()}, [], []))},
+         {"Verify healthcheck 'Zero child processes running'",
+            fun() ->
+                [logplex_queue:stop(Pid) || {_,Pid,_,_} <- supervisor:which_children(logplex_read_queue_sup)],
+                ?assertMatch({ok,{{_,500,_},_,"Zero logplex_read_queue_sup child processes running"}}, http:request(get, {"http://localhost:8002/healthcheck", headers()}, [], []))
+            end}
         ]
     }.
 
