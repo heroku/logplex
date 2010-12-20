@@ -84,7 +84,7 @@ boot_redis() ->
     case application:start(redis, temporary) of
         ok ->
             Opts = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-            redis_sup:add_pool(config_pool, Opts, 25);
+            redis_pool:add_pool(config_pool, Opts, 25);
         Err ->
             exit(Err)
     end.
