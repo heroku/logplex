@@ -65,11 +65,7 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
                     case logplex_rate_limit:lock(ChannelId) of
                         true ->
                             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
-                            {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
-                            UTC = erlang:universaltime(),
-                            {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
-                            DateFormat = fun(Int) -> string:right(integer_to_list(Int), 2, $0) end,
-                            Msg1 = iolist_to_binary(io_lib:format("<40>1 ~w-~s-~sT~s:~s:~s-~s:00 - heroku logplex - - You have exceeded ~w logs/min. Please upgrade your logging addon for higher throughput.", [Year, DateFormat(Month), DateFormat(Day), DateFormat(Hour), DateFormat(Min), DateFormat(Sec), DateFormat(Offset), throughput(Addon)])),
+                            Msg1 = iolist_to_binary(["<40>1 ", logplex_utils:formatted_utc_date(), " - heroku logplex - - You have exceeded ", integer_to_list(throughput(Addon)), " logs/min. Please upgrade your logging addon for higher throughput."]),
                             process(ChannelId, BufferPid, Addon, Msg1);
                         false ->
                             ok

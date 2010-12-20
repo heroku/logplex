@@ -1,3 +1,5 @@
+-include_lib("eunit/include/eunit.hrl").
+
 -record(msg, {time, source, ps, content}).
 -record(channel, {id, name, app_id, addon}).
 -record(token, {id, channel_id, name, app_id, addon}).

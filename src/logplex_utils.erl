@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_utils).
--export([resolve_host/1, parse_msg/1, filter/2, format/1, field_val/2, field_val/3, parse_redis_url/1]).
+-export([resolve_host/1, parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3, parse_redis_url/1]).
 
 -include_lib("logplex.hrl").
 
@@ -45,6 +45,13 @@ filter(Msg, [Fun|Tail]) ->
         true -> filter(Msg, Tail);
         _ -> false
     end.
+
+formatted_utc_date() ->
+    {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
+    UTC = erlang:universaltime(),
+    {_, {Offset, _, _}} = calendar:time_difference(Local, UTC),
+    DateFormat = fun(Int) -> string:right(integer_to_list(Int), 2, $0) end,
+    io_lib:format("~w-~s-~sT~s:~s:~s-~s:00", [Year, DateFormat(Month), DateFormat(Day), DateFormat(Hour), DateFormat(Min), DateFormat(Sec), DateFormat(Offset)]).
 
 format(Msg) when is_record(Msg, msg) ->
     Ps =

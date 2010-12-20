@@ -9,10 +9,10 @@
 
 Tested on Erlang R13B04
 
-# Test
+# EUnit tests
 prereq: start a local redis server on the default port 6379
 
-    $ bin/test.escript
+    $ bin/test
 
 # Run
 
@@ -21,8 +21,9 @@ prereq: start a local redis server on the default port 6379
     $ bin/console
 
 ## Production
+*note: assumes Ubuntu/Upstart for start/stop commands
 
-    $ initctl [start|stop|restart] logplex
+    $ [start|stop|restart] logplex
     $ bin/connect ('ctrl-g q' to exit)
 
 ## Environment Variables
@@ -43,7 +44,9 @@ prereq: start a local redis server on the default port 6379
 
 ## Sharding
 
-sadd redis:shard:urls redis://password@hostname:6379/
+Add new log redis url to config redis shard key:
+
+    sadd redis:shard:urls redis://password@hostname:6379/
 
 ## Redis Keys
 

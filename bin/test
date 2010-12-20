@@ -1,0 +1,11 @@
+#!/bin/sh
+
+unamestr=`uname`
+if [[ "$unamestr" == 'Darwin' ]]; then
+   hostname=`hostname`
+else
+   hostname=`hostname --fqdn`
+fi
+
+ulimit -n 65535
+erl +K true +A30 +P500000 -env ERL_MAX_PORTS 65535 -env HTTP_PORT 8002 -env INSTANCE_NAME localhost -env LOGPLEX_AUTH_KEY secret -env LOGPLEX_WORKERS 1 -env LOGPLEX_DRAIN_WRITERS 1 -env LOGPLEX_REDIS_WRITERS 1 -env LOGPLEX_READERS 1 -name logplex_console@$hostname -pa ebin -pa deps/*/ebin -boot release/logplex-1.0 -noshell -eval 'eunit:test({application,logplex})' -s init stop

@@ -81,7 +81,7 @@ handlers() ->
         Count = logplex_stats:healthcheck(),
         not is_integer(Count) andalso throw({500, io_lib:format("Increment healthcheck counter failed: ~p", [Count])}),
 
-        {200, integer_to_list(Count)}
+        {200, <<"OK">>}
     end},
 
     {['GET', "/cloudkick$"], fun(Req, _Match) ->
@@ -136,7 +136,7 @@ handlers() ->
         Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
         
         case logplex_channel:update_addon(list_to_integer(ChannelId), Addon) of
-            ok -> {200, <<>>};
+            ok -> {200, <<"OK">>};
             {error, not_found} -> {404, <<"not found">>}
         end
     end},
@@ -144,7 +144,7 @@ handlers() ->
     {['DELETE', "/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         case logplex_channel:delete(list_to_integer(ChannelId)) of
-            ok -> {200, ""};
+            ok -> {200, <<"OK">>};
             {error, not_found} -> {404, <<"not found">>}
         end
     end},
@@ -232,7 +232,7 @@ handlers() ->
         DrainId = logplex_drain:create(list_to_integer(ChannelId), Host, Port),
         case DrainId of
             Int when is_integer(Int) ->
-                {201, ""};
+                {201, <<"OK">>};
             {error, already_exists} ->
                 {400, <<"Drain already exists">>};
             {error, invalid_drain} ->
@@ -258,7 +258,7 @@ handlers() ->
         Host == "" andalso error_resp(400, <<"'host' param is missing">>),
         
         case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of
-            ok -> {200, ""};
+            ok -> {200, <<"OK">>};
             {error, not_found} -> {404, <<"not found">>}
         end
     end}].
