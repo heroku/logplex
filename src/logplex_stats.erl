@@ -118,7 +118,7 @@ handle_info({timeout, _TimerRef, flush}, _State) ->
 
     Stats = ets:tab2list(logplex_stats),
     ets:delete_all_objects(logplex_stats),
-    io:format("logplex_stats~s~n", [lists:flatten([[" ", atom_to_list(Key), "=", integer_to_list(Value)] || {Key, Value} <- Stats, Value > 0])]),
+    io:format("logplex_stats~s~n", [lists:flatten([[" ", to_list(Key), "=", to_list(Value)] || {Key, Value} <- Stats, Value > 0])]),
 
     ChannelStats = ets:tab2list(logplex_stats_channels),
     ets:delete_all_objects(logplex_stats_channels),
@@ -158,3 +158,8 @@ start_timer() ->
     {_Mega, Secs, Micro} = now(),
     Time = 60000 - ((Secs rem 60 * 1000) + (Micro div 1000)),
     erlang:start_timer(Time, ?MODULE, flush).
+
+to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom);
+to_list(Int) when is_integer(Int) -> integer_to_list(Int);
+to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin);
+to_list(List) when is_list(List) -> List.
