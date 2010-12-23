@@ -80,11 +80,11 @@ num_lines(Socket) ->
             case Rest of
                 <<Int:Size/binary, "\r\n">> ->
                     list_to_integer(binary_to_list(Int));
-                _ ->
-                    exit({parse_failure, ?MODULE, ?LINE})
+                Other ->
+                    exit({parse_failure, ?MODULE, ?LINE, Other})
             end;
-        _ ->
-            exit({parse_failure, ?MODULE, ?LINE})
+        Other ->
+            exit({parse_failure, ?MODULE, ?LINE, Other})
     end.
 
 recv_lines(Socket, Num) ->
@@ -104,12 +104,12 @@ recv_lines(Socket, Num, Acc) ->
                     case gen_tcp:recv(Socket, Length+2) of
                         {ok, <<Msg:Length/binary, "\r\n">>} ->
                             recv_lines(Socket, Num-1, [Msg|Acc]);
-                        _ ->
-                            exit({parse_failure, ?MODULE, ?LINE})
+                        Other ->
+                            exit({parse_failure, ?MODULE, ?LINE, Other})
                     end;
-                _ ->
-                    exit({parse_failure, ?MODULE, ?LINE})
+                Other ->
+                    exit({parse_failure, ?MODULE, ?LINE, Other})
             end;
-        _ ->
-            exit({parse_failure, ?MODULE, ?LINE})
+        Other ->
+            exit({parse_failure, ?MODULE, ?LINE, Other})
     end.
