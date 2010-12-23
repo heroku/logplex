@@ -179,10 +179,10 @@ lookup_urls() ->
 
 populate_info_table() ->
     ReadQueues = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
-    {ok, Map1, Interval1} = redis_shard:generate_map_and_interval(ReadQueues),
+    {ok, Map1, Interval1} = redis_shard:generate_map_and_interval(lists:sort(ReadQueues)),
 
     RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
-    {ok, Map2, Interval2} = redis_shard:generate_map_and_interval(RedisBuffers),
+    {ok, Map2, Interval2} = redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
 
     ets:delete_all_objects(logplex_shard_info),
     ets:insert(logplex_shard_info, {logplex_read_queue_map, {Map1, Interval1}}),
