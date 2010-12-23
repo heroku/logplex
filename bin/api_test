@@ -1,7 +1,3 @@
 #!/bin/sh
 
-if [[ "$LOGPLEX_AUTH_KEY" == '' ]]; then
-  export LOGPLEX_AUTH_KEY=secret
-fi
-
-erl -name logplex_api_test@$hostname -pa ebin -pa deps/*/ebin -boot start_sasl -boot crypto -noshell -eval 'eunit:test({application,logplex})' -s init stop
+envdir keys erl -name logplex_api_test@$hostname -pa ebin -pa deps/*/ebin -boot start_sasl -boot crypto -noshell -eval 'eunit:test({application,logplex})' -s init stop
