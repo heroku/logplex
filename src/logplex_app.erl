@@ -34,7 +34,6 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
-    set_port_range(),
     boot_redis(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
@@ -75,10 +74,6 @@ set_cookie() ->
         false -> ok;
         Cookie -> erlang:set_cookie(node(), list_to_atom(Cookie))
     end.
-
-set_port_range() -> %% also port 4369 for the erlang port mapper
-    application:set_env(kernel, inet_dist_listen_min, 9100),
-    application:set_env(kernel, inet_dist_listen_max, 9120).
 
 boot_redis() ->
     case application:start(redis, temporary) of
