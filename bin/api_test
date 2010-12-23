@@ -1,9 +1,5 @@
 #!/bin/sh
 
-if [[ "$HTTP_PORT" == '' ]]; then
-  export HTTP_PORT=8002
-fi
-
 if [[ "$LOGPLEX_AUTH_KEY" == '' ]]; then
   export LOGPLEX_AUTH_KEY=secret
 fi
