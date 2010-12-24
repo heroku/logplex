@@ -44,9 +44,8 @@ loop(QueuePid, Socket) ->
             case is_process_alive(ClientPid) of
                 false -> ok;
                 true ->
-                    case gen_tcp:send(Socket, Packet) of
-                        ok ->
-                            Logs = recv_logs(Socket),
+                    case redis:send_recv(Socket, 30000, Packet) of
+                        Logs when is_list(Logs) ->
                             ClientPid ! {logs, Logs};
                         Err ->
                             exit(Err)
@@ -66,50 +65,4 @@ open_socket(Opts) ->
             Socket;
         Err ->
             exit(Err)
-    end.
-
-recv_logs(Socket) ->
-    Num = num_lines(Socket),
-    recv_lines(Socket, Num).
-
-num_lines(Socket) ->
-    inet:setopts(Socket, [{packet, line}]),
-    case gen_tcp:recv(Socket, 0) of
-        {ok, <<"*", Rest/binary>>} ->
-            Size = size(Rest) - 2,
-            case Rest of
-                <<Int:Size/binary, "\r\n">> ->
-                    list_to_integer(binary_to_list(Int));
-                Other ->
-                    exit({parse_failure, ?MODULE, ?LINE, Other})
-            end;
-        Other ->
-            exit({parse_failure, ?MODULE, ?LINE, Other})
-    end.
-
-recv_lines(Socket, Num) ->
-    recv_lines(Socket, Num, []).
-
-recv_lines(_Socket, 0, Acc) -> Acc;
-
-recv_lines(Socket, Num, Acc) ->
-    inet:setopts(Socket, [{packet, line}]),
-    case gen_tcp:recv(Socket, 0) of
-        {ok, <<"$", Rest/binary>>} ->
-            Size = size(Rest) - 2,
-            case Rest of
-                <<Int:Size/binary, "\r\n">> ->
-                    Length = list_to_integer(binary_to_list(Int)),
-                    inet:setopts(Socket, [{packet, raw}]),
-                    case gen_tcp:recv(Socket, Length+2) of
-                        {ok, <<Msg:Length/binary, "\r\n">>} ->
-                            recv_lines(Socket, Num-1, [Msg|Acc]);
-                        Other ->
-                            exit({parse_failure, ?MODULE, ?LINE, Other})
-                    end;
-                Other ->
-                    exit({parse_failure, ?MODULE, ?LINE, Other})
-            end;
-        Other ->
-            exit({parse_failure, ?MODULE, ?LINE, Other})
     end.
