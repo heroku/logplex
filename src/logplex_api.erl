@@ -84,31 +84,6 @@ handlers() ->
         {200, <<"OK">>}
     end},
 
-    {['GET', "/cloudkick$"], fun(Req, _Match) ->
-        authorize(Req),
-
-        [throw({200, iolist_to_binary(mochijson2:encode({struct, [
-            {status, iolist_to_binary(io_lib:format("Zero ~p child processes running", [Worker]))},
-            {state, <<"err">>}
-        ]}))}) || {Worker, 0} <- logplex_stats:workers()],
-
-        RegisteredMods = [logplex_grid, logplex_rate_limit, logplex_realtime, logplex_stats, logplex_channel, logplex_token, logplex_drain, logplex_session, logplex_tail, logplex_shard, syslog_acceptor],
-        [(whereis(Name) == undefined orelse not is_process_alive(whereis(Name))) andalso throw({200, iolist_to_binary(mochijson2:encode({struct, [
-            {status, iolist_to_binary(io_lib:format("Process dead: ~p", [Name]))},
-            {state, <<"err">>}
-        ]}))}) || Name <- RegisteredMods],
-
-        Cached = logplex_stats:cached(),
-        {200, iolist_to_binary(mochijson2:encode({struct, [
-            {state, <<"ok">>},
-            {metrics, [
-                [{type, <<"int">>},
-                 {name, Key},
-                 {value, Value}]
-            || {Key, Value} <- Cached, Value > 0]}
-        ]}))}
-    end},
-
     {['POST', "/channels$"], fun(Req, _Match) ->
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),

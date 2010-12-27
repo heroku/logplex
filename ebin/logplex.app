@@ -6,6 +6,7 @@
     logplex_api,
     logplex_app,
     logplex_channel,
+    logplex_cloudkick,
     logplex_drain,
     logplex_drain_writer,
     logplex_grid,
@@ -26,7 +27,7 @@
     syslog_acceptor
   ]},
   {registered, []},
-  {applications, [kernel, stdlib, sasl, crypto, public_key]},
+  {applications, [kernel, stdlib, sasl, inets, crypto, public_key]},
   {mod, {logplex_app, []}}
  ]}.
  
