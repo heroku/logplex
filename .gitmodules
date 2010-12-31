@@ -4,3 +4,6 @@
 [submodule "deps/mochiweb"]
 	path = deps/mochiweb
 	url = git://github.com/mochi/mochiweb.git
+[submodule "deps/pagerduty"]
+	path = deps/pagerduty
+	url = git://github.com/JacobVorreuter/pagerduty.git

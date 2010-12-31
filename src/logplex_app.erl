@@ -34,6 +34,7 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
+    boot_pagerduty(),
     boot_redis(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
@@ -74,6 +75,17 @@ set_cookie() ->
     case os:getenv("LOGPLEX_COOKIE") of
         false -> ok;
         Cookie -> erlang:set_cookie(node(), list_to_atom(Cookie))
+    end.
+
+boot_pagerduty() ->
+    case os:getenv("HEROKU_DOMAIN") of
+        "heroku.com" ->
+            ok = application:load(pagerduty),
+            application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
+            ok = application:start(pagerduty, temporary),
+            ok = error_logger:add_report_handler(logplex_report_handler);
+        _ ->
+            ok
     end.
 
 boot_redis() ->

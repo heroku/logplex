@@ -27,7 +27,7 @@
     syslog_acceptor
   ]},
   {registered, []},
-  {applications, [kernel, stdlib, sasl, inets, crypto, public_key]},
+  {applications, [kernel, stdlib, sasl, inets, crypto, public_key, ssl]},
   {mod, {logplex_app, []}}
  ]}.
  
