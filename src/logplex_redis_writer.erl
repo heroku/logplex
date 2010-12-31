@@ -44,6 +44,7 @@ loop(BufferPid, Socket) ->
             case gen_tcp:send(Socket, Logs) of
                 ok ->
                     logplex_stats:incr(logplex_stats, message_processed, NumItems),
+                    logplex_realtime:incr(message_processed, NumItems),
                     receive _X -> ok after 0 -> ok end,
                     inet:setopts(Socket, [{active, once}]);
                 Err -> exit(Err)
