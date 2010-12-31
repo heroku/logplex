@@ -21,7 +21,9 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_utils).
--export([resolve_host/1, parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3, parse_redis_url/1]).
+-export([resolve_host/1, parse_msg/1, filter/2, formatted_utc_date/0,
+         format/1, field_val/2, field_val/3, parse_redis_url/1, 
+         instance_name/0, heorku_domain/0]).
 
 -include_lib("logplex.hrl").
 
@@ -88,4 +90,26 @@ parse_redis_url(Url) ->
             [{ip, Ip}, {port, Port}, {pass, Pass}];
         _ ->
             [{ip, "127.0.0.1"}, {port, 6379}]
+    end.
+
+instance_name() ->
+    case get(instance_name) of
+        undefined ->
+            InstanceName = os:getenv("INSTANCE_NAME"),
+            put(instance_name, InstanceName),
+            InstanceName;
+        InstanceName -> InstanceName
+    end.
+
+heorku_domain() ->
+    case get(heroku_domain) of
+        undefined ->
+            Domain = 
+                case os:getenv("HEROKU_DOMAIN") of
+                    false -> <<"">>;
+                    Val -> list_to_binary(Val)
+                end,
+            put(heroku_domain, Domain),
+            Domain;
+        Domain -> Domain
     end.

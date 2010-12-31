@@ -243,3 +243,8 @@ healthcheck() ->
 %%====================================================================
 publish_stats(InstanceName, Json) when is_list(InstanceName), is_binary(Json) ->
     redis:q(config_pool, [<<"PUBLISH">>, iolist_to_binary([<<"stats.">>, InstanceName]), Json]).
+
+register_stat_instance() ->
+    InstanceName = logplex_utils:instance_name(),
+    Domain = logplex_utils:heorku_domain(),
+    redis:q(config_pool, [<<"SETEX">>, iolist_to_binary([Domain, <<":stats:logplex:">>, InstanceName]), <<"60">>, <<"1">>]).

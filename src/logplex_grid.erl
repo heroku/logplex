@@ -35,11 +35,7 @@ init(Parent) ->
             false -> <<"127.0.0.1">>;
             Val1 -> list_to_binary(Val1)
         end,
-    Domain =
-        case os:getenv("HEROKU_DOMAIN") of
-            false -> <<"">>;
-            Val2 -> list_to_binary(Val2)
-        end,
+    Domain = logplex_utils:heorku_domain(),
     register(?MODULE, self()),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(BinNode, LocalIp, Domain).

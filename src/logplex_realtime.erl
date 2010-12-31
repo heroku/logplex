@@ -65,6 +65,7 @@ incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
 init([]) ->
     Self = self(),
     spawn_link(fun() -> flush(Self) end),
+    spawn_link(fun() -> register() end),
     {ok, #state{}}.
 
 %%--------------------------------------------------------------------
@@ -125,7 +126,7 @@ handle_info(flush, State) ->
             {drain_buffer_dropped, State#state.drain_buffer_dropped},
             {redis_buffer_dropped, State#state.redis_buffer_dropped}
         ]})),
-        redis_helper:publish_stats(instance_name(), Json)
+        redis_helper:publish_stats(logplex_utils:instance_name(), Json)
     end),
     {noreply, #state{}};
 
@@ -159,11 +160,7 @@ flush(Pid) ->
     Pid ! flush,
     flush(Pid).
 
-instance_name() ->
-    case get(instance_name) of
-        undefined ->
-            InstanceName = os:getenv("INSTANCE_NAME"),
-            put(instance_name, InstanceName),
-            InstanceName;
-        InstanceName -> InstanceName
-    end.
+register() ->
+    redis_helper:register_stat_instance(),
+    timer:sleep(10 * 1000),
+    register().
