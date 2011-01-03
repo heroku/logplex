@@ -148,6 +148,7 @@ handle_call(_Msg, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast({in, _Packet}, #state{dropped_stat_key=StatKey, length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
     logplex_stats:incr(StatKey),
+    logplex_realtime:incr(StatKey),
     {noreply, State};
 
 handle_cast({in, Packet}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
@@ -205,6 +206,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+build_stat_key("logplex_" ++ Name, Postfix) when is_list(Postfix) ->
+    build_stat_key(Name, Postfix);
+
 build_stat_key(Name, Postfix) when is_list(Name), is_list(Postfix) ->
     Name ++ "_" ++ Postfix;
 

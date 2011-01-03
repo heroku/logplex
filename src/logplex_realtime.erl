@@ -44,10 +44,10 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-incr(Key) when is_atom(Key) ->
+incr(Key) ->
     incr(Key, 1).
 
-incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
+incr(Key, Inc) when is_integer(Inc) ->
     gen_server:cast(?MODULE, {incr, Key, Inc}).
 
 %%====================================================================
@@ -97,16 +97,17 @@ handle_cast({incr, message_processed, Incr}, #state{message_processed=Count}=Sta
 handle_cast({incr, message_routed, Incr}, #state{message_routed=Count}=State) ->
     {noreply, State#state{message_routed=Count+Incr}};
 
-handle_cast({incr, work_queue_dropped, Incr}, #state{work_queue_dropped=Count}=State) ->
+handle_cast({incr, "work_queue_dropped", Incr}, #state{work_queue_dropped=Count}=State) ->
     {noreply, State#state{work_queue_dropped=Count+Incr}};
 
-handle_cast({incr, drain_buffer_dropped, Incr}, #state{drain_buffer_dropped=Count}=State) ->
+handle_cast({incr, "drain_buffer_dropped", Incr}, #state{drain_buffer_dropped=Count}=State) ->
     {noreply, State#state{drain_buffer_dropped=Count+Incr}};
 
-handle_cast({incr, redis_buffer_dropped, Incr}, #state{redis_buffer_dropped=Count}=State) ->
+handle_cast({incr, "redis_buffer_dropped", Incr}, #state{redis_buffer_dropped=Count}=State) ->
     {noreply, State#state{redis_buffer_dropped=Count+Incr}};
 
 handle_cast(_Msg, State) ->
+    io:format("realtime: recv'd ~p~n", [_Msg]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
