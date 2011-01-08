@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/3, delete/3, lookup/1]).
+-export([create/3, delete/3, clear_all/1, lookup/1]).
 
 -include_lib("logplex.hrl").
 
@@ -66,6 +66,19 @@ delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
             redis_helper:delete_drain(DrainId);
         _ ->
             {error, not_found}
+    end.
+
+clear_all(ChannelId) when is_integer(ChannelId) ->
+    case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}) of
+        [] ->
+            {error, not_found};
+        List ->
+            [begin
+                logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
+                logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
+                redis_helper:delete_drain(DrainId)
+            end || #drain{id=DrainId} <- List],
+            ok
     end.
 
 lookup(DrainId) when is_integer(DrainId) ->

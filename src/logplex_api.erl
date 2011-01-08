@@ -226,15 +226,23 @@ handlers() ->
 
     {['DELETE', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        
+
         Data = Req:parse_qs(),
         Host = proplists:get_value("host", Data),
         Port = proplists:get_value("port", Data),
-        Host == "" andalso error_resp(400, <<"'host' param is missing">>),
-        
-        case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of
-            ok -> {200, <<"OK">>};
-            {error, not_found} -> {404, <<"Not found">>}
+        Host == "" andalso error_resp(400, <<"'host' param is empty">>),
+
+        case Host == undefined andalso Port == undefined of
+            true ->
+                case logplex_drain:clear_all(list_to_integer(ChannelId)) of
+                    ok -> {200, <<"OK">>};
+                    {error, not_found} -> {404, <<"Not found">>}
+                end;
+            false ->
+                case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of
+                    ok -> {200, <<"OK">>};
+                    {error, not_found} -> {404, <<"Not found">>}
+                end
         end
     end}].
 

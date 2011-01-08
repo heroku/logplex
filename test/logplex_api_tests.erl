@@ -246,6 +246,16 @@ logplex_api_test_() ->
          {"Delete drain",
             ?_assertMatch({ok,{{_,200,_},_,_}},
                 http:request(delete, {"http://localhost:" ++ Port ++ "/channels/" ++ get(channel_id) ++ "/drains?host=10.0.0.1&port=514", headers()}, [], []))},
+        {"Create drain",
+            ?_assertMatch({ok,{{_,201,_},_,"OK"}},
+                http:request(post, 
+                    {"http://localhost:" ++ Port ++ "/channels/" ++ get(channel_id) ++ "/drains", headers(), content_type(), iolist_to_binary(mochijson2:encode({struct, [
+                        {"host", <<"10.0.0.1">>},
+                        {"port", 514}
+                    ]}))}, [], []))},
+        {"Clear drains",
+           ?_assertMatch({ok,{{_,200,_},_,_}},
+               http:request(delete, {"http://localhost:" ++ Port ++ "/channels/" ++ get(channel_id) ++ "/drains", headers()}, [], []))},
          {"Delete non-existent drain",
             ?_assertMatch({ok,{{_,404,_},_,"Not found"}},
                 http:request(delete, {"http://localhost:" ++ Port ++ "/channels/" ++ get(channel_id) ++ "/drains?host=10.0.0.1&port=514", headers()}, [], []))},
