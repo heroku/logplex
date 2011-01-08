@@ -33,7 +33,7 @@
 
 %% API functions
 start_link() ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_integer(Port) orelse Port == undefined) ->
     case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host=Host, port=Port}) of
@@ -60,7 +60,7 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
 delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
     case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host=Host, port=Port1}) of
-        [#drain{id=DrainId}] ->
+        [#drain{id=DrainId}|_] ->
             logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
             logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
             redis_helper:delete_drain(DrainId);
@@ -69,17 +69,13 @@ delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     end.
 
 clear_all(ChannelId) when is_integer(ChannelId) ->
-    case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}) of
-        [] ->
-            {error, not_found};
-        List ->
-            [begin
-                logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
-                logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
-                redis_helper:delete_drain(DrainId)
-            end || #drain{id=DrainId} <- List],
-            ok
-    end.
+    List = ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
+    [begin
+        logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
+        logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
+        redis_helper:delete_drain(DrainId)
+    end || #drain{id=DrainId} <- List],
+    ok.
 
 lookup(DrainId) when is_integer(DrainId) ->
     redis_helper:lookup_drain(DrainId).

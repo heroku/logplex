@@ -207,11 +207,11 @@ handlers() ->
         DrainId = logplex_drain:create(list_to_integer(ChannelId), Host, Port),
         case DrainId of
             Int when is_integer(Int) ->
-                {201, <<"OK">>};
+                {201, io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port])};
             {error, already_exists} ->
-                {400, <<"Drain already exists">>};
+                {400, io_lib:format("Drain syslog://~s:~p already exists", [Host, Port])};
             {error, invalid_drain} ->
-                {400, <<"Invalid drain">>}
+                {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
         end        
     end},
 
@@ -234,14 +234,12 @@ handlers() ->
 
         case Host == undefined andalso Port == undefined of
             true ->
-                case logplex_drain:clear_all(list_to_integer(ChannelId)) of
-                    ok -> {200, <<"OK">>};
-                    {error, not_found} -> {404, <<"Not found">>}
-                end;
+                logplex_drain:clear_all(list_to_integer(ChannelId)),
+                {200, <<"Cleared all drains">>};
             false ->
                 case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of
-                    ok -> {200, <<"OK">>};
-                    {error, not_found} -> {404, <<"Not found">>}
+                    ok -> {200, io_lib:format("Successfully removed drain syslog://~s:~s", [Host, Port])};
+                    {error, not_found} -> {404, io_lib:format("Drain syslog://~s:~s does not exist", [Host, Port])}
                 end
         end
     end}].
