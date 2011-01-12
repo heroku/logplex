@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_redis_writer).
--export([start_link/2, init/3, loop/2]).
+-export([start_link/2, init/3, loop/3]).
 
 -include_lib("logplex.hrl").
 
@@ -34,10 +34,11 @@ init(Parent, BufferPid, RedisOpts) ->
     io:format("init ~p~n", [?MODULE]),
     pg2:join(BufferPid, self()),
     Socket = open_socket(RedisOpts),
+    not is_port(Socket) andalso exit(Socket),
     proc_lib:init_ack(Parent, {ok, self()}),
-    loop(BufferPid, Socket).
+    loop(BufferPid, Socket, RedisOpts).
 
-loop(BufferPid, Socket) ->
+loop(BufferPid, Socket, RedisOpts) ->
     case logplex_queue:out(BufferPid, 100) of
         timeout -> ok;
         {NumItems, Logs} ->
@@ -47,11 +48,16 @@ loop(BufferPid, Socket) ->
                     logplex_realtime:incr(message_processed, NumItems),
                     receive _X -> ok after 0 -> ok end,
                     inet:setopts(Socket, [{active, once}]);
-                Err -> exit(Err)
+                {error, closed} ->
+                    error_logger:error_msg("~p redis connection closed", [?MODULE]),
+                    timer:sleep(500),
+                    exit({error, closed});
+                Err ->
+                    exit(Err)
             end
     end,
     receive stop -> exit(normal) after 0 -> ok end,
-    ?MODULE:loop(BufferPid, Socket).
+    ?MODULE:loop(BufferPid, Socket, RedisOpts).
 
 open_socket(Opts) ->
     Ip = proplists:get_value(ip, Opts),
@@ -62,5 +68,5 @@ open_socket(Opts) ->
             inet:setopts(Socket, [{active, once}, {nodelay, true}]),
             Socket;
         Err ->
-            exit(Err)
+            Err
     end.

@@ -51,9 +51,10 @@ out(NameOrPid) ->
 out(NameOrPid, Num) when (is_atom(NameOrPid) orelse is_pid(NameOrPid)) andalso is_integer(Num) ->
     case gen_server:call(NameOrPid, {out, Num}, ?TIMEOUT) of
         empty ->
+            Pid = case NameOrPid of Name when is_atom(Name) -> whereis(Name); _ -> NameOrPid end,
             receive
                 stop -> exit(normal);
-                {_From, Packet} -> Packet
+                {Pid, Packet} -> Packet
             after 60 * 1000 ->
                 timeout
             end;
