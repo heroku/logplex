@@ -34,7 +34,13 @@ init(Parent, BufferPid, RedisOpts) ->
     io:format("init ~p~n", [?MODULE]),
     pg2:join(BufferPid, self()),
     Socket = open_socket(RedisOpts),
-    not is_port(Socket) andalso exit(Socket),
+    case Socket of
+        {error, Err} ->
+            timer:sleep(500),
+            exit({error, Err});
+        _ ->
+            ok
+    end,
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(BufferPid, Socket, RedisOpts).
 
