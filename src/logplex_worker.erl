@@ -44,8 +44,6 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
         timeout ->
             ok;
         {1, [Msg]} ->
-            logplex_stats:incr(message_received),
-            logplex_realtime:incr(message_received),
             case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
                 {match, [Token]} ->
                     route(Token, Map, Interval, Msg);
