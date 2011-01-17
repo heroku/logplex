@@ -1,0 +1,3 @@
+#!/bin/sh
+
+envdir keys erl -pa ebin -pa deps/*/ebin -noinput -eval "logplex_utils:set_weight($1)" -s init stop

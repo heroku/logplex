@@ -220,6 +220,12 @@ lookup_drain(DrainId) when is_integer(DrainId) ->
 set_node_ex(Node, Ip, Domain) when is_binary(Node), is_binary(Ip), is_binary(Domain) ->
     redis:q(config_pool, [<<"SETEX">>, iolist_to_binary([<<"node:">>, Domain, <<":">>, Node]), <<"60">>, Ip]).
 
+register_with_face(Domain, Ip) ->
+    redis:q(config_pool, [<<"SETEX">>, iolist_to_binary([Domain, <<":alive:">>, Ip]), <<"20">>, ""]).
+
+set_weight(Domain, Ip, Weight) when is_integer(Weight) ->
+    redis:q(config_pool, [<<"SETEX">>, iolist_to_binary([Domain, <<":weight:">>, Ip]), <<"604800">>, integer_to_list(Weight)]).
+
 get_nodes(Domain) when is_binary(Domain) ->
     redis:q(config_pool, [<<"KEYS">>, iolist_to_binary([<<"node:">>, Domain, <<":*">>])]).
 

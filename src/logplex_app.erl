@@ -91,18 +91,10 @@ boot_pagerduty() ->
 boot_redis() ->
     case application:start(redis, temporary) of
         ok ->
-            Opts = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+            Opts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
             redis_pool:add_pool(config_pool, Opts, 25);
         Err ->
             exit(Err)
-    end.
-
-redis_opts(ConfigVar) when is_list(ConfigVar) ->
-    case os:getenv(ConfigVar) of
-        false ->
-            [{ip, "127.0.0.1"}, {port, 6379}];
-        Url ->
-            logplex_utils:parse_redis_url(Url)
     end.
 
 logplex_work_queue_args() ->

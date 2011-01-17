@@ -21,11 +21,31 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_utils).
--export([resolve_host/1, parse_msg/1, filter/2, formatted_utc_date/0,
-         format/1, field_val/2, field_val/3, parse_redis_url/1, 
-         instance_name/0, heorku_domain/0]).
+-export([set_weight/1, resolve_host/1, parse_msg/1, filter/2,
+         formatted_utc_date/0, format/1, field_val/2, field_val/3,
+         redis_opts/1, parse_redis_url/1, instance_name/0, heorku_domain/0]).
 
 -include_lib("logplex.hrl").
+
+set_weight(Weight) when is_integer(Weight), Weight < 0 ->
+    set_weight(0);
+
+set_weight(Weight) when is_integer(Weight), Weight > 100 ->
+    set_weight(100);
+
+set_weight(Weight) when is_integer(Weight) ->
+    application:start(sasl),
+    application:start(redis),
+    Opts = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+    redis_pool:add_pool(config_pool, Opts, 1),
+    LocalIp =
+        case os:getenv("LOCAL_IP") of
+            false -> <<"127.0.0.1">>;
+            Val1 -> list_to_binary(Val1)
+        end,
+    Domain = heorku_domain(),
+    Res = redis_helper:set_weight(Domain, LocalIp, Weight),
+    io:format("set_weight ~p => ~w: ~p~n", [LocalIp, Weight, Res]). 
 
 resolve_host(Host) when is_binary(Host) ->
     case inet:getaddr(binary_to_list(Host), inet) of
@@ -77,6 +97,14 @@ field_val(Key, [_, _ | Tail], Default) ->
 
 field_val(_Key, _, Default) ->
     Default.
+
+redis_opts(ConfigVar) when is_list(ConfigVar) ->
+    case os:getenv(ConfigVar) of
+        false ->
+            [{ip, "127.0.0.1"}, {port, 6379}];
+        Url ->
+            logplex_utils:parse_redis_url(Url)
+    end.
 
 parse_redis_url(Url) ->
     case redis_uri:parse(Url) of
