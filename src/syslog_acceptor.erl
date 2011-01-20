@@ -32,7 +32,7 @@ start_link() ->
 init(Parent) ->
     Self = self(),
     register(?MODULE, Self),
-    {ok, Socket} = gen_udp:open(?UDP_PORT, [binary, {active, true}]),
+    {ok, Socket} = gen_udp:open(?UDP_PORT, [binary, {active, once}]),
     proc_lib:init_ack(Parent, {ok, self()}),
     ?MODULE:loop(Socket).
 
@@ -41,6 +41,7 @@ loop(Socket) ->
         Msg ->
             case Msg of
                 {udp, Socket, _IP, _InPortNo, Packet} ->
+                    inet:setopt(Socket, [{active, once}]),
                     logplex_stats:incr(message_received),
                     logplex_realtime:incr(message_received),
                     logplex_queue:in(logplex_work_queue, Packet);
