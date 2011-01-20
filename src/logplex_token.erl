@@ -62,7 +62,7 @@ lookup(Token) when is_binary(Token) ->
         [Token1] when is_record(Token1, token) ->
             Token1;
         _ ->
-            redis_helper:lookup_token(Token)
+            undefined
     end.
 
 %%====================================================================
