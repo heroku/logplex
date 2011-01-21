@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_utils).
--export([set_weight/1, resolve_host/1, parse_msg/1, filter/2,
+-export([set_weight/1, setup_test_channel/2, resolve_host/1, parse_msg/1, filter/2,
          formatted_utc_date/0, format/1, field_val/2, field_val/3,
          redis_opts/1, parse_redis_url/1, instance_name/0, heorku_domain/0]).
 
@@ -46,6 +46,11 @@ set_weight(Weight) when is_integer(Weight) ->
     Domain = heorku_domain(),
     Res = redis_helper:set_weight(Domain, LocalIp, Weight),
     io:format("set_weight ~p => ~w: ~p~n", [LocalIp, Weight, Res]). 
+
+setup_test_channel(ChannelName, AppId) when is_binary(ChannelName), is_integer(AppId) ->
+    ChannelId = logplex_channel:create(ChannelName, AppId, <<"advanced">>),
+    timer:sleep(100),
+    logplex_token:create(ChannelId, <<"app">>).
 
 resolve_host(Host) when is_binary(Host) ->
     case inet:getaddr(binary_to_list(Host), inet) of
