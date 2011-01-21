@@ -75,7 +75,7 @@ handlers() ->
 
         [throw({500, io_lib:format("Zero ~p child processes running", [Worker])}) || {Worker, 0} <- logplex_stats:workers()],
 
-        RegisteredMods = [logplex_grid, logplex_rate_limit, logplex_realtime, logplex_stats, logplex_channel, logplex_token, logplex_drain, logplex_session, logplex_tail, logplex_shard, syslog_acceptor],
+        RegisteredMods = [logplex_grid, logplex_rate_limit, logplex_realtime, logplex_stats, logplex_channel, logplex_token, logplex_drain, logplex_session, logplex_tail, logplex_shard, udp_acceptor],
         [(whereis(Name) == undefined orelse not is_process_alive(whereis(Name))) andalso throw({500, io_lib:format("Process dead: ~p", [Name])}) || Name <- RegisteredMods],
 
         Count = logplex_stats:healthcheck(),

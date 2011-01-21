@@ -68,7 +68,8 @@ init([]) ->
 
         {logplex_cloudkick, {logplex_cloudkick, start_link, []}, permanent, 2000, worker, [logplex_cloudkick]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
-        {syslog_acceptor, {syslog_acceptor, start_link, []}, permanent, 2000, worker, [syslog_acceptor]}
+        {tcp_acceptor, {tcp_acceptor, start_link, []}, permanent, 2000, worker, [tcp_acceptor]},
+        {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]}
     ]}}.
 
 set_cookie() ->

@@ -24,7 +24,8 @@
     logplex_worker,
     logplex_worker_sup,
     redis_helper,
-    syslog_acceptor
+    tcp_acceptor,
+    udp_acceptor 
   ]},
   {registered, []},
   {applications, [kernel, stdlib, sasl, inets, crypto, public_key, ssl]},
