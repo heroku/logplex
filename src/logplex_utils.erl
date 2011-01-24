@@ -113,14 +113,9 @@ redis_opts(ConfigVar) when is_list(ConfigVar) ->
 
 parse_redis_url(Url) ->
     case redis_uri:parse(Url) of
-        {redis, UserInfo, Host, Port, _Path, _Query} ->
-            Pass = 
-                case UserInfo of
-                    "" -> undefined;
-                    Val -> list_to_binary(Val)
-                end,
+        {redis, _User, Pass, Host, Port, _Path, _Query} ->
             {ok, Ip} = inet:getaddr(Host, inet),
-            [{ip, Ip}, {port, Port}, {pass, Pass}];
+            [{ip, Ip}, {port, Port}, {pass, list_to_binary(Pass)}];
         _ ->
             [{ip, "127.0.0.1"}, {port, 6379}]
     end.
