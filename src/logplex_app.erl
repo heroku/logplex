@@ -101,12 +101,12 @@ boot_redis() ->
 logplex_work_queue_args() ->
     MaxLength =
         case os:getenv("LOGPLEX_QUEUE_LENGTH") of
-            false -> 2000;
+            false -> ?DEFAULT_LOGPLEX_QUEUE_LENGTH;
             StrNum1 -> list_to_integer(StrNum1)
         end,
     NumWorkers =
         case os:getenv("LOGPLEX_WORKERS") of
-            false -> 10;
+            false -> ?DEFAULT_LOGPLEX_WORKERS;
             StrNum2 -> list_to_integer(StrNum2)
         end,
     [{name, "logplex_work_queue"},
@@ -118,12 +118,12 @@ logplex_work_queue_args() ->
 logplex_drain_buffer_args() ->
     MaxLength =
         case os:getenv("LOGPLEX_DRAIN_BUFFER_LENGTH") of
-            false -> 2000;
+            false -> ?DEFAULT_LOGPLEX_DRAIN_BUFFER_LENGTH;
             StrNum1 -> list_to_integer(StrNum1)
         end,
     NumWorkers =
         case os:getenv("LOGPLEX_DRAIN_WRITERS") of
-            false -> 100;
+            false -> ?DEFAULT_LOGPLEX_DRAIN_WRITERS;
             StrNum2 -> list_to_integer(StrNum2)
         end,
     [{name, "logplex_drain_buffer"},

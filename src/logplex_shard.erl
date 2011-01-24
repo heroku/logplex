@@ -219,12 +219,12 @@ poll_shard_urls() ->
 read_queue_args(Url) ->
     MaxLength =
         case os:getenv("LOGPLEX_READ_QUEUE_LENGTH") of
-            false -> 2000;
+            false -> ?DEFAULT_LOGPLEX_READ_QUEUE_LENGTH;
             StrNum1 -> list_to_integer(StrNum1)
         end,
     NumWorkers =
         case os:getenv("LOGPLEX_READERS") of
-            false -> 100;
+            false -> ?DEFAULT_LOGPLEX_READERS;
             StrNum2 -> list_to_integer(StrNum2)
         end,
     RedisOpts = logplex_utils:parse_redis_url(Url),
@@ -240,12 +240,12 @@ read_queue_args(Url) ->
 redis_buffer_args(Url) ->
     MaxLength =
         case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
-            false -> 2000;
+            false -> ?DEFAULT_LOGPLEX_REDIS_BUFFER_LENGTH;
             StrNum1 -> list_to_integer(StrNum1)
         end,
     NumWorkers =
         case os:getenv("LOGPLEX_REDIS_WRITERS") of
-            false -> 10;
+            false -> ?DEFAULT_LOGPLEX_REDIS_WRITERS;
             StrNum2 -> list_to_integer(StrNum2)
         end,
     RedisOpts = logplex_utils:parse_redis_url(Url),
