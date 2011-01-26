@@ -37,10 +37,16 @@ init(Parent, QueuePid, RedisOpts) ->
     loop(QueuePid, Socket).
 
 loop(QueuePid, Socket) ->
+    %% verify that reader still has an open
+    %% connection to redis server
+    case gen_tcp:recv(Socket, 0, 0) of
+        {error, timeout} -> ok;
+        {error, closed} -> exit(normal)
+    end,
     case logplex_queue:out(QueuePid) of
         timeout -> ok;
         Out ->
-             {1, [{ClientPid, Packet}]} = Out,
+            {1, [{ClientPid, Packet}]} = Out,
             case is_process_alive(ClientPid) of
                 false -> ok;
                 true ->
