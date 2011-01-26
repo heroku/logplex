@@ -56,7 +56,7 @@ shard_info() ->
     ok.
 
 shard_info(Url) ->
-    Opts = redis_opts(Url),
+    Opts = parse_redis_url(Url),
     {ok, Pool} = redis_pool:start_link(Opts),
     redis_pool:expand(Pool, 1),
     Pid = redis_pool:pid(Pool),
