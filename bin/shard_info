@@ -1,4 +1,3 @@
 #!/bin/sh
 
-#envdir keys erl -pa ebin -pa deps/*/ebin -noinput -eval "logplex_utils:shard_info()" -s init stop
-erl -pa ebin -pa deps/*/ebin -noinput -eval "logplex_utils:shard_info()" -s init stop
+envdir keys erl -pa ebin -pa deps/*/ebin -noinput -eval "logplex_utils:shard_info()" -s init stop
