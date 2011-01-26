@@ -38,15 +38,12 @@ init(Parent) ->
 
 loop(Socket) ->
     receive
-        Msg ->
-            case Msg of
-                {udp, Socket, _IP, _InPortNo, Packet} ->
-                    inet:setopts(Socket, [{active, once}]),
-                    logplex_stats:incr(message_received),
-                    logplex_realtime:incr(message_received),
-                    logplex_queue:in(logplex_work_queue, Packet);
-                _ ->
-                    ok
-            end
+        {udp, Socket, _IP, _InPortNo, Packet} ->
+            logplex_stats:incr(message_received),
+            logplex_realtime:incr(message_received),
+            logplex_queue:in(logplex_work_queue, Packet);
+        _ ->
+            ok
     end,
+    inet:setopts(Socket, [{active, once}]),
     ?MODULE:loop(Socket).

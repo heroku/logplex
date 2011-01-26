@@ -113,7 +113,7 @@ handle_cast(poll_shard_urls, #state{urls=Urls}=State) ->
                 [begin
                     case logplex_queue:get(Pid, redis_url) of
                         Url ->
-                            [Pid1 ! stop || Pid1 <- pg2:get_local_members(Pid)],
+                            [Pid1 ! stop || Pid1 <- logplex_queue:all_members(Pid)],
                             logplex_queue:stop(Pid);
                         _ -> ok
                     end
@@ -121,7 +121,7 @@ handle_cast(poll_shard_urls, #state{urls=Urls}=State) ->
                 [begin
                     case logplex_queue:get(Pid, redis_url) of
                         Url ->
-                            [Pid1 ! stop || Pid1 <- pg2:get_local_members(Pid)],
+                            [Pid1 ! stop || Pid1 <- logplex_queue:all_members(Pid)],
                             logplex_queue:stop(Pid);
                         _ -> ok
                     end

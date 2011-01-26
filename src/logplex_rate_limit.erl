@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([lock/1, set_lock/1, clear_all/0, is_locked/1]).
+-export([lock/1, set_lock/1, set_lock/2, clear_all/0, is_locked/1]).
 
 -include_lib("logplex.hrl").
 
@@ -41,14 +41,23 @@ lock(ChannelId) when is_integer(ChannelId) ->
     Nodes = lists:sort([node()|nodes()]),
     Index = (ChannelId rem length(Nodes)) + 1,
     Node = lists:nth(Index, Nodes),
-    case rpc:call(Node, ?MODULE, set_lock, [ChannelId], ?TIMEOUT) of
-        {badrpc, Reason} ->
-            error_logger:error_msg("badrpc (~p): ~p~n", [Node, Reason]),
-            true;
-        Res ->
-            Res
+    case Node =:= node() of
+        true ->
+            set_lock(ChannelId);
+        false ->
+            case set_lock(Node, ChannelId)  of
+                true ->
+                    true;
+                false ->
+                    false;
+                Error ->
+                    error_logger:error_msg("badrpc (~p): ~p~n", [Node, Error]),
+                    true
+            end
     end.
 
+set_lock(Node, ChannelId) when is_integer(ChannelId) ->
+    gen_server:call({?MODULE, Node}, {set_lock, ChannelId}, ?TIMEOUT).
 set_lock(ChannelId) when is_integer(ChannelId) ->
     gen_server:call(?MODULE, {set_lock, ChannelId}, ?TIMEOUT).
 

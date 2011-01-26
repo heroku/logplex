@@ -31,15 +31,6 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {
-    message_received=0,
-    message_processed=0,
-    message_routed=0,
-    work_queue_dropped=0,
-    drain_buffer_dropped=0,
-    redis_buffer_dropped=0
-}).
-
 %% API functions
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -47,8 +38,18 @@ start_link() ->
 incr(Key) ->
     incr(Key, 1).
 
+incr("work_queue_dropped", Inc) when is_integer(Inc) ->
+    incr(work_queue_dropped, Inc);
+
+incr("drain_buffer_dropped", Inc) when is_integer(Inc) ->
+    incr(drain_buffer_dropped, Inc);
+
+incr("redis_buffer_dropped", Inc) when is_integer(Inc) ->
+    incr(redis_buffer_dropped, Inc);
+
 incr(Key, Inc) when is_integer(Inc) ->
-    gen_server:cast(?MODULE, {incr, Key, Inc}).
+    ets:update_counter(?MODULE, Key, Inc).
+
 
 %%====================================================================
 %% gen_server callbacks
@@ -63,10 +64,17 @@ incr(Key, Inc) when is_integer(Inc) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    ets:new(?MODULE, [named_table, set, public]),
+    true = ets:insert(?MODULE, [{message_received, 0},
+                                {message_processed, 0},
+                                {message_routed, 0},
+                                {work_queue_dropped, 0},
+                                {drain_buffer_dropped, 0},
+                                {redis_buffer_dropped, 0}]),
     Self = self(),
     spawn_link(fun() -> flush(Self) end),
     spawn_link(fun() -> register() end),
-    {ok, #state{}}.
+    {ok, []}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -88,24 +96,6 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({incr, message_received, Incr}, #state{message_received=Count}=State) ->
-    {noreply, State#state{message_received=Count+Incr}};
-
-handle_cast({incr, message_processed, Incr}, #state{message_processed=Count}=State) ->
-    {noreply, State#state{message_processed=Count+Incr}};
-
-handle_cast({incr, message_routed, Incr}, #state{message_routed=Count}=State) ->
-    {noreply, State#state{message_routed=Count+Incr}};
-
-handle_cast({incr, "work_queue_dropped", Incr}, #state{work_queue_dropped=Count}=State) ->
-    {noreply, State#state{work_queue_dropped=Count+Incr}};
-
-handle_cast({incr, "drain_buffer_dropped", Incr}, #state{drain_buffer_dropped=Count}=State) ->
-    {noreply, State#state{drain_buffer_dropped=Count+Incr}};
-
-handle_cast({incr, "redis_buffer_dropped", Incr}, #state{redis_buffer_dropped=Count}=State) ->
-    {noreply, State#state{redis_buffer_dropped=Count+Incr}};
-
 handle_cast(_Msg, State) ->
     io:format("realtime: recv'd ~p~n", [_Msg]),
     {noreply, State}.
@@ -118,18 +108,22 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info(flush, State) ->
-    spawn(fun() ->
-        Json = iolist_to_binary(mochijson2:encode({struct, [
-            {message_received, State#state.message_received},
-            {message_processed, State#state.message_processed},
-            {message_routed, State#state.message_routed},
-            {work_queue_dropped, State#state.work_queue_dropped},
-            {drain_buffer_dropped, State#state.drain_buffer_dropped},
-            {redis_buffer_dropped, State#state.redis_buffer_dropped}
-        ]})),
-        redis_helper:publish_stats(logplex_utils:instance_name(), Json)
-    end),
-    {noreply, #state{}};
+    Json = {struct, [lookup_stat(message_received),
+                     lookup_stat(message_processed),
+                     lookup_stat(message_routed),
+                     lookup_stat(work_queue_dropped),
+                     lookup_stat(drain_buffer_dropped),
+                     lookup_stat(redis_buffer_dropped)]},
+    spawn(fun() -> 
+                  Json1 = iolist_to_binary(mochijson2:encode(Json)),
+                  redis_helper:publish_stats(logplex_utils:instance_name(), Json1) end),
+    true = ets:insert(?MODULE, [{message_received, 0},
+                                {message_processed, 0},
+                                {message_routed, 0},
+                                {work_queue_dropped, 0},
+                                {drain_buffer_dropped, 0},
+                                {redis_buffer_dropped, 0}]),
+    {noreply, State};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -165,3 +159,11 @@ register() ->
     redis_helper:register_stat_instance(),
     timer:sleep(10 * 1000),
     register().
+
+lookup_stat(StatsName) ->
+    case ets:lookup(?MODULE, StatsName) of
+        [] ->
+            {StatsName, 0};
+        [Stat] ->
+            Stat
+    end.

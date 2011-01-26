@@ -64,7 +64,8 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
                     case logplex_rate_limit:lock(ChannelId) of
                         true ->
                             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
-                            Msg1 = iolist_to_binary(["<40>1 ", logplex_utils:formatted_utc_date(), " - heroku logplex - - You have exceeded ", integer_to_list(throughput(Addon)), " logs/min. Please upgrade your logging addon for higher throughput."]),
+                            Msg1 = iolist_to_binary(["<40>1 ", logplex_utils:formatted_utc_date(), " - heroku logplex - - You have exceeded ",
+                                                     integer_to_list(throughput(Addon)), " logs/min. Please upgrade your logging addon for higher throughput."]),
                             process(ChannelId, BufferPid, Addon, Msg1);
                         false ->
                             ok

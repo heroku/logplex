@@ -28,10 +28,11 @@
 	     handle_info/2, terminate/2, code_change/3]).
 
 -export([in/2, out/1, out/2, info/1, get/2, set_max_length/2, stop/1]).
+-export([register/2, all_workers/1]).
 
 -include_lib("logplex.hrl").
 
--record(state, {dropped_stat_key, length_stat_key, queue, length, max_length, waiting, dict}).
+-record(state, {dropped_stat_key, length_stat_key, queue, length, max_length, waiting, dict, workers=[]}).
 
 -define(TIMEOUT, 30000).
 
@@ -44,6 +45,12 @@ start_link(Name, Props) when is_atom(Name), is_list(Props) ->
 
 in(NameOrPid, Packet) when is_atom(NameOrPid); is_pid(NameOrPid) ->
     gen_server:cast(NameOrPid, {in, Packet}).
+
+register(NameOrPid, WorkerPid) ->
+    gen_server:cast(NameOrPid, {register, WorkerPid}).
+
+all_workers(NameOrPid) ->
+    gen_server:call(NameOrPid, all_workers).
 
 out(NameOrPid) ->
     out(NameOrPid, 1).
@@ -90,7 +97,6 @@ init([Props]) ->
     Name = proplists:get_value(name, Props),
     Self = self(),
     io:format("init logplex_queue ~p (~p)~n", [Name, Self]),
-    pg2:create(Self),
     State = #state{
         dropped_stat_key = build_stat_key(Name, "dropped"),
         length_stat_key = build_stat_key(Name, "length"),
@@ -137,6 +143,9 @@ handle_call({get, Key}, _From, #state{dict=Dict}=State) ->
         end,
     {reply, Result, State};
 
+handle_call(all_workers, _From, #state{workers=Workers}=State) ->
+    {reply, Workers, State};
+
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -167,6 +176,9 @@ handle_cast({max_length, MaxLength}, State) ->
 
 handle_cast(stop, State) ->
     {stop, normal, State};
+
+handle_cast({register, WorkerPid}, #state{workers=Workers}=State) ->
+    {noreply, State#state{workers=[WorkerPid|Workers]}};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
