@@ -233,7 +233,7 @@ get_node(Node) when is_binary(Node) ->
     redis:q(config_pool, [<<"GET">>, Node]).
 
 shard_urls() ->
-    redis:q(config_pool, [<<"SMEMBERS">>, <<"redis:shard:urls">>]).
+    redis:q(config_pool, [<<"SMEMBERS">>, <<"redis:shard:urls">>], 30000).
 
 %%====================================================================
 %% HEALTHCHECK
