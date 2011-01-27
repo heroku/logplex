@@ -40,6 +40,7 @@ loop(QueuePid, Socket) ->
     %% verify that reader still has an open
     %% connection to redis server
     case gen_tcp:recv(Socket, 0, 0) of
+        {ok, _} -> ok;
         {error, timeout} -> ok;
         {error, closed} -> exit(normal)
     end,
@@ -65,9 +66,14 @@ open_socket(Opts) ->
     Ip = proplists:get_value(ip, Opts),
     Port = proplists:get_value(port, Opts),
     Pass = proplists:get_value(pass, Opts),
-    case redis:connect(Ip, Port, Pass) of
+    case redis:connect(Ip, Port, undefined) of
         {ok, Socket} ->
-            inet:setopts(Socket, [{active, false}, {nodelay, true}]),
+            gen_tcp:send(Socket, [<<"AUTH ">>, Pass, <<"\r\n">>]),
+            case gen_tcp:recv(Socket, 0, 5000) of
+                {ok,<<"+OK\r\n">>} -> ok;
+                _ -> exit({error, auth_failed})
+            end,
+            inet:setopts(Socket, [{nodelay, true}]),
             Socket;
         Err ->
             exit(Err)
