@@ -47,7 +47,7 @@ init(Parent, BufferPid, RedisOpts) ->
 loop(BufferPid, Socket, RedisOpts) ->
     %% verify that writer still has an open
     %% connection to redis server
-    case gen_tcp:recv(Socket, 1, 0) of
+    case gen_tcp:recv(Socket, 0, 0) of
         {ok, _} -> ok;
         {error, timeout} -> ok;
         {error, closed} -> exit(normal)
