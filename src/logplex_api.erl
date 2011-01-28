@@ -285,7 +285,7 @@ error_resp(RespCode, Body, Error) ->
     throw({RespCode, Body}).
 
 filter_and_send_logs(Socket, Logs, [], _Num) ->
-    [gen_tcp:send(Socket, logplex_utils:format(logplex_utils:parse_msg(Msg))) || {ok, Msg} <- lists:reverse(Logs)];
+    [gen_tcp:send(Socket, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
 
 filter_and_send_logs(Socket, Logs, Filters, Num) ->
     filter_and_send_logs(Socket, Logs, Filters, Num, []).
@@ -293,7 +293,7 @@ filter_and_send_logs(Socket, Logs, Filters, Num) ->
 filter_and_send_logs(Socket, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
     gen_tcp:send(Socket, Acc);
 
-filter_and_send_logs(Socket, [{ok, Msg}|Tail], Filters, Num, Acc) ->
+filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
     Msg1 = logplex_utils:parse_msg(Msg),
     case logplex_utils:filter(Msg1, Filters) of
         true ->

@@ -136,7 +136,7 @@ format(_Msg) ->
 field_val(Key, Fields) ->
     field_val(Key, Fields, undefined).
 
-field_val(Key, [{ok, Key}, {ok, Val} | _Tail], _Default) ->
+field_val(Key, [Key, Val | _Tail], _Default) ->
     Val;
 
 field_val(Key, [_, _ | Tail], Default) ->

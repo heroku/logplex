@@ -33,16 +33,14 @@ start_link(BufferPid, RedisOpts) ->
 init(Parent, BufferPid, RedisOpts) ->
     io:format("init ~p~n", [?MODULE]),
     logplex_queue:register(BufferPid, self()),
-    Socket = open_socket(RedisOpts),
-    case Socket of
+    case open_socket(RedisOpts) of
         {error, Err} ->
             timer:sleep(500),
             exit({error, Err});
-        _ ->
-            ok
-    end,
-    proc_lib:init_ack(Parent, {ok, self()}),
-    loop(BufferPid, Socket, RedisOpts).
+        {ok, Socket} when is_port(Socket) ->
+            proc_lib:init_ack(Parent, {ok, self()}),
+            loop(BufferPid, Socket, RedisOpts)
+    end.
 
 loop(BufferPid, Socket, RedisOpts) ->
     %% verify that writer still has an open
@@ -74,15 +72,4 @@ open_socket(Opts) ->
     Ip = proplists:get_value(ip, Opts),
     Port = proplists:get_value(port, Opts),
     Pass = proplists:get_value(pass, Opts),
-    case redis:connect(Ip, Port, undefined) of
-        {ok, Socket} ->
-            gen_tcp:send(Socket, [<<"AUTH ">>, Pass, <<"\r\n">>]),
-            case gen_tcp:recv(Socket, 0, 5000) of
-                {ok,<<"+OK\r\n">>} -> ok;
-                _ -> exit({error, auth_failed})
-            end,
-            inet:setopts(Socket, [{nodelay, true}]),
-            Socket;
-        Err ->
-            Err
-    end.
+    redis:connect(Ip, Port, Pass).

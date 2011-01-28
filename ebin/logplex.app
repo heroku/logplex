@@ -12,7 +12,6 @@
     logplex_grid,
     logplex_queue_sup,
     logplex_rate_limit,
-    logplex_reader,
     logplex_realtime,
     logplex_redis_writer,
     logplex_session,

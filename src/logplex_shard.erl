@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([lookup/3, lookup_urls/0, urls/0, list_diff/2, poll_shard_urls/0]).
+-export([lookup/3, lookup_urls/0, urls/0]).
 
 -include_lib("logplex.hrl").
 
@@ -65,14 +65,11 @@ init([]) ->
     io:format("init ~p~n", [?MODULE]),
     Urls = lookup_urls(),
 
-    [logplex_queue_sup:start_child(logplex_read_queue_sup, [read_queue_args(Url)]) || Url <- Urls],
     [logplex_queue_sup:start_child(logplex_redis_buffer_sup, [redis_buffer_args(Url)]) || Url <- Urls],
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
-    populate_info_table(),
-
-    spawn_link(fun poll_shard_urls/0),
+    populate_info_table(Urls),
 
     {ok, #state{urls=Urls}}.
 
@@ -99,38 +96,6 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast(poll_shard_urls, #state{urls=Urls}=State) ->
-    case lookup_urls() of
-        Urls ->
-            {noreply, State};
-        NewList ->
-            {Removed, Added} = list_diff(Urls, NewList),
-            [begin
-                logplex_queue_sup:start_child(logplex_read_queue_sup, [read_queue_args(Url)]),
-                logplex_queue_sup:start_child(logplex_redis_buffer_sup, [redis_buffer_args(Url)])
-            end || Url <- Added],
-            [begin
-                [begin
-                    case logplex_queue:get(Pid, redis_url) of
-                        Url ->
-                            [Pid1 ! stop || Pid1 <- logplex_queue:all_members(Pid)],
-                            logplex_queue:stop(Pid);
-                        _ -> ok
-                    end
-                end || {_, Pid, worker, _} <- supervisor:which_children(logplex_read_queue_sup)],
-                [begin
-                    case logplex_queue:get(Pid, redis_url) of
-                        Url ->
-                            [Pid1 ! stop || Pid1 <- logplex_queue:all_members(Pid)],
-                            logplex_queue:stop(Pid);
-                        _ -> ok
-                    end
-                end || {_, Pid, worker, _} <- supervisor:which_children(logplex_redis_buffer_sup)]
-            end || Url <- Removed],
-            populate_info_table(),
-            {noreply, State#state{urls=NewList}}
-    end;
-
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -177,65 +142,30 @@ lookup_urls() ->
             Urls
     end.
 
-populate_info_table() ->
-    ReadQueues = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_read_queue_sup)],
-    {ok, Map1, Interval1} = redis_shard:generate_map_and_interval(lists:sort(ReadQueues)),
+populate_info_table(Urls) ->
+    Pools = add_pools(Urls, []),
+    {ok, Map1, Interval1} = redis_shard:generate_map_and_interval(lists:sort(Pools)),
 
     RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
     {ok, Map2, Interval2} = redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
 
     ets:delete_all_objects(logplex_shard_info),
-    ets:insert(logplex_shard_info, {logplex_read_queue_map, {Map1, Interval1}}),
+    ets:insert(logplex_shard_info, {logplex_read_pool_map, {Map1, Interval1}}),
     ets:insert(logplex_shard_info, {logplex_redis_buffer_map, {Map2, Interval2}}),
 
     ok.
 
-list_diff(List1, List2) ->
-    list_diff(List1, List2, {[], []}).
+add_pools([], Acc) -> Acc;
 
-list_diff([], [], Acc) ->
-    Acc;
-
-list_diff([A|Tail1], [A|Tail2], Acc) ->
-    list_diff(Tail1, Tail2, Acc);
-
-list_diff([A|Tail1], [B|Tail2]=List2, {Acc1, Acc2}) ->
-    case lists:member(A, List2) of
-        true -> list_diff([A|Tail1], Tail2, {Acc1, [B|Acc2]});
-        false -> list_diff(Tail1, List2, {[A|Acc1], Acc2})
-    end;
-
-list_diff([], List2, {Acc1, Acc2}) ->
-    {Acc1, List2 ++ Acc2};
-
-list_diff(List1, [], {Acc1, Acc2}) ->
-    {List1 ++ Acc1, Acc2}.
-
-poll_shard_urls() ->
-    timer:sleep(20 * 1000),
-    gen_server:cast(?MODULE, poll_shard_urls),
-    ?MODULE:poll_shard_urls().
-
-read_queue_args(Url) ->
-    MaxLength =
-        case os:getenv("LOGPLEX_READ_QUEUE_LENGTH") of
-            false -> ?DEFAULT_LOGPLEX_READ_QUEUE_LENGTH;
-            StrNum1 -> list_to_integer(StrNum1)
-        end,
+add_pools([Url|Tail], Acc) ->
+    Opts = logplex_utils:parse_redis_url(Url),
     NumWorkers =
         case os:getenv("LOGPLEX_READERS") of
             false -> ?DEFAULT_LOGPLEX_READERS;
             StrNum2 -> list_to_integer(StrNum2)
         end,
-    RedisOpts = logplex_utils:parse_redis_url(Url),
-    [{name, "logplex_read_queue"},
-     {max_length, MaxLength},
-     {num_workers, NumWorkers},
-     {worker_sup, logplex_reader_sup},
-     {worker_args, [RedisOpts]},
-     {dict, dict:from_list([
-        {redis_url, Url}
-     ])}].
+    {ok, Pool} = redis_pool:add(Opts, NumWorkers),
+    add_pools(Tail, [{Url, Pool}|Acc]).
 
 redis_buffer_args(Url) ->
     MaxLength =
