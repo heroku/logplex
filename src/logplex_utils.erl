@@ -37,7 +37,7 @@ set_weight(Weight) when is_integer(Weight) ->
     application:start(sasl),
     application:start(redis),
     Opts = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-    redis_pool:add_pool(config_pool, Opts, 1),
+    redis_pool:add(config_pool, Opts, 1),
     LocalIp =
         case os:getenv("LOCAL_IP") of
             false -> <<"127.0.0.1">>;
@@ -51,7 +51,7 @@ shard_info() ->
     application:start(sasl),
     application:start(redis),
     Opts = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-    redis_pool:add_pool(config_pool, Opts, 1),
+    redis_pool:add(config_pool, Opts, 1),
     [shard_info(binary_to_list(Url)) || {ok, Url} <- redis_helper:shard_urls()],
     ok.
 
