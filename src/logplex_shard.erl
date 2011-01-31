@@ -132,7 +132,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 lookup_urls() ->
-    case lists:sort([binary_to_list(Url) || {ok, Url} <- redis_helper:shard_urls()]) of
+    case lists:sort([binary_to_list(Url) || Url <- redis_helper:shard_urls()]) of
         [] ->
             case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
                 false -> ["redis://127.0.0.1:6379/"];
