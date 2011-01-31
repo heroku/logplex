@@ -36,8 +36,10 @@ init(Parent) ->
     loop(Socket).
 
 loop(Socket) ->
-    case logplex_queue:out(logplex_drain_buffer) of
+    case catch logplex_queue:out(logplex_drain_buffer) of
         timeout -> ok;
+        {'EXIT', {noproc, _}} ->
+            exit(normal);
         {1, [{Host, Port, Msg}]} ->
             case gen_udp:send(Socket, Host, Port, Msg) of
                 ok ->

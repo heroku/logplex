@@ -40,9 +40,11 @@ init(Parent) ->
     loop(#state{regexp=RE, map=Map, interval=Interval}).
 
 loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
-    case logplex_queue:out(logplex_work_queue) of
+    case catch logplex_queue:out(logplex_work_queue) of
         timeout ->
             ok;
+        {'EXIT', {noproc, _}} ->
+            exit(normal);
         {1, [Msg]} ->
             case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
                 {match, [Token]} ->

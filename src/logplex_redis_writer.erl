@@ -50,7 +50,9 @@ loop(BufferPid, Socket, RedisOpts) ->
         {error, timeout} -> ok;
         {error, closed} -> exit(normal)
     end,
-    case logplex_queue:out(BufferPid, 100) of
+    case catch logplex_queue:out(BufferPid, 100) of
+        {'EXIT', {noproc, _}} ->
+            exit(normal);
         timeout -> ok;
         {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of
