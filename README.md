@@ -24,6 +24,130 @@ prereq: start a local redis server on the default port 6379
     $ [start|stop|restart] logplex
     $ bin/connect ('ctrl-g q' to exit)
 
+# REST API
+
+## Healthcheck
+
+    GET /healthcheck
+
+## Channels
+
+    POST /channels
+
+JSON Params:
+
+* name: channel name (required)
+* app\_id: Heroku app\_id (required)
+* addon: Heroku addon \[basic|expanded|advanced\] (required)
+
+Resp:
+
+* status: 201
+* body: channel\_id
+
+<br/>
+
+    POST /channels/<channel_id>/token
+
+JSON Params:
+
+* name: token name that will appear as the log msg source (required)
+
+Resp:
+
+* status: 201
+* body token\_id
+
+<br/>
+
+    POST /channels/<channel_id>/addon
+
+JSON Params:
+
+* addon: Heroku addon to upgrade/downgrade to [basic|expanded|advanced] (required)
+
+Resp:
+
+* status: 200
+* body: OK
+
+<br/>
+
+    GET /channels/<channel_id>/info
+
+Resp:
+
+* status: 200
+* body: json info object
+
+    DELETE /channels/<channel_id>
+
+Resp:
+
+* status: 200
+* body: OK
+
+## Sessions
+
+    POST /sessions
+
+JSON Params:
+
+* channel\_id (required)
+* tail (optional)
+* num (optional)
+* source (optional)
+* ps (optional)
+
+Resp:
+
+* status: 201
+* body: session\_id
+
+<br/>
+
+    GET /sessions/<session_id>
+
+Resp:
+
+* status: 200
+* body: log data
+
+## Drains
+
+    POST /channels/<channel_id>/drains
+
+JSON Params:
+
+* host (required)
+* port (optional)
+
+Resp:
+
+* status: 201
+
+<br/>
+
+    GET /channels/<channel_id>/drains
+
+Resp:
+
+* status: 200
+* body: drain list
+
+<br/>
+
+    DELETE /channels/<channel_id>/drains
+
+Querystring Params:
+
+* host (required)
+* port (required)
+
+Resp:
+
+* status: 200
+
 ## Environment Variables
 
 * LOGPLEX\_COOKIE - Erlang cookie, important for multiple node grid (not required)
