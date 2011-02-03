@@ -221,7 +221,7 @@ set_node_ex(Node, Ip, Domain) when is_binary(Node), is_binary(Ip), is_binary(Dom
     redis_pool:q(config_pool, [<<"SETEX">>, iolist_to_binary([<<"node:">>, Domain, <<":">>, Node]), <<"60">>, Ip]).
 
 register_with_face(Domain, Ip) ->
-    redis_pool:q(config_pool, [<<"SETEX">>, iolist_to_binary([Domain, <<":alive:">>, Ip]), <<"20">>, ""]).
+    redis_pool:q(config_pool, [<<"SETEX">>, iolist_to_binary([Domain, <<":alive:">>, Ip]), <<"180">>, ""]).
 
 set_weight(Domain, Ip, Weight) when is_integer(Weight) ->
     redis_pool:q(config_pool, [<<"SETEX">>, iolist_to_binary([Domain, <<":weight:">>, Ip]), <<"604800">>, integer_to_list(Weight)]).
