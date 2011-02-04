@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_grid).
--export([start_link/0, init/1, publish/2, loop/3]).
+-export([start_link/0, init/1, call/3, cast/2, loop/3]).
 
 -include_lib("logplex.hrl").
 
@@ -40,9 +40,11 @@ init(Parent) ->
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(BinNode, LocalIp, Domain).
 
-publish(RegName, Msg) when is_atom(RegName), is_tuple(Msg) ->
-    [erlang:send({RegName, Node}, Msg) || Node <- [node()|nodes()]],
-    ok.
+call(RegName, Msg, Timeout) when is_atom(RegName), is_integer(Timeout) ->
+    gen_server:multi_call([node()|nodes()], RegName, Msg, Timeout).
+
+cast(RegName, Msg) when is_atom(RegName) ->
+    gen_server:abcast([node()|nodes()], RegName, Msg).
 
 loop(BinNode, LocalIp, Domain) ->
     redis_helper:set_node_ex(BinNode, LocalIp, Domain),

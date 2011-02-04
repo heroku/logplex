@@ -38,7 +38,7 @@ start_link() ->
 create(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
     case redis_helper:create_channel(ChannelName, AppId, Addon) of
         ChannelId when is_integer(ChannelId) ->
-            logplex_grid:publish(?MODULE, {create, ChannelId, ChannelName, AppId, Addon}),
+            logplex_grid:call(?MODULE, {create, ChannelId, ChannelName, AppId, Addon}, 8000),
             ChannelId;
         Err ->
             Err
@@ -49,9 +49,9 @@ delete(ChannelId) when is_integer(ChannelId) ->
         undefined ->
             {error, not_found};
         _ ->
-            logplex_grid:publish(?MODULE, {delete_channel, ChannelId}),
-            logplex_grid:publish(logplex_token, {delete_channel, ChannelId}),
-            logplex_grid:publish(logplex_drain, {delete_channel, ChannelId}),
+            logplex_grid:cast(?MODULE, {delete_channel, ChannelId}),
+            logplex_grid:cast(logplex_token, {delete_channel, ChannelId}),
+            logplex_grid:cast(logplex_drain, {delete_channel, ChannelId}),
             redis_helper:delete_channel(ChannelId)
     end.
 
@@ -60,8 +60,8 @@ update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
         undefined ->
             {error, not_found};
         Channel ->
-            logplex_grid:publish(?MODULE, {update_channel, Channel#channel{addon=Addon}}),
-            logplex_grid:publish(logplex_token, {update_addon, ChannelId, Addon}),
+            logplex_grid:cast(?MODULE, {update_channel, Channel#channel{addon=Addon}}),
+            logplex_grid:cast(logplex_token, {update_addon, ChannelId, Addon}),
             redis_helper:update_channel_addon(ChannelId, Addon)
     end.
 
@@ -126,6 +126,14 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call({create, ChannelId, ChannelName, AppId, Addon}, _From, State) ->
+    ets:insert(?MODULE, #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon}),
+    {reply, ok, State};
+
+handle_call({create_drain, DrainId, ChannelId, ResolvedHost, Host, Port}, _From, State) ->
+    ets:insert(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, resolved_host=ResolvedHost, host=Host, port=Port}),
+    {reply, ok, State};
+
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -136,6 +144,32 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({update_channel, #channel{id=ChannelId, addon=Addon}=Channel}, State) ->
+    ets:insert(?MODULE, Channel),
+    [begin
+        ets:delete_object(logplex_channel_tokens, Token),
+        ets:insert(logplex_channel_tokens, Token#token{addon=Addon})
+    end || Token <- ets:lookup(logplex_channel_tokens, ChannelId)],
+    {noreply, State};
+
+handle_cast({delete_channel, ChannelId}, State) ->
+    ets:delete(?MODULE, ChannelId),
+    ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}),
+    ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
+    {noreply, State};
+
+handle_cast({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, State) ->
+    ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon}),
+    {noreply, State};
+
+handle_cast({delete_token, ChannelId, TokenId}, State) ->
+    ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_', app_id='_', addon='_'}),
+    {noreply, State};
+
+handle_cast({delete_drain, DrainId}, State) ->
+    ets:match_delete(logplex_channel_drains, #drain{id=DrainId, channel_id='_', resolved_host='_', host='_', port='_'}),
+    {noreply, State};
+
 handle_cast({resolve_host, Ip, Drain}, State) ->
     ets:delete_object(logplex_channel_drains, Drain),
     ets:insert(logplex_channel_drains, Drain#drain{resolved_host=Ip}),
@@ -151,40 +185,6 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({create, ChannelId, ChannelName, AppId, Addon}, State) ->
-    ets:insert(?MODULE, #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon}),
-    {noreply, State};
-
-handle_info({update_channel, #channel{id=ChannelId, addon=Addon}=Channel}, State) ->
-    ets:insert(?MODULE, Channel),
-    [begin
-        ets:delete_object(logplex_channel_tokens, Token),
-        ets:insert(logplex_channel_tokens, Token#token{addon=Addon})
-    end || Token <- ets:lookup(logplex_channel_tokens, ChannelId)],
-    {noreply, State};
-
-handle_info({delete_channel, ChannelId}, State) ->
-    ets:delete(?MODULE, ChannelId),
-    ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}),
-    ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
-    {noreply, State};
-
-handle_info({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, State) ->
-    ets:insert(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon}),
-    {noreply, State};
-
-handle_info({delete_token, ChannelId, TokenId}, State) ->
-    ets:match_delete(logplex_channel_tokens, #token{id=TokenId, channel_id=ChannelId, name='_', app_id='_', addon='_'}),
-    {noreply, State};
-
-handle_info({create_drain, DrainId, ChannelId, ResolvedHost, Host, Port}, State) ->
-    ets:insert(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, resolved_host=ResolvedHost, host=Host, port=Port}),
-    {noreply, State};
-
-handle_info({delete_drain, DrainId}, State) ->
-    ets:match_delete(logplex_channel_drains, #drain{id=DrainId, channel_id='_', resolved_host='_', host='_', port='_'}),
-    {noreply, State};
-
 handle_info(_Info, State) ->
     {noreply, State}.
 

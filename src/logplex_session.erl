@@ -38,7 +38,7 @@ start_link() ->
 create(Body) when is_binary(Body) ->
     Session = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
     redis_helper:create_session(Session, Body),
-    logplex_grid:publish(?MODULE, {create, Session, Body}),
+    logplex_grid:call(?MODULE, {create, Session, Body}, 8000),
     Session.
 
 lookup(Session) when is_binary(Session) ->
@@ -77,6 +77,10 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call({create, Session, Body}, _From, State) ->
+    ets:insert(?MODULE, {Session, Body}),
+    {reply, ok, State};
+
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -99,10 +103,6 @@ handle_cast(_Msg, State) ->
 %%--------------------------------------------------------------------
 handle_info(expire_session_cache, State) ->
     ets:delete_all_objects(?MODULE),
-    {noreply, State};
-
-handle_info({create, Session, Body}, State) ->
-    ets:insert(?MODULE, {Session, Body}),
     {noreply, State};
 
 handle_info(_Info, State) ->

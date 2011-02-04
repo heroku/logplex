@@ -47,8 +47,8 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
                 Ip ->
                     case redis_helper:drain_index() of
                         DrainId when is_integer(DrainId) ->
-                            logplex_grid:publish(?MODULE, {create_drain, DrainId, ChannelId, Ip, Host, Port}),
-                            logplex_grid:publish(logplex_channel, {create_drain, DrainId, ChannelId, Ip, Host, Port}),
+                            logplex_grid:cast(?MODULE, {create_drain, DrainId, ChannelId, Ip, Host, Port}),
+                            logplex_grid:call(logplex_channel, {create_drain, DrainId, ChannelId, Ip, Host, Port}, 8000),
                             redis_helper:create_drain(DrainId, ChannelId, Host, Port),
                             DrainId;
                         Error ->
@@ -61,8 +61,8 @@ delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
     case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host=Host, port=Port1}) of
         [#drain{id=DrainId}|_] ->
-            logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
-            logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
+            logplex_grid:cast(?MODULE, {delete_drain, DrainId}),
+            logplex_grid:cast(logplex_channel, {delete_drain, DrainId}),
             redis_helper:delete_drain(DrainId);
         _ ->
             {error, not_found}
@@ -71,8 +71,8 @@ delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
 clear_all(ChannelId) when is_integer(ChannelId) ->
     List = ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
     [begin
-        logplex_grid:publish(?MODULE, {delete_drain, DrainId}),
-        logplex_grid:publish(logplex_channel, {delete_drain, DrainId}),
+        logplex_grid:cast(?MODULE, {delete_drain, DrainId}),
+        logplex_grid:cast(logplex_channel, {delete_drain, DrainId}),
         redis_helper:delete_drain(DrainId)
     end || #drain{id=DrainId} <- List],
     ok.
@@ -117,6 +117,18 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({delete_channel, ChannelId}, State) ->
+    ets:match_delete(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
+    {noreply, State};
+
+handle_cast({create_drain, DrainId, ChannelId, ResolvedHost, Host, Port}, State) ->
+    ets:insert(?MODULE, #drain{id=DrainId, channel_id=ChannelId, resolved_host=ResolvedHost, host=Host, port=Port}),
+    {noreply, State};
+
+handle_cast({delete_drain, DrainId}, State) ->
+    ets:delete(?MODULE, DrainId),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -127,18 +139,6 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({delete_channel, ChannelId}, State) ->
-    ets:match_delete(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
-    {noreply, State};
-
-handle_info({create_drain, DrainId, ChannelId, ResolvedHost, Host, Port}, State) ->
-    ets:insert(?MODULE, #drain{id=DrainId, channel_id=ChannelId, resolved_host=ResolvedHost, host=Host, port=Port}),
-    {noreply, State};
-
-handle_info({delete_drain, DrainId}, State) ->
-    ets:delete(?MODULE, DrainId),
-    {noreply, State};
-
 handle_info(_Info, State) ->
     {noreply, State}.
 

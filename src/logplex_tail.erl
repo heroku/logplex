@@ -37,7 +37,7 @@ start_link() ->
 
 register(ChannelId) when is_integer(ChannelId) ->
     Self = self(),
-    logplex_grid:publish(?MODULE, {register, ChannelId, Self}),
+    logplex_grid:cast(?MODULE, {register, ChannelId, Self}),
     ok.
 
 route(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
@@ -80,6 +80,10 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({register, ChannelId, Pid}, State)->
+    ets:insert(?MODULE, {ChannelId, Pid}),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -90,10 +94,6 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({register, ChannelId, Pid}, State)->
-    ets:insert(?MODULE, {ChannelId, Pid}),
-    {noreply, State};
-
 handle_info(_Info, State) ->
     {noreply, State}.
 
