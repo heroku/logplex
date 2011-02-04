@@ -51,7 +51,7 @@ loop(BinNode, LocalIp, Domain) ->
     redis_helper:register_with_face(Domain, LocalIp),
     case redis_helper:get_nodes(Domain) of
         Keys when is_list(Keys) ->
-            [connect(size(Domain), Key) || {ok, Key} <- Keys];
+            [connect(size(Domain), Key) || Key <- Keys];
         _Err ->
             ok
     end,

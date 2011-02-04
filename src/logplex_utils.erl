@@ -52,7 +52,7 @@ shard_info() ->
     application:start(redis),
     Opts = redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
     redis_pool:add(config_pool, Opts, 1),
-    [shard_info(binary_to_list(Url)) || {ok, Url} <- redis_helper:shard_urls()],
+    [shard_info(binary_to_list(Url)) || Url <- redis_helper:shard_urls()],
     ok.
 
 shard_info(Url) ->
@@ -62,7 +62,7 @@ shard_info(Url) ->
     Pid = redis_pool:pid(Pool),
     case redis:q(Pid, [<<"KEYS">>, <<"ch:*:spool">>]) of 
         Keys when is_list(Keys) ->
-            Result = [debug_object(Pid, Key) || {ok, Key} <- Keys],
+            Result = [debug_object(Pid, Key) || Key <- Keys],
             io:format("== ~s~n", [Url]),
             [begin
                 io:format("~s bytes  ~s~n", [string:right(integer_to_list(N), 10, $ ), Key])
@@ -75,7 +75,7 @@ shard_info(Url) ->
 
 debug_object(Pid, Key) ->
     case redis:q(Pid, [<<"DEBUG">>, <<"OBJECT">>, Key]) of
-        {ok, Output} ->
+        Output ->
             Tokens = string:tokens(binary_to_list(Output), " "),
             Len1 = lists:foldl(
                 fun(Token, Acc) ->
