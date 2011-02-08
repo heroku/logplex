@@ -83,12 +83,14 @@ handle_info(flush, #state{instance_name=undefined}=State) ->
     handle_info(flush, State#state{instance_name=InstanceName});
 
 handle_info(flush, State) ->
-    Json = {struct, [lookup_stat(message_received),
-                     lookup_stat(message_processed),
-                     lookup_stat(message_routed),
-                     lookup_stat(work_queue_dropped),
-                     lookup_stat(drain_buffer_dropped),
-                     lookup_stat(redis_buffer_dropped)]},
+    Stats = ets:tab2list(?MODULE),
+    reset_stats(),
+    Json = {struct, [proplists:lookup(message_received, Stats),
+                     proplists:lookup(message_processed, Stats),
+                     proplists:lookup(message_routed, Stats),
+                     proplists:lookup(work_queue_dropped, Stats),
+                     proplists:lookup(drain_buffer_dropped, Stats),
+                     proplists:lookup(redis_buffer_dropped, Stats)]},
     Json1 = iolist_to_binary(mochijson2:encode(Json)),
     publish(Json1, State);
 
@@ -110,14 +112,6 @@ register() ->
     redis_helper:register_stat_instance(),
     timer:sleep(10 * 1000),
     register().
-
-lookup_stat(StatsName) ->
-    case ets:lookup(?MODULE, StatsName) of
-        [] ->
-            {StatsName, 0};
-        [Stat] ->
-            Stat
-    end.
 
 reset_stats() ->
     true = ets:insert(?MODULE, [{message_received, 0},
