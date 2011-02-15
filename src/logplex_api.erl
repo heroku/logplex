@@ -160,7 +160,7 @@ handlers() ->
 
         Num0 =
             case proplists:get_value(<<"num">>, Data) of
-                undefined -> 20;
+                undefined -> 100;
                 BinNum -> list_to_integer(binary_to_list(BinNum))
             end,
         Num = ternary(Filters == [], Num0 - 1, -1),
