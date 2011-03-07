@@ -320,9 +320,14 @@ filters([], Filters) ->
     Filters;
 
 filters([{<<"ps">>, Ps}|Tail], Filters) ->
+    Size = size(Ps),
     Filters1 = [
         fun(Msg) ->
-            Msg#msg.ps == Ps
+            case Msg#msg.ps of
+                Ps -> true;
+                <<Ps:Size/binary, ".", _/binary>> -> true;
+                _ -> false
+            end
         end | Filters],
     filters(Tail, Filters1);
 
