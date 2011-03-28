@@ -2,6 +2,6 @@
 
 HOST=`hostname --fqdn`
 COOKIE=`cat keys/LOGPLEX_COOKIE`
-HOME=/root
+HOME=/home/logplex
 
 erl -name remsh@$HOST -hidden -setcookie $COOKIE -remsh logplex@$HOST
