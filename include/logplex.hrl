@@ -5,6 +5,7 @@
 -record(token, {id, channel_id, name, app_id, addon}).
 -record(drain, {id, channel_id, resolved_host, host, port}).
 
+-define(HTTP_PORT, 8001).
 -define(TCP_PORT, 9998).
 -define(UDP_PORT, 9999).
 

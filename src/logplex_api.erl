@@ -30,7 +30,7 @@
 start_link() ->
     Port =
         case os:getenv("HTTP_PORT") of
-            false -> 80;
+            false -> ?HTTP_PORT;
             Val -> list_to_integer(Val)
         end,
     Opts = [
