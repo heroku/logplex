@@ -4,7 +4,7 @@ export USER=logplex
 export DIR=/opt/logplex
 export SERVER_UID=`id -u $USER`
 export SERVER_GID=`id -g $USER`
-export HOME=/root
+export HOME=/home/logplex
 
 ulimit -n 65535
 cd $DIR
