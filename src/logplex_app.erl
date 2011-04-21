@@ -36,6 +36,7 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     boot_pagerduty(),
     boot_redis(),
+    boot_nsync(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
@@ -97,6 +98,9 @@ boot_redis() ->
         Err ->
             exit(Err)
     end.
+
+boot_nsync() ->
+    ok = application:start(nsync, temporary).
 
 logplex_work_queue_args() ->
     MaxLength =
