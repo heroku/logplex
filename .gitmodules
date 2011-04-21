@@ -10,3 +10,6 @@
 [submodule "deps/gen_nb_server"]
 	path = deps/gen_nb_server
 	url = git://github.com/kevsmith/gen_nb_server.git
+[submodule "deps/nsync"]
+	path = deps/nsync
+	url = https://github.com/JacobVorreuter/nsync
