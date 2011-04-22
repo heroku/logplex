@@ -36,7 +36,7 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_integer(Port) orelse Port == undefined) ->
-    case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host=Host, port=Port}) of
+    case lookup(ChannelId, Host, Port) of
         [_] ->
             {error, already_exists};
         [] ->
@@ -44,11 +44,9 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
                 undefined ->
                     error_logger:error_msg("invalid drain: ~p:~p~n", [Host, Port]),
                     {error, invalid_drain};
-                Ip ->
+                _Ip ->
                     case redis_helper:drain_index() of
                         DrainId when is_integer(DrainId) ->
-                            logplex_grid:cast(?MODULE, {create_drain, DrainId, ChannelId, Ip, Host, Port}),
-                            logplex_grid:call(logplex_channel, {create_drain, DrainId, ChannelId, Ip, Host, Port}, 8000),
                             redis_helper:create_drain(DrainId, ChannelId, Host, Port),
                             DrainId;
                         Error ->
@@ -59,26 +57,46 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
 
 delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
-    case ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host=Host, port=Port1}) of
+    case lookup(ChannelId, Host, Port1) of
         [#drain{id=DrainId}|_] ->
-            logplex_grid:cast(?MODULE, {delete_drain, DrainId}),
-            logplex_grid:cast(logplex_channel, {delete_drain, DrainId}),
             redis_helper:delete_drain(DrainId);
         _ ->
             {error, not_found}
     end.
 
 clear_all(ChannelId) when is_integer(ChannelId) ->
-    List = ets:match_object(?MODULE, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
+    List = logplex_channel:drains(ChannelId),
     [begin
-        logplex_grid:cast(?MODULE, {delete_drain, DrainId}),
-        logplex_grid:cast(logplex_channel, {delete_drain, DrainId}),
         redis_helper:delete_drain(DrainId)
     end || #drain{id=DrainId} <- List],
     ok.
 
 lookup(DrainId) when is_integer(DrainId) ->
     redis_helper:lookup_drain(DrainId).
+
+lookup(ChannelId, Host, Port) ->
+    case nsync_helper:tab_drains() of
+	undefined ->
+	    [];
+	DrainsTab ->
+	    lookup(DrainsTab, ChannelId, Host, Port)
+    end.
+lookup(DrainsTab, ChannelId, Host, Port) ->
+    lists:foldl(fun({Drain, Dict}, Acc) -> 
+			case {dict:fetch(<<"ch">>, Dict) == list_to_binary(integer_to_list(ChannelId)),
+			      dict:fetch(<<"host">>, Dict) == Host,
+			      dict:fetch(<<"port">>, Dict) == Port} of 
+			    {true, true, true} -> 
+				[#drain{id = list_to_binary(string:sub_word(binary_to_list(Drain), 2, $:)),
+					channel_id = ChannelId,
+					host = Host,
+					port = list_to_integer(binary_to_list(Port)),
+					resolved_host = logplex_utils:resolve_host(Host)
+				       } | Acc];
+			    _ -> 
+				Acc 
+			end 
+		end, [], ets:tab2list(DrainsTab)).
 
 %%====================================================================
 %% gen_server callbacks
@@ -93,8 +111,6 @@ lookup(DrainId) when is_integer(DrainId) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
-    populate_cache(),
 	{ok, []}.
 
 %%--------------------------------------------------------------------

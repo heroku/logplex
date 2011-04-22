@@ -28,8 +28,15 @@
 %%====================================================================
 %% SESSION
 %%====================================================================
+%% Change SETEX command unhandled by nsync to SET 
 create_session(Session, Body) when is_binary(Session), is_binary(Body) ->
-    redis_pool:q(config_pool, [<<"SETEX">>, Session, <<"360">>, Body]).
+    redis_pool:q(config_pool, [<<"SET">>, Session, Body]).
+
+delete_session(Session) when is_binary(Session) ->
+    case redis_pool:q(config_pool, [<<"DEL">>, Session]) of
+        1 -> ok;
+        Err -> Err
+    end.
 
 lookup_session(Session) when is_binary(Session) ->
     case redis_pool:q(config_pool, [<<"GET">>, Session]) of

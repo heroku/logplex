@@ -37,10 +37,8 @@ start_link() ->
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     case logplex_channel:lookup(ChannelId) of
-        #channel{app_id=AppId, addon=Addon} ->
+        #channel{app_id=_AppId, addon=_Addon} ->
             TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-            logplex_grid:call(?MODULE, {create_token, ChannelId, TokenId, TokenName, AppId, Addon}, 8000),
-            logplex_grid:cast(logplex_channel, {create_token, ChannelId, TokenId, TokenName, AppId, Addon}),
             redis_helper:create_token(ChannelId, TokenId, TokenName),
             TokenId;
         _ ->
@@ -49,20 +47,31 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
 
 delete(TokenId) when is_binary(TokenId) ->
     case lookup(TokenId) of
-        #token{channel_id=ChannelId} ->
-            logplex_grid:cast(?MODULE, {delete_token, TokenId}),
-            logplex_grid:cast(logplex_channel, {delete_token, ChannelId, TokenId}),
+        #token{channel_id=_ChannelId} ->
             redis_helper:delete_token(TokenId);
         _ ->
             ok
     end.
 
 lookup(Token) when is_binary(Token) ->
-    case ets:lookup(?MODULE, Token) of
-        [Token1] when is_record(Token1, token) ->
-            Token1;
-        _ ->
-            undefined
+    case nsync_helper:tab_tokens() of
+	undefined ->
+	    [];
+	Tab ->
+	    lookup(Tab, Token)
+    end.
+lookup(Tab, Token) when is_binary(Token) ->
+    case ets:lookup(Tab, iolist_to_binary([<<"tok:">>,Token,<<":data">>])) of
+        [{_, Dict}] ->
+	    ChannelId = list_to_integer(binary_to_list(dict:fetch(<<"ch">>, Dict))),
+	    Channel = logplex_channel:lookup(ChannelId),
+	    #token{id = Token,
+		   channel_id = ChannelId,
+		   name = dict:fetch(<<"name">>, Dict),
+		   app_id = Channel#channel.app_id, 
+		   addon = Channel#channel.addon
+		  };
+	_ -> undefined
     end.
 
 %%====================================================================
@@ -78,8 +87,6 @@ lookup(Token) when is_binary(Token) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
-    populate_cache(),
 	{ok, []}.
 
 %%--------------------------------------------------------------------

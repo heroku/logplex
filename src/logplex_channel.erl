@@ -38,7 +38,6 @@ start_link() ->
 create(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
     case redis_helper:create_channel(ChannelName, AppId, Addon) of
         ChannelId when is_integer(ChannelId) ->
-            logplex_grid:call(?MODULE, {create, ChannelId, ChannelName, AppId, Addon}, 8000),
             ChannelId;
         Err ->
             Err
@@ -49,9 +48,6 @@ delete(ChannelId) when is_integer(ChannelId) ->
         undefined ->
             {error, not_found};
         _ ->
-            logplex_grid:cast(?MODULE, {delete_channel, ChannelId}),
-            logplex_grid:cast(logplex_token, {delete_channel, ChannelId}),
-            logplex_grid:cast(logplex_drain, {delete_channel, ChannelId}),
             redis_helper:delete_channel(ChannelId)
     end.
 
@@ -59,16 +55,31 @@ update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
     case lookup(ChannelId) of
         undefined ->
             {error, not_found};
-        Channel ->
-            logplex_grid:cast(?MODULE, {update_channel, Channel#channel{addon=Addon}}),
-            logplex_grid:cast(logplex_token, {update_addon, ChannelId, Addon}),
+        _Channel ->
             redis_helper:update_channel_addon(ChannelId, Addon)
     end.
 
 lookup(ChannelId) when is_integer(ChannelId) ->
-    case ets:lookup(?MODULE, ChannelId) of
-        [Channel] -> Channel;
-        _ -> undefined
+    case nsync_helper:tab_channel() of
+	undefined ->
+	    undefined;
+	Tab ->
+	    lookup(Tab, ChannelId)
+    end.
+lookup(Tab, ChannelId) ->
+    case ets:lookup(Tab, iolist_to_binary([<<"ch:">>,integer_to_list(ChannelId),<<":data">>])) of
+        [{_, Dict}] ->
+            #channel{id = ChannelId,
+		     name = dict:fetch(<<"name">>, Dict),
+		     app_id =
+			 case dict:find(<<"app_id">>, Dict) of
+			     {ok, Val} when is_binary(Val), size(Val) > 0 ->
+				 list_to_integer(binary_to_list(Val));
+			     _ -> undefined
+			 end,
+		     addon = dict:fetch(<<"addon">>, Dict)
+		    };
+	_ -> undefined
     end.
 
 logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
@@ -78,10 +89,60 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     redis_pool:q(Pool, [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
 
 tokens(ChannelId) when is_integer(ChannelId) ->
-    ets:lookup(logplex_channel_tokens, ChannelId).
+    case {nsync_helper:tab_channel(), nsync_helper:tab_tokens()} of
+	{ChannelTab, TokensTab} 
+	  when ChannelTab == undefined; TokensTab == undefined ->
+	    undefined;
+	{ChannelTab, TokensTab} ->
+	    tokens(ChannelTab, TokensTab, ChannelId)
+    end.
+tokens(ChannelTab, TokensTab, ChannelId) ->
+    Channel = lookup(ChannelTab, ChannelId),
+    lists:foldl(fun({Token, Dict}, Acc) -> 
+			case dict:fetch(<<"ch">>,Dict) == list_to_binary(integer_to_list(ChannelId)) of 
+			    true -> 
+				[#token{id = list_to_binary(string:sub_word(binary_to_list(Token), 2, $:)),
+					channel_id = ChannelId,
+					name = dict:fetch(<<"name">>, Dict),
+					app_id = Channel#channel.app_id, 
+					addon = Channel#channel.addon
+				       } | Acc]; 
+			    false-> 
+				Acc 
+			end 
+		end, [], ets:tab2list(TokensTab)).
 
 drains(ChannelId) when is_integer(ChannelId) ->
-    ets:lookup(logplex_channel_drains, ChannelId).
+    case nsync_helper:tab_drains() of
+	undefined ->
+	    [];
+	DrainsTab ->
+	    drains(DrainsTab, ChannelId)
+    end.
+drains(DrainsTab, ChannelId) ->
+    lists:foldl(fun({Drain, Dict}, Acc) -> 
+			case dict:fetch(<<"ch">>, Dict) == list_to_binary(integer_to_list(ChannelId)) of 
+			    true -> 
+				Host = dict:fetch(<<"host">>, Dict),
+				case logplex_utils:resolve_host(Host) of
+				    undefined -> Acc;
+				    Ip -> 
+					[#drain{id = list_to_binary(string:sub_word(binary_to_list(Drain), 2, $:)),
+						channel_id = ChannelId,
+						host = Host,
+						port = 
+						    case dict:find(<<"port">>, Dict) of
+							{ok, Val} when is_binary(Val), size(Val) > 0 ->
+							    list_to_integer(binary_to_list(Val));
+							_ -> undefined
+						    end,
+						resolved_host = Ip
+					       } | Acc]
+				end;
+			    false-> 
+				Acc 
+			end 
+		end, [], ets:tab2list(DrainsTab)).
 
 info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
@@ -109,10 +170,6 @@ info(ChannelId) when is_integer(ChannelId) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
-    ets:new(logplex_channel_tokens, [protected, named_table, bag, {keypos, 3}]),
-    ets:new(logplex_channel_drains, [protected, named_table, bag, {keypos, 3}]),
-    populate_cache(),
     spawn_link(fun refresh_dns/0),
     {ok, []}.
 
@@ -235,10 +292,14 @@ populate_cache() ->
 
 refresh_dns() ->
     timer:sleep(60 * 1000),
-    [begin
-        case logplex_utils:resolve_host(Host) of
-            undefined -> ok;
-            Ip -> gen_server:cast(?MODULE, {resolve_host, Ip, Drain})
-        end
-    end || #drain{host=Host}=Drain <- ets:tab2list(logplex_channel_drains)],
-    ?MODULE:refresh_dns().
+    case nsync_helper:tab_drains() of
+	undefined -> ?MODULE:refresh_dns();
+	DrainsTab ->
+	    [begin
+		 case logplex_utils:resolve_host(Host) of
+		     undefined -> ok;
+		     Ip -> gen_server:cast(?MODULE, {resolve_host, Ip, Drain})
+		 end
+	     end || #drain{host=Host}=Drain <- ets:tab2list(DrainsTab)],
+	    ?MODULE:refresh_dns()
+    end.
