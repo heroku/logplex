@@ -62,6 +62,8 @@ update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
     end.
 
 lookup(ChannelId) when is_integer(ChannelId) ->
+    %% @todo: there's implicit coupling between this function and redis_helper:create_channel/3.
+    %%        fix it.
     ChannelKey = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
     case ets:lookup(nsync:tid(?MODULE), ChannelKey) of
         [{_, Channel}] ->

@@ -58,6 +58,8 @@ delete(TokenId) when is_binary(TokenId) ->
     end.
 
 lookup(Token) when is_binary(Token) ->
+    %% @todo: there's implicit coupling between this function and redis_helper:create_token/3.
+    %%        fix it.
     TokenId = iolist_to_binary([<<"tok:">>, Token, <<":data">>]),
     case ets:lookup(nsync:tid(?MODULE), TokenId) of
         [{_, T}] ->
