@@ -29,8 +29,7 @@
 
 -export([create/2,
          lookup/1,
-         delete/1,
-         nsync_callback/2]).
+         delete/1]).
 
 -include_lib("logplex.hrl").
 
@@ -42,6 +41,7 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     case logplex_channel:lookup(ChannelId) of
         #channel{app_id=AppId, addon=Addon} ->
             TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+            gen_server:cast(logplex_channel, {create_token, ChannelId, TokenId, TokenName, AppId, Addon}),
             redis_helper:create_token(ChannelId, TokenId, TokenName),
             TokenId;
         _ ->
@@ -51,6 +51,7 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
 delete(TokenId) when is_binary(TokenId) ->
     case lookup(TokenId) of
         #token{channel_id=ChannelId} ->
+            gen_server:cast(logplex_channel, {delete_token, ChannelId, TokenId}),
             redis_helper:delete_token(TokenId);
         _ ->
             ok
@@ -66,26 +67,11 @@ lookup(Token) when is_binary(Token) ->
             %% In order to construct a token, two lookups are needed here. Another
             %% design choice would be to make logplex_token:create/2 do:
             %%      redis_helper:create_token(ChannelId, TokenId, TokenName, AppId, Addon)
-            %% then we have a little faster lookup but need more space consumption.
+            %% then we have a little faster lookup but consume more space.
             %% Which to choose depends on usage senario.
             #token{id=Token, channel_id=ChannelId, name=Name, app_id=C#channel.app_id, addon=C#channel.addon};
         _ -> undefined
     end.
-
-nsync_callback(Tab, {load, Key, _Val}) ->
-    case Key of
-        <<"tok:", _/binary>> -> Tab;
-        _ -> undefined
-    end;
-nsync_callback(_Tab, {load, eof}) ->
-    ok;
-nsync_callback(Tab, {cmd, _Cmd, Args}) ->
-    case Args of
-        [<<"tok:", _/binary>> | _] -> Tab;
-        _ -> undefined
-    end;
-nsync_callback(_Tab, _) ->
-    ok.
 
 %%====================================================================
 %% gen_server callbacks
@@ -100,10 +86,6 @@ nsync_callback(_Tab, _) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    Tab = ets:new(?MODULE, [public, named_table, set]),
-    Opts = [{callback, {?MODULE, nsync_callback, [Tab]}}],
-    {ok, _Pid} = nsync:start_link(Opts),
-    % populate_cache(),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -116,10 +98,6 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, _From, State) ->
-    ets:insert(?MODULE, #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon}),
-    {reply, ok, State};
-
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -130,20 +108,6 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({delete_channel, ChannelId}, State) ->
-    ets:match_delete(?MODULE, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}),
-    {noreply, State};
-
-handle_cast({delete_token, TokenId}, State) ->
-    ets:delete(?MODULE, TokenId),
-    {noreply, State};
-
-handle_cast({update_addon, ChannelId, Addon}, State) ->
-    [begin
-        ets:insert(?MODULE, Token#token{addon=Addon})
-    end || Token <- ets:match_object(?MODULE, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'})],
-    {noreply, State};
-
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -175,15 +139,3 @@ terminate(_Reason, _State) ->
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-%%--------------------------------------------------------------------
-%%% Internal functions
-%%--------------------------------------------------------------------
-populate_cache() ->
-    Data = [begin
-        case logplex_channel:lookup(Token#token.channel_id) of
-            #channel{app_id=AppId, addon=Addon} -> Token#token{app_id=AppId, addon=Addon};
-            _ -> Token
-        end
-    end || Token <- redis_helper:lookup_tokens()],
-    length(Data) > 0 andalso ets:insert(?MODULE, Data).

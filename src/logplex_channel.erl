@@ -38,7 +38,6 @@ start_link() ->
 create(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
     case redis_helper:create_channel(ChannelName, AppId, Addon) of
         ChannelId when is_integer(ChannelId) ->
-            logplex_grid:call(?MODULE, {create, ChannelId, ChannelName, AppId, Addon}, 8000),
             ChannelId;
         Err ->
             Err
@@ -49,9 +48,7 @@ delete(ChannelId) when is_integer(ChannelId) ->
         undefined ->
             {error, not_found};
         _ ->
-            logplex_grid:cast(?MODULE, {delete_channel, ChannelId}),
-            logplex_grid:cast(logplex_token, {delete_channel, ChannelId}),
-            logplex_grid:cast(logplex_drain, {delete_channel, ChannelId}),
+            gen_server:cast(?MODULE, {delete_channel, ChannelId}),
             redis_helper:delete_channel(ChannelId)
     end.
 
@@ -60,14 +57,18 @@ update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
         undefined ->
             {error, not_found};
         Channel ->
-            logplex_grid:cast(?MODULE, {update_channel, Channel#channel{addon=Addon}}),
-            logplex_grid:cast(logplex_token, {update_addon, ChannelId, Addon}),
+            gen_server:cast(?MODULE, {update_channel, Channel#channel{addon=Addon}}),
             redis_helper:update_channel_addon(ChannelId, Addon)
     end.
 
 lookup(ChannelId) when is_integer(ChannelId) ->
-    case ets:lookup(?MODULE, ChannelId) of
-        [Channel] -> Channel;
+    ChannelKey = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
+    case ets:lookup(nsync:tid(?MODULE), ChannelKey) of
+        [{_, Channel}] ->
+            Name = dict:fetch(<<"name">>, Channel),
+            AppId = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Channel))),
+            Addon = dict:fetch(<<"addon">>, Channel),
+            #channel{id=ChannelId, name=Name, app_id=AppId, addon=Addon};
         _ -> undefined
     end.
 
@@ -109,7 +110,6 @@ info(ChannelId) when is_integer(ChannelId) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
     ets:new(logplex_channel_tokens, [protected, named_table, bag, {keypos, 3}]),
     ets:new(logplex_channel_drains, [protected, named_table, bag, {keypos, 3}]),
     populate_cache(),
@@ -126,10 +126,6 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({create, ChannelId, ChannelName, AppId, Addon}, _From, State) ->
-    ets:insert(?MODULE, #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon}),
-    {reply, ok, State};
-
 handle_call({create_drain, DrainId, ChannelId, ResolvedHost, Host, Port}, _From, State) ->
     ets:insert(logplex_channel_drains, #drain{id=DrainId, channel_id=ChannelId, resolved_host=ResolvedHost, host=Host, port=Port}),
     {reply, ok, State};
@@ -145,7 +141,6 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({update_channel, #channel{id=ChannelId, addon=Addon}=Channel}, State) ->
-    ets:insert(?MODULE, Channel),
     [begin
         ets:delete_object(logplex_channel_tokens, Token),
         ets:insert(logplex_channel_tokens, Token#token{addon=Addon})
@@ -153,7 +148,6 @@ handle_cast({update_channel, #channel{id=ChannelId, addon=Addon}=Channel}, State
     {noreply, State};
 
 handle_cast({delete_channel, ChannelId}, State) ->
-    ets:delete(?MODULE, ChannelId),
     ets:match_delete(logplex_channel_tokens, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}),
     ets:match_delete(logplex_channel_drains, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
     {noreply, State};
@@ -211,9 +205,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 populate_cache() ->
-    Channels = redis_helper:lookup_channels(),
-    length(Channels) > 0 andalso ets:insert(?MODULE, Channels),
-
     Tokens = [begin
         case logplex_channel:lookup(Token#token.channel_id) of
             #channel{app_id=AppId, addon=Addon} -> Token#token{app_id=AppId, addon=Addon};

@@ -70,7 +70,8 @@ init([]) ->
         {logplex_cloudkick, {logplex_cloudkick, start_link, []}, permanent, 2000, worker, [logplex_cloudkick]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {tcp_acceptor, {tcp_acceptor, start_link, []}, permanent, 2000, worker, [tcp_acceptor]},
-        {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]}
+        {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]},
+        {logplex_nsync, {logplex_nsync, start_link, []}, permanent, 2000, worker, [logplex_nsync]}
     ]}}.
 
 set_cookie() ->
