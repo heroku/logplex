@@ -50,8 +50,6 @@ init([]) ->
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
 
         {logplex_channel, {logplex_channel, start_link, []}, permanent, 2000, worker, [logplex_channel]},
-        {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
-        {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
         {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
 

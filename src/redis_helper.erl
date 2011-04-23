@@ -122,8 +122,17 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
 %%====================================================================
 %% TOKEN
 %%====================================================================
-create_token(ChannelId, TokenId, TokenName) when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
-    Res = redis_pool:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName]),
+create_token(ChannelId, TokenId, TokenName, AppId, Addon) when is_integer(ChannelId),
+                                                                is_binary(TokenId),
+                                                                is_binary(TokenName),
+                                                                is_integer(AppId),
+                                                                is_binary(Addon) ->
+    Res = redis_pool:q(config_pool, [<<"HMSET">>,
+                                    iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]),
+                                    <<"ch">>, integer_to_list(ChannelId),
+                                    <<"name">>, TokenName,
+                                    <<"appid">>, integer_to_list(AppId),
+                                    <<"addon">>, Addon]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
@@ -159,6 +168,14 @@ lookup_tokens() ->
                     Acc
             end
         end, [], redis_pool:q(config_pool, [<<"KEYS">>, <<"tok:*:data">>]))).
+
+update_token_addon(TokenId, Addon) when is_binary(TokenId), is_binary(Addon) ->
+    TokenKey = iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]),
+    Res = redis_pool:q(config_pool, [<<"HSET">>, TokenKey, <<"addon">>, Addon]),
+    case Res of
+        {error, Err} -> {error, Err};
+        Int when is_integer(Int) -> ok
+    end.
 
 %%====================================================================
 %% DRAIN

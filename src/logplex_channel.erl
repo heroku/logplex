@@ -58,7 +58,8 @@ update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
             {error, not_found};
         Channel ->
             gen_server:cast(?MODULE, {update_channel, Channel#channel{addon=Addon}}),
-            redis_helper:update_channel_addon(ChannelId, Addon)
+            redis_helper:update_channel_addon(ChannelId, Addon),
+            [redis_helper:update_token_addon(Token#token.id, Addon) || Token <- tokens(ChannelId)]
     end.
 
 lookup(ChannelId) when is_integer(ChannelId) ->
