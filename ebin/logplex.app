@@ -1,7 +1,7 @@
 {application, logplex,
  [
   {description, "Log multiplexer"},
-  {vsn, "1.0"},
+  {vsn, "1.1"},
   {modules, [
     logplex_api,
     logplex_app,

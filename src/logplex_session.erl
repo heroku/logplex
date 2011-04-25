@@ -38,15 +38,19 @@ start_link() ->
 create(Body) when is_binary(Body) ->
     Session = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
     redis_helper:create_session(Session, Body),
-    logplex_grid:call(?MODULE, {create, Session, Body}, 8000),
+    gen_server:call(?MODULE, {expire_session_cache, Session}),
     Session.
 
 lookup(Session) when is_binary(Session) ->
-    case ets:lookup(?MODULE, Session) of
-        [] ->
-            redis_helper:lookup_session(Session);
-        [{Session, Body}] ->
-            Body
+    case nsync_helper:tab_session() of
+	undefined -> [];
+	SessionTab ->
+	    case ets:lookup(SessionTab, Session) of
+		[] -> 
+		    redis_helper:lookup_session(Session);
+		[{Session, Body}] -> 
+		    Body
+	    end
     end.
 
 %%====================================================================
@@ -62,9 +66,6 @@ lookup(Session) when is_binary(Session) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    Self = self(),
-    ets:new(?MODULE, [protected, named_table, set]),
-    spawn_link(fun() -> expire_session_cache(Self) end),
 	{ok, []}.
 
 %%--------------------------------------------------------------------
@@ -77,8 +78,8 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({create, Session, Body}, _From, State) ->
-    ets:insert(?MODULE, {Session, Body}),
+handle_call({expire_session_cache, Session}, _From, State) ->
+    erlang:send_after(20 * 60 * 1000, self(), {delete_session, Session}),
     {reply, ok, State};
 
 handle_call(_Msg, _From, State) ->
@@ -101,8 +102,8 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info(expire_session_cache, State) ->
-    ets:delete_all_objects(?MODULE),
+handle_info({delete_session, Session}, State) ->
+    redis_helper:delete_session(Session),
     {noreply, State};
 
 handle_info(_Info, State) ->
@@ -130,7 +131,3 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-expire_session_cache(Pid) ->
-    timer:sleep(20 * 60 * 1000),
-    Pid ! expire_session_cache,
-    expire_session_cache(Pid).

@@ -28,8 +28,15 @@
 %%====================================================================
 %% SESSION
 %%====================================================================
+%% Change SETEX command unhandled by nsync to SET 
 create_session(Session, Body) when is_binary(Session), is_binary(Body) ->
-    redis_pool:q(config_pool, [<<"SETEX">>, Session, <<"360">>, Body]).
+    redis_pool:q(config_pool, [<<"SET">>, Session, Body]).
+
+delete_session(Session) when is_binary(Session) ->
+    case redis_pool:q(config_pool, [<<"DEL">>, Session]) of
+        1 -> ok;
+        Err -> Err
+    end.
 
 lookup_session(Session) when is_binary(Session) ->
     case redis_pool:q(config_pool, [<<"GET">>, Session]) of
@@ -107,12 +114,7 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
             #channel{
                 id = ChannelId,
                 name = logplex_utils:field_val(<<"name">>, Fields),
-                app_id =
-                 case logplex_utils:field_val(<<"app_id">>, Fields) of
-                     Val when is_binary(Val), size(Val) > 0 ->
-                         list_to_integer(binary_to_list(Val));
-                     _ -> undefined
-                 end,
+                app_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"app_id">>))),
                 addon = logplex_utils:field_val(<<"addon">>, Fields)
             };
         _ ->
@@ -122,8 +124,13 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
 %%====================================================================
 %% TOKEN
 %%====================================================================
-create_token(ChannelId, TokenId, TokenName) when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
-    Res = redis_pool:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName]),
+create_token(ChannelId, TokenId, TokenName, AppId, Addon) 
+  when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName), is_integer(AppId), is_binary(Addon) ->
+    Res = redis_pool:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), 
+                                     <<"ch">>, integer_to_list(ChannelId), 
+                                     <<"name">>, TokenName, 
+                                     <<"app_id">>, integer_to_list(AppId), 
+                                     <<"addon">>, Addon]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
@@ -140,7 +147,9 @@ lookup_token(TokenId) when is_binary(TokenId) ->
         Fields when is_list(Fields), length(Fields) > 0 ->
             #token{id = TokenId,
                    channel_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"ch">>, Fields))),
-                   name = logplex_utils:field_val(<<"name">>, Fields)
+                   name = logplex_utils:field_val(<<"name">>, Fields),
+		   app_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"app_id">>, Fields))),
+		   addon = logplex_utils:field_val(<<"addon">>, Fields)
             };
         _ ->
             undefined
