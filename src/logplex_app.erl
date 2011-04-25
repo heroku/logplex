@@ -36,6 +36,7 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     boot_pagerduty(),
     boot_redis(),
+    boot_nsync(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
@@ -49,8 +50,6 @@ init([]) ->
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
 
         {logplex_channel, {logplex_channel, start_link, []}, permanent, 2000, worker, [logplex_channel]},
-        {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
-        {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
         {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
 
@@ -69,7 +68,8 @@ init([]) ->
         {logplex_cloudkick, {logplex_cloudkick, start_link, []}, permanent, 2000, worker, [logplex_cloudkick]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {tcp_acceptor, {tcp_acceptor, start_link, []}, permanent, 2000, worker, [tcp_acceptor]},
-        {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]}
+        {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]},
+        {logplex_nsync, {logplex_nsync, start_link, []}, permanent, 2000, worker, [logplex_nsync]}
     ]}}.
 
 set_cookie() ->
@@ -97,6 +97,9 @@ boot_redis() ->
         Err ->
             exit(Err)
     end.
+
+boot_nsync() ->
+    ok = application:start(nsync, temporary).
 
 logplex_work_queue_args() ->
     MaxLength =
