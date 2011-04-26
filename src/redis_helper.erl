@@ -121,6 +121,45 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
             undefined
     end.
 
+add_channel_token(ChannelId, TokenId) when is_integer(ChannelId), is_binary(TokenId) ->
+    case redis_pool:q(config_pool, [<<"LPUSH">>, lists:concat(["ch:", ChannelId, ":tok"]), TokenId]) of
+	Int when is_integer(Int) ->
+	    ok;
+	Error ->
+	    Error
+    end.
+
+add_channel_drain(ChannelId, DrainId) when is_integer(ChannelId), is_integer(DrainId) ->
+    case redis_pool:q(config_pool, [<<"LPUSH">>, lists:concat(["ch:", ChannelId, ":drain"]), integer_to_list(DrainId)]) of
+	Int when is_integer(Int) ->
+	    ok;
+	Error ->
+	    Error
+    end.
+
+delete_channel_token(TokenId) when is_binary(TokenId) ->
+    delete_channel_token(TokenId, redis_pool:q(config_pool, [<<"KEYS">>, <<"ch:*:tok">>])).
+delete_channel_token(_TokenId, []) ->
+    ok;
+delete_channel_token(TokenId, [ChannelTokenKey | T]) ->
+    case redis_pool:q(config_pool, [<<"LREM">>, ChannelTokenKey, "1", TokenId]) of
+	0 ->
+	    delete_channel_token(TokenId, T);
+	_ ->
+	    ok
+    end.
+
+delete_channel_drain(DrainId) when is_integer(DrainId) ->
+    delete_channel_token(DrainId, redis_pool:q(config_pool, [<<"KEYS">>, <<"ch:*:drain">>])).
+delete_channel_drain(_DrainId, []) ->
+    ok;
+delete_channel_drain(DrainId, [ChannelDrainKey | T]) ->
+    case redis_pool:q(config_pool, [<<"LREM">>, ChannelDrainKey, "1", integer_to_list(DrainId)]) of
+	0 ->
+	    delete_channel_drain(DrainId, T);
+	_ ->
+	    ok
+    end.
 %%====================================================================
 %% TOKEN
 %%====================================================================
@@ -132,13 +171,13 @@ create_token(ChannelId, TokenId, TokenName, AppId, Addon)
                                      <<"app_id">>, integer_to_list(AppId), 
                                      <<"addon">>, Addon]),
     case Res of
-        <<"OK">> -> ok;
+        <<"OK">> -> add_channel_token(ChannelId, TokenId);
         Err -> Err
     end.
 
 delete_token(TokenId) when is_binary(TokenId) ->
-    case redis_pool:q(config_pool, [<<"DEL">>, TokenId]) of
-        1 -> ok;
+    case redis_pool:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
+        1 -> delete_channel_token(TokenId);
         Err -> Err
     end.
 
@@ -186,13 +225,13 @@ create_drain(DrainId, ChannelId, Host, Port) when is_integer(DrainId), is_intege
         [<<"port">> || is_integer(Port)] ++
         [integer_to_list(Port) || is_integer(Port)]),
     case Res of
-        <<"OK">> -> ok;
+        <<"OK">> -> add_channel_drain(ChannelId, DrainId);
         Err -> Err
     end.
 
 delete_drain(DrainId) when is_integer(DrainId) ->
     case redis_pool:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
-        1 -> ok;
+        1 -> delete_channel_drain(DrainId);
         Err -> Err
     end.
 

@@ -74,39 +74,47 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     redis_pool:q(Pool, [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
 
 tokens(ChannelId) when is_integer(ChannelId) ->
-    case nsync_helper:tab_tokens() of
-	undefined ->
+    case {nsync_helper:tab_channel_tokens(), nsync_helper:tab_tokens()} of
+	{ChannelTokensTab, TokensTab} when ChannelTokensTab == undefined; TokensTab == undefined ->
 	    [];
-	TokensTab ->
-	    tokens(TokensTab, ChannelId)
+	{ChannelTokensTab, TokensTab} ->
+	    tokens(ChannelTokensTab, TokensTab, ChannelId)
     end.
-tokens(TokensTab, ChannelId) ->
-    lists:foldl(fun({Token, Dict}, Acc) -> 
-			case dict:fetch(<<"ch">>,Dict) == list_to_binary(integer_to_list(ChannelId)) of 
-			    true -> 
-				[#token{id = list_to_binary(string:sub_word(binary_to_list(Token), 2, $:)),
-					channel_id = ChannelId,
-					name = dict:fetch(<<"name">>, Dict),
-					app_id = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
-					addon = dict:fetch(<<"addon">>, Dict)
-				       } | Acc]; 
-			    false-> 
-				Acc 
-			end 
-		end, [], ets:tab2list(TokensTab)).
+tokens(ChannelTokensTab, TokensTab, ChannelId) ->
+    case ets:lookup(ChannelTokensTab, iolist_to_binary([<<"ch:">>,integer_to_list(ChannelId),<<":tok">>])) of
+	[{_, TokenIdList}] ->
+	    lists:foldl(
+	      fun(TokenId, Acc) -> 
+		      case ets:lookup(TokensTab, iolist_to_binary([<<"tok:">>,TokenId,<<":data">>])) of
+			  [{_, Dict}] ->
+			      [#token{id = TokenId,
+				      channel_id = list_to_integer(binary_to_list(dict:fetch(<<"ch">>, Dict))),
+				      name = dict:fetch(<<"name">>, Dict),
+				      app_id = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
+				      addon = dict:fetch(<<"addon">>, Dict)
+				     } | Acc];
+			  _ -> Acc
+		      end
+	      end, [], TokenIdList);
+	_ ->
+	    []
+    end.
 
 drains(ChannelId) when is_integer(ChannelId) ->
-    case nsync_helper:tab_drains() of
-	undefined ->
+    case {nsync_helper:tab_channel_drains(), nsync_helper:tab_drains()} of
+	{ChannelDrainsTab, DrainsTab} when ChannelDrainsTab == undefined; DrainsTab == undefined ->
 	    [];
-	DrainsTab ->
-	    drains(DrainsTab, ChannelId)
+	{ChannelDrainsTab, DrainsTab} ->
+	    drains(ChannelDrainsTab, DrainsTab, ChannelId)
     end.
-drains(DrainsTab, ChannelId) ->
-    lists:foldl(fun({Drain, Dict}, Acc) -> 
-			case dict:fetch(<<"ch">>, Dict) == list_to_binary(integer_to_list(ChannelId)) of 
-			    true -> 
-				Id = list_to_integer(string:sub_word(binary_to_list(Drain), 2, $:)),
+drains(ChannelDrainsTab, DrainsTab, ChannelId) ->
+    case ets:lookup(ChannelDrainsTab, iolist_to_binary([<<"ch:">>,integer_to_list(ChannelId),<<":drain">>])) of
+	[{_, DrainIdList}] ->
+	    lists:foldl(
+	      fun(DrainId, Acc) -> 
+		      case ets:lookup(DrainsTab, iolist_to_binary([<<"drain:">>,DrainId,<<":data">>])) of
+			  [{_, Dict}] ->
+			      Id = list_to_integer(binary_to_list(iolist_to_binary([DrainId]))),
 				case logplex_drain:lookup_host(Id) of
 				    undefined -> Acc;
 				    Ip -> 
@@ -122,10 +130,12 @@ drains(DrainsTab, ChannelId) ->
 						resolved_host = Ip
 					       } | Acc]
 				end;
-			    false-> 
-				Acc 
-			end 
-		end, [], ets:tab2list(DrainsTab)).
+			  _ -> Acc 
+		      end
+	      end, [], DrainIdList);
+	_ ->
+	    []
+    end.
 
 info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of

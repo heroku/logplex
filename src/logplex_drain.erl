@@ -23,11 +23,13 @@
 -module(logplex_drain).
 -behaviour(gen_server).
 
+-record(state, {timer_ref}).
+
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([create/3, delete/3, clear_all/1, lookup/1]).
+-export([create/3, delete/3, clear_all/1, lookup/1, lookup_host/1]).
 
 -include_lib("logplex.hrl").
 
@@ -44,11 +46,10 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
                 undefined ->
                     error_logger:error_msg("invalid drain: ~p:~p~n", [Host, Port]),
                     {error, invalid_drain};
-                Ip ->
+                _Ip ->
                     case redis_helper:drain_index() of
                         DrainId when is_integer(DrainId) ->
                             redis_helper:create_drain(DrainId, ChannelId, Host, Port),
-			    gen_server:cast(?MODULE, {create_drain, DrainId, Ip}),
                             DrainId;
                         Error ->
                             Error
@@ -56,12 +57,11 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
             end
     end.
 
-delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
+delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), is_list(Port) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
     case lookup(ChannelId, Host, Port1) of
         [#drain{id=DrainId}|_] ->
-            redis_helper:delete_drain(DrainId),
-	    gen_server:cast(?MODULE, {delete_drain, DrainId});
+            redis_helper:delete_drain(DrainId);
         _ ->
             {error, not_found}
     end.
@@ -79,7 +79,7 @@ lookup(DrainId) when is_integer(DrainId) ->
 lookup(ChannelId, Host, Port) ->
     case nsync_helper:tab_drains() of
 	undefined ->
-	    undefined;
+	    [];
 	DrainsTab ->
 	    lookup(DrainsTab, ChannelId, Host, Port)
     end.
@@ -95,7 +95,7 @@ lookup(DrainsTab, ChannelId, Host, Port) ->
 					[#drain{id = Id,
 						channel_id = ChannelId,
 						host = Host,
-						port = list_to_integer(binary_to_list(Port)),
+						port = Port,
 						resolved_host = lookup_host(Id)
 					       } | Acc];
 				    _ -> 
@@ -106,7 +106,6 @@ lookup(DrainsTab, ChannelId, Host, Port) ->
 				[#drain{id = Id,
 					channel_id = ChannelId,
 					host = Host,
-					port = list_to_integer(binary_to_list(Port)),
 					resolved_host = lookup_host(Id)
 				       } | Acc];
 			    _ -> 
@@ -130,8 +129,9 @@ lookup_host(DrainId) when is_integer(DrainId) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    erlang:send_after(60 * 1000, self(), refresh_dns),
-    {ok, []}.
+    ets:new(logplex_drain_hosts, [named_table, set, protected]),
+    TimerRef = erlang:send_after(60 * 1000, self(), refresh_dns),
+    {ok, #state{timer_ref = TimerRef}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -144,10 +144,10 @@ init([]) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_call({lookup_host, DrainId}, _From, State) ->
-    case lists:keyfind(DrainId, 1, State) of
-	false ->
+    case ets:lookup(logplex_drain_hosts, DrainId) of
+	[] ->
 	    {reply, undefined, State};
-	{DrainId, ResolvedHost} ->
+	[{DrainId, ResolvedHost}] ->
 	    {reply, ResolvedHost, State}
     end;
 handle_call(_Msg, _From, State) ->
@@ -161,10 +161,16 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({create_drain, DrainId, ResolvedHost}, State) ->
-    {noreply, lists:keystore(DrainId, 1, State, {DrainId, ResolvedHost})};
+    ets:insert(logplex_drain_hosts, {DrainId, ResolvedHost}),
+    {noreply, State};
 
 handle_cast({delete_drain, DrainId}, State) ->
-    {noreply, lists:keydelete(DrainId, 1, State)};
+    ets:delete(logplex_drain_hosts, DrainId),
+    {noreply, State};
+
+handle_cast(refresh_dns, State) ->
+    refresh_dns(),
+    {noreply, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -177,24 +183,9 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info(refresh_dns, State) ->
-    NewState = 
-	case nsync_helper:tab_drains() of
-	    undefined ->
-		State;
-	    DrainsTab ->
-		lists:foldl(fun({Drain, Dict}, Acc)-> 
-				    Host = dict:fetch(<<"host">>, Dict),
-				    case logplex_utils:resolve_host(Host) of
-					undefined -> 
-					    Acc;
-					Ip -> 
-					    Id = list_to_integer(string:sub_word(binary_to_list(Drain), 2, $:)),
-					    lists:keyreplace(Id, 1, Acc, {Id, Ip})
-				    end
-			    end, State, ets:tab2list(DrainsTab))
-	end,
+    refresh_dns(),
     erlang:send_after(60 * 1000, self(), refresh_dns),
-    {noreply, NewState};
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -206,7 +197,8 @@ handle_info(_Info, State) ->
 %% The return value is ignored.
 %% @hidden
 %%--------------------------------------------------------------------
-terminate(_Reason, _State) -> 
+terminate(_Reason, #state{timer_ref = TimerRef}) ->
+    erlang:cancel_timer(TimerRef),
     ok.
 
 %%--------------------------------------------------------------------
@@ -220,3 +212,20 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+refresh_dns() ->
+    case nsync_helper:tab_drains() of
+	undefined ->
+	    ok;
+	DrainsTab ->
+	    DrainHosts = 
+		lists:foldl(fun({Drain, Dict}, Acc)-> 
+				    Host = dict:fetch(<<"host">>, Dict),
+				    case logplex_utils:resolve_host(Host) of
+					undefined -> Acc;
+					Ip -> 
+					    DrainId = list_to_integer(string:sub_word(binary_to_list(Drain), 2, $:)),
+					    [{DrainId, Ip} | Acc]
+				    end
+			    end, [], ets:tab2list(DrainsTab)),
+	    ets:insert(logplex_drain_hosts, DrainHosts)
+    end.

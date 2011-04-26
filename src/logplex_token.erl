@@ -37,13 +37,8 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     end.
 
 delete(TokenId) when is_binary(TokenId) ->
-    case lookup(TokenId) of
-        #token{channel_id=_ChannelId} ->
-            redis_helper:delete_token(TokenId);
-        _ ->
-            ok
-    end.
-
+    redis_helper:delete_token(TokenId).
+    
 lookup(Token) when is_binary(Token) ->
     case nsync_helper:tab_tokens() of
 	undefined ->
