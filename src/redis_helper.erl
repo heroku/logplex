@@ -48,7 +48,7 @@ channel_index() ->
 
 create_channel(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
     ChannelId = channel_index(),
-    case redis_pool:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
+    case redis_pool:q(config_pool, [<<"HMSET">>, channel_key(ChannelId),
             <<"name">>, ChannelName,
             <<"app_id">>, integer_to_list(AppId),
             <<"addon">>, Addon]) of
@@ -57,13 +57,13 @@ create_channel(ChannelName, AppId, Addon) when is_binary(ChannelName), is_intege
     end.
 
 delete_channel(ChannelId) when is_integer(ChannelId) ->
-    case redis_pool:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
+    case redis_pool:q(config_pool, [<<"DEL">>, channel_key(ChannelId)]) of
         1 -> ok;
         Err -> Err
     end.
 
 update_channel_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
-    case redis_pool:q(config_pool, [<<"HSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]), <<"addon">>, Addon]) of
+    case redis_pool:q(config_pool, [<<"HSET">>, channel_key(ChannelId), <<"addon">>, Addon]) of
         {error, Err} -> {error, Err};
         Int when is_integer(Int) -> ok
     end.
@@ -102,7 +102,7 @@ lookup_channel_ids() ->
         end, [], redis_pool:q(config_pool, [<<"KEYS">>, <<"ch:*:data">>]))).
 
 lookup_channel(ChannelId) when is_integer(ChannelId) ->
-    case redis_pool:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
+    case redis_pool:q(config_pool, [<<"HGETALL">>, channel_key(ChannelId)]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #channel{
                 id = ChannelId,
@@ -119,6 +119,9 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
             undefined
     end.
 
+channel_key(ChannelId) when is_integer(ChannelId) ->
+    iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]).
+
 %%====================================================================
 %% TOKEN
 %%====================================================================
@@ -128,7 +131,7 @@ create_token(ChannelId, TokenId, TokenName, AppId, Addon) when is_integer(Channe
                                                                 is_integer(AppId),
                                                                 is_binary(Addon) ->
     Res = redis_pool:q(config_pool, [<<"HMSET">>,
-                                    iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]),
+                                    token_key(TokenId),
                                     <<"ch">>, integer_to_list(ChannelId),
                                     <<"name">>, TokenName,
                                     <<"appid">>, integer_to_list(AppId),
@@ -138,14 +141,26 @@ create_token(ChannelId, TokenId, TokenName, AppId, Addon) when is_integer(Channe
         Err -> Err
     end.
 
+add_token_to_channel(ChannelId, TokenId) when is_integer(ChannelId), is_binary(TokenId) ->
+    case redis_pool:q(config_pool, [<<"RPUSH">>, channel_tokens_key(ChannelId), TokenId]) of
+        N when is_integer(N) -> ok;
+        Err -> Err
+    end.
+
 delete_token(TokenId) when is_binary(TokenId) ->
-    case redis_pool:q(config_pool, [<<"DEL">>, TokenId]) of
+    case redis_pool:q(config_pool, [<<"DEL">>, token_key(TokenId)]) of
+        1 -> ok;
+        Err -> Err
+    end.
+
+delete_token_from_channel(ChannelId, TokenId) when is_integer(ChannelId), is_binary(TokenId) ->
+    case redis_pool:q(config_pool, [<<"LREM">>, channel_tokens_key(ChannelId), TokenId]) of
         1 -> ok;
         Err -> Err
     end.
 
 lookup_token(TokenId) when is_binary(TokenId) ->
-    case redis_pool:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
+    case redis_pool:q(config_pool, [<<"HGETALL">>, token_key(TokenId)]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #token{id = TokenId,
                    channel_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"ch">>, Fields))),
@@ -170,12 +185,17 @@ lookup_tokens() ->
         end, [], redis_pool:q(config_pool, [<<"KEYS">>, <<"tok:*:data">>]))).
 
 update_token_addon(TokenId, Addon) when is_binary(TokenId), is_binary(Addon) ->
-    TokenKey = iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]),
-    Res = redis_pool:q(config_pool, [<<"HSET">>, TokenKey, <<"addon">>, Addon]),
+    Res = redis_pool:q(config_pool, [<<"HSET">>, token_key(TokenId), <<"addon">>, Addon]),
     case Res of
         {error, Err} -> {error, Err};
         Int when is_integer(Int) -> ok
     end.
+
+token_key(TokenId) when is_binary(TokenId) ->
+    iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]).
+
+channel_tokens_key(ChannelId) when is_integer(ChannelId) ->
+    iolist_to_binary([<<"chtoks:">>, integer_to_list(ChannelId), <<":data">>]).
 
 %%====================================================================
 %% DRAIN
@@ -187,22 +207,47 @@ drain_index() ->
     end.
 
 create_drain(DrainId, ChannelId, Host, Port) when is_integer(DrainId), is_integer(ChannelId), is_binary(Host) ->
-    Key = iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>]),
-    Res = redis_pool:q(config_pool, [<<"HMSET">>, Key,
+    create_drain(DrainId, ChannelId, undefined, Host, Port).
+
+create_drain(DrainId, ChannelId, Ip, Host, Port) when is_integer(DrainId),
+                                                      is_integer(ChannelId),
+                                                      is_tuple(Ip),
+                                                      is_binary(Host) ->
+    Res = redis_pool:q(config_pool, [<<"HMSET">>, drain_key(DrainId),
         <<"ch">>, integer_to_list(ChannelId),
         <<"host">>, Host] ++
         [<<"port">> || is_integer(Port)] ++
-        [integer_to_list(Port) || is_integer(Port)]),
+        [integer_to_list(Port) || is_integer(Port)] ++
+        [<<"ip">> || is_tuple(Ip)] ++
+        [term_to_binary(Ip) || is_tuple(Ip)]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
     end.
 
+add_drain_to_channel(ChannelId, DrainId) when is_integer(ChannelId), is_integer(DrainId) ->
+    case redis:q(config_pool, [<<"RPUSH">>, channel_drains_key(ChannelId), integer_to_list(DrainId)]) of
+        N when is_integer(N) -> ok;
+        Err -> Err
+    end.
+
 delete_drain(DrainId) when is_integer(DrainId) ->
-    case redis_pool:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
+    case redis_pool:q(config_pool, [<<"DEL">>, drain_key(DrainId)]) of
         1 -> ok;
         Err -> Err
     end.
+
+delete_drain_from_channel(ChannelId, DrainId) when is_integer(ChannelId), is_integer(DrainId) ->
+    case redis:q(config_pool, [<<"LREM">>, channel_drains_key(ChannelId), integer_to_list(DrainId)]) of
+        1 -> ok;
+        Err -> Err
+    end.
+
+drain_key(DrainId) when is_integer(DrainId) ->
+    iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>]).
+
+channel_drains_key(ChannelId) when is_integer(ChannelId) ->
+    iolist_to_binary([<<"chdrains:">>, integer_to_list(ChannelId), <<":data">>]).
 
 lookup_drains() ->
     lists:foldl(
@@ -215,7 +260,7 @@ lookup_drains() ->
         end, [], redis_pool:q(config_pool, [<<"KEYS">>, <<"drain:*:data">>])).
 
 lookup_drain(DrainId) when is_integer(DrainId) ->
-    case redis_pool:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
+    case redis_pool:q(config_pool, [<<"HGETALL">>, drain_key(DrainId)]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             #drain{
                 id = DrainId,
@@ -225,6 +270,11 @@ lookup_drain(DrainId) when is_integer(DrainId) ->
                  case logplex_utils:field_val(<<"port">>, Fields) of
                      <<"">> -> undefined;
                      Val -> list_to_integer(binary_to_list(Val))
+                 end,
+                resolved_host =
+                 case logplex_utils:filed_val(<<"ip">>, Fields) of
+                    <<"">> -> undefined;
+                    Ip -> binary_to_term(Ip)
                  end
             };
         _ ->

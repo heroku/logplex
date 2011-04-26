@@ -46,7 +46,7 @@ loop(Req) ->
             throw(normal)
         end || {Worker, 0} <- logplex_stats:workers()],
 
-        RegisteredMods = [logplex_grid, logplex_rate_limit, logplex_realtime, logplex_stats, logplex_channel, logplex_session, logplex_tail, logplex_shard, udp_acceptor],
+        RegisteredMods = [logplex_grid, logplex_rate_limit, logplex_realtime, logplex_stats, logplex_session, logplex_tail, logplex_shard, udp_acceptor, logplex_nsync],
         [begin
             case (whereis(Name) == undefined orelse not is_process_alive(whereis(Name))) of
                 true ->

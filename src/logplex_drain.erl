@@ -23,7 +23,11 @@
 -module(logplex_drain).
 
 %% API
--export([create/3, delete/3, clear_all/1, lookup/1]).
+-export([create/3,
+         delete/3,
+         clear_all/1,
+         lookup/1,
+         drains_of_channel/1]).
 
 -include_lib("logplex.hrl").
 
@@ -40,7 +44,7 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
                 Ip ->
                     case redis_helper:drain_index() of
                         DrainId when is_integer(DrainId) ->
-                            gen_server:call(logplex_channel, {create_drain, DrainId, ChannelId, Ip, Host, Port}, 8000),
+                            redis_helper:add_drain_to_channel(ChannelId, DrainId),
                             redis_helper:create_drain(DrainId, ChannelId, Host, Port),
                             DrainId;
                         Error ->
@@ -53,30 +57,52 @@ delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
     case lookup_drains(ChannelId, Host, Port1) of
         [#drain{id=DrainId}|_] ->
-            gen_server:cast(logplex_channel, {delete_drain, DrainId}),
+            redis_helper:delete_drain_from_channel(ChannelId, DrainId),
             redis_helper:delete_drain(DrainId);
         _ ->
             {error, not_found}
     end.
 
 clear_all(ChannelId) when is_integer(ChannelId) ->
-    List = lookup_drains(ChannelId),
+    List = drains_of_channel(ChannelId),
     [begin
-        gen_server:cast(logplex_channel, {delete_drain, DrainId}),
+        redis_helper:delete_channel_drains(ChannelId, DrainId),
         redis_helper:delete_drain(DrainId)
     end || #drain{id=DrainId} <- List],
     ok.
 
 lookup(DrainId) when is_integer(DrainId) ->
-    redis_helper:lookup_drain(DrainId).
+    case ets:lookup(nsync:tid(?MODULE), redis_helper:drain_key(DrainId)) of
+        [{_, Drain}] ->
+            #drain{
+                id = DrainId,
+                channel_id = list_to_integer(binary_to_list(dict:fetch(<<"ch">>, Drain))),
+                host = dict:fetch(<<"host">>, Drain),
+                port = list_to_integer(binary_to_list(dict:fetch(<<"port">>, Drain)))
+            };
+        _ -> undefined
+    end.
+
+drains_of_channel(ChannelId) when is_integer(ChannelId) ->
+    ChannelDrainsKey = redis_helper:channel_drains_key(ChannelId),
+    Tab = nsync:tid(logplex_channel_drains),
+    case Tab of
+        undefined -> [];
+        _ ->
+            case ets:lookup(Tab, ChannelDrainsKey) of
+                [{_, Ids}] ->
+                    Drains = [lookup(DrainId) || DrainId <- Ids],
+                    Drains;
+                _ -> undefined
+            end
+    end.
 
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
 lookup_drains(ChannelId, Host, Port) ->
-    ets:match_object(logplex_channel_drains,
-                    #drain{id='_', channel_id=ChannelId, resolved_host='_', host=Host, port=Port}).
-
-lookup_drains(ChannelId) ->
-    ets:match_object(logplex_channel_drains,
-                    #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}).
+    lists:filter(
+        fun(Drain) ->
+            #drain{host=H, port=P} = Drain,
+            H =:= Host andalso P =:= Port
+        end, drains_of_channel(ChannelId)).

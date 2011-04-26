@@ -38,7 +38,7 @@ start_link() ->
 create(Body) when is_binary(Body) ->
     Session = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
     redis_helper:create_session(Session, Body),
-    gen_server:call(?MODULE, {create, Session, Body}, 8000),
+    logplex_grid:call(?MODULE, {create, Session, Body}, 8000),
     Session.
 
 lookup(Session) when is_binary(Session) ->
