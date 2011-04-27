@@ -150,7 +150,7 @@ delete_channel_token(TokenId, [ChannelTokenKey | T]) ->
     end.
 
 delete_channel_drain(DrainId) when is_integer(DrainId) ->
-    delete_channel_token(DrainId, redis_pool:q(config_pool, [<<"KEYS">>, <<"ch:*:drain">>])).
+    delete_channel_drain(DrainId, redis_pool:q(config_pool, [<<"KEYS">>, <<"ch:*:drain">>])).
 delete_channel_drain(_DrainId, []) ->
     ok;
 delete_channel_drain(DrainId, [ChannelDrainKey | T]) ->
