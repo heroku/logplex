@@ -154,7 +154,7 @@ delete_token(TokenId) when is_binary(TokenId) ->
     end.
 
 delete_token_from_channel(ChannelId, TokenId) when is_integer(ChannelId), is_binary(TokenId) ->
-    case redis_pool:q(config_pool, [<<"LREM">>, channel_tokens_key(ChannelId), TokenId]) of
+    case redis_pool:q(config_pool, [<<"LREM">>, channel_tokens_key(ChannelId), integer_to_list(0), TokenId]) of
         1 -> ok;
         Err -> Err
     end.
@@ -238,7 +238,7 @@ delete_drain(DrainId) when is_integer(DrainId) ->
     end.
 
 delete_drain_from_channel(ChannelId, DrainId) when is_integer(ChannelId), is_integer(DrainId) ->
-    case redis:q(config_pool, [<<"LREM">>, channel_drains_key(ChannelId), integer_to_list(DrainId)]) of
+    case redis:q(config_pool, [<<"LREM">>, channel_drains_key(ChannelId), integer_to_list(0), integer_to_list(DrainId)]) of
         1 -> ok;
         Err -> Err
     end.
