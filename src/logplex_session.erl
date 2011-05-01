@@ -43,14 +43,14 @@ create(Body) when is_binary(Body) ->
 
 lookup(Session) when is_binary(Session) ->
     case nsync_helper:tab_session() of
-	undefined -> [];
-	SessionTab ->
-	    case ets:lookup(SessionTab, Session) of
-		[] -> 
-		    redis_helper:lookup_session(Session);
-		[{Session, Body}] -> 
-		    Body
-	    end
+        undefined -> [];
+        SessionTab ->
+            case ets:lookup(SessionTab, Session) of
+                [] -> 
+                    redis_helper:lookup_session(Session);
+                [{Session, Body}] -> 
+                    Body
+            end
     end.
 
 %%====================================================================

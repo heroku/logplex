@@ -41,19 +41,19 @@ delete(TokenId) when is_binary(TokenId) ->
     
 lookup(Token) when is_binary(Token) ->
     case nsync_helper:tab_tokens() of
-	undefined ->
-	    undefined;
-	Tab ->
-	    lookup(Tab, Token)
+        undefined ->
+            undefined;
+        Tab ->
+            lookup(Tab, Token)
     end.
 lookup(Tab, Token) ->
     case ets:lookup(Tab, iolist_to_binary([<<"tok:">>,Token,<<":data">>])) of
         [{_, Dict}] ->
-	    #token{id = Token,
-		   channel_id = list_to_integer(binary_to_list(dict:fetch(<<"ch">>, Dict))),
-		   name = dict:fetch(<<"name">>, Dict),
-		   app_id = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
-		   addon = dict:fetch(<<"addon">>, Dict)
-		  };
-	_ -> undefined
+            #token{id = Token,
+                   channel_id = list_to_integer(binary_to_list(dict:fetch(<<"ch">>, Dict))),
+                   name = dict:fetch(<<"name">>, Dict),
+                   app_id = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
+                   addon = dict:fetch(<<"addon">>, Dict)
+                  };
+        _ -> undefined
     end.

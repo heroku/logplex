@@ -51,20 +51,20 @@ update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
 
 lookup(ChannelId) when is_integer(ChannelId) ->
     case nsync_helper:tab_channel() of
-	undefined ->
-	    undefined;
-	Tab ->
-	    lookup(Tab, ChannelId)
+        undefined ->
+            undefined;
+        Tab ->
+            lookup(Tab, ChannelId)
     end.
 lookup(Tab, ChannelId) ->
     case ets:lookup(Tab, iolist_to_binary([<<"ch:">>,integer_to_list(ChannelId),<<":data">>])) of
         [{_, Dict}] ->
             #channel{id = ChannelId,
-		     name = dict:fetch(<<"name">>, Dict),
-		     app_id = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
-		     addon = dict:fetch(<<"addon">>, Dict)
-		    };
-	_ -> undefined
+                     name = dict:fetch(<<"name">>, Dict),
+                     app_id = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
+                     addon = dict:fetch(<<"addon">>, Dict)
+                    };
+        _ -> undefined
     end.
 
 logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
@@ -75,66 +75,66 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
 
 tokens(ChannelId) when is_integer(ChannelId) ->
     case {nsync_helper:tab_channel_tokens(), nsync_helper:tab_tokens()} of
-	{ChannelTokensTab, TokensTab} when ChannelTokensTab == undefined; TokensTab == undefined ->
-	    [];
-	{ChannelTokensTab, TokensTab} ->
-	    tokens(ChannelTokensTab, TokensTab, ChannelId)
+        {ChannelTokensTab, TokensTab} when ChannelTokensTab == undefined; TokensTab == undefined ->
+            [];
+        {ChannelTokensTab, TokensTab} ->
+            tokens(ChannelTokensTab, TokensTab, ChannelId)
     end.
 tokens(ChannelTokensTab, TokensTab, ChannelId) ->
     case ets:lookup(ChannelTokensTab, iolist_to_binary([<<"ch:">>,integer_to_list(ChannelId),<<":tok">>])) of
-	[{_, TokenIdList}] ->
-	    lists:foldl(
-	      fun(TokenId, Acc) -> 
-		      case ets:lookup(TokensTab, iolist_to_binary([<<"tok:">>,TokenId,<<":data">>])) of
-			  [{_, Dict}] ->
-			      [#token{id = TokenId,
-				      channel_id = list_to_integer(binary_to_list(dict:fetch(<<"ch">>, Dict))),
-				      name = dict:fetch(<<"name">>, Dict),
-				      app_id = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
-				      addon = dict:fetch(<<"addon">>, Dict)
-				     } | Acc];
-			  _ -> Acc
-		      end
-	      end, [], TokenIdList);
-	_ ->
-	    []
+        [{_, TokenIdList}] ->
+            lists:foldl(
+              fun(TokenId, Acc) -> 
+                      case ets:lookup(TokensTab, iolist_to_binary([<<"tok:">>,TokenId,<<":data">>])) of
+                          [{_, Dict}] ->
+                              [#token{id = TokenId,
+                                      channel_id = list_to_integer(binary_to_list(dict:fetch(<<"ch">>, Dict))),
+                                      name = dict:fetch(<<"name">>, Dict),
+                                      app_id = list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
+                                      addon = dict:fetch(<<"addon">>, Dict)
+                                     } | Acc];
+                          _ -> Acc
+                      end
+              end, [], TokenIdList);
+        _ ->
+            []
     end.
 
 drains(ChannelId) when is_integer(ChannelId) ->
     case {nsync_helper:tab_channel_drains(), nsync_helper:tab_drains()} of
-	{ChannelDrainsTab, DrainsTab} when ChannelDrainsTab == undefined; DrainsTab == undefined ->
-	    [];
-	{ChannelDrainsTab, DrainsTab} ->
-	    drains(ChannelDrainsTab, DrainsTab, ChannelId)
+        {ChannelDrainsTab, DrainsTab} when ChannelDrainsTab == undefined; DrainsTab == undefined ->
+            [];
+        {ChannelDrainsTab, DrainsTab} ->
+            drains(ChannelDrainsTab, DrainsTab, ChannelId)
     end.
 drains(ChannelDrainsTab, DrainsTab, ChannelId) ->
     case ets:lookup(ChannelDrainsTab, iolist_to_binary([<<"ch:">>,integer_to_list(ChannelId),<<":drain">>])) of
-	[{_, DrainIdList}] ->
-	    lists:foldl(
-	      fun(DrainId, Acc) -> 
-		      case ets:lookup(DrainsTab, iolist_to_binary([<<"drain:">>,DrainId,<<":data">>])) of
-			  [{_, Dict}] ->
-			      Id = list_to_integer(binary_to_list(iolist_to_binary([DrainId]))),
-				case logplex_drain:lookup_host(Id) of
-				    undefined -> Acc;
-				    Ip -> 
-					[#drain{id = Id,
-						channel_id = ChannelId,
-						host = dict:fetch(<<"host">>, Dict),
-						port = 
-						    case dict:find(<<"port">>, Dict) of
-							{ok, Val} when is_binary(Val), size(Val) > 0 ->
-							    list_to_integer(binary_to_list(Val));
-							_ -> undefined
-						    end,
-						resolved_host = Ip
-					       } | Acc]
-				end;
-			  _ -> Acc 
-		      end
-	      end, [], DrainIdList);
-	_ ->
-	    []
+        [{_, DrainIdList}] ->
+            lists:foldl(
+              fun(DrainId, Acc) -> 
+                      case ets:lookup(DrainsTab, iolist_to_binary([<<"drain:">>,DrainId,<<":data">>])) of
+                          [{_, Dict}] ->
+                              Id = list_to_integer(binary_to_list(iolist_to_binary([DrainId]))),
+                              case logplex_drain:lookup_host(Id) of
+                                  undefined -> Acc;
+                                  Ip -> 
+                                      [#drain{id = Id,
+                                              channel_id = ChannelId,
+                                              host = dict:fetch(<<"host">>, Dict),
+                                              port = 
+                                                  case dict:find(<<"port">>, Dict) of
+                                                      {ok, Val} when is_binary(Val), size(Val) > 0 ->
+                                                          list_to_integer(binary_to_list(Val));
+                                                      _ -> undefined
+                                                  end,
+                                              resolved_host = Ip
+                                             } | Acc]
+                              end;
+                          _ -> Acc 
+                      end
+              end, [], DrainIdList);
+        _ ->
+            []
     end.
 
 info(ChannelId) when is_integer(ChannelId) ->

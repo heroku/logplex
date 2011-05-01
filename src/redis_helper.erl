@@ -123,18 +123,18 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
 
 add_channel_token(ChannelId, TokenId) when is_integer(ChannelId), is_binary(TokenId) ->
     case redis_pool:q(config_pool, [<<"LPUSH">>, lists:concat(["ch:", ChannelId, ":tok"]), TokenId]) of
-	Int when is_integer(Int) ->
-	    ok;
-	Error ->
-	    Error
+        Int when is_integer(Int) ->
+            ok;
+        Error ->
+            Error
     end.
 
 add_channel_drain(ChannelId, DrainId) when is_integer(ChannelId), is_integer(DrainId) ->
     case redis_pool:q(config_pool, [<<"LPUSH">>, lists:concat(["ch:", ChannelId, ":drain"]), integer_to_list(DrainId)]) of
-	Int when is_integer(Int) ->
-	    ok;
-	Error ->
-	    Error
+        Int when is_integer(Int) ->
+            ok;
+        Error ->
+            Error
     end.
 
 delete_channel_token(TokenId) when is_binary(TokenId) ->
@@ -143,10 +143,10 @@ delete_channel_token(_TokenId, []) ->
     ok;
 delete_channel_token(TokenId, [ChannelTokenKey | T]) ->
     case redis_pool:q(config_pool, [<<"LREM">>, ChannelTokenKey, "1", TokenId]) of
-	0 ->
-	    delete_channel_token(TokenId, T);
-	_ ->
-	    ok
+        0 ->
+            delete_channel_token(TokenId, T);
+        _ ->
+            ok
     end.
 
 delete_channel_drain(DrainId) when is_integer(DrainId) ->
@@ -155,10 +155,10 @@ delete_channel_drain(_DrainId, []) ->
     ok;
 delete_channel_drain(DrainId, [ChannelDrainKey | T]) ->
     case redis_pool:q(config_pool, [<<"LREM">>, ChannelDrainKey, "1", integer_to_list(DrainId)]) of
-	0 ->
-	    delete_channel_drain(DrainId, T);
-	_ ->
-	    ok
+        0 ->
+            delete_channel_drain(DrainId, T);
+        _ ->
+            ok
     end.
 %%====================================================================
 %% TOKEN
@@ -187,9 +187,9 @@ lookup_token(TokenId) when is_binary(TokenId) ->
             #token{id = TokenId,
                    channel_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"ch">>, Fields))),
                    name = logplex_utils:field_val(<<"name">>, Fields),
-		   app_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"app_id">>, Fields))),
-		   addon = logplex_utils:field_val(<<"addon">>, Fields)
-            };
+                   app_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"app_id">>, Fields))),
+                   addon = logplex_utils:field_val(<<"addon">>, Fields)
+                  };
         _ ->
             undefined
     end.

@@ -49,7 +49,7 @@ init([]) ->
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
 
         {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
-	{nsync_helper, {nsync_helper, start_link, []}, permanent, 2000, worker, [nsync_helper]},
+        {nsync_helper, {nsync_helper, start_link, []}, permanent, 2000, worker, [nsync_helper]},
         {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
 

@@ -78,39 +78,39 @@ lookup(DrainId) when is_integer(DrainId) ->
 
 lookup(ChannelId, Host, Port) ->
     case {nsync_helper:tab_channel_drains(), nsync_helper:tab_drains()} of
-	{ChannelDrainsTab, DrainsTab} when ChannelDrainsTab == undefined; DrainsTab == undefined ->
-	    undefined;
-	{ChannelDrainsTab, DrainsTab} ->
-	    lookup(ChannelDrainsTab, DrainsTab, ChannelId, Host, Port)
+        {ChannelDrainsTab, DrainsTab} when ChannelDrainsTab == undefined; DrainsTab == undefined ->
+            undefined;
+        {ChannelDrainsTab, DrainsTab} ->
+            lookup(ChannelDrainsTab, DrainsTab, ChannelId, Host, Port)
     end.
 lookup(ChannelDrainsTab, DrainsTab, ChannelId, Host, Port) ->
     case ets:lookup(ChannelDrainsTab, iolist_to_binary([<<"ch:">>,integer_to_list(ChannelId),<<":drain">>])) of
-	[{_, DrainIdList}] ->
-	    lookup_drainlist(DrainsTab, DrainIdList, #drain{channel_id = ChannelId, host = Host, port = Port});
-	_ -> undefined
+        [{_, DrainIdList}] ->
+            lookup_drainlist(DrainsTab, DrainIdList, #drain{channel_id = ChannelId, host = Host, port = Port});
+        _ -> undefined
     end.
 
 lookup_drainlist(DrainsTab, DrainIdList, #drain{host=Host,port=Port}=Drain) ->
     lists:foldl(
       fun(DrainId, Acc) -> 
-	      case ets:lookup(DrainsTab, iolist_to_binary([<<"drain:">>,DrainId,<<":data">>])) of
-		  [{_, Dict}] ->
-		      case dict:fetch(<<"host">>, Dict) == Host of 
-			  true when is_integer(Port) -> 
-			      BinPort = list_to_binary(integer_to_list(Port)),
-			      case dict:find(<<"port">>, Dict) of
-				  {ok, BinPort} ->
-				      Id = list_to_integer(binary_to_list(iolist_to_binary([DrainId]))),
-				      [Drain#drain{id = Id, resolved_host = lookup_host(Id)} | Acc];
-				  _ -> Acc
-			      end;
-			  true ->
-			      Id = list_to_integer(binary_to_list(iolist_to_binary([DrainId]))),
-			      [Drain#drain{id = Id, resolved_host = lookup_host(Id)} | Acc];
-			  _ -> Acc 
-		      end;
-		  _ -> Acc
-	      end
+              case ets:lookup(DrainsTab, iolist_to_binary([<<"drain:">>,DrainId,<<":data">>])) of
+                  [{_, Dict}] ->
+                      case dict:fetch(<<"host">>, Dict) == Host of 
+                          true when is_integer(Port) -> 
+                              BinPort = list_to_binary(integer_to_list(Port)),
+                              case dict:find(<<"port">>, Dict) of
+                                  {ok, BinPort} ->
+                                      Id = list_to_integer(binary_to_list(iolist_to_binary([DrainId]))),
+                                      [Drain#drain{id = Id, resolved_host = lookup_host(Id)} | Acc];
+                                  _ -> Acc
+                              end;
+                          true ->
+                              Id = list_to_integer(binary_to_list(iolist_to_binary([DrainId]))),
+                              [Drain#drain{id = Id, resolved_host = lookup_host(Id)} | Acc];
+                          _ -> Acc 
+                      end;
+                  _ -> Acc
+              end
       end, [], DrainIdList).
 
 lookup_host(DrainId) when is_integer(DrainId) ->
@@ -145,10 +145,10 @@ init([]) ->
 %%--------------------------------------------------------------------
 handle_call({lookup_host, DrainId}, _From, State) ->
     case ets:lookup(logplex_drain_hosts, DrainId) of
-	[] ->
-	    {reply, undefined, State};
-	[{DrainId, ResolvedHost}] ->
-	    {reply, ResolvedHost, State}
+        [] ->
+            {reply, undefined, State};
+        [{DrainId, ResolvedHost}] ->
+            {reply, ResolvedHost, State}
     end;
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
@@ -214,18 +214,18 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 refresh_dns() ->
     case nsync_helper:tab_drains() of
-	undefined ->
-	    ok;
-	DrainsTab ->
-	    DrainHosts = 
-		lists:foldl(fun({Drain, Dict}, Acc)-> 
-				    Host = dict:fetch(<<"host">>, Dict),
-				    case logplex_utils:resolve_host(Host) of
-					undefined -> Acc;
-					Ip -> 
-					    DrainId = list_to_integer(string:sub_word(binary_to_list(Drain), 2, $:)),
-					    [{DrainId, Ip} | Acc]
-				    end
-			    end, [], ets:tab2list(DrainsTab)),
-	    ets:insert(logplex_drain_hosts, DrainHosts)
+        undefined ->
+            ok;
+        DrainsTab ->
+            DrainHosts = 
+                lists:foldl(fun({Drain, Dict}, Acc)-> 
+                                    Host = dict:fetch(<<"host">>, Dict),
+                                    case logplex_utils:resolve_host(Host) of
+                                        undefined -> Acc;
+                                        Ip -> 
+                                            DrainId = list_to_integer(string:sub_word(binary_to_list(Drain), 2, $:)),
+                                            [{DrainId, Ip} | Acc]
+                                    end
+                            end, [], ets:tab2list(DrainsTab)),
+            ets:insert(logplex_drain_hosts, DrainHosts)
     end.
