@@ -36,6 +36,7 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     boot_pagerduty(),
     boot_redis(),
+    boot_nsync(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
@@ -47,11 +48,6 @@ init([]) ->
         {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
-
-        {logplex_channel, {logplex_channel, start_link, []}, permanent, 2000, worker, [logplex_channel]},
-        {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
-        {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
-        {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
 
         {logplex_redis_writer_sup, {logplex_worker_sup, start_link, [logplex_redis_writer_sup, logplex_redis_writer]}, permanent, 2000, worker, [logplex_redis_writer_sup]},
@@ -97,6 +93,15 @@ boot_redis() ->
         Err ->
             exit(Err)
     end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Botting nsync in logplex launching process
+%% @spec boot_nsync() -> ok
+%% @end
+%%--------------------------------------------------------------------
+boot_nsync() ->
+    logplex_nsync_callback:sync().   
 
 logplex_work_queue_args() ->
     MaxLength =

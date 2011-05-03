@@ -22,7 +22,9 @@
     logplex_utils,
     logplex_worker,
     logplex_worker_sup,
+    logplex_nsync_callback,
     redis_helper,
+    nsync_helper,
     tcp_acceptor,
     udp_acceptor 
   ]},
