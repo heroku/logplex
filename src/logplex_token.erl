@@ -21,26 +21,19 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_token).
--behaviour(gen_server).
-
-%% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
-	     handle_info/2, terminate/2, code_change/3]).
 
 -export([create/2, lookup/1, delete/1]).
+%% Nsync calls
+-export([extract_tokens/1, add_token/2, del_token/1, update_channel/2,
+	del_channel/1]).
 
 -include_lib("logplex.hrl").
-
-%% API functions
-start_link() ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+-include_lib("nsync_helper.hrl").
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     case logplex_channel:lookup(ChannelId) of
         #channel{app_id=AppId, addon=Addon} ->
             TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-            logplex_grid:call(?MODULE, {create_token, ChannelId, TokenId, TokenName, AppId, Addon}, 8000),
-            logplex_grid:cast(logplex_channel, {create_token, ChannelId, TokenId, TokenName, AppId, Addon}),
             redis_helper:create_token(ChannelId, TokenId, TokenName),
             TokenId;
         _ ->
@@ -50,8 +43,6 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
 delete(TokenId) when is_binary(TokenId) ->
     case lookup(TokenId) of
         #token{channel_id=ChannelId} ->
-            logplex_grid:cast(?MODULE, {delete_token, TokenId}),
-            logplex_grid:cast(logplex_channel, {delete_token, ChannelId, TokenId}),
             redis_helper:delete_token(TokenId);
         _ ->
             ok
@@ -65,101 +56,113 @@ lookup(Token) when is_binary(Token) ->
             undefined
     end.
 
-%%====================================================================
-%% gen_server callbacks
-%%====================================================================
 
-%%--------------------------------------------------------------------
-%% Function: init(Args) -> {ok, State} |
-%%                         {ok, State, Timeout} |
-%%                         ignore               |
-%%                         {stop, Reason}
-%% Description: Initiates the server
-%% @hidden
-%%--------------------------------------------------------------------
-init([]) ->
-    ets:new(?MODULE, [protected, named_table, set, {keypos, 2}]),
-    populate_cache(),
-	{ok, []}.
 
+%%% NSYNC CALLS
 %%--------------------------------------------------------------------
-%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
-%%                                      {reply, Reply, State, Timeout} |
-%%                                      {noreply, State} |
-%%                                      {noreply, State, Timeout} |
-%%                                      {stop, Reason, Reply, State} |
-%%                                      {stop, Reason, State}
-%% Description: Handling call messages
-%% @hidden
+%% @doc Extracts tokens from a raw list of nsync data, assuming
+%% channels have already been extracted. It will use the logplex_token
+%% ETSs previously created in sync function in logplex_nsync_callback 
+%% module.
+%% @spec extract_tokens(RawData::list()) -> ok
+%% @end
 %%--------------------------------------------------------------------
-handle_call({create_token, ChannelId, TokenId, TokenName, AppId, Addon}, _From, State) ->
-    ets:insert(?MODULE, #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon}),
-    {reply, ok, State};
+extract_tokens([{<<?TOKEN_PREFIX, Rest/binary>>, Dict}|T]) ->
+    Size = size(Rest) - length(?DATA_SUFFIX),
+    case Rest of
+	<<RawID:Size/binary,?DATA_SUFFIX>> ->
+	    ChID = nsync_helper:binary_to_integer(
+		     dict:fetch(<<"ch">>, Dict)),
+	    Ch = logplex_channel:lookup(ChID),
+	    Token = #token{id = RawID,
+			   channel_id = Ch#channel.id,
+			   name = 
+			       binary_to_list(dict:fetch(<<"name">>,
+							 Dict)),
+			   app_id = Ch#channel.app_id,
+			   addon = Ch#channel.addon},
+	    ets:insert(logplex_token, Token),
+	    logplex_channel:add_token(Token);
+	_ ->	    
+	    ok
+    end,
+    extract_tokens(T);
 
-handle_call(_Msg, _From, State) ->
-    {reply, {error, invalid_call}, State}.
+extract_tokens([_|T]) ->
+    extract_tokens(T);
 
-%%--------------------------------------------------------------------
-%% Function: handle_cast(Msg, State) -> {noreply, State} |
-%%                                      {noreply, State, Timeout} |
-%%                                      {stop, Reason, State}
-%% Description: Handling cast messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_cast({delete_channel, ChannelId}, State) ->
-    ets:match_delete(?MODULE, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}),
-    {noreply, State};
-
-handle_cast({delete_token, TokenId}, State) ->
-    ets:delete(?MODULE, TokenId),
-    {noreply, State};
-
-handle_cast({update_addon, ChannelId, Addon}, State) ->
-    [begin
-        ets:insert(?MODULE, Token#token{addon=Addon})
-    end || Token <- ets:match_object(?MODULE, #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'})],
-    {noreply, State};
-
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: handle_info(Info, State) -> {noreply, State} |
-%%                                       {noreply, State, Timeout} |
-%%                                       {stop, Reason, State}
-%% Description: Handling all non call/cast messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_info(_Info, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: terminate(Reason, State) -> void()
-%% Description: This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any necessary
-%% cleaning up. When it returns, the gen_server terminates with Reason.
-%% The return value is ignored.
-%% @hidden
-%%--------------------------------------------------------------------
-terminate(_Reason, _State) -> 
+extract_tokens([]) ->
     ok.
 
 %%--------------------------------------------------------------------
-%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
-%% Description: Convert process state when code is changed
-%% @hidden
+%% @doc Adds a token from its nsync raw data representation to 
+%% logplex_token ETS
+%% @spec add_token(ID::binary(), Params::list()) -> ok
+%% @end
 %%--------------------------------------------------------------------
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+add_token(ID, Params) ->
+    Tok = add_token_intern(Params, #token{id = ID}),
+    Ch = logplex_channel:lookup(Tok#token.channel_id),
+    TokComplete = 
+	Tok#token{app_id = Ch#channel.app_id,
+		  addon = Ch#channel.addon},	
+    ets:insert(logplex_token, TokComplete),
+    logplex_channel:add_token(TokComplete).
+
 
 %%--------------------------------------------------------------------
-%%% Internal functions
+%% @private
+%% @doc Iterates over the nsync data list in order to find the 
+%% values needed for completing a correct token record
+%% @spec add_token_intern(list(), token()) -> token()
+%% @end
 %%--------------------------------------------------------------------
-populate_cache() ->
-    Data = [begin
-        case logplex_channel:lookup(Token#token.channel_id) of
-            #channel{app_id=AppId, addon=Addon} -> Token#token{app_id=AppId, addon=Addon};
-            _ -> Token
-        end
-    end || Token <- redis_helper:lookup_tokens()],
-    length(Data) > 0 andalso ets:insert(?MODULE, Data).
+add_token_intern([], Tok) ->
+    Tok;
+
+add_token_intern([<<"name">>|[Name|Rest]], Tok) ->
+    add_token_intern(Rest, Tok#token{name = Name});
+
+add_token_intern([<<"ch">>|[Ch|Rest]], Tok) ->
+    add_token_intern(
+      Rest, 
+      Tok#token{channel_id = nsync_helper:binary_to_integer(Ch)});
+
+add_token_intern([_|R], Tok) ->
+    add_token_intern(R, Tok).   
+
+
+%%--------------------------------------------------------------------
+%% @doc Deletes a token from logplex_token and logplex_channel_tokens
+%% ETSs
+%% @spec del_token(ID::binary()) -> ok
+%% @end
+%%--------------------------------------------------------------------
+del_token(ID) ->
+    ets:delete(logplex_token, ID), 
+    logplex_channel:del_token(ID).
+
+%%--------------------------------------------------------------------
+%% @doc Updates the addon value for a specific channel ID
+%% @spec update_channel(ID::integer(), Addon::binary()) -> ok
+%% @end
+%%--------------------------------------------------------------------
+update_channel(KeyID, Addon) ->
+    [ets:insert(logplex_token, Token#token{addon=Addon}) || 
+	Token <- ets:match_object(logplex_token, 
+				  #token{id='_', 
+					 channel_id=KeyID, 
+					 name='_', 
+					 app_id='_', 
+					 addon='_'})].
+
+%%--------------------------------------------------------------------
+%% @doc Deletes associated tokens with a channel ID
+%% @spec del_channel(ID::integer()) -> ok
+%% @end
+%%--------------------------------------------------------------------
+del_channel(KeyID) ->    
+    ets:match_delete(logplex_token, 
+		     #token{id ='_', channel_id = KeyID,
+			    name = '_', app_id = '_', 
+			    addon = '_'}).

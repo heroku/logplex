@@ -21,116 +21,48 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_session).
--behaviour(gen_server).
-
-%% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
-	     handle_info/2, terminate/2, code_change/3]).
 
 -export([create/1, lookup/1]).
+%% Nsync calls
+-export([insert_session/3, expire_session/1]).
 
 -include_lib("logplex.hrl").
-
-%% API functions
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+-include_lib("nsync_helper.hrl").
 
 create(Body) when is_binary(Body) ->
     Session = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
     redis_helper:create_session(Session, Body),
-    logplex_grid:call(?MODULE, {create, Session, Body}, 8000),
     Session.
 
 lookup(Session) when is_binary(Session) ->
     case ets:lookup(?MODULE, Session) of
         [] ->
-            redis_helper:lookup_session(Session);
+	    {error, not_found};
         [{Session, Body}] ->
             Body
     end.
 
-%%====================================================================
-%% gen_server callbacks
-%%====================================================================
+
 
 %%--------------------------------------------------------------------
-%% Function: init(Args) -> {ok, State} |
-%%                         {ok, State, Timeout} |
-%%                         ignore               |
-%%                         {stop, Reason}
-%% Description: Initiates the server
-%% @hidden
+%% @doc Inserts a session into logplex_session ETS (previously created
+%% in logplex_nsync_callback) and starts a timer expiring it
+%% @spec insert_session(Key::binary(), TTL::integer, Value::binary) ->
+%% ok
+%% @end
 %%--------------------------------------------------------------------
-init([]) ->
-    Self = self(),
-    ets:new(?MODULE, [protected, named_table, set]),
-    spawn_link(fun() -> expire_session_cache(Self) end),
-	{ok, []}.
+insert_session(Key, TTL, Value) ->
+    ets:insert(logplex_session, {Key, Value}),
+    timer:apply_after(TTL,
+		      ?MODULE,
+		      expire_session,
+		      [Key]).
+
 
 %%--------------------------------------------------------------------
-%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
-%%                                      {reply, Reply, State, Timeout} |
-%%                                      {noreply, State} |
-%%                                      {noreply, State, Timeout} |
-%%                                      {stop, Reason, Reply, State} |
-%%                                      {stop, Reason, State}
-%% Description: Handling call messages
-%% @hidden
+%% @doc Expires a previously created session
+%% @spec expire_session(Key::binary()) -> ok
+%% @end
 %%--------------------------------------------------------------------
-handle_call({create, Session, Body}, _From, State) ->
-    ets:insert(?MODULE, {Session, Body}),
-    {reply, ok, State};
-
-handle_call(_Msg, _From, State) ->
-    {reply, {error, invalid_call}, State}.
-
-%%--------------------------------------------------------------------
-%% Function: handle_cast(Msg, State) -> {noreply, State} |
-%%                                      {noreply, State, Timeout} |
-%%                                      {stop, Reason, State}
-%% Description: Handling cast messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: handle_info(Info, State) -> {noreply, State} |
-%%                                       {noreply, State, Timeout} |
-%%                                       {stop, Reason, State}
-%% Description: Handling all non call/cast messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_info(expire_session_cache, State) ->
-    ets:delete_all_objects(?MODULE),
-    {noreply, State};
-
-handle_info(_Info, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: terminate(Reason, State) -> void()
-%% Description: This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any necessary
-%% cleaning up. When it returns, the gen_server terminates with Reason.
-%% The return value is ignored.
-%% @hidden
-%%--------------------------------------------------------------------
-terminate(_Reason, _State) -> 
-    ok.
-
-%%--------------------------------------------------------------------
-%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
-%% Description: Convert process state when code is changed
-%% @hidden
-%%--------------------------------------------------------------------
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-%%--------------------------------------------------------------------
-%%% Internal functions
-%%--------------------------------------------------------------------
-expire_session_cache(Pid) ->
-    timer:sleep(20 * 60 * 1000),
-    Pid ! expire_session_cache,
-    expire_session_cache(Pid).
+expire_session(Key) ->
+    ets:delete(logplex_session, Key).

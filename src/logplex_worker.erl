@@ -58,6 +58,7 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
 route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon} ->
+	    io:format("[~p] Token received ~p~n", [?MODULE, {ChannelId, TokenName, AppId, Addon}]),
             Count = logplex_stats:incr(logplex_stats_channels, {message_received, AppId, ChannelId}),
             case exceeded_threshold(ChannelId, Count, Addon) of
                 true ->
@@ -79,6 +80,7 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
                     process(ChannelId, BufferPid, Addon, Msg1)
             end;
         _ ->
+	    io:format("[~p] Token not found ~n",[?MODULE]),
             ok
     end.
 
