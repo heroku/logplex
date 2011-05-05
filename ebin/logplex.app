@@ -23,7 +23,6 @@
     logplex_worker,
     logplex_worker_sup,
     redis_helper,
-    tcp_acceptor,
     udp_acceptor 
   ]},
   {registered, []},
