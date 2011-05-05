@@ -36,6 +36,7 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     boot_pagerduty(),
     boot_redis(),
+    setup_redgrid_vals(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
@@ -43,7 +44,7 @@ stop(_State) ->
 
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
-        {logplex_grid, {logplex_grid, start_link, []}, permanent, 2000, worker, [logplex_grid]},
+        {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
         {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
@@ -96,6 +97,13 @@ boot_redis() ->
         Err ->
             exit(Err)
     end.
+
+setup_redgrid_vals() ->
+    application:load(redgrid),
+    application:set_env(redgrid, local_ip, os:getenv("LOCAL_IP")),
+    application:set_env(redgrid, redis_url, os:getenv("LOGPLEX_CONFIG_REDIS_URL")),
+    application:set_env(redgrid, domain, os:getenv("HEROKU_DOMAIN")),
+    ok.
 
 logplex_work_queue_args() ->
     MaxLength =
