@@ -75,7 +75,7 @@ shard_info(Url) ->
 
 debug_object(Pid, Key) ->
     case redis:q(Pid, [<<"DEBUG">>, <<"OBJECT">>, Key]) of
-        Output ->
+        Output when is_binary(Output) ->
             Tokens = string:tokens(binary_to_list(Output), " "),
             Len1 = lists:foldl(
                 fun(Token, Acc) ->

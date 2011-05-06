@@ -45,6 +45,7 @@ stop(_State) ->
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
+        {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
         {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
