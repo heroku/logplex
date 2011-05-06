@@ -13,3 +13,6 @@
 [submodule "deps/redgrid"]
 	path = deps/redgrid
 	url = git://github.com/JacobVorreuter/redgrid.git
+[submodule "deps/redo"]
+	path = deps/redo
+	url = git://github.com/JacobVorreuter/redo.git
