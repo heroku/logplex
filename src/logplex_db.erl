@@ -149,6 +149,7 @@ create_schema() ->
 
 create_tables() ->
     io:format("create tables~n"),
+    mnesia:create_table(counters,[{attributes, [key, val]},                   {disc_copies, [node()]}]),
     mnesia:create_table(channel, [{attributes, record_info(fields, channel)}, {disc_copies, [node()]}]),
     mnesia:create_table(token,   [{attributes, record_info(fields, token)},   {disc_copies, [node()]}]),
     mnesia:create_table(drain,   [{attributes, record_info(fields, drain)},   {disc_copies, [node()]}]),
@@ -170,4 +171,5 @@ sync_tables_to_local() ->
                     end, Acc, Locs)
             end, [], Tables),
     [mnesia:add_table_copy(T, node(), Type) || {T, Type} <- Copies],
+    mnesia:wait_for_tables(mnesia:system_info(tables), 60000),
     ok.

@@ -84,7 +84,7 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
 
 process(ChannelId, BufferPid, Addon, Msg) ->
     logplex_tail:route(ChannelId, Msg),
-    [logplex_queue:in(logplex_drain_buffer, {Host, Port, Msg}) || #drain{resolved_host=Host, port=Port} <- logplex_channel:drains(ChannelId)],
+    [logplex_queue:in(logplex_drain_buffer, {Host, Port, Msg}) || #drain{resolved_host=Host, port=Port} <- logplex_channel:lookup_drains(ChannelId)],
     logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)).
 
 throughput(<<"basic">>) -> ?BASIC_THROUGHPUT;

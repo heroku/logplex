@@ -21,116 +21,43 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_session).
--behaviour(gen_server).
-
-%% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
-	     handle_info/2, terminate/2, code_change/3]).
-
--export([create/1, lookup/1]).
+-export([create/1, lookup/1, expire_session_cache/0, init/1, loop/0]).
 
 -include_lib("logplex.hrl").
 
-%% API functions
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
 create(Body) when is_binary(Body) ->
-    Session = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
-    redis_helper:create_session(Session, Body),
-    logplex_grid:call(?MODULE, {create, Session, Body}, 8000),
-    Session.
+    SessionId = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
+    Expiration = datetime_to_epoch(erlang:universaltime()) + 360,
+    {atomic, _} = mnesia:transaction(
+        fun() ->
+            Session = #session{id=SessionId, body=Body, expiration=Expiration},
+            mnesia:write(session, Session, write)
+        end),
+    SessionId.
 
-lookup(Session) when is_binary(Session) ->
-    case ets:lookup(?MODULE, Session) of
-        [] ->
-            redis_helper:lookup_session(Session);
-        [{Session, Body}] ->
-            Body
+lookup(SessionId) when is_binary(SessionId) ->
+    case ets:lookup(session, SessionId) of
+        [#session{body=Body}] -> Body;
+        _ -> undefined
     end.
 
-%%====================================================================
-%% gen_server callbacks
-%%====================================================================
+expire_session_cache() ->
+    proc_lib:start_link(?MODULE, init, [self()]).
 
-%%--------------------------------------------------------------------
-%% Function: init(Args) -> {ok, State} |
-%%                         {ok, State, Timeout} |
-%%                         ignore               |
-%%                         {stop, Reason}
-%% Description: Initiates the server
-%% @hidden
-%%--------------------------------------------------------------------
-init([]) ->
-    Self = self(),
-    ets:new(?MODULE, [protected, named_table, set]),
-    spawn_link(fun() -> expire_session_cache(Self) end),
-	{ok, []}.
+init(Parent) ->
+    proc_lib:init_ack(Parent, {ok, self()}),
+    loop().
 
-%%--------------------------------------------------------------------
-%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
-%%                                      {reply, Reply, State, Timeout} |
-%%                                      {noreply, State} |
-%%                                      {noreply, State, Timeout} |
-%%                                      {stop, Reason, Reply, State} |
-%%                                      {stop, Reason, State}
-%% Description: Handling call messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_call({create, Session, Body}, _From, State) ->
-    ets:insert(?MODULE, {Session, Body}),
-    {reply, ok, State};
+loop() ->
+    timer:sleep(60 * 1000),
+    Now = datetime_to_epoch(erlang:universaltime()),
+    Sessions = ets:tab2list(session),
+    {atomic, _} = mnesia:transaction(
+        fun() ->
+            [mnesia:delete(session, Session, write) || #session{id=Session, expiration=Expiration} <- Sessions, Expiration > Now]
+        end),
+    loop().
 
-handle_call(_Msg, _From, State) ->
-    {reply, {error, invalid_call}, State}.
+datetime_to_epoch(Datetime) when is_tuple(Datetime) ->
+    calendar:datetime_to_gregorian_seconds(Datetime) - calendar:datetime_to_gregorian_seconds({{1970, 1, 1}, {0, 0, 0}}).
 
-%%--------------------------------------------------------------------
-%% Function: handle_cast(Msg, State) -> {noreply, State} |
-%%                                      {noreply, State, Timeout} |
-%%                                      {stop, Reason, State}
-%% Description: Handling cast messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: handle_info(Info, State) -> {noreply, State} |
-%%                                       {noreply, State, Timeout} |
-%%                                       {stop, Reason, State}
-%% Description: Handling all non call/cast messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_info(expire_session_cache, State) ->
-    ets:delete_all_objects(?MODULE),
-    {noreply, State};
-
-handle_info(_Info, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: terminate(Reason, State) -> void()
-%% Description: This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any necessary
-%% cleaning up. When it returns, the gen_server terminates with Reason.
-%% The return value is ignored.
-%% @hidden
-%%--------------------------------------------------------------------
-terminate(_Reason, _State) -> 
-    ok.
-
-%%--------------------------------------------------------------------
-%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
-%% Description: Convert process state when code is changed
-%% @hidden
-%%--------------------------------------------------------------------
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-%%--------------------------------------------------------------------
-%%% Internal functions
-%%--------------------------------------------------------------------
-expire_session_cache(Pid) ->
-    timer:sleep(20 * 60 * 1000),
-    Pid ! expire_session_cache,
-    expire_session_cache(Pid).
