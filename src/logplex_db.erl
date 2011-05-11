@@ -124,7 +124,7 @@ start() ->
     end.
 
 wait_for_nodes() ->
-    Registered = lists:sort(redgrid:registered_nodes()),
+    Registered = lists:sort([Node || {Node, _} <- redgrid:nodes()]),
     Running = lists:sort([node()|nodes()]),
     case Registered == Running of
         true -> ok;
