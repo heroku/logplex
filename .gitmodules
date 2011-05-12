@@ -16,3 +16,6 @@
 [submodule "deps/redo"]
 	path = deps/redo
 	url = git://github.com/JacobVorreuter/redo.git
+[submodule "deps/nsync"]
+	path = deps/nsync
+	url = git://github.com/JacobVorreuter/nsync.git

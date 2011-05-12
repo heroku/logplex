@@ -21,11 +21,84 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_grid).
--export([call/3, cast/2]).
+-export([start_link/0, init/1, call/3, cast/2, loop/3]).
+
+-include_lib("logplex.hrl").
+
+start_link() ->
+    proc_lib:start_link(?MODULE, init, [self()]).
+
+init(Parent) ->
+    BinNode = atom_to_binary(node(), utf8),
+    LocalIp =
+        case os:getenv("LOCAL_IP") of
+            false -> <<"127.0.0.1">>;
+            Val1 -> list_to_binary(Val1)
+        end,
+    Domain = logplex_utils:heorku_domain(),
+    register(?MODULE, self()),
+    proc_lib:init_ack(Parent, {ok, self()}),
+    loop(BinNode, LocalIp, Domain).
 
 call(RegName, Msg, Timeout) when is_atom(RegName), is_integer(Timeout) ->
     gen_server:multi_call([node()|nodes()], RegName, Msg, Timeout).
 
 cast(RegName, Msg) when is_atom(RegName) ->
     gen_server:abcast([node()|nodes()], RegName, Msg).
+
+loop(BinNode, LocalIp, Domain) ->
+    redis_helper:set_node_ex(BinNode, LocalIp, Domain),
+    case redis_helper:get_nodes(Domain) of
+        Keys when is_list(Keys) ->
+            [connect(size(Domain), Key) || Key <- Keys];
+        _Err ->
+            ok
+    end,
+    receive
+        {nodedown, _Node} ->
+            ok
+    after 0 ->
+        ok
+    end,
+    timer:sleep(5 * 1000),
+    ?MODULE:loop(BinNode, LocalIp, Domain).
+
+connect(Size, Key) ->
+    case Key of
+        <<"node:", _:Size/binary, ":", BinNode/binary>> ->
+            StrNode = binary_to_list(BinNode),
+            Node = list_to_atom(StrNode),
+            case node() == Node of
+                true ->
+                    undefined;
+                false ->
+                    case net_adm:ping(Node) of
+                        pong -> ok;
+                        pang ->
+                            case redis_helper:get_node(Key) of
+                                {ok, Ip} when is_binary(Ip) ->
+                                    case inet:getaddr(binary_to_list(Ip), inet) of
+                                        {ok, Addr} ->
+                                            case re:run(StrNode, ".*@(.*)$", [{capture, all_but_first, list}]) of
+                                                {match, [Host]} ->
+                                                    inet_db:add_host(Addr, [Host]),
+                                                    case net_adm:ping(Node) of
+                                                        pong ->
+                                                            erlang:monitor_node(Node, true);
+                                                        pang ->
+                                                            {error, {ping_failed, Node}}
+                                                    end;
+                                                _ ->
+                                                    error_logger:error_msg("failed_to_parse_host: ~p~n", [StrNode])
+                                            end;
+                                        Err ->
+                                            error_logger:error_msg("failed to resolve ~p: ~p~n", [Ip, Err])
+                                    end;
+                                _ ->
+                                    undefined
+                            end
+                    end
+            end;
+        _ -> ok
+    end.
 

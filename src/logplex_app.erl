@@ -25,6 +25,7 @@
 
 %% Application callbacks
 -export([start/2, stop/1, init/1]).
+-export([nsync_opts/0]).
 
 -include_lib("logplex.hrl").
 
@@ -36,6 +37,7 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     boot_pagerduty(),
     boot_redis(),
+    boot_nsync(),
     setup_redgrid_vals(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
@@ -45,6 +47,7 @@ stop(_State) ->
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
+        {logplex_grid, {logplex_grid, start_link, []}, permanent, 2000, worker, [logplex_grid]},
         {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
         {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
@@ -87,6 +90,19 @@ boot_pagerduty() ->
         _ ->
             ok
     end.
+
+boot_nsync() ->
+    ok = application:start(nsync, temporary).
+
+nsync_opts() ->
+    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+    Ip = case proplists:get_value(ip, RedisOpts) of
+        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
+        Other -> Other
+    end,
+    RedisOpts1 = proplists:delete(ip, RedisOpts),
+    RedisOpts2 = [{ip, Ip} | RedisOpts1],
+    [{callback, {nsync_callback, handle, []}}, {block, true} | RedisOpts2].
 
 boot_redis() ->
     case application:start(redis, temporary) of
