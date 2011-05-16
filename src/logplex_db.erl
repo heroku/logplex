@@ -24,16 +24,39 @@
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
-	     handle_info/2, terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, 
+	 handle_info/2, terminate/2, code_change/3]).
+
+-export([start_link/0, backup/0, backup/1, restore/0, restore/1]).
 
 -include_lib("logplex.hrl").
 
 -define(BLANK_SCHEMA, {0,0}).
+-define(BACKUP, "./data/logplex.bak").
 
 %% API functions
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+backup() ->
+    backup(?BACKUP).
+
+backup(Filename) ->
+    A = now(),
+    Res = mnesia:backup(Filename),
+    B = now(),
+    io:format("logplex_db backup file=~s duration=~w result=~p~n", [Filename, timer:now_diff(B,A) div 1000, Res]),
+    Res.
+
+restore() ->
+    restore(?BACKUP).
+
+restore(Filename) ->
+    A = now(),
+    Res = mnesia:restore(Filename, []),
+    B = now(),
+    io:format("logplex_db restore file=~s duration=~w result=~p~n", [Filename, timer:now_diff(B,A) div 1000, Res]),
+    Res.
 
 %%====================================================================
 %% gen_server callbacks
@@ -50,6 +73,7 @@ start_link() ->
 init([]) ->
     start(),
     {ok, _Pid} = nsync:start_link(logplex_app:nsync_opts()),
+    spawn_link(fun backup_timer/0),
     {ok, []}.
 
 %%--------------------------------------------------------------------
@@ -174,3 +198,8 @@ sync_tables_to_local() ->
     [mnesia:add_table_copy(T, node(), Type) || {T, Type} <- Copies],
     mnesia:wait_for_tables(mnesia:system_info(tables), 60000),
     ok.
+
+backup_timer() ->
+    timer:sleep(60 * 1000),
+    backup(),
+    backup_timer().
