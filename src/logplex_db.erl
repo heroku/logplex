@@ -72,7 +72,10 @@ restore(Filename) ->
 %%--------------------------------------------------------------------
 init([]) ->
     start(),
-    {ok, _Pid} = nsync:start_link(logplex_app:nsync_opts()),
+    Opts = nsync_opts(),
+    io:format("nsync:start_link(~p)~n", [Opts]),
+    {ok, _Pid} = nsync:start_link(Opts),
+    io:format("nsync finish~n"),
     spawn_link(fun backup_timer/0),
     {ok, []}.
 
@@ -131,9 +134,20 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+nsync_opts() ->
+    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+    Ip = case proplists:get_value(ip, RedisOpts) of
+        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
+        Other -> Other
+    end,
+    RedisOpts1 = proplists:delete(ip, RedisOpts),
+    RedisOpts2 = [{ip, Ip} | RedisOpts1],
+    [{callback, {nsync_callback, handle, []}}, {block, true}, {timeout, 720 * 1000} | RedisOpts2].
+
 start() ->
     wait_for_nodes(),
     SchemaVsn = schema_version(),
+    io:format("schema version ~p~n", [SchemaVsn]),
     case nodes() == [] of
         true ->
             SchemaVsn == undefined andalso create_schema(), 
@@ -141,6 +155,7 @@ start() ->
             SchemaVsn == undefined andalso create_tables(),
             ok;
         false ->
+            io:format("mnesia nodes ~p~n", [nodes()]),
             mnesia:start(),
             mnesia:change_config(extra_db_nodes, nodes()),
             mnesia:change_table_copy_type(schema, node(), disc_copies),
@@ -149,6 +164,7 @@ start() ->
     end.
 
 wait_for_nodes() ->
+    io:format("wait for nodes~n"),
     Registered = lists:sort([Node || {Node, _} <- redgrid:nodes()]),
     Running = lists:sort([node()|nodes()]),
     case Registered == Running of
@@ -182,7 +198,7 @@ create_tables() ->
     ok.
 
 sync_tables_to_local() ->
-    io:format("sync tables to local~n"),
+    A = now(),
     Tables = [{T, mnesia:table_info(T, where_to_commit)} || T <- mnesia:system_info(tables)],
     Copies =
         lists:foldl(
@@ -197,6 +213,8 @@ sync_tables_to_local() ->
             end, [], Tables),
     [mnesia:add_table_copy(T, node(), Type) || {T, Type} <- Copies],
     mnesia:wait_for_tables(mnesia:system_info(tables), 60000),
+    B = now(),
+    io:format("logplex_db sync tables to local duration=~w~n", [timer:now_diff(B,A) div 1000]),
     ok.
 
 backup_timer() ->

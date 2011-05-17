@@ -35,10 +35,14 @@ handle({load, <<"drain_index">>, Index}) ->
 
 handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
+    AppId = case dict_find(<<"app_id">>, Dict) of
+        undefined -> undefined;
+        Val -> list_to_integer(binary_to_list(Val))
+    end,
     Channel = #channel{id=Id,
-                   name=dict:fetch(<<"name">>, Dict),
-                   app_id=list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
-                   addon=dict:fetch(<<"addon">>, Dict)},
+                   name=dict_find(<<"name">>, Dict),
+                   app_id=AppId,
+                   addon=dict_find(<<"addon">>, Dict)},
     mnesia:dirty_write(channel, Channel),
     undefined;
 
@@ -50,10 +54,10 @@ handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
     Drain = #drain{id=Id,
-                   channel_id=dict:fetch(<<"ch">>, Dict),
-                   resolved_host=logplex_utils:resolve_host(dict:fetch(<<"host">>, Dict)),
-                   host=dict:fetch(<<"host">>, Dict),
-                   port=dict:fetch(<<"port">>, Dict)},
+                   channel_id=dict_find(<<"ch">>, Dict),
+                   resolved_host=logplex_utils:resolve_host(dict_find(<<"host">>, Dict)),
+                   host=dict_find(<<"host">>, Dict),
+                   port=dict_find(<<"port">>, Dict)},
     mnesia:dirty_write(drain, Drain),
     undefined;
 
@@ -61,15 +65,20 @@ handle({load, _Key, _Val}) ->
     undefined;
 
 handle({load, eof}) ->
+    io:format("nsync load complete~n"),
     ok;
 
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
+    AppId = case dict_find(<<"app_id">>, Dict) of
+        undefined -> undefined;
+        Val -> list_to_integer(binary_to_list(Val))
+    end,
     Channel = #channel{id=Id,
-                   name=dict:fetch(<<"name">>, Dict),
-                   app_id=list_to_integer(binary_to_list(dict:fetch(<<"app_id">>, Dict))),
-                   addon=dict:fetch(<<"addon">>, Dict)},
+                   name=dict_find(<<"name">>, Dict),
+                   app_id=AppId,
+                   addon=dict_find(<<"addon">>, Dict)},
     {atomic, _} = mnesia:transaction(
         fun() ->
             mnesia:write(channel, Channel, write),
@@ -91,10 +100,10 @@ handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Drain = #drain{id=Id,
-                   channel_id=dict:fetch(<<"ch">>, Dict),
-                   resolved_host=logplex_utils:resolve_host(dict:fetch(<<"host">>, Dict)),
-                   host=dict:fetch(<<"host">>, Dict),
-                   port=dict:fetch(<<"port">>, Dict)},
+                   channel_id=dict_find(<<"ch">>, Dict),
+                   resolved_host=logplex_utils:resolve_host(dict_find(<<"host">>, Dict)),
+                   host=dict_find(<<"host">>, Dict),
+                   port=dict_find(<<"port">>, Dict)},
     {atomic, _} = mnesia:transaction(
         fun() ->
             mnesia:write(drain, Drain, write),
@@ -144,8 +153,8 @@ parse_id(<<C, Rest/binary>>, Acc) ->
     parse_id(Rest, [C|Acc]).
 
 create_token(Id, Dict) ->
-    ChannelId = list_to_integer(binary_to_list(dict:fetch(<<"ch">>, Dict))),
-    Name = dict:fetch(<<"name">>, Dict), 
+    ChannelId = list_to_integer(binary_to_list(dict_find(<<"ch">>, Dict))),
+    Name = dict_find(<<"name">>, Dict), 
     {AppId, Addon} = case lookup_channel(ChannelId) of
         #channel{app_id=AppId0, addon=Addon0} -> {AppId0, Addon0};
         undefined -> {undefined, undefined}
@@ -171,3 +180,10 @@ dict_from_list([], Dict) ->
 
 dict_from_list([Key, Val | Rest], Dict) ->
     dict_from_list(Rest, dict:store(Key, Val, Dict)).
+
+dict_find(Key, Dict) ->
+    case dict:find(Key, Dict) of
+        {ok, Val} -> Val;
+        _ -> undefined
+    end.
+

@@ -25,7 +25,6 @@
 
 %% Application callbacks
 -export([start/2, stop/1, init/1]).
--export([nsync_opts/0]).
 
 -include_lib("logplex.hrl").
 
@@ -93,16 +92,6 @@ boot_pagerduty() ->
 
 boot_nsync() ->
     ok = application:start(nsync, temporary).
-
-nsync_opts() ->
-    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-    Ip = case proplists:get_value(ip, RedisOpts) of
-        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
-        Other -> Other
-    end,
-    RedisOpts1 = proplists:delete(ip, RedisOpts),
-    RedisOpts2 = [{ip, Ip} | RedisOpts1],
-    [{callback, {nsync_callback, handle, []}}, {block, true} | RedisOpts2].
 
 boot_redis() ->
     case application:start(redis, temporary) of
