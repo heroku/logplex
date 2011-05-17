@@ -53,11 +53,19 @@ handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
 
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
+    Ch = case dict_find(<<"ch">>, Dict) of
+        undefined -> undefined;
+        Val1 -> list_to_integer(binary_to_list(Val1))
+    end,
+    Port = case dict_find(<<"port">>, Dict) of
+        undefined -> undefined;
+        Val2 -> list_to_integer(binary_to_list(Val2))
+    end,
     Drain = #drain{id=Id,
-                   channel_id=dict_find(<<"ch">>, Dict),
+                   channel_id=Ch,
                    resolved_host=logplex_utils:resolve_host(dict_find(<<"host">>, Dict)),
                    host=dict_find(<<"host">>, Dict),
-                   port=dict_find(<<"port">>, Dict)},
+                   port=Port},
     mnesia:dirty_write(drain, Drain),
     undefined;
 
@@ -99,11 +107,19 @@ handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
+    Ch = case dict_find(<<"ch">>, Dict) of
+        undefined -> undefined;
+        Val1 -> list_to_integer(binary_to_list(Val1))
+    end,
+    Port = case dict_find(<<"port">>, Dict) of
+        undefined -> undefined;
+        Val2 -> list_to_integer(binary_to_list(Val2))
+    end,
     Drain = #drain{id=Id,
-                   channel_id=dict_find(<<"ch">>, Dict),
+                   channel_id=Ch,
                    resolved_host=logplex_utils:resolve_host(dict_find(<<"host">>, Dict)),
                    host=dict_find(<<"host">>, Dict),
-                   port=dict_find(<<"port">>, Dict)},
+                   port=Port},
     {atomic, _} = mnesia:transaction(
         fun() ->
             mnesia:write(drain, Drain, write),
