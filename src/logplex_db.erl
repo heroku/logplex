@@ -109,6 +109,10 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({inconsistent_database, Context, Node}, State) ->
+    error_logger:error_report([inconsistent_database, Context, Node]),
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -152,11 +156,13 @@ start() ->
         true ->
             SchemaVsn == undefined andalso create_schema(), 
             mnesia:start(),
+            mnesia:subscribe(system),
             SchemaVsn == undefined andalso create_tables(),
             ok;
         false ->
             io:format("mnesia nodes ~p~n", [nodes()]),
             mnesia:start(),
+            mnesia:subscribe(system),
             mnesia:change_config(extra_db_nodes, nodes()),
             mnesia:change_table_copy_type(schema, node(), disc_copies),
             sync_tables_to_local(),
