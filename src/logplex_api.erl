@@ -84,6 +84,11 @@ handlers() ->
         {200, <<"OK">>}
     end},
 
+    {['GET', "/$"], fun(_Ref, _Match) ->
+        Props = [{partitioned, logplex_db:is_partitioned()}],
+        {200, iolist_to_binary(mochijson2:encode(Props))}
+    end},
+
     {['POST', "/channels$"], fun(Req, _Match) ->
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),

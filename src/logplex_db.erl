@@ -27,12 +27,15 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start_link/0, backup/0, backup/1, restore/0, restore/1]).
+-export([start_link/0, backup/0, backup/1, restore/0, restore/1,
+         is_partitioned/0, recover_from/1]).
 
 -include_lib("logplex.hrl").
 
 -define(BLANK_SCHEMA, {0,0}).
 -define(BACKUP, "./data/logplex.bak").
+
+-record(state, {partitioned=false}).
 
 %% API functions
 start_link() ->
@@ -58,6 +61,12 @@ restore(Filename) ->
     io:format("logplex_db restore file=~s duration=~w result=~p~n", [Filename, timer:now_diff(B,A) div 1000, Res]),
     Res.
 
+is_partitioned() ->
+    gen_server:call(?MODULE, is_partitioned, 1000).
+
+recover_from(Node) when is_atom(Node) ->
+    gen_server:call(?MODULE, {recover, Node}, 60 * 1000).
+
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -77,7 +86,7 @@ init([]) ->
     {ok, _Pid} = nsync:start_link(Opts),
     io:format("nsync finish~n"),
     spawn_link(fun backup_timer/0),
-    {ok, []}.
+    {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -89,6 +98,18 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call(is_partitioned, _From, State) ->
+    {reply, State#state.partitioned, State};
+
+handle_call({recover, Master}, _From, State) ->
+    mnesia:set_master_nodes([Master]),
+    io:format("stopping mnesia...~n"),
+    mnesia:stop(),
+    io:format("starting mnesia...~n"),
+    mnesia:start(),
+    mnesia:set_master_nodes([]),
+    {reply, ok, State#state{partitioned=false}};
+    
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
 
@@ -109,9 +130,9 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({inconsistent_database, Context, Node}, State) ->
-    error_logger:error_report([inconsistent_database, Context, Node]),
-    {noreply, State};
+handle_info({mnesia_system_event, {inconsistent_database, _Context, Node}}, State) ->
+    io:format("mnesia partition detected on node ~p~n", [Node]),
+    {noreply, State#state{partitioned=true}};
 
 handle_info(_Info, State) ->
     {noreply, State}.
