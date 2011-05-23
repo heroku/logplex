@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_utils).
--export([rpc/4, set_weight/1, shard_info/0, setup_test_channel/2, resolve_host/1,
+-export([rpc/4, set_weight/1, nodes/0, shard_info/0, setup_test_channel/2, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
          redis_opts/1, parse_redis_url/1, instance_name/0, heorku_domain/0]).
 
@@ -55,6 +55,11 @@ set_weight(Weight) when is_integer(Weight) ->
     Domain = heorku_domain(),
     Res = redis_helper:set_weight(Domain, LocalIp, Weight),
     io:format("set_weight ~p => ~w: ~p~n", [LocalIp, Weight, Res]). 
+
+nodes() ->
+    io:format("Local node~n> ~p~n~n", [node()]),
+    io:format("Remote nodes~n"),
+    [io:format("> ~p~n", [Node]) || Node <- erlang:nodes()].
 
 shard_info() ->
     application:start(sasl),

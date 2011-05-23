@@ -85,7 +85,9 @@ handlers() ->
     end},
 
     {['GET', "/$"], fun(_Ref, _Match) ->
-        Props = [{partitioned, logplex_db:is_partitioned()}],
+        Props = [{partitioned, logplex_db:is_partitioned()},
+                 {stopped_nodes, proplists:get_value(extra_db_nodes, mnesia:system_info(all)) =/= []}
+        ],
         {200, iolist_to_binary(mochijson2:encode(Props))}
     end},
 
