@@ -81,10 +81,14 @@ recover_from(Node) when is_atom(Node) ->
 %%--------------------------------------------------------------------
 init([]) ->
     start(),
-    Opts = nsync_opts(),
-    io:format("nsync:start_link(~p)~n", [Opts]),
-    {ok, _Pid} = nsync:start_link(Opts),
-    io:format("nsync finish~n"),
+    case os:getenv("NSYNC") of
+        "0" -> ok;
+        _ ->
+            Opts = nsync_opts(),
+            io:format("nsync:start_link(~p)~n", [Opts]),
+            {ok, _Pid} = nsync:start_link(Opts),
+            io:format("nsync finish~n")
+    end,
     spawn_link(fun backup_timer/0),
     {ok, #state{}}.
 
