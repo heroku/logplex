@@ -59,7 +59,8 @@ set_weight(Weight) when is_integer(Weight) ->
 nodes() ->
     io:format("Local node~n> ~p~n~n", [node()]),
     io:format("Remote nodes~n"),
-    [io:format("> ~p~n", [Node]) || Node <- erlang:nodes()].
+    [io:format("> ~p~n", [Node]) || Node <- erlang:nodes()],
+    ok.
 
 shard_info() ->
     application:start(sasl),
