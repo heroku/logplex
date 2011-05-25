@@ -82,10 +82,14 @@ set_cookie() ->
 boot_pagerduty() ->
     case os:getenv("HEROKU_DOMAIN") of
         "heroku.com" ->
-            ok = application:load(pagerduty),
-            application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
-            ok = application:start(pagerduty, temporary),
-            ok = error_logger:add_report_handler(logplex_report_handler);
+            case os:getenv("PAGERDUTY") of
+                "0" -> ok;
+                _ ->
+                    ok = application:load(pagerduty),
+                    application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
+                    ok = application:start(pagerduty, temporary),
+                    ok = error_logger:add_report_handler(logplex_report_handler)
+            end;
         _ ->
             ok
     end.
