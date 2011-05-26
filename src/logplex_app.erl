@@ -46,7 +46,6 @@ stop(_State) ->
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
-        {logplex_grid, {logplex_grid, start_link, []}, permanent, 2000, worker, [logplex_grid]},
         {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
         {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
@@ -68,7 +67,6 @@ init([]) ->
         {logplex_work_queue, {logplex_queue, start_link, [logplex_work_queue, logplex_work_queue_args()]}, permanent, 2000, worker, [logplex_work_queue]},
         {logplex_drain_buffer, {logplex_queue, start_link, [logplex_drain_buffer, logplex_drain_buffer_args()]}, permanent, 2000, worker, [logplex_drain_buffer]},
 
-        {logplex_cloudkick, {logplex_cloudkick, start_link, []}, permanent, 2000, worker, [logplex_cloudkick]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]}
     ]}}.
