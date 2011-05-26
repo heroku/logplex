@@ -104,8 +104,13 @@ handlers() ->
         Addon = proplists:get_value(<<"addon">>, Params),
         Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
 
+        A = now(),
         ChannelId = logplex_channel:create(ChannelName, AppId, Addon),
+        B = now(),
         not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
+
+        io:format("create_channel name=~s app_id=~w addon=~s time=~w~n",
+            [ChannelName, AppId, Addon, timer:now_diff(B,A) div 1000]),
 
         {201, integer_to_list(ChannelId)}
     end},
@@ -138,8 +143,13 @@ handlers() ->
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
+        A = now(),
         Token = logplex_token:create(list_to_integer(ChannelId), TokenName),
+        B = now(),
         not is_binary(Token) andalso exit({expected_binary, Token}),
+
+        io:format("create_token name=~s channel_id=~s time=~w~n",
+            [TokenName, ChannelId, timer:now_diff(B,A) div 1000]),
 
         {201, Token}
     end},

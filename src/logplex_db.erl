@@ -174,23 +174,43 @@ nsync_opts() ->
     [{callback, {nsync_callback, handle, []}}, {block, true}, {timeout, 720 * 1000} | RedisOpts2].
 
 start() ->
+    A = now(),
     wait_for_nodes(),
+    B = now(),
     SchemaVsn = schema_version(),
     io:format("schema version ~p~n", [SchemaVsn]),
     case nodes() == [] of
         true ->
             SchemaVsn == undefined andalso create_schema(), 
+            C = now(),
             mnesia:start(),
+            D = now(),
             mnesia:subscribe(system),
             SchemaVsn == undefined andalso create_tables(),
+            E = now(),
+            io:format("mnesia_boot wait_for_nodes=~w create_schema=~w start=~w create_tables=~w~n", [
+                timer:now_diff(B,A) div 1000,
+                timer:now_diff(C,B) div 1000,
+                timer:now_diff(D,C) div 1000,
+                timer:now_diff(E,D) div 1000
+            ]),
             ok;
         false ->
             io:format("mnesia nodes ~p~n", [nodes()]),
             mnesia:start(),
+            C = now(),
             mnesia:subscribe(system),
             mnesia:change_config(extra_db_nodes, nodes()),
             mnesia:change_table_copy_type(schema, node(), disc_copies),
+            D = now(),
             sync_tables_to_local(),
+            E = now(),
+            io:format("mnesia_boot wait_for_nodes=~w start=~w change_config=~w sync_tables=~w~n", [
+                timer:now_diff(B,A) div 1000,
+                timer:now_diff(C,B) div 1000,
+                timer:now_diff(D,C) div 1000,
+                timer:now_diff(E,D) div 1000
+            ]),
             ok
     end.
 
@@ -201,7 +221,6 @@ wait_for_nodes() ->
     case Registered == Running of
         true -> ok;
         false ->
-            io:format("waiting for nodes~n"),
             timer:sleep(1000),
             wait_for_nodes()
     end.
