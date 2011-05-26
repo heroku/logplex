@@ -138,6 +138,10 @@ handle_info({mnesia_system_event, {inconsistent_database, _Context, Node}}, Stat
     io:format("mnesia partition detected on node ~p~n", [Node]),
     {noreply, State#state{partitioned=true}};
 
+handle_info({mnesia_system_event, Event}, State) ->
+    io:format("mnesia_event ~p~n", [Event]),
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
