@@ -30,12 +30,14 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     case logplex_channel:lookup(ChannelId) of
         #channel{app_id=AppId, addon=Addon} ->
             TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-            {atomic, _} = mnesia:sync_transaction(
-                fun() ->
+            case redis_helper:create_token(ChannelId, TokenId, TokenName) of
+                ok ->
                     Token = #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon},
-                    mnesia:write(token, Token, write)
-                end), 
-            TokenId;
+                    ets:insert(tokens, Token),
+                    TokenId;
+                Err ->
+                    Err
+            end;
         _ ->
             {error, not_found}
     end.
@@ -43,17 +45,19 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
 delete(TokenId) when is_binary(TokenId) ->
     case lookup(TokenId) of
         #token{} ->
-            {atomic, _} = mnesia:transaction(
-                fun() ->
-                    mnesia:delete(token, TokenId, write)
-                end),
-            ok;
+            case redis_helper:delete_token(TokenId) of
+                ok ->
+                    ets:delete(tokens, TokenId),
+                    ok;
+                Err ->
+                    Err
+            end;
         _ ->
-            ok
+            {error, not_found}
     end.
 
 lookup(TokenId) when is_binary(TokenId) ->
-    case ets:lookup(token, TokenId) of
+    case ets:lookup(tokens, TokenId) of
         [Token] when is_record(Token, token) ->
             Token;
         _ ->

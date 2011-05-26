@@ -22,49 +22,40 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_channel).
 
--export([create/3, delete/1, update_addon/2, lookup/1, lookup_drains/1, logs/2, info/1]).
+-export([create/3, delete/1, update_addon/2, lookup/1,
+         lookup_tokens/1, lookup_drains/1, logs/2, info/1]).
 
 -include_lib("logplex.hrl").
 
 create(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
-    case sync_incr_channel_id() of
-        {atomic, ChannelId} when is_integer(ChannelId) ->
-            {atomic, _} = mnesia:sync_transaction(
-                fun() ->
+    case redis_helper:channel_index() of
+        ChannelId when is_integer(ChannelId) ->
+            case redis_helper:create_channel(ChannelId, ChannelName, AppId, Addon) of
+                ok ->
                     Channel = #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon},
-                    mnesia:write(channel, Channel, write)
-                end),
-            ChannelId;
-        {aborted, Reason} ->
-            {error, Reason}
+                    ets:insert(channels, Channel),
+                    ChannelId;
+                Err ->
+                    Err
+            end;
+        Err ->
+            Err
     end.
-
-sync_incr_channel_id() ->
-    mnesia:sync_transaction(fun() ->
-        case mnesia:wread({counters, channel}) of
-            [{counters, channel, ChannelId}] ->
-                mnesia:write(counters, {counters, channel, ChannelId+1}, write),
-                ChannelId+1;
-            [] ->
-                mnesia:write(counters, {counters, channel, 1}, write),
-                1
-        end
-    end).
 
 delete(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
         undefined ->
             {error, not_found};
         _ ->
-            {atomic, _} = mnesia:transaction(
-                fun() ->
-                    Tokens = mnesia:match_object(token, token_match_expr(ChannelId), read),
-                    Drains = mnesia:match_object(drain, drain_match_expr(ChannelId), read),
-                    [mnesia:delete(token, TokenId, write) || #token{id=TokenId} <- Tokens],
-                    [mnesia:delete(drain, DrainId, write) || #drain{id=DrainId} <- Drains],
-                    mnesia:delete(channel, ChannelId, write)
-                end),
-            ok 
+            [logplex_token:delete(TokenId) || #token{id=TokenId} <- lookup_tokens(ChannelId)],
+            [logplex_drain:delete(DrainId) || #drain{id=DrainId} <- lookup_drains(ChannelId)], 
+            case redis_helper:delete_channel(ChannelId) of
+                ok ->
+                    ets:delete(channels, ChannelId),
+                    ok;
+                Err ->
+                    Err
+            end
     end.
 
 update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
@@ -72,23 +63,29 @@ update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
         undefined ->
             {error, not_found};
         Channel ->
-            {atomic, _} = mnesia:transaction(
-                fun() ->
-                    Tokens = mnesia:match_object(token, token_match_expr(ChannelId), read),
-                    [mnesia:write(token, Token#token{addon=Addon}, write) || Token <- Tokens],
-                    mnesia:write(channel, Channel#channel{addon=Addon}, write)                     
-                end),
-            ok
+            case redis_helper:update_channel_addon(ChannelId, Addon) of
+                ok ->
+                    case lookup_tokens(ChannelId) of
+                        [] -> ok;
+                        Tokens -> ets:insert(tokens, [Token#token{addon=Addon} || Token <- Tokens])
+                    end,
+                    ets:insert(channels, Channel#channel{addon=Addon});
+                Err ->
+                    Err
+            end
     end.
 
 lookup(ChannelId) when is_integer(ChannelId) ->
-    case ets:lookup(channel, ChannelId) of
+    case ets:lookup(channels, ChannelId) of
         [Channel] -> Channel;
         _ -> undefined
     end.
 
+lookup_tokens(ChannelId) when is_integer(ChannelId) ->
+    ets:match_object(tokens, token_match_expr(ChannelId)).
+
 lookup_drains(ChannelId) when is_integer(ChannelId) ->
-    ets:match_object(drain, drain_match_expr(ChannelId)).
+    ets:match_object(drains, drain_match_expr(ChannelId)).
 
 token_match_expr(ChannelId) ->
     #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_'}.
@@ -105,8 +102,8 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
 info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
         #channel{name=ChannelName, app_id=AppId, addon=Addon} ->
-            Tokens = ets:match_object(token, token_match_expr(ChannelId)),
-            Drains = ets:match_object(drain, drain_match_expr(ChannelId)),
+            Tokens = lookup_tokens(ChannelId),
+            Drains = lookup_drains(ChannelId),
             [{channel_id, ChannelId},
              {channel_name, ChannelName},
              {app_id, AppId},

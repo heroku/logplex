@@ -4,7 +4,7 @@
 -record(channel, {id, name, app_id, addon}).
 -record(token, {id, channel_id, name, app_id, addon}).
 -record(drain, {id, channel_id, resolved_host, host, port}).
--record(session, {id, body, expiration}).
+-record(session, {id, body}).
 
 -define(HTTP_PORT, 8001).
 -define(TCP_PORT, 9998).

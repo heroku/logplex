@@ -84,16 +84,10 @@ handlers() ->
         {200, <<"OK">>}
     end},
 
-    {['GET', "/$"], fun(_Ref, _Match) ->
-        Props = [{partitioned, logplex_db:is_partitioned()},
-                 {stopped_nodes, proplists:get_value(extra_db_nodes, mnesia:system_info(all)) =/= []}
-        ],
-        {200, iolist_to_binary(mochijson2:encode(Props))}
-    end},
-
     {['POST', "/channels$"], fun(Req, _Match) ->
         authorize(Req),
-        {struct, Params} = mochijson2:decode(Req:recv_body()),
+        Body = Req:recv_body(),
+        {struct, Params} = mochijson2:decode(Body),
 
         ChannelName = proplists:get_value(<<"name">>, Params),
         ChannelName == undefined andalso error_resp(400, <<"'name' post param missing">>),
@@ -104,15 +98,20 @@ handlers() ->
         Addon = proplists:get_value(<<"addon">>, Params),
         Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
 
-        A = now(),
         ChannelId = logplex_channel:create(ChannelName, AppId, Addon),
-        B = now(),
         not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
 
-        io:format("create_channel name=~s app_id=~w addon=~s time=~w~n",
-            [ChannelName, AppId, Addon, timer:now_diff(B,A) div 1000]),
+        case proplists:get_value(<<"tokens">>, Params) of
+            List when length(List) > 0 ->
+                Tokens = [
+                    {TokenName, logplex_token:create(ChannelId, TokenName)}
+                || TokenName <- List],
 
-        {201, integer_to_list(ChannelId)}
+                Info = [{channel_id, ChannelId}, {tokens, Tokens}],
+                {201, iolist_to_binary(mochijson2:encode({struct, Info}))};
+            _ ->
+                {201, integer_to_list(ChannelId)}
+        end
     end},
 
     {['POST', "/channels/(\\d+)/addon$"], fun(Req, [ChannelId]) ->

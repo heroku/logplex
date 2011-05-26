@@ -46,14 +46,14 @@ channel_index() ->
         ChannelId when is_integer(ChannelId) -> ChannelId
     end.
 
-create_channel(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
-    ChannelId = channel_index(),
-    case redis_pool:q(config_pool, [<<"HMSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
-            <<"name">>, ChannelName,
-            <<"app_id">>, integer_to_list(AppId),
-            <<"addon">>, Addon]) of
-        {error, Err} -> {error, Err};
-        <<"OK">> -> ChannelId
+create_channel(ChannelId, ChannelName, AppId, Addon) when is_integer(ChannelId), is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
+    Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
+    Cmd = [<<"HMSET">>, Key, <<"name">>, ChannelName, <<"app_id">>, integer_to_list(AppId), <<"addon">>, Addon],
+    case redis_pool:q(config_pool, Cmd) of
+        <<"OK">> ->
+            ok;
+        {error, Err} ->
+            {error, Err}
     end.
 
 delete_channel(ChannelId) when is_integer(ChannelId) ->
@@ -74,32 +74,6 @@ build_push_msg(ChannelId, Length, Msg) when is_integer(ChannelId), is_binary(Len
         redis_proto:build([<<"LPUSH">>, Key, Msg]),
         redis_proto:build([<<"LTRIM">>, Key, <<"0">>, Length])
     ]).
-
-lookup_channels() ->
-    lists:flatten(lists:foldl(
-        fun (Key, Acc) when is_binary(Key) ->
-            case string:tokens(binary_to_list(Key), ":") of
-                ["ch", ChannelId, "data"] ->
-                    case lookup_channel(list_to_integer(ChannelId)) of
-                        undefined -> Acc;
-                        Channel -> [Channel|Acc]
-                    end;
-                _ ->
-                    Acc
-            end;
-            (_, Acc) ->
-                Acc
-        end, [], redis_pool:q(config_pool, [<<"KEYS">>, <<"ch:*:data">>]))).
- 
-lookup_channel_ids() ->
-    lists:flatten(lists:foldl(
-        fun(Key, Acc) ->
-            case string:tokens(binary_to_list(Key), ":") of
-                ["ch", ChannelId, "data"] ->
-                    [list_to_integer(ChannelId)|Acc];
-                _ -> Acc
-            end
-        end, [], redis_pool:q(config_pool, [<<"KEYS">>, <<"ch:*:data">>]))).
 
 lookup_channel(ChannelId) when is_integer(ChannelId) ->
     case redis_pool:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
@@ -135,31 +109,6 @@ delete_token(TokenId) when is_binary(TokenId) ->
         Err -> Err
     end.
 
-lookup_token(TokenId) when is_binary(TokenId) ->
-    case redis_pool:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
-        Fields when is_list(Fields), length(Fields) > 0 ->
-            #token{id = TokenId,
-                   channel_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"ch">>, Fields))),
-                   name = logplex_utils:field_val(<<"name">>, Fields)
-            };
-        _ ->
-            undefined
-    end.
-
-lookup_tokens() ->
-    lists:flatten(lists:foldl(
-        fun(Key, Acc) ->
-            case string:tokens(binary_to_list(Key), ":") of
-                ["tok", TokenId, "data"] ->
-                    case lookup_token(list_to_binary(TokenId)) of
-                        undefined -> Acc;
-                        Token -> [Token|Acc]
-                    end;
-                _ ->
-                    Acc
-            end
-        end, [], redis_pool:q(config_pool, [<<"KEYS">>, <<"tok:*:data">>]))).
-
 %%====================================================================
 %% DRAIN
 %%====================================================================
@@ -185,33 +134,6 @@ delete_drain(DrainId) when is_integer(DrainId) ->
     case redis_pool:q(config_pool, [<<"DEL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
         1 -> ok;
         Err -> Err
-    end.
-
-lookup_drains() ->
-    lists:foldl(
-        fun(Key, Acc) ->
-            case string:tokens(binary_to_list(Key), ":") of
-                ["drain", DrainId, "data"] ->
-                    [lookup_drain(list_to_integer(DrainId))|Acc];
-                _ -> Acc
-            end
-        end, [], redis_pool:q(config_pool, [<<"KEYS">>, <<"drain:*:data">>])).
-
-lookup_drain(DrainId) when is_integer(DrainId) ->
-    case redis_pool:q(config_pool, [<<"HGETALL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
-        Fields when is_list(Fields), length(Fields) > 0 ->
-            #drain{
-                id = DrainId,
-                channel_id = list_to_integer(binary_to_list(logplex_utils:field_val(<<"ch">>, Fields))),
-                host = logplex_utils:field_val(<<"host">>, Fields),
-                port =
-                 case logplex_utils:field_val(<<"port">>, Fields) of
-                     <<"">> -> undefined;
-                     Val -> list_to_integer(binary_to_list(Val))
-                 end
-            };
-        _ ->
-            undefined
     end.
     
 %%====================================================================

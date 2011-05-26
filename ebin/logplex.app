@@ -6,7 +6,6 @@
     logplex_api,
     logplex_app,
     logplex_channel,
-    logplex_cloudkick,
     logplex_drain,
     logplex_drain_writer,
     logplex_grid,

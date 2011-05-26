@@ -25,25 +25,9 @@
 
 -include_lib("logplex.hrl").
 
-handle({load, <<"channel_index">>, Index}) ->
-    mnesia:dirty_write(counters, {counters, channel, list_to_integer(Index)}),
-    undefined;
-
-handle({load, <<"drain_index">>, Index}) ->
-    mnesia:dirty_write(counters, {counters, drain, list_to_integer(Index)}),
-    undefined;
-
 handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
-    AppId = case dict_find(<<"app_id">>, Dict) of
-        undefined -> undefined;
-        Val -> list_to_integer(binary_to_list(Val))
-    end,
-    Channel = #channel{id=Id,
-                   name=dict_find(<<"name">>, Dict),
-                   app_id=AppId,
-                   addon=dict_find(<<"addon">>, Dict)},
-    mnesia:dirty_write(channel, Channel),
+    create_channel(Id, Dict),
     undefined;
 
 handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
@@ -53,20 +37,7 @@ handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
 
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
-    Ch = case dict_find(<<"ch">>, Dict) of
-        undefined -> undefined;
-        Val1 -> list_to_integer(binary_to_list(Val1))
-    end,
-    Port = case dict_find(<<"port">>, Dict) of
-        undefined -> undefined;
-        Val2 -> list_to_integer(binary_to_list(Val2))
-    end,
-    Drain = #drain{id=Id,
-                   channel_id=Ch,
-                   resolved_host=logplex_utils:resolve_host(dict_find(<<"host">>, Dict)),
-                   host=dict_find(<<"host">>, Dict),
-                   port=Port},
-    mnesia:dirty_write(drain, Drain),
+    create_drain(Id, Dict),
     undefined;
 
 handle({load, _Key, _Val}) ->
@@ -79,78 +50,41 @@ handle({load, eof}) ->
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    AppId = case dict_find(<<"app_id">>, Dict) of
-        undefined -> undefined;
-        Val -> list_to_integer(binary_to_list(Val))
-    end,
-    Channel = #channel{id=Id,
-                   name=dict_find(<<"name">>, Dict),
-                   app_id=AppId,
-                   addon=dict_find(<<"addon">>, Dict)},
-    {atomic, _} = mnesia:transaction(
-        fun() ->
-            mnesia:write(channel, Channel, write),
-            case ets:lookup(counters, channel) of
-                [{counters, channel, Current}] when Current < Id -> 
-                    mnesia:write(counters, {counters, channel, Id}, write);
-                _ ->
-                    ok
-            end
-        end),
+    create_channel(Id, Dict),
     undefined;
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
-    create_token(Id, dict_from_list(Args)),
+    Dict = dict_from_list(Args),
+    create_token(Id, Dict),
     undefined;
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    Ch = case dict_find(<<"ch">>, Dict) of
-        undefined -> undefined;
-        Val1 -> list_to_integer(binary_to_list(Val1))
-    end,
-    Port = case dict_find(<<"port">>, Dict) of
-        undefined -> undefined;
-        Val2 -> list_to_integer(binary_to_list(Val2))
-    end,
-    Drain = #drain{id=Id,
-                   channel_id=Ch,
-                   resolved_host=logplex_utils:resolve_host(dict_find(<<"host">>, Dict)),
-                   host=dict_find(<<"host">>, Dict),
-                   port=Port},
-    {atomic, _} = mnesia:transaction(
-        fun() ->
-            mnesia:write(drain, Drain, write),
-            case ets:lookup(counters, drain) of
-                [{counters, drain, Current}] when Current < Id -> 
-                    mnesia:write(counters, {counters, drain, Id}, write);
-                _ ->
-                    ok
-            end
-        end),
+    create_drain(Id, Dict),
     undefined;
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    logplex_channel:delete(Id),
+    ets:delete(channels, Id),
     undefined;
 
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
-    mnesia:dirty_delete(token, Id),
+    ets:delete(tokens, Id),
     undefined;
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    mnesia:dirty_delete(drain, Id),
+    ets:delete(drains, Id),
     undefined;
 
 handle({cmd, "hset", [<<"ch:", Rest/binary>>, <<"addon">>, Addon]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Channel = lookup_channel(Id),
-    mnesia:dirty_write(channel, Channel#channel{addon=Addon}),
+    ets:insert(channels, Channel#channel{addon=Addon}),
+    [ets:insert(tokens, Token#token{addon=Addon}) || Token <- logplex_channel:lookup_tokens(Id)],
     undefined;    
     
 handle({cmd, _Cmd, _Args}) ->
@@ -168,6 +102,17 @@ parse_id(<<":", _/binary>>, Acc) ->
 parse_id(<<C, Rest/binary>>, Acc) ->
     parse_id(Rest, [C|Acc]).
 
+create_channel(Id, Dict) ->
+    AppId = case dict_find(<<"app_id">>, Dict) of
+        undefined -> undefined;
+        Val -> list_to_integer(binary_to_list(Val))
+    end,
+    Channel = #channel{id=Id,
+                   name=dict_find(<<"name">>, Dict),
+                   app_id=AppId,
+                   addon=dict_find(<<"addon">>, Dict)},
+    ets:insert(channels, Channel).
+
 create_token(Id, Dict) ->
     ChannelId = list_to_integer(binary_to_list(dict_find(<<"ch">>, Dict))),
     Name = dict_find(<<"name">>, Dict), 
@@ -180,10 +125,26 @@ create_token(Id, Dict) ->
                    name=Name,
                    app_id=AppId,
                    addon=Addon},
-    mnesia:dirty_write(token, Token).
+    ets:insert(tokens, Token).
+
+create_drain(Id, Dict) ->
+    Ch = case dict_find(<<"ch">>, Dict) of
+        undefined -> undefined;
+        Val1 -> list_to_integer(binary_to_list(Val1))
+    end,
+    Port = case dict_find(<<"port">>, Dict) of
+        undefined -> undefined;
+        Val2 -> list_to_integer(binary_to_list(Val2))
+    end,
+    Drain = #drain{id=Id,
+                   channel_id=Ch,
+                   resolved_host=logplex_utils:resolve_host(dict_find(<<"host">>, Dict)),
+                   host=dict_find(<<"host">>, Dict),
+                   port=Port},
+    ets:insert(drains, Drain).
 
 lookup_channel(Id) ->
-    case ets:lookup(channel, Id) of
+    case ets:lookup(channels, Id) of
         Channel when is_record(Channel, channel) -> Channel;
         _ -> redis_helper:lookup_channel(Id)
     end.            

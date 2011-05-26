@@ -21,43 +21,22 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_session).
--export([create/1, lookup/1, expire_session_cache/0, init/1, loop/0]).
+-export([create/1, lookup/1]).
 
 -include_lib("logplex.hrl").
 
 create(Body) when is_binary(Body) ->
     SessionId = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
-    Expiration = datetime_to_epoch(erlang:universaltime()) + 360,
-    {atomic, _} = mnesia:transaction(
-        fun() ->
-            Session = #session{id=SessionId, body=Body, expiration=Expiration},
-            mnesia:write(session, Session, write)
-        end),
+    Session = #session{id=SessionId, body=Body},
+    ets:insert(sessions, Session),
+    spawn_link(fun() ->
+        timer:sleep(6 * 60 * 1000), % 6 mins
+        ets:delete(sessions, SessionId)
+    end),
     SessionId.
 
 lookup(SessionId) when is_binary(SessionId) ->
-    case ets:lookup(session, SessionId) of
+    case ets:lookup(sessions, SessionId) of
         [#session{body=Body}] -> Body;
         _ -> undefined
     end.
-
-expire_session_cache() ->
-    proc_lib:start_link(?MODULE, init, [self()]).
-
-init(Parent) ->
-    proc_lib:init_ack(Parent, {ok, self()}),
-    loop().
-
-loop() ->
-    timer:sleep(60 * 1000),
-    Now = datetime_to_epoch(erlang:universaltime()),
-    Sessions = ets:tab2list(session),
-    {atomic, _} = mnesia:transaction(
-        fun() ->
-            [mnesia:delete(session, Session, write) || #session{id=Session, expiration=Expiration} <- Sessions, Expiration > Now]
-        end),
-    loop().
-
-datetime_to_epoch(Datetime) when is_tuple(Datetime) ->
-    calendar:datetime_to_gregorian_seconds(Datetime) - calendar:datetime_to_gregorian_seconds({{1970, 1, 1}, {0, 0, 0}}).
-

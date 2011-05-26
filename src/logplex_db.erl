@@ -21,257 +21,43 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_db).
--behaviour(gen_server).
-
-%% gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, 
-	 handle_info/2, terminate/2, code_change/3]).
-
--export([start_link/0, backup/0, backup/1, restore/0, restore/1,
-         is_partitioned/0, recover_from/1]).
+-export([setup/0, dump/0]).
 
 -include_lib("logplex.hrl").
 
--define(BLANK_SCHEMA, {0,0}).
--define(BACKUP, "./data/logplex.bak").
+setup() ->
+    create_ets_tables(),
+    NumObjs = open_dets_tables(),
+    populate_ets([channels, tokens, drains]),
+    spawn_link(fun sync_dets/0),
+    NumObjs > 0.
 
--record(state, {partitioned=false}).
-
-%% API functions
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-backup() ->
-    backup(?BACKUP).
-
-backup(Filename) ->
-    A = now(),
-    Res = mnesia:backup(Filename),
-    B = now(),
-    io:format("logplex_db backup file=~s duration=~w result=~p~n", [Filename, timer:now_diff(B,A) div 1000, Res]),
-    Res.
-
-restore() ->
-    restore(?BACKUP).
-
-restore(Filename) ->
-    A = now(),
-    Res = mnesia:restore(Filename, []),
-    B = now(),
-    io:format("logplex_db restore file=~s duration=~w result=~p~n", [Filename, timer:now_diff(B,A) div 1000, Res]),
-    Res.
-
-is_partitioned() ->
-    gen_server:call(?MODULE, is_partitioned, 1000).
-
-recover_from(Node) when is_atom(Node) ->
-    gen_server:call(?MODULE, {recover, Node}, 60 * 1000).
-
-%%====================================================================
-%% gen_server callbacks
-%%====================================================================
-
-%%--------------------------------------------------------------------
-%% Function: init(Args) -> {ok, State} |
-%%                         {ok, State, Timeout} |
-%%                         ignore               |
-%%                         {stop, Reason}
-%% Description: Initiates the server
-%% @hidden
-%%--------------------------------------------------------------------
-init([]) ->
-    start(),
-    case os:getenv("NSYNC") of
-        "0" -> ok;
-        _ ->
-            Opts = nsync_opts(),
-            io:format("nsync:start_link(~p)~n", [Opts]),
-            {ok, _Pid} = nsync:start_link(Opts),
-            io:format("nsync finish~n")
-    end,
-    spawn_link(fun backup_timer/0),
-    {ok, #state{}}.
-
-%%--------------------------------------------------------------------
-%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
-%%                                      {reply, Reply, State, Timeout} |
-%%                                      {noreply, State} |
-%%                                      {noreply, State, Timeout} |
-%%                                      {stop, Reason, Reply, State} |
-%%                                      {stop, Reason, State}
-%% Description: Handling call messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_call(is_partitioned, _From, State) ->
-    {reply, State#state.partitioned, State};
-
-handle_call({recover, Master}, _From, State) ->
-    mnesia:set_master_nodes([Master]),
-    io:format("stopping mnesia...~n"),
-    mnesia:stop(),
-    io:format("starting mnesia...~n"),
-    mnesia:start(),
-    mnesia:set_master_nodes([]),
-    {reply, ok, State#state{partitioned=false}};
-    
-handle_call(_Msg, _From, State) ->
-    {reply, {error, invalid_call}, State}.
-
-%%--------------------------------------------------------------------
-%% Function: handle_cast(Msg, State) -> {noreply, State} |
-%%                                      {noreply, State, Timeout} |
-%%                                      {stop, Reason, State}
-%% Description: Handling cast messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: handle_info(Info, State) -> {noreply, State} |
-%%                                       {noreply, State, Timeout} |
-%%                                       {stop, Reason, State}
-%% Description: Handling all non call/cast messages
-%% @hidden
-%%--------------------------------------------------------------------
-handle_info({mnesia_system_event, {inconsistent_database, _Context, Node}}, State) ->
-    io:format("mnesia partition detected on node ~p~n", [Node]),
-    {noreply, State#state{partitioned=true}};
-
-handle_info({mnesia_system_event, Event}, State) ->
-    io:format("mnesia_event ~p~n", [Event]),
-    {noreply, State};
-
-handle_info(_Info, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% Function: terminate(Reason, State) -> void()
-%% Description: This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any necessary
-%% cleaning up. When it returns, the gen_server terminates with Reason.
-%% The return value is ignored.
-%% @hidden
-%%--------------------------------------------------------------------
-terminate(_Reason, _State) -> 
+create_ets_tables() ->
+    ets:new(channels, [named_table, public, set, {keypos, 2}]),
+    ets:new(tokens,   [named_table, public, set, {keypos, 2}]),
+    ets:new(drains,   [named_table, public, set, {keypos, 2}]),
+    ets:new(sessions, [named_table, public, set, {keypos, 2}]),
     ok.
 
-%%--------------------------------------------------------------------
-%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
-%% Description: Convert process state when code is changed
-%% @hidden
-%%--------------------------------------------------------------------
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+open_dets_tables() ->
+    {ok, _} = dets:open_file(channels, [{keypos, 2}, {type, set}]),
+    {ok, _} = dets:open_file(tokens,   [{keypos, 2}, {type, set}]),
+    {ok, _} = dets:open_file(drains,   [{keypos, 2}, {type, set}]),
+    lists:foldl(fun(Name, Acc) -> dets:info(Name, no_objects) + Acc end, 0, [channels, tokens, drains]).
 
-%%--------------------------------------------------------------------
-%%% Internal functions
-%%--------------------------------------------------------------------
-nsync_opts() ->
-    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-    Ip = case proplists:get_value(ip, RedisOpts) of
-        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
-        Other -> Other
-    end,
-    RedisOpts1 = proplists:delete(ip, RedisOpts),
-    RedisOpts2 = [{ip, Ip} | RedisOpts1],
-    [{callback, {nsync_callback, handle, []}}, {block, true}, {timeout, 720 * 1000} | RedisOpts2].
+populate_ets([]) -> ok;
 
-start() ->
-    A = now(),
-    wait_for_nodes(),
-    B = now(),
-    SchemaVsn = schema_version(),
-    io:format("schema version ~p~n", [SchemaVsn]),
-    case nodes() == [] of
-        true ->
-            SchemaVsn == undefined andalso create_schema(), 
-            C = now(),
-            mnesia:start(),
-            D = now(),
-            mnesia:subscribe(system),
-            SchemaVsn == undefined andalso create_tables(),
-            E = now(),
-            io:format("mnesia_boot wait_for_nodes=~w create_schema=~w start=~w create_tables=~w~n", [
-                timer:now_diff(B,A) div 1000,
-                timer:now_diff(C,B) div 1000,
-                timer:now_diff(D,C) div 1000,
-                timer:now_diff(E,D) div 1000
-            ]),
-            ok;
-        false ->
-            io:format("mnesia nodes ~p~n", [nodes()]),
-            mnesia:start(),
-            C = now(),
-            mnesia:subscribe(system),
-            mnesia:change_config(extra_db_nodes, nodes()),
-            mnesia:change_table_copy_type(schema, node(), disc_copies),
-            D = now(),
-            sync_tables_to_local(),
-            E = now(),
-            io:format("mnesia_boot wait_for_nodes=~w start=~w change_config=~w sync_tables=~w~n", [
-                timer:now_diff(B,A) div 1000,
-                timer:now_diff(C,B) div 1000,
-                timer:now_diff(D,C) div 1000,
-                timer:now_diff(E,D) div 1000
-            ]),
-            ok
-    end.
+populate_ets([Name|Rest]) ->
+    Name = dets:to_ets(Name, Name),
+    populate_ets(Rest).
 
-wait_for_nodes() ->
-    io:format("wait for nodes~n"),
-    Registered = lists:sort([Node || {Node, _} <- redgrid:nodes()]),
-    Running = lists:sort([node()|nodes()]),
-    case Registered == Running of
-        true -> ok;
-        false ->
-            timer:sleep(1000),
-            wait_for_nodes()
-    end.
+sync_dets() ->
+    timer:sleep(10000),
+    dump(),   
+    sync_dets().
 
-schema_version() ->
-    case mnesia:system_info(schema_version) of
-        ?BLANK_SCHEMA ->
-            undefined;
-        Vsn ->
-            Vsn
-    end.
-
-create_schema() ->
-    io:format("create schema~n"),
-    mnesia:create_schema([node()]),
+dump() ->
+    dets:from_ets(channels, channels), dets:sync(channels),
+    dets:from_ets(tokens, tokens), dets:sync(tokens),
+    dets:from_ets(drains, drains), dets:sync(drains),
     ok.
-
-create_tables() ->
-    io:format("create tables~n"),
-    mnesia:create_table(counters,[{attributes, [key, val]},                   {disc_copies, [node()]}]),
-    mnesia:create_table(channel, [{attributes, record_info(fields, channel)}, {disc_copies, [node()]}]),
-    mnesia:create_table(token,   [{attributes, record_info(fields, token)},   {disc_copies, [node()]}]),
-    mnesia:create_table(drain,   [{attributes, record_info(fields, drain)},   {disc_copies, [node()]}]),
-    mnesia:create_table(session, [{attributes, record_info(fields, session)}, {disc_copies, [node()]}]),
-    ok.
-
-sync_tables_to_local() ->
-    A = now(),
-    Tables = [{T, mnesia:table_info(T, where_to_commit)} || T <- mnesia:system_info(tables)],
-    Copies =
-        lists:foldl(
-            fun({T, Locs}, Acc) ->
-                lists:foldl(
-                    fun({Node, Type}, Acc1) ->
-                        case Node == node() of
-                            true -> Acc1;
-                            false -> [{T, Type}|Acc1]
-                        end
-                    end, Acc, Locs)
-            end, [], Tables),
-    [mnesia:add_table_copy(T, node(), Type) || {T, Type} <- Copies],
-    mnesia:wait_for_tables(mnesia:system_info(tables), 60000),
-    B = now(),
-    io:format("logplex_db sync tables to local duration=~w~n", [timer:now_diff(B,A) div 1000]),
-    ok.
-
-backup_timer() ->
-    timer:sleep(60 * 1000),
-    backup(),
-    backup_timer().
