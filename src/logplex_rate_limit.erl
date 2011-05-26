@@ -31,7 +31,7 @@
 
 -include_lib("logplex.hrl").
 
--define(TIMEOUT, 10000).
+-define(LOCK_TIMEOUT, 1000).
 
 %% API functions
 start_link() ->
@@ -57,9 +57,9 @@ lock(ChannelId) when is_integer(ChannelId) ->
     end.
 
 set_lock(Node, ChannelId) when is_integer(ChannelId) ->
-    gen_server:call({?MODULE, Node}, {set_lock, ChannelId}, ?TIMEOUT).
+    gen_server:call({?MODULE, Node}, {set_lock, ChannelId}, ?LOCK_TIMEOUT).
 set_lock(ChannelId) when is_integer(ChannelId) ->
-    gen_server:call(?MODULE, {set_lock, ChannelId}, ?TIMEOUT).
+    gen_server:call(?MODULE, {set_lock, ChannelId}, ?LOCK_TIMEOUT).
 
 clear_all() ->
     gen_server:cast(?MODULE, clear_all).

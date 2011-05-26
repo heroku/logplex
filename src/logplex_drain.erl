@@ -36,15 +36,31 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
                     error_logger:error_msg("invalid drain: ~p:~p~n", [Host, Port]),
                     {error, invalid_drain};
                 Ip ->
-                    DrainId = mnesia:dirty_update_counter(counters, drain, 1),
-                    {atomic, _} = mnesia:transaction(
-                        fun() ->
-                            Drain = #drain{id=DrainId, channel_id=ChannelId, resolved_host=Ip, host=Host, port=Port},
-                            mnesia:write(drain, Drain, write)
-                        end),
-                    DrainId
+                    case sync_incr_drain_id() of
+                        {atomic, DrainId} when is_integer(DrainId) ->
+                            {atomic, _} = mnesia:transaction(
+                                fun() ->
+                                    Drain = #drain{id=DrainId, channel_id=ChannelId, resolved_host=Ip, host=Host, port=Port},
+                                    mnesia:write(drain, Drain, write)
+                                end),
+                            DrainId;
+                        {aborted, Reason} ->
+                            {error, Reason}
+                    end
             end
     end.
+
+sync_incr_drain_id() ->
+    mnesia:sync_transaction(fun() ->
+        case mnesia:wread({counters, drain}) of
+            [{counters, drain, DrainId}] ->
+                mnesia:write(counters, {counters, drain, DrainId+1}, write),
+                DrainId+1;
+            [] ->
+                mnesia:write(counters, {counters, drain, 1}, write),
+                1
+        end
+    end).
 
 delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,

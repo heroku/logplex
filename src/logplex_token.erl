@@ -30,7 +30,7 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     case logplex_channel:lookup(ChannelId) of
         #channel{app_id=AppId, addon=Addon} ->
             TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-            {atomic, _} = mnesia:transaction(
+            {atomic, _} = mnesia:sync_transaction(
                 fun() ->
                     Token = #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon},
                     mnesia:write(token, Token, write)

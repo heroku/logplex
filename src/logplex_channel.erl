@@ -27,13 +27,29 @@
 -include_lib("logplex.hrl").
 
 create(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
-    ChannelId = mnesia:dirty_update_counter(counters, channel, 1),
-    {atomic, _} = mnesia:transaction(
-        fun() ->
-            Channel = #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon},
-            mnesia:write(channel, Channel, write)
-        end),
-    ChannelId.
+    case sync_incr_channel_id() of
+        {atomic, ChannelId} when is_integer(ChannelId) ->
+            {atomic, _} = mnesia:sync_transaction(
+                fun() ->
+                    Channel = #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon},
+                    mnesia:write(channel, Channel, write)
+                end),
+            ChannelId;
+        {aborted, Reason} ->
+            {error, Reason}
+    end.
+
+sync_incr_channel_id() ->
+    mnesia:sync_transaction(fun() ->
+        case mnesia:wread({counters, channel}) of
+            [{counters, channel, ChannelId}] ->
+                mnesia:write(counters, {counters, channel, ChannelId+1}, write),
+                ChannelId+1;
+            [] ->
+                mnesia:write(counters, {counters, channel, 1}, write),
+                1
+        end
+    end).
 
 delete(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
