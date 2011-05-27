@@ -162,6 +162,8 @@ handlers() ->
     end},
 
     {['GET', "/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
+        proplists:get_value("srv", Req:parse_qs()) == undefined
+            andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version\n">>),
         Body = logplex_session:lookup(list_to_binary("/sessions/" ++ Session)),
         not is_binary(Body) andalso error_resp(404, <<"Not found">>),
 
