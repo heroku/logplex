@@ -100,7 +100,17 @@ handlers() ->
         ChannelId = logplex_channel:create(ChannelName, AppId, Addon),
         not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
 
-        {201, integer_to_list(ChannelId)}
+        case proplists:get_value(<<"tokens">>, Params) of
+            List when length(List) > 0 ->
+                Tokens = [
+                    {TokenName, logplex_token:create(ChannelId, TokenName)}
+                || TokenName <- List],
+
+                Info = [{channel_id, ChannelId}, {tokens, Tokens}],
+                {201, iolist_to_binary(mochijson2:encode({struct, Info}))};
+            _ ->
+                {201, integer_to_list(ChannelId)}
+        end
     end},
 
     {['POST', "/channels/(\\d+)/addon$"], fun(Req, [ChannelId]) ->
