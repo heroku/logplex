@@ -37,7 +37,7 @@ start_link() ->
 
 register(ChannelId) when is_integer(ChannelId) ->
     Self = self(),
-    logplex_grid:cast(?MODULE, {register, ChannelId, Self}),
+    gen_server:abcast([node()|nodes()], ?MODULE, {register, ChannelId, Self}),
     ok.
 
 route(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->

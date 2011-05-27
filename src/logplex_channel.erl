@@ -69,7 +69,8 @@ update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
                         [] -> ok;
                         Tokens -> ets:insert(tokens, [Token#token{addon=Addon} || Token <- Tokens])
                     end,
-                    ets:insert(channels, Channel#channel{addon=Addon});
+                    ets:insert(channels, Channel#channel{addon=Addon}),
+                    ok;
                 Err ->
                     Err
             end

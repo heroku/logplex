@@ -21,9 +21,9 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_utils).
--export([rpc/4, set_weight/1, nodes/0, setup_test_channel/2, resolve_host/1,
+-export([rpc/4, set_weight/1, setup_test_channel/2, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
-         redis_opts/1, parse_redis_url/1, instance_name/0, heorku_domain/0]).
+         redis_opts/1, parse_redis_url/1, instance_name/0, heroku_domain/0]).
 
 -include_lib("logplex.hrl").
 
@@ -44,12 +44,6 @@ set_weight(Weight) when is_integer(Weight), Weight > 100 ->
 
 set_weight(Weight) when is_integer(Weight) ->
     redgrid:update_meta([{"weight", integer_to_list(Weight)}]).
-
-nodes() ->
-    io:format("Local node~n> ~p~n~n", [node()]),
-    io:format("Remote nodes~n"),
-    [io:format("> ~p~n", [Node]) || Node <- erlang:nodes()],
-    ok.
 
 setup_test_channel(ChannelName, AppId) when is_binary(ChannelName), is_integer(AppId) ->
     ChannelId = logplex_channel:create(ChannelName, AppId, <<"advanced">>),
@@ -133,7 +127,7 @@ instance_name() ->
         InstanceName -> InstanceName
     end.
 
-heorku_domain() ->
+heroku_domain() ->
     case get(heroku_domain) of
         undefined ->
             Domain = 

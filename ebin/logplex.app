@@ -8,7 +8,6 @@
     logplex_channel,
     logplex_drain,
     logplex_drain_writer,
-    logplex_grid,
     logplex_queue_sup,
     logplex_rate_limit,
     logplex_realtime,
