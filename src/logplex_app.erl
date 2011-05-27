@@ -48,6 +48,7 @@ stop(_State) ->
 
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
+        {redo, {redo, start_link, [config, redo_opts()]}, permanent, 2000, worker, [redo]},
         {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
         {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
@@ -103,12 +104,12 @@ boot_nsync(Block) ->
     io:format("nsync load_time=~w~n", [timer:now_diff(B,A) div 1000000]).
 
 boot_redis() ->
-    case application:start(redis, temporary) of
-        ok ->
-            Opts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-            redis_pool:add(config_pool, Opts, 25);
-        Err ->
-            exit(Err)
+    application:start(redis, temporary).
+    
+redo_opts() ->
+    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
+        false -> [];
+        Url -> redo_uri:parse(Url)
     end.
 
 setup_redgrid_vals() ->
