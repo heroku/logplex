@@ -34,10 +34,8 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
-    LoadedFromDisk = logplex_db:setup(),
     boot_pagerduty(),
     boot_redis(),
-    boot_nsync(not LoadedFromDisk),
     setup_redgrid_vals(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
@@ -48,7 +46,7 @@ stop(_State) ->
 
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
-        {redo, {redo, start_link, [config, redo_opts()]}, permanent, 2000, worker, [redo]},
+        {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
         {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
         {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
@@ -94,24 +92,9 @@ boot_pagerduty() ->
             ok
     end.
 
-boot_nsync(Block) ->
-    ok = application:start(nsync, temporary),
-    Opts = nsync_opts(Block),
-    io:format("nsync:start_link(~p)~n", [Opts]),
-    A = now(),
-    {ok, _Pid} = nsync:start_link(Opts),
-    B = now(),
-    io:format("nsync load_time=~w~n", [timer:now_diff(B,A) div 1000000]).
-
 boot_redis() ->
     application:start(redis, temporary).
     
-redo_opts() ->
-    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
-        false -> [];
-        Url -> redo_uri:parse(Url)
-    end.
-
 setup_redgrid_vals() ->
     application:load(redgrid),
     application:set_env(redgrid, local_ip, os:getenv("LOCAL_IP")),
@@ -152,13 +135,3 @@ logplex_drain_buffer_args() ->
      {num_workers, NumWorkers},
      {worker_sup, logplex_drain_sup},
      {worker_args, []}].
-
-nsync_opts(Block) ->
-    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-    Ip = case proplists:get_value(ip, RedisOpts) of
-        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
-        Other -> Other
-    end,
-    RedisOpts1 = proplists:delete(ip, RedisOpts),
-    RedisOpts2 = [{ip, Ip} | RedisOpts1],
-    [{callback, {nsync_callback, handle, []}}, {block, Block}, {timeout, 20 * 60 * 1000} | RedisOpts2].

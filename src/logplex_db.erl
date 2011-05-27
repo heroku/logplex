@@ -21,9 +21,15 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_db).
--export([setup/0, dump/0]).
+-export([start_link/0, dump/0]).
 
 -include_lib("logplex.hrl").
+
+start_link() ->
+    BootFromDisk = setup(),
+    {ok, Pid} = redo:start_link(config, redo_opts()),
+    boot_nsync(not BootFromDisk),
+    {ok, Pid}.
 
 setup() ->
     create_ets_tables(),
@@ -61,3 +67,28 @@ dump() ->
     dets:from_ets(tokens, tokens), dets:sync(tokens),
     dets:from_ets(drains, drains), dets:sync(drains),
     ok.
+
+boot_nsync(Block) ->
+    ok = application:start(nsync, temporary),
+    Opts = nsync_opts(Block),
+    io:format("nsync:start_link(~p)~n", [Opts]),
+    A = now(),
+    {ok, _Pid} = nsync:start_link(Opts),
+    B = now(),
+    io:format("nsync load_time=~w~n", [timer:now_diff(B,A) div 1000000]).
+
+nsync_opts(Block) ->
+    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+    Ip = case proplists:get_value(ip, RedisOpts) of
+        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
+        Other -> Other
+    end,
+    RedisOpts1 = proplists:delete(ip, RedisOpts),
+    RedisOpts2 = [{ip, Ip} | RedisOpts1],
+    [{callback, {nsync_callback, handle, []}}, {block, Block}, {timeout, 20 * 60 * 1000} | RedisOpts2].
+
+redo_opts() ->
+    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
+        false -> [];
+        Url -> redo_uri:parse(Url)
+    end.
