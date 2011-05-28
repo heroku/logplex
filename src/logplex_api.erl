@@ -328,6 +328,8 @@ tail_loop(Socket, Filters) ->
             logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1)),
             tail_loop(Socket, Filters);
         {tcp_closed, Socket} ->
+            ok;
+        {tcp_error, Socket, _Reason} ->
             ok
     end.
 
