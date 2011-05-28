@@ -59,14 +59,16 @@ loop(Req) ->
         {Code, Body} = serve(handlers(), Method, Path, Req),
         Time = timer:now_diff(now(), Start) div 1000,
         io:format("logplex_api app_id=~s channel_id=~s method=~p path=~s resp_code=~w time=~w body=~s~n", [AppId, ChannelId, Method, Path, Code, Time, Body]),
-        Req:respond({Code, ?HDR, Body})
+        Req:respond({Code, ?HDR, Body}),
+        exit(normal)
     catch 
         exit:normal ->
-            ok;
+            exit(normal);
         Class:Exception ->
             Time1 = timer:now_diff(now(), Start) div 1000,
             io:format("logplex_api app_id=~s channel_id=~s method=~p path=~s time=~w exception=~1000p:~1000p~n", [AppId, ChannelId, Method, Path, Time1, Class, Exception]),
-            Req:respond({500, ?HDR, ""})
+            Req:respond({500, ?HDR, ""}),
+            exit(normal)
     end.
 
 handlers() ->
