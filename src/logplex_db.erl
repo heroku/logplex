@@ -26,17 +26,16 @@
 -include_lib("logplex.hrl").
 
 start_link() ->
-    BootFromDisk = setup(),
+    setup(),
     {ok, Pid} = redo:start_link(config, redo_opts()),
-    boot_nsync(not BootFromDisk),
+    os:getenv("NSYNC") =/= "0" andalso boot_nsync(),
     {ok, Pid}.
 
 setup() ->
     create_ets_tables(),
-    NumObjs = open_dets_tables(),
+    open_dets_tables(),
     populate_ets([channels, tokens, drains]),
-    spawn_link(fun sync_dets/0),
-    NumObjs > 0.
+    spawn_link(fun sync_dets/0).
 
 create_ets_tables() ->
     ets:new(channels, [named_table, public, set, {keypos, 2}]),
@@ -49,7 +48,7 @@ open_dets_tables() ->
     {ok, _} = dets:open_file(channels, [{keypos, 2}, {type, set}]),
     {ok, _} = dets:open_file(tokens,   [{keypos, 2}, {type, set}]),
     {ok, _} = dets:open_file(drains,   [{keypos, 2}, {type, set}]),
-    lists:foldl(fun(Name, Acc) -> dets:info(Name, no_objects) + Acc end, 0, [channels, tokens, drains]).
+    ok.
 
 populate_ets([]) -> ok;
 
@@ -68,16 +67,16 @@ dump() ->
     dets:from_ets(drains, drains), dets:sync(drains),
     ok.
 
-boot_nsync(Block) ->
+boot_nsync() ->
     ok = application:start(nsync, temporary),
-    Opts = nsync_opts(Block),
+    Opts = nsync_opts(),
     io:format("nsync:start_link(~p)~n", [Opts]),
     A = now(),
     {ok, _Pid} = nsync:start_link(Opts),
     B = now(),
     io:format("nsync load_time=~w~n", [timer:now_diff(B,A) div 1000000]).
 
-nsync_opts(Block) ->
+nsync_opts() ->
     RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
     Ip = case proplists:get_value(ip, RedisOpts) of
         {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
@@ -85,7 +84,7 @@ nsync_opts(Block) ->
     end,
     RedisOpts1 = proplists:delete(ip, RedisOpts),
     RedisOpts2 = [{ip, Ip} | RedisOpts1],
-    [{callback, {nsync_callback, handle, []}}, {block, Block}, {timeout, 20 * 60 * 1000} | RedisOpts2].
+    [{callback, {nsync_callback, handle, []}}, {block, true}, {timeout, 20 * 60 * 1000} | RedisOpts2].
 
 redo_opts() ->
     case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
