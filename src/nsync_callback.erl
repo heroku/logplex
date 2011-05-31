@@ -44,7 +44,8 @@ handle({load, _Key, _Val}) ->
     undefined;
 
 handle({load, eof}) ->
-    io:format("nsync load complete~n"),
+    error_logger:info_msg("NSYNC sync complete"),
+    application:set_env(logplex, read_only, false),
     ok;
 
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
@@ -89,6 +90,11 @@ handle({cmd, "hset", [<<"ch:", Rest/binary>>, <<"addon">>, Addon]}) ->
     
 handle({cmd, _Cmd, _Args}) ->
     undefined;
+
+handle({error, closed}) ->
+    error_logger:error_msg("NSYNC connection closed. Read-only mode enabled"),
+    application:set_env(logplex, read_only, true),
+    ok;
 
 handle(_) ->
     ok.

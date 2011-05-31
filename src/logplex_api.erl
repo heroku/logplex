@@ -87,6 +87,7 @@ handlers() ->
     end},
 
     {['POST', "/channels$"], fun(Req, _Match) ->
+        readonly(Req),
         authorize(Req),
         Body = Req:recv_body(),
         {struct, Params} = mochijson2:decode(Body),
@@ -117,6 +118,7 @@ handlers() ->
     end},
 
     {['POST', "/channels/(\\d+)/addon$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),
 
@@ -130,6 +132,7 @@ handlers() ->
     end},
 
     {['DELETE', "/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
         case logplex_channel:delete(list_to_integer(ChannelId)) of
             ok -> {200, <<"OK">>};
@@ -138,6 +141,7 @@ handlers() ->
     end},
 
     {['POST', "/channels/(\\d+)/token$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),
 
@@ -215,6 +219,7 @@ handlers() ->
     end},
 
     {['POST', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
 
         {struct, Data} = mochijson2:decode(Req:recv_body()),
@@ -245,6 +250,7 @@ handlers() ->
     end},
 
     {['DELETE', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
 
         Data = Req:parse_qs(),
@@ -295,6 +301,13 @@ authorize(Req) ->
             true;
         _ ->
             throw({401, <<"Not Authorized">>})
+    end.
+
+readonly(_Req) ->
+    case application:get_env(logplex, read_only) of
+        {ok, true} ->
+            throw({500, <<"Read-only mode">>});
+        _ -> ok
     end.
 
 error_resp(RespCode, Body) ->
