@@ -83,7 +83,7 @@ nsync_opts() ->
         Other -> Other
     end,
     RedisOpts1 = proplists:delete(ip, RedisOpts),
-    RedisOpts2 = [{ip, Ip} | RedisOpts1],
+    RedisOpts2 = [{host, Ip} | RedisOpts1],
     [{callback, {nsync_callback, handle, []}}, {block, true}, {timeout, 20 * 60 * 1000} | RedisOpts2].
 
 redo_opts() ->
