@@ -21,50 +21,21 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_db).
--export([start_link/0, dump/0]).
+-export([start_link/0]).
 
 -include_lib("logplex.hrl").
 
 start_link() ->
-    setup(),
-    {ok, Pid} = redo:start_link(config, redo_opts()),
-    os:getenv("NSYNC") =/= "0" andalso boot_nsync(),
-    {ok, Pid}.
-
-setup() ->
     create_ets_tables(),
-    open_dets_tables(),
-    populate_ets([channels, tokens, drains]),
-    spawn_link(fun sync_dets/0).
+    {ok, Pid} = redo:start_link(config, redo_opts()),
+    boot_nsync(),
+    {ok, Pid}.
 
 create_ets_tables() ->
     ets:new(channels, [named_table, public, set, {keypos, 2}]),
     ets:new(tokens,   [named_table, public, set, {keypos, 2}]),
     ets:new(drains,   [named_table, public, set, {keypos, 2}]),
     ets:new(sessions, [named_table, public, set, {keypos, 2}]),
-    ok.
-
-open_dets_tables() ->
-    {ok, _} = dets:open_file(channels, [{keypos, 2}, {type, set}]),
-    {ok, _} = dets:open_file(tokens,   [{keypos, 2}, {type, set}]),
-    {ok, _} = dets:open_file(drains,   [{keypos, 2}, {type, set}]),
-    ok.
-
-populate_ets([]) -> ok;
-
-populate_ets([Name|Rest]) ->
-    Name = dets:to_ets(Name, Name),
-    populate_ets(Rest).
-
-sync_dets() ->
-    timer:sleep(10000),
-    dump(),   
-    sync_dets().
-
-dump() ->
-    dets:from_ets(channels, channels), dets:sync(channels),
-    dets:from_ets(tokens, tokens), dets:sync(tokens),
-    dets:from_ets(drains, drains), dets:sync(drains),
     ok.
 
 boot_nsync() ->
