@@ -114,8 +114,6 @@ handle_cast(_Msg, State) ->
 handle_info({timeout, _TimerRef, flush}, _State) ->
     start_timer(),
 
-    logplex_rate_limit:clear_all(),
-
     Stats = ets:tab2list(logplex_stats),
     ets:delete_all_objects(logplex_stats),
     io:format("logplex_stats~s~n", [lists:flatten([[" ", to_list(Key), "=", to_list(Value)] || {Key, Value} <- Stats, Value > 0])]),
