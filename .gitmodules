@@ -1,12 +1,12 @@
 [submodule "deps/redis_pool"]
 	path = deps/redis_pool
-	url = git://github.com/JacobVorreuter/redis_pool.git
+	url = git@git.herokai.com:erlang_redis_pool.git
 [submodule "deps/mochiweb"]
 	path = deps/mochiweb
-	url = git://github.com/mochi/mochiweb.git
+	url = git@git.herokai.com:mochiweb.git
 [submodule "deps/pagerduty"]
 	path = deps/pagerduty
-	url = git://github.com/JacobVorreuter/pagerduty.git
+	url = git@git.herokai.com:erlang_pagerduty.git
 [submodule "deps/gen_nb_server"]
 	path = deps/gen_nb_server
 	url = git://github.com/kevsmith/gen_nb_server.git
