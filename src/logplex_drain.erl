@@ -22,7 +22,7 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_drain).
 
--export([create/3, delete/3, clear_all/1, lookup/1]).
+-export([create/3, delete/1, delete/3, clear_all/1, lookup/1]).
 
 -include_lib("logplex.hrl").
 
