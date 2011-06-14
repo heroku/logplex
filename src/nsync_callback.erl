@@ -180,7 +180,7 @@ populate_token_drain_data([]) ->
     ok;
 
 populate_token_drain_data([Drain|Tail]) when is_record(Drain, drain) ->
-    case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', addon='_'}) of
+    case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', addon='_', drains='_'}) of
         [] ->
             error_logger:error_report([?MODULE, populate_token_drain_data, undefined_tokens, Drain]);
         Tokens ->
@@ -197,7 +197,7 @@ remove_token_drain_data(DrainId) ->
         undefined ->
             error_logger:error_report([?MODULE, remove_token_drain_data, undefined_drain, DrainId]);
         Drain ->
-            case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', addon='_'}) of
+            case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', addon='_', drains='_'}) of
                 [] ->
                     error_logger:error_report([?MODULE, remove_token_drain_data, undefined_tokens, Drain]);
                 Tokens ->
