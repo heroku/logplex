@@ -80,7 +80,14 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     [{logplex_read_pool_map, {Map, Interval}}] = ets:lookup(logplex_shard_info, logplex_read_pool_map),
     Index = redis_shard:key_to_index(integer_to_list(ChannelId)),
     {_RedisUrl, Pool} = redis_shard:get_matching_pool(Index, Map, Interval),
-    redis_pool:q(Pool, [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))]).
+    Cmd = [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))],
+    case catch redo:cmd(Pool, Cmd) of
+        {'EXIT', Err} ->
+            io:format("Error fetching logs channel_id=~w error=~100p~n", [ChannelId, Err]),
+            [];
+        Logs ->
+            Logs
+    end.
 
 info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
