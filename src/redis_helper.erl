@@ -104,7 +104,7 @@ create_token(ChannelId, TokenId, TokenName) when is_integer(ChannelId), is_binar
     end.
 
 delete_token(TokenId) when is_binary(TokenId) ->
-    case redo:cmd(config, [<<"DEL">>, TokenId]) of
+    case redo:cmd(config, [<<"DEL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
         1 -> ok;
         Err -> Err
     end.
