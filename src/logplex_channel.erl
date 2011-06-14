@@ -32,8 +32,6 @@ create(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId)
         ChannelId when is_integer(ChannelId) ->
             case redis_helper:create_channel(ChannelId, ChannelName, AppId, Addon) of
                 ok ->
-                    Channel = #channel{id=ChannelId, name=ChannelName, app_id=AppId, addon=Addon},
-                    ets:insert(channels, Channel),
                     ChannelId;
                 Err ->
                     Err
@@ -49,31 +47,15 @@ delete(ChannelId) when is_integer(ChannelId) ->
         _ ->
             [logplex_token:delete(TokenId) || #token{id=TokenId} <- lookup_tokens(ChannelId)],
             [logplex_drain:delete(DrainId) || #drain{id=DrainId} <- lookup_drains(ChannelId)], 
-            case redis_helper:delete_channel(ChannelId) of
-                ok ->
-                    ets:delete(channels, ChannelId),
-                    ok;
-                Err ->
-                    Err
-            end
+            redis_helper:delete_channel(ChannelId)
     end.
 
 update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
     case lookup(ChannelId) of
         undefined ->
             {error, not_found};
-        Channel ->
-            case redis_helper:update_channel_addon(ChannelId, Addon) of
-                ok ->
-                    case lookup_tokens(ChannelId) of
-                        [] -> ok;
-                        Tokens -> ets:insert(tokens, [Token#token{addon=Addon} || Token <- Tokens])
-                    end,
-                    ets:insert(channels, Channel#channel{addon=Addon}),
-                    ok;
-                Err ->
-                    Err
-            end
+        #channel{} ->
+            redis_helper:update_channel_addon(ChannelId, Addon)
     end.
 
 lookup(ChannelId) when is_integer(ChannelId) ->

@@ -35,13 +35,11 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
                 undefined ->
                     error_logger:error_msg("invalid drain: ~p:~p~n", [Host, Port]),
                     {error, invalid_drain};
-                Ip ->
+                _Ip ->
                     case redis_helper:drain_index() of
                         DrainId when is_integer(DrainId) ->
                             case redis_helper:create_drain(DrainId, ChannelId, Host, Port) of
                                 ok ->
-                                    Drain = #drain{id=DrainId, channel_id=ChannelId, resolved_host=Ip, host=Host, port=Port},
-                                    ets:insert(drains, Drain),
                                     DrainId;
                                 Err ->
                                     Err
@@ -62,13 +60,7 @@ delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     end.
 
 delete(DrainId) when is_integer(DrainId) ->
-    case redis_helper:delete_drain(DrainId) of
-        ok ->
-            ets:delete(drains, DrainId),
-            ok;
-        Err ->
-            Err
-    end.
+    redis_helper:delete_drain(DrainId).
 
 clear_all(ChannelId) when is_integer(ChannelId) ->
     List = ets:match_object(drains, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),

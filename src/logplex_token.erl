@@ -28,12 +28,10 @@
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     case logplex_channel:lookup(ChannelId) of
-        #channel{app_id=AppId, addon=Addon} ->
+        #channel{} ->
             TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
             case redis_helper:create_token(ChannelId, TokenId, TokenName) of
                 ok ->
-                    Token = #token{id=TokenId, channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon},
-                    ets:insert(tokens, Token),
                     TokenId;
                 Err ->
                     Err
@@ -45,13 +43,7 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
 delete(TokenId) when is_binary(TokenId) ->
     case lookup(TokenId) of
         #token{} ->
-            case redis_helper:delete_token(TokenId) of
-                ok ->
-                    ets:delete(tokens, TokenId),
-                    ok;
-                Err ->
-                    Err
-            end;
+            redis_helper:delete_token(TokenId);
         _ ->
             {error, not_found}
     end.
