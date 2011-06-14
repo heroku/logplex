@@ -242,7 +242,7 @@ handlers() ->
 
     {['GET', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Drains = logplex_channel:drains(list_to_integer(ChannelId)),
+        Drains = logplex_channel:lookup_drains(list_to_integer(ChannelId)),
         not is_list(Drains) andalso exit({expected_list, Drains}),
         
         Drains1 = [{struct, [{host, Host}, {port, Port}]} || #drain{host=Host, port=Port} <- Drains],
