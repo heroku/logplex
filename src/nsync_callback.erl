@@ -78,8 +78,8 @@ handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    ets:delete(drains, Id),
-    remove_token_drain_data(Id);
+    remove_token_drain_data(Id),
+    ets:delete(drains, Id);
 
 handle({cmd, "hset", [<<"ch:", Rest/binary>>, <<"addon">>, Addon]}) ->
     Id = list_to_integer(parse_id(Rest)),
