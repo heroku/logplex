@@ -2,7 +2,7 @@
 
 -record(msg, {time, source, ps, content}).
 -record(channel, {id, name, app_id, addon}).
--record(token, {id, channel_id, name, app_id, addon}).
+-record(token, {id, channel_id, name, app_id, addon, drains=[]}).
 -record(drain, {id, channel_id, resolved_host, host, port}).
 -record(session, {id, body}).
 

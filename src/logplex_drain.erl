@@ -22,7 +22,7 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_drain).
 
--export([create/3, delete/3, clear_all/1, lookup/1, refresh_dns/0, init/1, loop/0]).
+-export([create/3, delete/3, clear_all/1, lookup/1]).
 
 -include_lib("logplex.hrl").
 
@@ -80,21 +80,3 @@ lookup(DrainId) when is_integer(DrainId) ->
         [Drain] -> Drain;
         _ -> undefined
     end.
-
-refresh_dns() ->
-    proc_lib:start_link(?MODULE, init, [self()]).
-
-init(Parent) ->
-    proc_lib:init_ack(Parent, {ok, self()}),
-    loop().
-
-loop() ->
-    timer:sleep(60 * 1000),
-    [begin
-        case logplex_utils:resolve_host(Host) of
-            undefined -> ok;
-            Ip ->
-                ets:insert(drains, Drain#drain{resolved_host=Ip})
-        end
-    end || #drain{host=Host}=Drain <- ets:tab2list(drains)],
-    loop().

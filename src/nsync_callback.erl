@@ -25,71 +25,75 @@
 
 -include_lib("logplex.hrl").
 
+%% nsync callbacks
+
+%% LOAD
 handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
-    create_channel(Id, Dict),
-    undefined;
+    create_channel(Id, Dict);
 
 handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_binary(parse_id(Rest)),
-    create_token(Id, Dict),
-    undefined;
+    create_token(Id, Dict);
 
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
-    create_drain(Id, Dict),
-    undefined;
+    create_drain(Id, Dict);
 
 handle({load, _Key, _Val}) ->
-    undefined;
+    ok;
 
 handle({load, eof}) ->
+    populate_token_channel_data(ets:tab2list(tokens)),
+    populate_token_drain_data(ets:tab2list(drains)),
     error_logger:info_msg("NSYNC sync complete"),
     application:set_env(logplex, read_only, false),
     ok;
 
+%% STREAM
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    create_channel(Id, Dict),
-    undefined;
+    create_channel(Id, Dict);
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    create_token(Id, Dict),
-    undefined;
+    Token = create_token(Id, Dict),
+    populate_token_channel_data([Token]);
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    create_drain(Id, Dict),
-    undefined;
+    Drain = create_drain(Id, Dict),
+    populate_token_drain_data([Drain]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    ets:delete(channels, Id),
-    undefined;
+    ets:delete(channels, Id);
 
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
-    ets:delete(tokens, Id),
-    undefined;
+    ets:delete(tokens, Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     ets:delete(drains, Id),
-    undefined;
+    remove_token_drain_data(Id);
 
 handle({cmd, "hset", [<<"ch:", Rest/binary>>, <<"addon">>, Addon]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    Channel = lookup_channel(Id),
-    ets:insert(channels, Channel#channel{addon=Addon}),
-    [ets:insert(tokens, Token#token{addon=Addon}) || Token <- logplex_channel:lookup_tokens(Id)],
-    undefined;    
+    case logplex_channel:lookup(Id) of
+        undefined ->
+            error_logger:error_report([?MODULE, set_addon, undefined_channel, Id]);
+        Channel ->
+            ets:insert(channels, Channel#channel{addon=Addon}),
+            [ets:insert(tokens, Token#token{addon=Addon}) || Token <- logplex_channel:lookup_tokens(Id)]
+    end,
+    ok;    
     
 handle({cmd, _Cmd, _Args}) ->
-    undefined;
+    ok;
 
 handle({error, closed}) ->
     error_logger:error_msg("NSYNC connection closed. Read-only mode enabled"),
@@ -99,6 +103,111 @@ handle({error, closed}) ->
 handle(_) ->
     ok.
 
+%% Helper functions
+create_channel(Id, Dict) ->
+    case dict_find(<<"app_id">>, Dict) of
+        undefined ->
+            error_logger:error_report([?MODULE, create_channel, missing_app_id, Id, dict:to_list(Dict)]);
+        Val ->
+            AppId = list_to_integer(binary_to_list(Val)),
+            Channel = #channel{id=Id,
+                   name=dict_find(<<"name">>, Dict),
+                   app_id=AppId,
+                   addon=dict_find(<<"addon">>, Dict)},
+            ets:insert(channels, Channel),
+            Channel
+    end.
+
+create_token(Id, Dict) ->
+    case dict_find(<<"ch">>, Dict) of
+        undefined ->
+            error_logger:error_report([?MODULE, create_token, missing_ch, Id, dict:to_list(Dict)]);
+        Val1 ->
+            Ch = list_to_integer(binary_to_list(Val1)),
+            Name = dict_find(<<"name">>, Dict), 
+            Token = #token{
+                id=Id,
+                channel_id=Ch,
+                name=Name
+            },
+            ets:insert(tokens, Token),
+            Token
+    end.
+
+create_drain(Id, Dict) ->
+    case dict_find(<<"ch">>, Dict) of
+        undefined ->
+            error_logger:error_report([?MODULE, create_drain, missing_ch, Id, dict:to_list(Dict)]);
+        Val1 ->
+            Ch = list_to_integer(binary_to_list(Val1)),
+            case dict_find(<<"port">>, Dict) of
+                undefined ->
+                    error_logger:error_report([?MODULE, create_drain, missing_port, Id, dict:to_list(Dict)]);
+                Val2 ->
+                    Port = list_to_integer(binary_to_list(Val2)),
+                    case dict_find(<<"host">>, Dict) of
+                        undefined ->
+                            error_logger:error_report([?MODULE, create_drain, missing_host, Id, dict:to_list(Dict)]);
+                        Host ->
+                            Drain = #drain{
+                                id=Id,
+                                channel_id=Ch,
+                                host=Host,
+                                port=Port
+                            },
+                            ets:insert(drains, Drain),
+                            Drain
+                    end
+            end
+    end.
+
+populate_token_channel_data([]) ->
+    ok;
+
+populate_token_channel_data([Token|Tail]) when is_record(Token, token) ->
+    case logplex_channel:lookup(Token#token.channel_id) of
+        undefined ->
+            error_logger:error_report([?MODULE, populate_token_channel_data, undefined_channel, Token]);
+        #channel{app_id=AppId, addon=Addon} ->
+            ets:insert(tokens, Token#token{app_id=AppId, addon=Addon})
+    end,
+    populate_token_channel_data(Tail);
+
+populate_token_channel_data([_|Tail]) ->
+    populate_token_channel_data(Tail).
+
+populate_token_drain_data([]) ->
+    ok;
+
+populate_token_drain_data([Drain|Tail]) when is_record(Drain, drain) ->
+    case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', addon='_'}) of
+        [] ->
+            error_logger:error_report([?MODULE, populate_token_drain_data, undefined_tokens, Drain]);
+        Tokens ->
+            Drain1 = Drain#drain{resolved_host=logplex_utils:resolve_host(Drain#drain.host)},
+            ets:insert(tokens, [Token#token{drains=[Drain1|Drains]} || #token{drains=Drains}=Token <- Tokens])
+    end,
+    populate_token_drain_data(Tail);
+
+populate_token_drain_data([_|Tail]) ->
+    populate_token_drain_data(Tail).
+
+remove_token_drain_data(DrainId) ->
+    case logplex_drain:lookup(DrainId) of
+        undefined ->
+            error_logger:error_report([?MODULE, remove_token_drain_data, undefined_drain, DrainId]);
+        Drain ->
+            case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', addon='_'}) of
+                [] ->
+                    error_logger:error_report([?MODULE, remove_token_drain_data, undefined_tokens, Drain]);
+                Tokens ->
+                    ets:insert(tokens, [begin
+                        Drains1 = lists:filter(fun(#drain{id=Id}) -> Id =/= DrainId end, Drains),
+                        Token#token{drains=Drains1} 
+                    end || #token{drains=Drains}=Token <- Tokens])
+            end
+    end.
+
 parse_id(Bin) ->
     parse_id(Bin, []).
 
@@ -107,53 +216,6 @@ parse_id(<<":", _/binary>>, Acc) ->
 
 parse_id(<<C, Rest/binary>>, Acc) ->
     parse_id(Rest, [C|Acc]).
-
-create_channel(Id, Dict) ->
-    AppId = case dict_find(<<"app_id">>, Dict) of
-        undefined -> undefined;
-        Val -> list_to_integer(binary_to_list(Val))
-    end,
-    Channel = #channel{id=Id,
-                   name=dict_find(<<"name">>, Dict),
-                   app_id=AppId,
-                   addon=dict_find(<<"addon">>, Dict)},
-    ets:insert(channels, Channel).
-
-create_token(Id, Dict) ->
-    ChannelId = list_to_integer(binary_to_list(dict_find(<<"ch">>, Dict))),
-    Name = dict_find(<<"name">>, Dict), 
-    {AppId, Addon} = case lookup_channel(ChannelId) of
-        #channel{app_id=AppId0, addon=Addon0} -> {AppId0, Addon0};
-        undefined -> {undefined, undefined}
-    end,
-    Token = #token{id=Id,
-                   channel_id=ChannelId,
-                   name=Name,
-                   app_id=AppId,
-                   addon=Addon},
-    ets:insert(tokens, Token).
-
-create_drain(Id, Dict) ->
-    Ch = case dict_find(<<"ch">>, Dict) of
-        undefined -> undefined;
-        Val1 -> list_to_integer(binary_to_list(Val1))
-    end,
-    Port = case dict_find(<<"port">>, Dict) of
-        undefined -> undefined;
-        Val2 -> list_to_integer(binary_to_list(Val2))
-    end,
-    Drain = #drain{id=Id,
-                   channel_id=Ch,
-                   resolved_host=logplex_utils:resolve_host(dict_find(<<"host">>, Dict)),
-                   host=dict_find(<<"host">>, Dict),
-                   port=Port},
-    ets:insert(drains, Drain).
-
-lookup_channel(Id) ->
-    case ets:lookup(channels, Id) of
-        Channel when is_record(Channel, channel) -> Channel;
-        _ -> redis_helper:lookup_channel(Id)
-    end.            
 
 dict_from_list(List) ->
     dict_from_list(List, dict:new()).
@@ -169,4 +231,3 @@ dict_find(Key, Dict) ->
         {ok, Val} -> Val;
         _ -> undefined
     end.
-

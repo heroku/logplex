@@ -9,7 +9,6 @@
     logplex_drain,
     logplex_drain_writer,
     logplex_queue_sup,
-    logplex_rate_limit,
     logplex_realtime,
     logplex_redis_writer,
     logplex_session,

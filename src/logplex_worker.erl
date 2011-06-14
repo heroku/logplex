@@ -57,19 +57,31 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
 
 route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
-        #token{channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon} ->
+        #token{channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon, drains=Drains} ->
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
             Msg1 = iolist_to_binary(re:replace(Msg, Token, TokenName)),
-            process(ChannelId, BufferPid, Addon, Msg1);
+            process_drains(Drains, Msg1),
+            process_tails(ChannelId, Msg1),
+            process_msg(ChannelId, BufferPid, Addon, Msg1);
         _ ->
             ok
     end.
 
-process(ChannelId, BufferPid, Addon, Msg) ->
+process_drains([], _Msg) ->
+    ok;
+
+process_drains([#drain{resolved_host=Host, port=Port}|Tail], Msg) ->
+    logplex_queue:in(logplex_drain_buffer, {Host, Port, Msg}),
+    process_drains(Tail, Msg).
+
+process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
-    [logplex_queue:in(logplex_drain_buffer, {Host, Port, Msg}) || #drain{resolved_host=Host, port=Port} <- logplex_channel:lookup_drains(ChannelId)],
-    logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)).
+    ok.
+
+process_msg(ChannelId, BufferPid, Addon, Msg) ->
+    logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)),
+    ok.
 
 spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
 spool_length(_) -> ?DEFAULT_LOG_HISTORY.
