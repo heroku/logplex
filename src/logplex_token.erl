@@ -27,17 +27,12 @@
 -include_lib("logplex.hrl").
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
-    case logplex_channel:lookup(ChannelId) of
-        #channel{} ->
-            TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-            case redis_helper:create_token(ChannelId, TokenId, TokenName) of
-                ok ->
-                    TokenId;
-                Err ->
-                    Err
-            end;
-        _ ->
-            {error, not_found}
+    TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+    case redis_helper:create_token(ChannelId, TokenId, TokenName) of
+        ok ->
+            TokenId;
+        Err ->
+            Err
     end.
 
 delete(TokenId) when is_binary(TokenId) ->
