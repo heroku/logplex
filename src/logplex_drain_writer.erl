@@ -45,8 +45,10 @@ loop(Socket) ->
                 ok ->
                     logplex_stats:incr(message_routed),
                     logplex_realtime:incr(message_routed);
-                {error, nxdomain} -> error_logger:error_msg("nxdomin ~s:~w~n", [Host, Port]);
-                Err -> exit(Err)
+                {error, nxdomain} ->
+                    io:format("nxdomin ~s:~w~n", [Host, Port]);
+                Err ->
+                    exit(Err)
             end
     end,
     ?MODULE:loop(Socket).
