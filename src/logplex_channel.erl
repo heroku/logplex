@@ -66,7 +66,7 @@ token_match_expr(ChannelId) ->
     #token{id='_', channel_id=ChannelId, name='_', app_id='_', drains='_'}.
 
 drain_match_expr(ChannelId) ->
-    #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}.
+    #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host='_', port='_'}.
 
 logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     [{logplex_read_pool_map, {Map, Interval}}] = ets:lookup(logplex_shard_info, logplex_read_pool_map),

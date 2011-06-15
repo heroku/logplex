@@ -140,6 +140,7 @@ create_drain(Id, Dict) ->
                             Drain = #drain{
                                 id=Id,
                                 channel_id=Ch,
+                                token=dict_find(<<"token">>, Dict),
                                 host=Host,
                                 port=Port
                             },

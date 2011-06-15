@@ -27,7 +27,7 @@
 -include_lib("logplex.hrl").
 
 create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_integer(Port) orelse Port == undefined) ->
-    case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, resolved_host='_', host=Host, port=Port}) of
+    case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port}) of
         [_] ->
             {error, already_exists};
         [] ->
@@ -38,9 +38,10 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
                 _Ip ->
                     case redis_helper:drain_index() of
                         DrainId when is_integer(DrainId) ->
-                            case redis_helper:create_drain(DrainId, ChannelId, Host, Port) of
+                            Token = list_to_binary("d." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+                            case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
                                 ok ->
-                                    DrainId;
+                                    #drain{id=DrainId, channel_id=ChannelId, token=Token, host=Host, port=Port};
                                 Err ->
                                     Err
                             end;
@@ -52,7 +53,7 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
 
 delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
-    case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, resolved_host='_', host=Host, port=Port1}) of
+    case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port1}) of
         [#drain{id=DrainId}|_] ->
             delete(DrainId);
         _ ->
@@ -63,7 +64,7 @@ delete(DrainId) when is_integer(DrainId) ->
     redis_helper:delete_drain(DrainId).
 
 clear_all(ChannelId) when is_integer(ChannelId) ->
-    List = ets:match_object(drains, #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}),
+    List = ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host='_', port='_'}),
     [delete(DrainId) || #drain{id=DrainId} <- List],
     ok.
 

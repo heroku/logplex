@@ -3,7 +3,7 @@
 -record(msg, {time, source, ps, content}).
 -record(channel, {id, name, app_id}).
 -record(token, {id, channel_id, name, app_id, drains=[]}).
--record(drain, {id, channel_id, resolved_host, host, port}).
+-record(drain, {id, channel_id, token, resolved_host, host, port}).
 -record(session, {id, body}).
 
 -define(HTTP_PORT, 8001).

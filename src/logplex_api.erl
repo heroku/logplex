@@ -222,10 +222,10 @@ handlers() ->
             List when length(List) >= ?MAX_DRAINS ->
                 {400, "You have already added the maximum number of drains allowed"};
             _ ->
-                DrainId = logplex_drain:create(list_to_integer(ChannelId), Host, Port),
-                case DrainId of
-                    Int when is_integer(Int) ->
+                case logplex_drain:create(list_to_integer(ChannelId), Host, Port) of
+                    #drain{id=_Id, token=_Token} ->
                         {201, io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port])};
+                        %{201, iolist_to_binary(mochijson2:encode({struct, [{id, Id}, {token, Token}]}))};
                     {error, already_exists} ->
                         {400, io_lib:format("Drain syslog://~s:~p already exists", [Host, Port])};
                     {error, invalid_drain} ->

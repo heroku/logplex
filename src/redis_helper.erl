@@ -111,10 +111,11 @@ drain_index() ->
         DrainId when is_integer(DrainId) -> DrainId
     end.
 
-create_drain(DrainId, ChannelId, Host, Port) when is_integer(DrainId), is_integer(ChannelId), is_binary(Host) ->
+create_drain(DrainId, ChannelId, Token, Host, Port) when is_integer(DrainId), is_integer(ChannelId), is_binary(Token), is_binary(Host) ->
     Key = iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>]),
     Res = redo:cmd(config, [<<"HMSET">>, Key,
         <<"ch">>, integer_to_list(ChannelId),
+        <<"token">>, Token,
         <<"host">>, Host] ++
         [<<"port">> || is_integer(Port)] ++
         [integer_to_list(Port) || is_integer(Port)]),
