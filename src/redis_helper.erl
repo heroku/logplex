@@ -46,9 +46,9 @@ channel_index() ->
         ChannelId when is_integer(ChannelId) -> ChannelId
     end.
 
-create_channel(ChannelId, ChannelName, AppId, Addon) when is_integer(ChannelId), is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
+create_channel(ChannelId, ChannelName, AppId) when is_integer(ChannelId), is_binary(ChannelName), is_integer(AppId) ->
     Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
-    Cmd = [<<"HMSET">>, Key, <<"name">>, ChannelName, <<"app_id">>, integer_to_list(AppId), <<"addon">>, Addon],
+    Cmd = [<<"HMSET">>, Key, <<"name">>, ChannelName, <<"app_id">>, integer_to_list(AppId)],
     case redo:cmd(config, Cmd) of
         <<"OK">> ->
             ok;
@@ -60,12 +60,6 @@ delete_channel(ChannelId) when is_integer(ChannelId) ->
     case redo:cmd(config, [<<"DEL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
         1 -> ok;
         Err -> Err
-    end.
-
-update_channel_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
-    case redo:cmd(config, [<<"HSET">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]), <<"addon">>, Addon]) of
-        {error, Err} -> {error, Err};
-        Int when is_integer(Int) -> ok
     end.
 
 build_push_msg(ChannelId, Length, Msg) when is_integer(ChannelId), is_binary(Length), is_binary(Msg) ->
@@ -86,8 +80,7 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
                      Val when is_binary(Val), size(Val) > 0 ->
                          list_to_integer(binary_to_list(Val));
                      _ -> undefined
-                 end,
-                addon = logplex_utils:field_val(<<"addon">>, Fields)
+                 end
             };
         _ ->
             undefined

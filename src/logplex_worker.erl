@@ -57,13 +57,13 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
 
 route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
-        #token{channel_id=ChannelId, name=TokenName, app_id=AppId, addon=Addon, drains=Drains} ->
+        #token{channel_id=ChannelId, name=TokenName, app_id=AppId, drains=Drains} ->
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
             Msg1 = iolist_to_binary(re:replace(Msg, Token, TokenName)),
             process_drains(Drains, Msg1),
             process_tails(ChannelId, Msg1),
-            process_msg(ChannelId, BufferPid, Addon, Msg1);
+            process_msg(ChannelId, BufferPid, Msg1);
         _ ->
             ok
     end.
@@ -79,9 +79,6 @@ process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
     ok.
 
-process_msg(ChannelId, BufferPid, Addon, Msg) ->
-    logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, spool_length(Addon), Msg)),
+process_msg(ChannelId, BufferPid, Msg) ->
+    logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg)),
     ok.
-
-spool_length(<<"advanced">>) -> ?ADVANCED_LOG_HISTORY;
-spool_length(_) -> ?DEFAULT_LOG_HISTORY.

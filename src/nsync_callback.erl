@@ -81,17 +81,6 @@ handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
 
-handle({cmd, "hset", [<<"ch:", Rest/binary>>, <<"addon">>, Addon]}) ->
-    Id = list_to_integer(parse_id(Rest)),
-    case logplex_channel:lookup(Id) of
-        undefined ->
-            io:format("Error ~p ~p ~p ~p~n", [?MODULE, set_addon, undefined_channel, Id]);
-        Channel ->
-            ets:insert(channels, Channel#channel{addon=Addon}),
-            [ets:insert(tokens, Token#token{addon=Addon}) || Token <- logplex_channel:lookup_tokens(Id)]
-    end,
-    ok;    
-    
 handle({cmd, _Cmd, _Args}) ->
     ok;
 
@@ -112,8 +101,7 @@ create_channel(Id, Dict) ->
             AppId = list_to_integer(binary_to_list(Val)),
             Channel = #channel{id=Id,
                    name=dict_find(<<"name">>, Dict),
-                   app_id=AppId,
-                   addon=dict_find(<<"addon">>, Dict)},
+                   app_id=AppId},
             ets:insert(channels, Channel),
             Channel
     end.
@@ -168,8 +156,8 @@ populate_token_channel_data([Token|Tail]) when is_record(Token, token) ->
     case logplex_channel:lookup(Token#token.channel_id) of
         undefined ->
             io:format("Error ~p ~p ~p ~p~n", [?MODULE, populate_token_channel_data, undefined_channel, Token]);
-        #channel{app_id=AppId, addon=Addon} ->
-            ets:insert(tokens, Token#token{app_id=AppId, addon=Addon})
+        #channel{app_id=AppId} ->
+            ets:insert(tokens, Token#token{app_id=AppId})
     end,
     populate_token_channel_data(Tail);
 
@@ -180,7 +168,7 @@ populate_token_drain_data([]) ->
     ok;
 
 populate_token_drain_data([Drain|Tail]) when is_record(Drain, drain) ->
-    case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', addon='_', drains='_'}) of
+    case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', drains='_'}) of
         [] ->
             io:format("Error ~p ~p ~p ~p~n", [?MODULE, populate_token_drain_data, undefined_tokens, Drain]);
         Tokens ->
@@ -197,7 +185,7 @@ remove_token_drain_data(DrainId) ->
         undefined ->
             io:format("Error ~p ~p ~p ~p~n", [?MODULE, remove_token_drain_data, undefined_drain, DrainId]);
         Drain ->
-            case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', addon='_', drains='_'}) of
+            case ets:match_object(tokens, #token{id='_', channel_id=Drain#drain.channel_id, name='_', app_id='_', drains='_'}) of
                 [] ->
                     io:format("Error ~p ~p ~p ~p~n", [?MODULE, remove_token_drain_data, undefined_tokens, Drain]);
                 Tokens ->

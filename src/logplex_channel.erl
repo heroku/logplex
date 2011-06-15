@@ -22,15 +22,15 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_channel).
 
--export([create/3, delete/1, update_addon/2, lookup/1,
+-export([create/2, delete/1, lookup/1,
          lookup_tokens/1, lookup_drains/1, logs/2, info/1]).
 
 -include_lib("logplex.hrl").
 
-create(ChannelName, AppId, Addon) when is_binary(ChannelName), is_integer(AppId), is_binary(Addon) ->
+create(ChannelName, AppId) when is_binary(ChannelName), is_integer(AppId) ->
     case redis_helper:channel_index() of
         ChannelId when is_integer(ChannelId) ->
-            case redis_helper:create_channel(ChannelId, ChannelName, AppId, Addon) of
+            case redis_helper:create_channel(ChannelId, ChannelName, AppId) of
                 ok ->
                     ChannelId;
                 Err ->
@@ -50,14 +50,6 @@ delete(ChannelId) when is_integer(ChannelId) ->
             redis_helper:delete_channel(ChannelId)
     end.
 
-update_addon(ChannelId, Addon) when is_integer(ChannelId), is_binary(Addon) ->
-    case lookup(ChannelId) of
-        undefined ->
-            {error, not_found};
-        #channel{} ->
-            redis_helper:update_channel_addon(ChannelId, Addon)
-    end.
-
 lookup(ChannelId) when is_integer(ChannelId) ->
     case ets:lookup(channels, ChannelId) of
         [Channel] -> Channel;
@@ -71,7 +63,7 @@ lookup_drains(ChannelId) when is_integer(ChannelId) ->
     ets:match_object(drains, drain_match_expr(ChannelId)).
 
 token_match_expr(ChannelId) ->
-    #token{id='_', channel_id=ChannelId, name='_', app_id='_', addon='_', drains='_'}.
+    #token{id='_', channel_id=ChannelId, name='_', app_id='_', drains='_'}.
 
 drain_match_expr(ChannelId) ->
     #drain{id='_', channel_id=ChannelId, resolved_host='_', host='_', port='_'}.
@@ -91,13 +83,12 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
 
 info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
-        #channel{name=ChannelName, app_id=AppId, addon=Addon} ->
+        #channel{name=ChannelName, app_id=AppId} ->
             Tokens = lookup_tokens(ChannelId),
             Drains = lookup_drains(ChannelId),
             [{channel_id, ChannelId},
              {channel_name, ChannelName},
              {app_id, AppId},
-             {addon, Addon},
              {tokens, lists:sort([{Name, Token} || #token{id=Token, name=Name} <- Tokens])},
              {drains, [iolist_to_binary([<<"syslog://">>, Host, ":", integer_to_list(Port)]) || #drain{host=Host, port=Port} <- Drains]}];
         _ ->

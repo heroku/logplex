@@ -98,10 +98,7 @@ handlers() ->
         AppId = proplists:get_value(<<"app_id">>, Params),
         AppId == undefined andalso error_resp(400, <<"'app_id' post param missing">>),
 
-        Addon = proplists:get_value(<<"addon">>, Params),
-        Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
-
-        ChannelId = logplex_channel:create(ChannelName, AppId, Addon),
+        ChannelId = logplex_channel:create(ChannelName, AppId),
         not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
 
         case proplists:get_value(<<"tokens">>, Params) of
@@ -117,18 +114,10 @@ handlers() ->
         end
     end},
 
-    {['POST', "/channels/(\\d+)/addon$"], fun(Req, [ChannelId]) ->
+    {['POST', "/channels/(\\d+)/addon$"], fun(Req, [_ChannelId]) ->
         readonly(Req),
         authorize(Req),
-        {struct, Params} = mochijson2:decode(Req:recv_body()),
-
-        Addon = proplists:get_value(<<"addon">>, Params),
-        Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
-        
-        case logplex_channel:update_addon(list_to_integer(ChannelId), Addon) of
-            ok -> {200, <<"OK">>};
-            {error, not_found} -> {404, <<"Not found">>}
-        end
+        {200, <<"OK">>}
     end},
 
     {['DELETE', "/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
