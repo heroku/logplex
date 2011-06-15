@@ -218,15 +218,20 @@ handlers() ->
         Host == <<"localhost">> andalso error_resp(400, <<"Invalid drain">>),
         Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
 
-        DrainId = logplex_drain:create(list_to_integer(ChannelId), Host, Port),
-        case DrainId of
-            Int when is_integer(Int) ->
-                {201, io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port])};
-            {error, already_exists} ->
-                {400, io_lib:format("Drain syslog://~s:~p already exists", [Host, Port])};
-            {error, invalid_drain} ->
-                {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
-        end        
+        case logplex_channel:lookup_drains(list_to_integer(ChannelId)) of
+            List when length(List) >= ?MAX_DRAINS ->
+                {400, "You have already added the maximum number of drains allowed"};
+            _ ->
+                DrainId = logplex_drain:create(list_to_integer(ChannelId), Host, Port),
+                case DrainId of
+                    Int when is_integer(Int) ->
+                        {201, io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port])};
+                    {error, already_exists} ->
+                        {400, io_lib:format("Drain syslog://~s:~p already exists", [Host, Port])};
+                    {error, invalid_drain} ->
+                        {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
+                end
+        end
     end},
 
     {['GET', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->

@@ -10,6 +10,7 @@
 -define(TCP_PORT, 9998).
 -define(UDP_PORT, 9999).
 
+-define(MAX_DRAINS, 5).
 -define(LOG_HISTORY, <<"1500">>).
 -define(MAX_SPOOL_POOL_SIZE, 1000).
 
