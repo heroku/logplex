@@ -40,6 +40,8 @@ loop(Socket) ->
         timeout -> ok;
         {'EXIT', {noproc, _}} ->
             exit(normal);
+        {_, [{undefined, _, _}]} ->
+            ok;
         {1, [{Host, Port, Msg}]} ->
             case gen_udp:send(Socket, Host, Port, Msg) of
                 ok ->
