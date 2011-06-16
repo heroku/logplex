@@ -44,7 +44,7 @@ start_link(Port) ->
     gen_nb_server:start_link({local, ?MODULE}, ?MODULE, [Port]).
 
 init([Port], State) ->
-    {ok, RE} = re:compile("^(\\d+) (.*)"),
+    {ok, RE} = re:compile("^(\\d+) "),
     case gen_nb_server:add_listen_socket({"0.0.0.0", Port}, State) of
         {ok, State1} ->
             {ok, gen_nb_server:store_cb_state(#state{regex=RE}, State1)};
@@ -99,10 +99,11 @@ parse(Accept, RE, Packet) ->
         nomatch ->
             {ok, _Line, Rest} = read_line(Packet, []),
             parse(Accept, RE, Rest);
-        {match, [Len, Rest]} ->
+        {match, [Len]} ->
+            LSize = size(Len),
             Size = list_to_integer(binary_to_list(Len)),
-            case Rest of
-                <<Msg:Size/binary, Rest1/binary>> ->
+            case Packet of
+                <<Len:LSize/binary, 32/integer, Msg:Size/binary, Rest1/binary>> ->
                     process_msg(Accept, Msg),
                     parse(Accept, RE, Rest1);
                 _ ->
