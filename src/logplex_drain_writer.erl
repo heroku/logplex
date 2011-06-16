@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_drain_writer).
--export([start_link/1, init/1, loop/1]).
+-export([start_link/1, init/1, loop/2]).
 
 -include_lib("logplex.hrl").
 
@@ -32,25 +32,39 @@ start_link(_BufferPid) ->
 init(Parent) ->
     io:format("init ~p~n", [?MODULE]),
     {ok, Socket} = gen_udp:open(0, [binary]),
+    {ok, RE} = re:compile("^<\\d+>\\S+ (\\S+) \\S+ (\\S+) (\\S+) \\S+ \\S+ (.*)"),
     proc_lib:init_ack(Parent, {ok, self()}),
-    loop(Socket).
+    loop(RE, Socket).
 
-loop(Socket) ->
+loop(RE, Socket) ->
     case catch logplex_queue:out(logplex_drain_buffer) of
         timeout -> ok;
         {'EXIT', {noproc, _}} ->
             exit(normal);
-        {_, [{undefined, _, _}]} ->
+        {_, [{_, undefined, _, _}]} ->
             ok;
-        {1, [{Host, Port, Msg}]} ->
-            case gen_udp:send(Socket, Host, Port, Msg) of
-                ok ->
-                    logplex_stats:incr(message_routed),
-                    logplex_realtime:incr(message_routed);
-                {error, nxdomain} ->
-                    io:format("nxdomin ~s:~w~n", [Host, Port]);
-                Err ->
-                    exit(Err)
+        {1, [{Token, Host, Port, Msg}]} ->
+            case format_packet(RE, Token, Msg) of
+                undefined ->
+                    io:format("Error poorly formated drain msg=~1000p~n", [Msg]);
+                Packet ->
+                    case gen_udp:send(Socket, Host, Port, Packet) of
+                        ok ->
+                            logplex_stats:incr(message_routed),
+                            logplex_realtime:incr(message_routed);
+                        {error, nxdomain} ->
+                            io:format("nxdomin ~s:~w~n", [Host, Port]);
+                        Err ->
+                            exit(Err)
+                    end
             end
     end,
-    ?MODULE:loop(Socket).
+    ?MODULE:loop(RE, Socket).
+
+format_packet(RE, Token, Msg) ->
+    case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
+        {match, [Time, Source, Ps, Content]} ->
+            [Time, " ", Token, " ", Source, " ", Ps, " - - ", Content];
+        _ ->
+            undefined
+    end.

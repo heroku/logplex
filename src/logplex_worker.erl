@@ -71,8 +71,8 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
 process_drains([], _Msg) ->
     ok;
 
-process_drains([#drain{resolved_host=Host, port=Port}|Tail], Msg) ->
-    logplex_queue:in(logplex_drain_buffer, {Host, Port, Msg}),
+process_drains([#drain{token=Token, resolved_host=Host, port=Port}|Tail], Msg) ->
+    logplex_queue:in(logplex_drain_buffer, {Token, Host, Port, Msg}),
     process_drains(Tail, Msg).
 
 process_tails(ChannelId, Msg) ->
