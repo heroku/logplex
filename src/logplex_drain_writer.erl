@@ -32,7 +32,7 @@ start_link(_BufferPid) ->
 init(Parent) ->
     io:format("init ~p~n", [?MODULE]),
     {ok, Socket} = gen_udp:open(0, [binary]),
-    {ok, RE} = re:compile("^<\\d+>\\S+ (\\S+) \\S+ (\\S+) (\\S+) \\S+ \\S+ (.*)"),
+    {ok, RE} = re:compile("^(<\\d+>\\S+) (\\S+) \\S+ (\\S+) (\\S+) \\S+ \\S+ (.*)"),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(RE, Socket).
 
@@ -63,8 +63,8 @@ loop(RE, Socket) ->
 
 format_packet(RE, Token, Msg) ->
     case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
-        {match, [Time, Source, Ps, Content]} ->
-            [Time, " ", Token, " ", Source, " ", Ps, " - - ", Content];
+        {match, [PriFac, Time, Source, Ps, Content]} ->
+            [PriFac, <<" ">>, Time, <<" ">>, Token, <<" ">>, Source, <<" ">>, Ps, <<" - - ">>, Content];
         _ ->
             undefined
     end.
