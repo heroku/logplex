@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(udp_acceptor).
--export([start_link/0, init/1, loop/1]).
+-export([start_link/0, init/1, loop/2]).
 
 -include_lib("logplex.hrl").
 
@@ -34,16 +34,23 @@ init(Parent) ->
     register(?MODULE, Self),
     {ok, Socket} = gen_udp:open(?UDP_PORT, [binary, {active, once}]),
     proc_lib:init_ack(Parent, {ok, self()}),
-    ?MODULE:loop(Socket).
+    ?MODULE:loop(Socket, true).
 
-loop(Socket) ->
+loop(Socket, Accept) ->
     receive
         {udp, Socket, _IP, _InPortNo, Packet} ->
             logplex_stats:incr(message_received),
             logplex_realtime:incr(message_received),
-            logplex_queue:in(logplex_work_queue, Packet);
+            logplex_queue:in(logplex_work_queue, Packet),
+            Accept andalso inet:setopts(Socket, [{active, once}]),
+            ?MODULE:loop(Socket, Accept);
+        {_From, stop_accepting} ->
+            error_logger:error_msg("udp_acceptor stop_accepting"),
+            ?MODULE:loop(Socket, false);
+        {_From, start_accepting} ->
+            error_logger:info_msg("udp_acceptor start_accepting"),
+            inet:setopts(Socket, [{active, once}]),
+            ?MODULE:loop(Socket, true);
         _ ->
-            ok
-    end,
-    inet:setopts(Socket, [{active, once}]),
-    ?MODULE:loop(Socket).
+            ?MODULE:loop(Socket, Accept)
+    end.

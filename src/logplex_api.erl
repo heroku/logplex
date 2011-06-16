@@ -59,14 +59,16 @@ loop(Req) ->
         {Code, Body} = serve(handlers(), Method, Path, Req),
         Time = timer:now_diff(now(), Start) div 1000,
         io:format("logplex_api app_id=~s channel_id=~s method=~p path=~s resp_code=~w time=~w body=~s~n", [AppId, ChannelId, Method, Path, Code, Time, Body]),
-        Req:respond({Code, ?HDR, Body})
+        Req:respond({Code, ?HDR, Body}),
+        exit(normal)
     catch 
         exit:normal ->
-            ok;
+            exit(normal);
         Class:Exception ->
             Time1 = timer:now_diff(now(), Start) div 1000,
             io:format("logplex_api app_id=~s channel_id=~s method=~p path=~s time=~w exception=~1000p:~1000p~n", [AppId, ChannelId, Method, Path, Time1, Class, Exception]),
-            Req:respond({500, ?HDR, ""})
+            Req:respond({500, ?HDR, ""}),
+            exit(normal)
     end.
 
 handlers() ->
@@ -75,7 +77,7 @@ handlers() ->
 
         [throw({500, io_lib:format("Zero ~p child processes running", [Worker])}) || {Worker, 0} <- logplex_stats:workers()],
 
-        RegisteredMods = [logplex_grid, logplex_rate_limit, logplex_realtime, logplex_stats, logplex_channel, logplex_token, logplex_drain, logplex_session, logplex_tail, logplex_shard, udp_acceptor],
+        RegisteredMods = [logplex_realtime, logplex_stats, logplex_tail, logplex_shard, udp_acceptor],
         [(whereis(Name) == undefined orelse not is_process_alive(whereis(Name))) andalso throw({500, io_lib:format("Process dead: ~p", [Name])}) || Name <- RegisteredMods],
 
         Count = logplex_stats:healthcheck(),
@@ -85,8 +87,10 @@ handlers() ->
     end},
 
     {['POST', "/channels$"], fun(Req, _Match) ->
+        readonly(Req),
         authorize(Req),
-        {struct, Params} = mochijson2:decode(Req:recv_body()),
+        Body = Req:recv_body(),
+        {struct, Params} = mochijson2:decode(Body),
 
         ChannelName = proplists:get_value(<<"name">>, Params),
         ChannelName == undefined andalso error_resp(400, <<"'name' post param missing">>),
@@ -94,10 +98,7 @@ handlers() ->
         AppId = proplists:get_value(<<"app_id">>, Params),
         AppId == undefined andalso error_resp(400, <<"'app_id' post param missing">>),
 
-        Addon = proplists:get_value(<<"addon">>, Params),
-        Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
-
-        ChannelId = logplex_channel:create(ChannelName, AppId, Addon),
+        ChannelId = logplex_channel:create(ChannelName, AppId),
         not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
 
         case proplists:get_value(<<"tokens">>, Params) of
@@ -113,20 +114,14 @@ handlers() ->
         end
     end},
 
-    {['POST', "/channels/(\\d+)/addon$"], fun(Req, [ChannelId]) ->
+    {['POST', "/channels/(\\d+)/addon$"], fun(Req, [_ChannelId]) ->
+        readonly(Req),
         authorize(Req),
-        {struct, Params} = mochijson2:decode(Req:recv_body()),
-
-        Addon = proplists:get_value(<<"addon">>, Params),
-        Addon == undefined andalso error_resp(400, <<"'addon' post param missing">>),
-        
-        case logplex_channel:update_addon(list_to_integer(ChannelId), Addon) of
-            ok -> {200, <<"OK">>};
-            {error, not_found} -> {404, <<"Not found">>}
-        end
+        {200, <<"OK">>}
     end},
 
     {['DELETE', "/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
         case logplex_channel:delete(list_to_integer(ChannelId)) of
             ok -> {200, <<"OK">>};
@@ -135,14 +130,20 @@ handlers() ->
     end},
 
     {['POST', "/channels/(\\d+)/token$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),
 
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
+        A = now(),
         Token = logplex_token:create(list_to_integer(ChannelId), TokenName),
+        B = now(),
         not is_binary(Token) andalso exit({expected_binary, Token}),
+
+        io:format("create_token name=~s channel_id=~s time=~w~n",
+            [TokenName, ChannelId, timer:now_diff(B,A) div 1000]),
 
         {201, Token}
     end},
@@ -156,6 +157,8 @@ handlers() ->
     end},
 
     {['GET', "/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
+        proplists:get_value("srv", Req:parse_qs()) == undefined
+            andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version\n">>),
         Body = logplex_session:lookup(list_to_binary("/sessions/" ++ Session)),
         not is_binary(Body) andalso error_resp(404, <<"Not found">>),
 
@@ -205,6 +208,7 @@ handlers() ->
     end},
 
     {['POST', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
 
         {struct, Data} = mochijson2:decode(Req:recv_body()),
@@ -214,20 +218,25 @@ handlers() ->
         Host == <<"localhost">> andalso error_resp(400, <<"Invalid drain">>),
         Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
 
-        DrainId = logplex_drain:create(list_to_integer(ChannelId), Host, Port),
-        case DrainId of
-            Int when is_integer(Int) ->
-                {201, io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port])};
-            {error, already_exists} ->
-                {400, io_lib:format("Drain syslog://~s:~p already exists", [Host, Port])};
-            {error, invalid_drain} ->
-                {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
-        end        
+        case logplex_channel:lookup_drains(list_to_integer(ChannelId)) of
+            List when length(List) >= ?MAX_DRAINS ->
+                {400, "You have already added the maximum number of drains allowed"};
+            _ ->
+                case logplex_drain:create(list_to_integer(ChannelId), Host, Port) of
+                    #drain{id=_Id, token=_Token} ->
+                        {201, io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port])};
+                        %{201, iolist_to_binary(mochijson2:encode({struct, [{id, Id}, {token, Token}]}))};
+                    {error, already_exists} ->
+                        {400, io_lib:format("Drain syslog://~s:~p already exists", [Host, Port])};
+                    {error, invalid_drain} ->
+                        {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
+                end
+        end
     end},
 
     {['GET', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Drains = logplex_channel:drains(list_to_integer(ChannelId)),
+        Drains = logplex_channel:lookup_drains(list_to_integer(ChannelId)),
         not is_list(Drains) andalso exit({expected_list, Drains}),
         
         Drains1 = [{struct, [{host, Host}, {port, Port}]} || #drain{host=Host, port=Port} <- Drains],
@@ -235,6 +244,7 @@ handlers() ->
     end},
 
     {['DELETE', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
         authorize(Req),
 
         Data = Req:parse_qs(),
@@ -287,6 +297,13 @@ authorize(Req) ->
             throw({401, <<"Not Authorized">>})
     end.
 
+readonly(_Req) ->
+    case application:get_env(logplex, read_only) of
+        {ok, true} ->
+            throw({500, <<"Read-only mode">>});
+        _ -> ok
+    end.
+
 error_resp(RespCode, Body) ->
     error_resp(RespCode, Body, undefined).
 
@@ -320,6 +337,8 @@ tail_loop(Socket, Filters) ->
             logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1)),
             tail_loop(Socket, Filters);
         {tcp_closed, Socket} ->
+            ok;
+        {tcp_error, Socket, _Reason} ->
             ok
     end.
 

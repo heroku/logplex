@@ -36,23 +36,22 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     boot_pagerduty(),
     boot_redis(),
+    setup_redgrid_vals(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
+    io:format("stopping...~n"),
+    logplex_db:dump(),
     ok.
 
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
-        {logplex_rate_limit, {logplex_rate_limit, start_link, []}, permanent, 2000, worker, [logplex_rate_limit]},
+        {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
+        {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
 
-        {logplex_channel, {logplex_channel, start_link, []}, permanent, 2000, worker, [logplex_channel]},
-        {logplex_token, {logplex_token, start_link, []}, permanent, 2000, worker, [logplex_token]},
-        {logplex_drain, {logplex_drain, start_link, []}, permanent, 2000, worker, [logplex_drain]},
-        {logplex_session, {logplex_session, start_link, []}, permanent, 2000, worker, [logplex_session]},
-
-        {logplex_grid, {logplex_grid, start_link, []}, permanent, 2000, worker, [logplex_grid]},
+        {logplex_token, {logplex_token, refresh_dns, []}, permanent, 2000, worker, [logplex_token]},
         {logplex_tail, {logplex_tail, start_link, []}, permanent, 2000, worker, [logplex_tail]},
 
         {logplex_redis_writer_sup, {logplex_worker_sup, start_link, [logplex_redis_writer_sup, logplex_redis_writer]}, permanent, 2000, worker, [logplex_redis_writer_sup]},
@@ -67,7 +66,6 @@ init([]) ->
         {logplex_work_queue, {logplex_queue, start_link, [logplex_work_queue, logplex_work_queue_args()]}, permanent, 2000, worker, [logplex_work_queue]},
         {logplex_drain_buffer, {logplex_queue, start_link, [logplex_drain_buffer, logplex_drain_buffer_args()]}, permanent, 2000, worker, [logplex_drain_buffer]},
 
-        {logplex_cloudkick, {logplex_cloudkick, start_link, []}, permanent, 2000, worker, [logplex_cloudkick]},
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]}
     ]}}.
@@ -81,22 +79,27 @@ set_cookie() ->
 boot_pagerduty() ->
     case os:getenv("HEROKU_DOMAIN") of
         "heroku.com" ->
-            ok = application:load(pagerduty),
-            application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
-            ok = application:start(pagerduty, temporary),
-            ok = error_logger:add_report_handler(logplex_report_handler);
+            case os:getenv("PAGERDUTY") of
+                "0" -> ok;
+                _ ->
+                    ok = application:load(pagerduty),
+                    application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
+                    ok = application:start(pagerduty, temporary),
+                    ok = error_logger:add_report_handler(logplex_report_handler)
+            end;
         _ ->
             ok
     end.
 
 boot_redis() ->
-    case application:start(redis, temporary) of
-        ok ->
-            Opts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
-            redis_pool:add(config_pool, Opts, 25);
-        Err ->
-            exit(Err)
-    end.
+    application:start(redis, temporary).
+    
+setup_redgrid_vals() ->
+    application:load(redgrid),
+    application:set_env(redgrid, local_ip, os:getenv("LOCAL_IP")),
+    application:set_env(redgrid, redis_url, os:getenv("LOGPLEX_CONFIG_REDIS_URL")),
+    application:set_env(redgrid, domain, os:getenv("HEROKU_DOMAIN")),
+    ok.
 
 logplex_work_queue_args() ->
     MaxLength =
@@ -113,7 +116,8 @@ logplex_work_queue_args() ->
      {max_length, MaxLength},
      {num_workers, NumWorkers},
      {worker_sup, logplex_worker_sup},
-     {worker_args, []}].
+     {worker_args, []},
+     {dict, dict:from_list([{producer_callback, fun(Self, Atom) -> whereis(udp_acceptor) ! {Self, Atom} end}])}].
 
 logplex_drain_buffer_args() ->
     MaxLength =

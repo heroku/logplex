@@ -7,3 +7,12 @@
 [submodule "deps/pagerduty"]
 	path = deps/pagerduty
 	url = git@git.herokai.com:erlang_pagerduty.git
+[submodule "deps/redgrid"]
+	path = deps/redgrid
+	url = git@git.herokai.com:redgrid.git
+[submodule "deps/redo"]
+	path = deps/redo
+	url = git@git.herokai.com:redo.git
+[submodule "deps/nsync"]
+	path = deps/nsync
+	url = git@git.herokai.com:nsync.git

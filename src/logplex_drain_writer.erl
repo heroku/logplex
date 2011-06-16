@@ -40,13 +40,17 @@ loop(Socket) ->
         timeout -> ok;
         {'EXIT', {noproc, _}} ->
             exit(normal);
+        {_, [{undefined, _, _}]} ->
+            ok;
         {1, [{Host, Port, Msg}]} ->
             case gen_udp:send(Socket, Host, Port, Msg) of
                 ok ->
                     logplex_stats:incr(message_routed),
                     logplex_realtime:incr(message_routed);
-                {error, nxdomain} -> error_logger:error_msg("nxdomin ~s:~w~n", [Host, Port]);
-                Err -> exit(Err)
+                {error, nxdomain} ->
+                    io:format("nxdomin ~s:~w~n", [Host, Port]);
+                Err ->
+                    exit(Err)
             end
     end,
     ?MODULE:loop(Socket).

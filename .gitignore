@@ -1,4 +1,8 @@
 release/*.boot
 ebin/*.beam
 erl_crash.dump
-go_src/*.out
+data
+channels
+tokens
+drains
+src/*.swp

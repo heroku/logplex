@@ -32,7 +32,17 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {dropped_stat_key, length_stat_key, queue, length, max_length, waiting, dict, workers=[]}).
+-record(state, {
+    dropped_stat_key,
+    length_stat_key,
+    queue,
+    length,
+    max_length,
+    waiting,
+    dict,
+    workers=[],
+    accepting=true
+}).
 
 -define(TIMEOUT, 30000).
 
@@ -104,7 +114,7 @@ init([Props]) ->
         length = 0,
         max_length = proplists:get_value(max_length, Props),
         waiting = queue:new(),
-        dict = proplists:get_value(dict, Props)
+        dict = proplists:get_value(dict, Props, dict:new())
     },
     WorkerSup = proplists:get_value(worker_sup, Props),
     NumWorkers = proplists:get_value(num_workers, Props),
@@ -124,12 +134,13 @@ init([Props]) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_call({out, Num}, {From, _Mref}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
+    State1 = enable_producer(State),
     case drain(Queue, Num) of
         {Items, Queue1} when is_list(Items), length(Items) > 0 ->
             NumItems = length(Items),
-            {reply, {NumItems, lists:reverse(Items)}, State#state{queue=Queue1, length=Length-NumItems}};
+            {reply, {NumItems, lists:reverse(Items)}, State1#state{queue=Queue1, length=Length-NumItems}};
         _ ->
-            {reply, empty, State#state{waiting=queue:in(From, Waiting)}}
+            {reply, empty, State1#state{waiting=queue:in(From, Waiting)}}
     end;
 
 handle_call(info, _From, #state{length=Length, max_length=MaxLength}=State) ->
@@ -156,10 +167,14 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({in, _Packet}, #state{dropped_stat_key=StatKey, length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
+handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Length, max_length=MaxLength}=State) when Length >= MaxLength ->
     logplex_stats:incr(StatKey),
     logplex_realtime:incr(StatKey),
-    {noreply, State};
+    case dict:find(producer_callback, Dict) of
+        {ok, Fun} -> Fun(self(), stop_accepting);
+        error -> ok
+    end,
+    {noreply, State#state{accepting=false}};
 
 handle_cast({in, Packet}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
     case queue:out(Waiting) of
@@ -258,6 +273,22 @@ drain(Queue, N, Acc) ->
             drain(Queue1, N-1, [Out|Acc]);
         {empty, _Queue} ->
             {Acc, Queue}
+    end.
+
+enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting=Accepting}=State) ->
+  case Accepting of
+        false ->
+            case Length < (MaxLength div 2) of
+                true ->
+                    case dict:find(producer_callback, Dict) of
+                        {ok, Fun} ->
+                            Fun(self(), start_accepting),
+                            State#state{accepting=true};
+                        error -> State
+                    end;
+                false -> State
+            end;
+        true -> State
     end.
 
 report_stats(Pid) ->

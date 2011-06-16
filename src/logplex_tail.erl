@@ -37,7 +37,7 @@ start_link() ->
 
 register(ChannelId) when is_integer(ChannelId) ->
     Self = self(),
-    logplex_grid:cast(?MODULE, {register, ChannelId, Self}),
+    gen_server:abcast([node()|nodes()], ?MODULE, {register, ChannelId, Self}),
     ok.
 
 route(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
@@ -57,8 +57,9 @@ route(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
+    process_flag(trap_exit, true),
     ets:new(?MODULE, [protected, named_table, bag]),
-	{ok, []}.
+    {ok, []}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -80,7 +81,8 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({register, ChannelId, Pid}, State)->
+handle_cast({register, ChannelId, Pid}, State) ->
+    link(Pid),
     ets:insert(?MODULE, {ChannelId, Pid}),
     {noreply, State};
 
@@ -94,6 +96,13 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({'EXIT', Pid, _Why}, State) ->
+    case ets:match_object(?MODULE, {'_', Pid}) of
+        [Obj] -> ets:delete_object(?MODULE, Obj);
+        [] -> ok
+    end,
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 

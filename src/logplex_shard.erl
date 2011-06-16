@@ -158,13 +158,8 @@ populate_info_table(Urls) ->
 add_pools([], Acc) -> Acc;
 
 add_pools([Url|Tail], Acc) ->
-    Opts = logplex_utils:parse_redis_url(Url),
-    NumWorkers =
-        case os:getenv("LOGPLEX_READERS") of
-            false -> ?DEFAULT_LOGPLEX_READERS;
-            StrNum2 -> list_to_integer(StrNum2)
-        end,
-    {ok, Pool} = redis_pool:add(Opts, NumWorkers),
+    Opts = redo_uri:parse(Url),
+    {ok, Pool} = redo:start_link(undefined, Opts),
     add_pools(Tail, [{Url, Pool}|Acc]).
 
 redis_buffer_args(Url) ->
