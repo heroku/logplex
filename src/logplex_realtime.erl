@@ -85,12 +85,14 @@ handle_info(flush, #state{instance_name=undefined}=State) ->
 handle_info(flush, State) ->
     Stats = ets:tab2list(?MODULE),
     reset_stats(),
-    Json = {struct, [proplists:lookup(message_received, Stats),
-                     proplists:lookup(message_processed, Stats),
-                     proplists:lookup(message_routed, Stats),
-                     proplists:lookup(work_queue_dropped, Stats),
-                     proplists:lookup(drain_buffer_dropped, Stats),
-                     proplists:lookup(redis_buffer_dropped, Stats)]},
+    Stats1 = [proplists:lookup(message_received, Stats),
+             proplists:lookup(message_processed, Stats),
+             proplists:lookup(message_routed, Stats),
+             proplists:lookup(message_dropped, Stats),
+             proplists:lookup(work_queue_dropped, Stats),
+             proplists:lookup(drain_buffer_dropped, Stats),
+             proplists:lookup(redis_buffer_dropped, Stats)],
+    Json = {struct, [{Key,Val} || {Key,Val} <- Stats1, Val > 0]},
     Json1 = iolist_to_binary(mochijson2:encode(Json)),
     publish(Json1, State);
 
@@ -117,6 +119,7 @@ reset_stats() ->
     true = ets:insert(?MODULE, [{message_received, 0},
                                 {message_processed, 0},
                                 {message_routed, 0},
+                                {message_dropped, 0},
                                 {work_queue_dropped, 0},
                                 {drain_buffer_dropped, 0},
                                 {redis_buffer_dropped, 0}]).

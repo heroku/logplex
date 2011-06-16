@@ -38,15 +38,16 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {accept=true}).
+-record(state, {accept = true, buffer = <<>>, regex}).
 
 start_link(Port) ->
     gen_nb_server:start_link({local, ?MODULE}, ?MODULE, [Port]).
 
 init([Port], State) ->
+    {ok, RE} = re:compile("^(\\d+) (.*)"),
     case gen_nb_server:add_listen_socket({"0.0.0.0", Port}, State) of
         {ok, State1} ->
-            {ok, gen_nb_server:store_cb_state(#state{}, State1)};
+            {ok, gen_nb_server:store_cb_state(#state{regex=RE}, State1)};
         Error ->
             {stop, Error, State}
     end.
@@ -65,23 +66,20 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info({tcp, Sock, Packet}, State) ->
+    MyState = gen_nb_server:get_cb_state(State),
+    Accept = MyState#state.accept,
+    RE = MyState#state.regex,
+    {ok, Rest} = parse(Accept, RE, <<(MyState#state.buffer)/binary, Packet/binary>>),
     inet:setopts(Sock, [{active, once}]),
-    logplex_stats:incr(message_received),
-    logplex_realtime:incr(message_received),
-    case gen_nb_server:get_cb_state(State) of
-        #state{accept=true} ->
-            logplex_queue:in(logplex_work_queue, Packet);
-        #state{accept=false} ->
-            logplex_stats:incr(message_dropped),
-            logplex_realtime:incr(work_queue_dropped)
-    end,
-    {noreply, State};
+    {noreply, gen_nb_server:store_cb_state(MyState#state{buffer=Rest}, State)};
 
 handle_info({_From, stop_accepting}, State) ->
-    {noreply, gen_nb_server:store_cb_state(#state{accept=false}, State)}; 
+    MyState = gen_nb_server:get_cb_state(State),
+    {noreply, gen_nb_server:store_cb_state(MyState#state{accept=false}, State)}; 
 
 handle_info({_From, start_accepting}, State) ->
-    {noreply, gen_nb_server:store_cb_state(#state{accept=true}, State)}; 
+    MyState = gen_nb_server:get_cb_state(State),
+    {noreply, gen_nb_server:store_cb_state(MyState#state{accept=true}, State)}; 
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -91,3 +89,43 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+%% internal
+parse(_Accept, _RE, <<>>) ->
+    {ok, <<>>};
+
+parse(Accept, RE, Packet) ->
+    case re:run(Packet, RE, [{capture, all_but_first, binary}]) of
+        nomatch ->
+            {ok, _Line, Rest} = read_line(Packet, []),
+            parse(Accept, RE, Rest);
+        {match, [Len, Rest]} ->
+            Size = list_to_integer(binary_to_list(Len)),
+            case Rest of
+                <<Msg:Size/binary, Rest1/binary>> ->
+                    process_msg(Accept, Msg),
+                    parse(Accept, RE, Rest1);
+                _ ->
+                    {ok, Packet}
+            end
+    end.
+
+read_line(<<$\n, Rest/binary>>, Acc) ->
+    {ok, iolist_to_binary(lists:reverse([$\n|Acc])), Rest};
+
+read_line(<<>>, Acc) ->
+    {ok, iolist_to_binary(lists:reverse(Acc)), <<>>};
+
+read_line(<<C, Rest/binary>>, Acc) ->
+    read_line(Rest, [C|Acc]).
+
+process_msg(Accept, Msg) ->
+    logplex_stats:incr(message_received),
+    logplex_realtime:incr(message_received),
+    case Accept of
+        true ->
+            logplex_queue:in(logplex_work_queue, Msg);
+        false ->
+            logplex_stats:incr(message_dropped),
+            logplex_realtime:incr(message_dropped)
+    end.
