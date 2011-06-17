@@ -157,8 +157,6 @@ handlers() ->
     end},
 
     {['GET', "/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
-        proplists:get_value("srv", Req:parse_qs()) == undefined
-            andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version\n">>),
         Body = logplex_session:lookup(list_to_binary("/sessions/" ++ Session)),
         not is_binary(Body) andalso error_resp(404, <<"Not found">>),
 
@@ -166,6 +164,14 @@ handlers() ->
         ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
         not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
         ChannelId = list_to_integer(binary_to_list(ChannelId0)),
+
+        case proplists:get_value("srv", Req:parse_qs()) of
+            undefined ->
+                io:format("Old client channel=~w~n", [ChannelId]),
+                error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version\n">>);
+            _ ->
+                ok
+        end,
 
         logplex_stats:incr(session_accessed),
 
