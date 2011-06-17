@@ -64,7 +64,7 @@ loop(RE, Socket) ->
 format_packet(RE, Token, Msg) ->
     case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
         {match, [PriFac, Time, Source, Ps, Content]} ->
-            [PriFac, <<" ">>, Time, <<" ">>, Token, <<" ">>, Source, <<" ">>, Ps, <<" - - ">>, Content];
+            [PriFac, <<" ">>, Time, <<" ">>, Source, <<" ">>, Ps, <<" - - ">>, Token, <<" ">>, Content];
         _ ->
             undefined
     end.
