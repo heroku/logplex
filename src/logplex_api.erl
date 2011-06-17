@@ -185,6 +185,8 @@ handlers() ->
         Socket = Req:get(socket),
         Req:start_response({200, ?HDR}),
 
+        inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
+
         filter_and_send_logs(Socket, Logs, Filters, Num0),
 
         case proplists:get_value(<<"tail">>, Data) of
