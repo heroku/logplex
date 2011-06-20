@@ -66,7 +66,7 @@ handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Drain = create_drain(Id, Dict),
-    populate_token_drain_data([Drain]);
+    Drain#drain.host =/= undefined andalso populate_token_drain_data([Drain]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
@@ -128,25 +128,25 @@ create_drain(Id, Dict) ->
             io:format("Error ~p ~p ~p ~p ~p~n", [?MODULE, create_drain, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
             Ch = list_to_integer(binary_to_list(Val1)),
-            case dict_find(<<"port">>, Dict) of
+            case dict_find(<<"token">>, Dict) of
                 undefined ->
-                    io:format("Error ~p ~p ~p ~p ~p~n", [?MODULE, create_drain, missing_port, Id, dict:to_list(Dict)]);
-                Val2 ->
-                    Port = list_to_integer(binary_to_list(Val2)),
-                    case dict_find(<<"host">>, Dict) of
-                        undefined ->
-                            io:format("Error ~p ~p ~p ~p ~p~n", [?MODULE, create_drain, missing_host, Id, dict:to_list(Dict)]);
-                        Host ->
-                            Drain = #drain{
-                                id=Id,
-                                channel_id=Ch,
-                                token=dict_find(<<"token">>, Dict),
-                                host=Host,
-                                port=Port
-                            },
-                            ets:insert(drains, Drain),
-                            Drain
-                    end
+                    io:format("Error ~p ~p ~p ~p ~p~n", [?MODULE, create_drain, missing_token, Id, dict:to_list(Dict)]);
+                Token ->
+                    Host = dict_find(<<"host">>, Dict),
+                    Port =
+                        case dict_find(<<"port">>, Dict) of
+                            undefined -> undefined;
+                            Val2 -> list_to_integer(binary_to_list(Val2))
+                        end,
+                    Drain = #drain{
+                        id=Id,
+                        channel_id=Ch,
+                        token=Token,
+                        host=Host,
+                        port=Port
+                    },
+                    ets:insert(drains, Drain),
+                    Drain
             end
     end.
 

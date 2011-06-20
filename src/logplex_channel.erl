@@ -90,7 +90,7 @@ info(ChannelId) when is_integer(ChannelId) ->
              {channel_name, ChannelName},
              {app_id, AppId},
              {tokens, lists:sort([{Name, Token} || #token{id=Token, name=Name} <- Tokens])},
-             {drains, [iolist_to_binary([<<"syslog://">>, Host, ":", integer_to_list(Port)]) || #drain{host=Host, port=Port} <- Drains]}];
+             {drains, [iolist_to_binary([<<"syslog://">>, Host, ":", integer_to_list(Port)]) || #drain{host=Host, port=Port} <- Drains, Port>0]}];
         _ ->
             []
     end.

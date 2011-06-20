@@ -209,6 +209,44 @@ handlers() ->
         {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
     end},
 
+    {['POST', "/channels/(\\d+)/drains/tokens$"], fun(Req, [ChannelId]) ->
+        readonly(Req),
+        authorize(Req),
+
+        {ok, DrainId, Token} = logplex_drain:reserve_token(),
+        logplex_drain:cache(DrainId, Token, list_to_integer(ChannelId)),
+        Resp = [
+            {id, DrainId},
+            {token, Token},
+            {msg, <<"Successfully reserved drain token">>}],
+        {201, iolist_to_binary(mochijson2:encode({struct, Resp}))}
+    end},
+
+    {['POST', "/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
+        readonly(Req),
+        authorize(Req),
+
+        {struct, Data} = mochijson2:decode(Req:recv_body()),
+        Host = proplists:get_value(<<"host">>, Data),
+        Port = proplists:get_value(<<"port">>, Data),
+        not is_binary(Host) andalso error_resp(400, <<"'host' param is missing">>),
+        Host == <<"localhost">> andalso error_resp(400, <<"Invalid drain">>),
+        Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
+
+        case logplex_drain:create(list_to_integer(DrainId), list_to_integer(ChannelId), Host, Port) of
+            #drain{id=Id} ->
+                Resp = [
+                    {id, Id},
+                    {msg, list_to_binary(io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port]))}
+                ],
+                {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
+            {error, not_found} ->
+                {404, <<"Failed to create drain">>};
+            {error, invalid_drain} ->
+                {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
+        end  
+    end},
+
     {['POST', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         readonly(Req),
         authorize(Req),
@@ -224,10 +262,11 @@ handlers() ->
             List when length(List) >= ?MAX_DRAINS ->
                 {400, "You have already added the maximum number of drains allowed"};
             _ ->
-                case logplex_drain:create(list_to_integer(ChannelId), Host, Port) of
-                    #drain{id=Id, token=Token} ->
+                {ok, DrainId, Token} = logplex_drain:reserve_token(),
+                case logplex_drain:create(DrainId, Token, list_to_integer(ChannelId), Host, Port) of
+                    #drain{} ->
                         Resp = [
-                            {id, Id},
+                            {id, DrainId},
                             {token, Token},
                             {msg, list_to_binary(io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port]))}
                         ],

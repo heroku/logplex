@@ -22,11 +22,30 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_drain).
 
--export([create/3, delete/1, delete/3, clear_all/1, lookup/1]).
+-export([reserve_token/0, cache/3, create/5, create/4,
+         delete/1, delete/3, clear_all/1, lookup/1]).
 
 -include_lib("logplex.hrl").
 
-create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_integer(Port) orelse Port == undefined) ->
+reserve_token() ->
+    Token = new_token(),
+    case redis_helper:drain_index() of
+        DrainId when is_integer(DrainId) ->
+           {ok, DrainId, Token};
+        Err ->
+            Err
+    end.
+
+cache(DrainId, Token, ChannelId)  when is_integer(DrainId),
+                                        is_binary(Token),
+                                        is_integer(ChannelId) ->
+    true = ets:insert(drains, #drain{id=DrainId, channel_id=ChannelId, token=Token}).
+
+create(DrainId, Token, ChannelId, Host, Port) when is_integer(DrainId),
+                                                   is_binary(Token),
+                                                   is_integer(ChannelId),
+                                                   is_binary(Host),
+                                                   (is_integer(Port) orelse Port == undefined) ->
     case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port}) of
         [_] ->
             {error, already_exists};
@@ -36,20 +55,38 @@ create(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host), (is_i
                     error_logger:error_msg("invalid drain: ~p:~p~n", [Host, Port]),
                     {error, invalid_drain};
                 _Ip ->
-                    case redis_helper:drain_index() of
-                        DrainId when is_integer(DrainId) ->
-                            Token = list_to_binary("d." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-                            case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
-                                ok ->
-                                    #drain{id=DrainId, channel_id=ChannelId, token=Token, host=Host, port=Port};
-                                Err ->
-                                    Err
-                            end;
+                    case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
+                        ok ->
+                            #drain{id=DrainId, channel_id=ChannelId, token=Token, host=Host, port=Port};
                         Err ->
                             Err
                     end
             end
     end.
+
+create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
+                                            is_integer(ChannelId),
+                                            is_binary(Host) ->
+    case ets:lookup(drains, DrainId) of
+        [#drain{channel_id=ChannelId, token=Token}] ->
+            case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port}) of
+                [_] ->
+                    {error, already_exists};
+                [] ->
+                    case logplex_utils:resolve_host(Host) of
+                        undefined ->
+                            error_logger:error_msg("invalid drain: ~p:~p~n", [Host, Port]),
+                            {error, invalid_drain};
+                        _Ip ->
+                            case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
+                                ok -> #drain{id=DrainId, channel_id=ChannelId, token=Token, host=Host, port=Port};
+                                Err -> Err
+                            end
+                    end
+            end;
+        _ ->
+            {error, not_found}
+    end.        
 
 delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
@@ -72,4 +109,17 @@ lookup(DrainId) when is_integer(DrainId) ->
     case ets:lookup(drains, DrainId) of
         [Drain] -> Drain;
         _ -> undefined
+    end.
+
+new_token() ->
+    new_token(10).
+
+new_token(0) ->
+    exit({error, failed_to_reserve_drain_token});
+
+new_token(Retries) ->
+    Token = list_to_binary("d." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+    case ets:match_object(drains, #drain{id='_', channel_id='_', token=Token, resolved_host='_', host='_', port='_'}) of
+        [#drain{}] -> new_token(Retries-1);
+        [] -> Token
     end.
