@@ -67,8 +67,9 @@ init([]) ->
         {logplex_drain_buffer, {logplex_queue, start_link, [logplex_drain_buffer, logplex_drain_buffer_args()]}, permanent, 2000, worker, [logplex_drain_buffer]},
 
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
-        {tcp_acceptor, {tcp_acceptor, start_link, [?TCP_PORT]}, permanent, 2000, worker, [tcp_acceptor]}
-    ]}}.
+        {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]}] ++
+        [{tcp_acceptor, {tcp_acceptor, start_link, [?TCP_PORT]}, permanent, 2000, worker, [tcp_acceptor]} || os:getenv("TCP_ACCEPTOR") == "1"]
+    }}.
 
 set_cookie() ->
     case os:getenv("LOGPLEX_COOKIE") of
