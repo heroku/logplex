@@ -27,7 +27,7 @@
 -include_lib("logplex.hrl").
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
-    TokenId = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+    TokenId = new_token(),
     case redis_helper:create_token(ChannelId, TokenId, TokenName) of
         ok ->
             TokenId;
@@ -75,3 +75,16 @@ refresh_tokens([#token{drains=Drains}=Token|Tail]) ->
     end || #drain{host=Host}=Drain <- Drains],
     ets:insert(tokens, Token#token{drains=Drains1}),
     refresh_tokens(Tail).
+
+new_token() ->
+    new_token(10).
+
+new_token(0) ->
+    exit({error, failed_to_provision_token});
+
+new_token(Retries) ->
+    Token = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+    case ets:match_object(tokens, #token{id=Token, channel_id='_', name='_', app_id='_', drains='_'}) of
+        [#token{}] -> new_token(Retries-1);
+        [] -> Token
+    end.
