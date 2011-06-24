@@ -21,43 +21,41 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(tcp_acceptor).
--behaviour(gen_nb_server).
+-behaviour(gen_server).
 
 %% API
 -export([start_link/1]).
 
 %% gen_server callbacks
--export([init/2,
-         handle_call/3,
-         handle_cast/2,
-         handle_info/2,
-         sock_opts/0,
-         new_connection/4,
-         terminate/2,
-         code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+         terminate/2, code_change/3]).
+
+-define(SOCK_OPTS, [binary, {reuseaddr, true}, {packet, raw},
+                            {keepalive, true}, {nodelay, true},
+                            {backlog, 1000}, {active, false}]).
 
 -include_lib("logplex.hrl").
 
--record(state, {accept = true, buffer = <<>>, regex}).
+-record(state, {listener, acceptor, accept = true}).
 
+%%====================================================================
+%% API functions
+%%====================================================================
 start_link(Port) ->
-    gen_nb_server:start_link({local, ?MODULE}, ?MODULE, [Port]).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Port], []).
 
-init([Port], State) ->
-    {ok, RE} = re:compile("^(\\d+) "),
-    case gen_nb_server:add_listen_socket({"0.0.0.0", Port}, State) of
-        {ok, State1} ->
-            {ok, gen_nb_server:store_cb_state(#state{regex=RE}, State1)};
+%%====================================================================
+%% gen_server callbacks
+%%====================================================================
+init([Port]) ->
+    process_flag(trap_exit, true),
+    case gen_tcp:listen(Port, ?SOCK_OPTS) of
+        {ok, LSock} ->
+            {ok, Ref} = prim_inet:async_accept(LSock, -1),
+            {ok, #state{listener=LSock, acceptor=Ref}};
         Error ->
-            {stop, Error, State}
+            {stop, Error}
     end.
-
-sock_opts() ->
-    [binary, {active, false}, {reuseaddr, true}, {nodelay, true}, {packet, raw}].
-
-new_connection(_IpAddr, _Port, CSock, State) ->
-    inet:setopts(CSock, [{active, once}]),
-    {ok, State}.
 
 handle_call(_Request, _From, State) ->
     {reply, ignore, State}.
@@ -65,68 +63,53 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({tcp, Sock, Packet}, State) ->
-    MyState = gen_nb_server:get_cb_state(State),
-    Accept = MyState#state.accept,
-    RE = MyState#state.regex,
-    {ok, Rest} = parse(Accept, RE, <<(MyState#state.buffer)/binary, Packet/binary>>),
-    inet:setopts(Sock, [{active, once}]),
-    {noreply, gen_nb_server:store_cb_state(MyState#state{buffer=Rest}, State)};
+handle_info({inet_async, LSock, Ref, {ok, CSock}}, #state{listener=LSock, acceptor=Ref}=State) ->
+    try
+        case set_sockopt(LSock, CSock) of
+            ok -> ok;
+            {error, Reason} -> exit({set_sockopt, Reason})
+        end,
 
-handle_info({_From, stop_accepting}, State) ->
-    MyState = gen_nb_server:get_cb_state(State),
-    {noreply, gen_nb_server:store_cb_state(MyState#state{accept=false}, State)}; 
+        {ok, Pid} = tcp_proxy_sup:start_child(),
+        gen_tcp:controlling_process(CSock, Pid),
+        tcp_proxy:set_socket(Pid, CSock),
 
-handle_info({_From, start_accepting}, State) ->
-    MyState = gen_nb_server:get_cb_state(State),
-    {noreply, gen_nb_server:store_cb_state(MyState#state{accept=true}, State)}; 
+        %% Signal the network driver that we are ready to accept another connection
+        case prim_inet:async_accept(LSock, -1) of
+            {ok, NewRef} -> ok;
+            {error, NewRef} -> exit({async_accept, inet:format_error(NewRef)})
+        end,
+
+        {noreply, State#state{acceptor=NewRef}}
+    catch exit:Why ->
+        error_logger:error_msg("Error in async accept: ~p.\n", [Why]),
+        {stop, Why, State}
+    end;
+
+handle_info({inet_async, LSock, Ref, Error}, #state{listener=LSock, acceptor=Ref}=State) ->
+    error_logger:error_msg("Error in socket acceptor: ~p.\n", [Error]),
+    {stop, Error, State};
 
 handle_info(_Info, State) ->
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(_Reason, State) ->
+    gen_tcp:close(State#state.listener),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%% internal
-parse(_Accept, _RE, <<>>) ->
-    {ok, <<>>};
-
-parse(Accept, RE, Packet) ->
-    case re:run(Packet, RE, [{capture, all_but_first, binary}]) of
-        nomatch ->
-            {ok, _Line, Rest} = read_line(Packet, []),
-            parse(Accept, RE, Rest);
-        {match, [Len]} ->
-            LSize = size(Len),
-            Size = list_to_integer(binary_to_list(Len)),
-            case Packet of
-                <<Len:LSize/binary, 32/integer, Msg:Size/binary, Rest1/binary>> ->
-                    process_msg(Accept, Msg),
-                    parse(Accept, RE, Rest1);
-                _ ->
-                    {ok, Packet}
-            end
-    end.
-
-read_line(<<$\n, Rest/binary>>, Acc) ->
-    {ok, iolist_to_binary(lists:reverse([$\n|Acc])), Rest};
-
-read_line(<<>>, Acc) ->
-    {ok, iolist_to_binary(lists:reverse(Acc)), <<>>};
-
-read_line(<<C, Rest/binary>>, Acc) ->
-    read_line(Rest, [C|Acc]).
-
-process_msg(Accept, Msg) ->
-    logplex_stats:incr(message_received),
-    logplex_realtime:incr(message_received),
-    case Accept of
-        true ->
-            logplex_queue:in(logplex_work_queue, Msg);
-        false ->
-            logplex_stats:incr(message_dropped),
-            logplex_realtime:incr(message_dropped)
+%% Taken from prim_inet.  We are merely copying some socket options from the
+%% listening socket to the new client socket.
+set_sockopt(ListSock, CliSocket) ->
+    true = inet_db:register_socket(CliSocket, inet_tcp),
+    case prim_inet:getopts(ListSock, [nodelay, keepalive, delay_send, priority, tos]) of
+    {ok, Opts} ->
+        case prim_inet:setopts(CliSocket, [{active, once}|Opts]) of
+        ok    -> ok;
+        Error -> gen_tcp:close(CliSocket), Error
+        end;
+    Error ->
+        gen_tcp:close(CliSocket), Error
     end.
