@@ -16,6 +16,3 @@
 [submodule "deps/nsync"]
 	path = deps/nsync
 	url = git@git.herokai.com:nsync.git
-[submodule "deps/gen_nb_server"]
-	path = deps/gen_nb_server
-	url = git://github.com/kevsmith/gen_nb_server.git
