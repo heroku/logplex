@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if [[ $1 = "development" ]]; then
+  git config -f .gitmodules submodule.deps/redis_pool.url git://github.com/JacobVorreuter/redis_pool.git
+  git config -f .gitmodules submodule.deps/pagerduty.url git://github.com/JacobVorreuter/pagerduty.git
+  git config -f .gitmodules submodule.deps/mochiweb.url git://github.com/mochi/mochiweb.git
+  git config -f .gitmodules submodule.deps/redgrid.url git://github.com/JacobVorreuter/redgrid.git
+  git config -f .gitmodules submodule.deps/redo.url git://github.com/JacobVorreuter/redo.git
+  git config -f .gitmodules submodule.deps/nsync.url git://github.com/JacobVorreuter/nsync.git
+  git submodule sync
+fi
+
+git submodule update --init

@@ -1,6 +1,6 @@
 # Setup
 
-    $ git submodule update --init
+    $ bin/get-deps development
     $ make
 
 # Erlang version
