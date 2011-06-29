@@ -84,7 +84,8 @@ new_token(0) ->
 
 new_token(Retries) ->
     Token = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
-    case ets:match_object(tokens, #token{id=Token, channel_id='_', name='_', app_id='_', drains='_'}) of
+    T = logplex_utils:empty_token(),
+    case ets:match_object(tokens, T#token{id=Token}) of
         [#token{}] -> new_token(Retries-1);
         [] -> Token
     end.

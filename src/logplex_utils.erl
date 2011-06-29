@@ -23,7 +23,7 @@
 -module(logplex_utils).
 -export([rpc/4, set_weight/1, setup_test_channel/2, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
-         redis_opts/1, parse_redis_url/1, instance_name/0, heroku_domain/0]).
+         empty_token/0, redis_opts/1, parse_redis_url/1, instance_name/0, heroku_domain/0]).
 
 -include_lib("logplex.hrl").
 
@@ -100,6 +100,9 @@ field_val(Key, [_, _ | Tail], Default) ->
 
 field_val(_Key, _, Default) ->
     Default.
+
+empty_token() ->
+    setelement(1, erlang:make_tuple(length(record_info(fields, token))+1, '_'), token).
 
 redis_opts(ConfigVar) when is_list(ConfigVar) ->
     case os:getenv(ConfigVar) of

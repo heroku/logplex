@@ -63,7 +63,8 @@ lookup_drains(ChannelId) when is_integer(ChannelId) ->
     ets:match_object(drains, drain_match_expr(ChannelId)).
 
 token_match_expr(ChannelId) ->
-    #token{id='_', channel_id=ChannelId, name='_', app_id='_', drains='_'}.
+    T = logplex_utils:empty_token(),
+    T#token{channel_id=ChannelId}.
 
 drain_match_expr(ChannelId) ->
     #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host='_', port='_'}.
