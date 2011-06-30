@@ -57,23 +57,28 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
 
 route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
-        #token{channel_id=ChannelId, name=TokenName, app_id=AppId, drains=Drains} ->
+        #token{channel_id=ChannelId, name=TokenName, app_id=AppId, drains=Drains, flags=Flags} ->
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
             Msg1 = iolist_to_binary(re:replace(Msg, Token, TokenName)),
-            process_drains(Drains, Msg1),
+            process_drains(Drains, Msg1, lists:member(<<"tcp-drain">>, Flags)),
             process_tails(ChannelId, Msg1),
             process_msg(ChannelId, BufferPid, Msg1);
         _ ->
             ok
     end.
 
-process_drains([], _Msg) ->
+process_drains([], _Msg, _TcpDrain) ->
     ok;
 
-process_drains([#drain{token=Token, resolved_host=Host, port=Port}|Tail], Msg) ->
+process_drains([#drain{token=Token, resolved_host=Host, port=Port}|Tail], Msg, false) ->
     logplex_queue:in(logplex_drain_buffer, {Token, Host, Port, Msg}),
-    process_drains(Tail, Msg).
+    process_drains(Tail, Msg, false);
+
+process_drains([#drain{token=Token, resolved_host=Host, port=Port}|Tail], Msg, true) ->
+    Pid = drain_worker(Token, Host, Port),
+    logplex_drain_worker:send(Pid, Msg),
+    process_drains(Tail, Msg, true).
 
 process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
@@ -82,3 +87,12 @@ process_tails(ChannelId, Msg) ->
 process_msg(ChannelId, BufferPid, Msg) ->
     logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg)),
     ok.
+
+drain_worker(Token, Host, Port) ->
+    case ets:lookup(drain_workers, Token) of
+        [{Token, Pid}] ->
+            Pid;
+        [] ->
+            {ok, Pid} = logplex_worker_sup:start_child(logplex_drain_worker_sup, [Token, Host, Port]),
+            Pid
+    end. 

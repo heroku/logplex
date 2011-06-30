@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_drain_writer).
--export([start_link/1, init/1, loop/2]).
+-export([start_link/1, init/1, loop/2, format_packet/3]).
 
 -include_lib("logplex.hrl").
 
