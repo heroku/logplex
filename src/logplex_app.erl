@@ -60,6 +60,7 @@ init([]) ->
         {logplex_reader_sup, {logplex_worker_sup, start_link, [logplex_reader_sup, logplex_reader]}, permanent, 2000, worker, [logplex_reader_sup]},
         {logplex_worker_sup, {logplex_worker_sup, start_link, [logplex_worker_sup, logplex_worker]}, permanent, 2000, worker, [logplex_worker_sup]},
         {logplex_drain_sup, {logplex_worker_sup, start_link, [logplex_drain_sup, logplex_drain_writer]}, permanent, 2000, worker, [logplex_drain_sup]},
+        {logplex_drain_worker_sup, {logplex_worker_sup, start_link, [logplex_drain_worker_sup, logplex_drain_worker]}, permanent, 2000, worker, [logplex_drain_worker_sup]},
 
         {logplex_shard, {logplex_shard, start_link, []}, permanent, 2000, worker, [logplex_shard]},
 
