@@ -71,7 +71,7 @@ init([]) ->
 
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
         {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]}] ++
-        [{tcp_acceptor, {tcp_acceptor, start_link, [?TCP_PORT]}, permanent, 2000, worker, [tcp_acceptor]} || not os:getenv("TCP_ACCEPTOR") == "0"]
+        [{tcp_acceptor, {tcp_acceptor, start_link, [?TCP_PORT]}, permanent, 2000, worker, [tcp_acceptor]} || os:getenv("TCP_ACCEPTOR") =/= "0"]
     }}.
 
 set_cookie() ->
