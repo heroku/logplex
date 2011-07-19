@@ -120,8 +120,7 @@ logplex_work_queue_args() ->
      {max_length, MaxLength},
      {num_workers, NumWorkers},
      {worker_sup, logplex_worker_sup},
-     {worker_args, []},
-     {dict, dict:from_list([{producer_callback, fun(Self, Atom) -> whereis(udp_acceptor) ! {Self, Atom} end}])}].
+     {worker_args, []}].
 
 logplex_drain_buffer_args() ->
     MaxLength =
