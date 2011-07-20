@@ -7,7 +7,7 @@
 -record(session, {id, body}).
 
 -define(HTTP_PORT, 8001).
--define(TCP_PORT, 601).
+-define(TCP_PORT, 6001).
 -define(UDP_PORT, 9999).
 
 -define(MAX_DRAINS, 5).
