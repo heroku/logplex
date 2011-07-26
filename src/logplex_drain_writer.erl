@@ -43,20 +43,12 @@ loop(RE, Socket) ->
             exit(normal);
         {_, [{_, undefined, _, _}]} ->
             ok;
-        {1, [{Token, Host, Port, Msg}]} ->
+        {1, [{TcpDrain, Token, Host, Port, Msg}]} ->
             case format_packet(RE, Token, Msg) of
                 undefined ->
                     io:format("Error poorly formated drain msg=~1000p~n", [Msg]);
                 Packet ->
-                    case gen_udp:send(Socket, Host, Port, Packet) of
-                        ok ->
-                            logplex_stats:incr(message_routed),
-                            logplex_realtime:incr(message_routed);
-                        {error, nxdomain} ->
-                            io:format("nxdomin ~s:~w~n", [Host, Port]);
-                        Err ->
-                            exit(Err)
-                    end
+                    send_packet(TcpDrain, Socket, Host, Port, Packet, 1)
             end
     end,
     ?MODULE:loop(RE, Socket).
@@ -67,4 +59,47 @@ format_packet(RE, Token, Msg) ->
             [PriFac, <<" ">>, Time, <<" ">>, Token, <<" ">>, Source, <<" ">>, Ps, <<" - - ">>, Content];
         _ ->
             undefined
+    end.
+
+send_packet(_TcpDrain, _UdpSocket, _Host, _Port, _Packet, Count) when Count < 0 ->
+    ok;
+
+send_packet(true = _TcpDrain, _UdpSocket, Host, Port, Packet, Count) ->
+    case tcp_socket(Host, Port) of
+        {ok, Sock} ->
+            case gen_tcp:send(Sock, Packet) of
+                ok ->
+                    logplex_stats:incr(message_routed),
+                    logplex_realtime:incr(message_routed);
+                _Err ->
+                    ets:delete(drain_sockets, {Host, Port}),
+                    send_packet(true, _UdpSocket, Host, Port, Packet, Count-1)
+            end;
+        _Err ->
+            ok
+    end;
+
+send_packet(false = _TcpDrain, Socket, Host, Port, Packet, _Count) ->
+    case gen_udp:send(Socket, Host, Port, Packet) of
+        ok ->
+            logplex_stats:incr(message_routed),
+            logplex_realtime:incr(message_routed);
+        {error, nxdomain} ->
+            io:format("nxdomin ~s:~w~n", [Host, Port]);
+        Err ->
+            exit(Err)
+    end.
+
+tcp_socket(Host, Port) ->
+    case ets:lookup(drain_sockets, {Host, Port}) of
+        [] ->
+            case gen_tcp:connect(Host, Port, [binary, {packet, raw}, {active, false}]) of
+                {ok, Sock} ->
+                    ets:insert(drain_sockets, {{Host, Port}, Sock}),
+                    {ok, Sock};
+                Err ->
+                    Err
+            end;
+        [{_, Sock}] ->
+            {ok, Sock}
     end.

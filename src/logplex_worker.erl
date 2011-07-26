@@ -68,17 +68,10 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
             ok
     end.
 
-process_drains([], _Msg, _TcpDrain) ->
-    ok;
-
-process_drains([#drain{token=Token, resolved_host=Host, port=Port}|Tail], Msg, false) ->
-    logplex_queue:in(logplex_drain_buffer, {Token, Host, Port, Msg}),
-    process_drains(Tail, Msg, false);
-
-process_drains([#drain{token=Token, resolved_host=Host, port=Port}|Tail], Msg, true) ->
-    Pid = drain_worker(Token, Host, Port),
-    logplex_drain_worker:send(Pid, Msg),
-    process_drains(Tail, Msg, true).
+process_drains(Drains, Msg, TcpDrain) ->
+    [logplex_queue:in(logplex_drain_buffer, {TcpDrain, Token, Host, Port, Msg}) ||
+        #drain{token=Token, resolved_host=Host, port=Port} <- Drains],
+    ok.
 
 process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
@@ -87,12 +80,3 @@ process_tails(ChannelId, Msg) ->
 process_msg(ChannelId, BufferPid, Msg) ->
     logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg)),
     ok.
-
-drain_worker(Token, Host, Port) ->
-    case ets:lookup(drain_workers, Token) of
-        [{Token, Pid}] ->
-            Pid;
-        [] ->
-            {ok, Pid} = logplex_worker_sup:start_child(logplex_drain_worker_sup, [Token, Host, Port]),
-            Pid
-    end. 
