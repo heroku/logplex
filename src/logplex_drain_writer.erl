@@ -41,7 +41,7 @@ loop(RE, Socket) ->
         timeout -> ok;
         {'EXIT', {noproc, _}} ->
             exit(normal);
-        {_, [{_, undefined, _, _}]} ->
+        {_, [{_, _, undefined, _, _}]} ->
             ok;
         {1, [{TcpDrain, Token, Host, Port, Msg}]} ->
             case format_packet(RE, Token, Msg) of
