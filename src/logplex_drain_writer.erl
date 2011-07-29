@@ -80,7 +80,7 @@ send_packet(true = _TcpDrain, _UdpSocket, Host, Port, Packet, Count) ->
     end;
 
 send_packet(false = _TcpDrain, Socket, Host, Port, Packet, _Count) ->
-    case gen_udp:send(Socket, Host, Port, Packet) of
+    case gen_udp:send(Socket, Host, Port, [integer_to_list(size(Packet)), <<" ">>, Packet, <<"\n">>]) of
         ok ->
             logplex_stats:incr(message_routed),
             logplex_realtime:incr(message_routed);
