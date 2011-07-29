@@ -122,8 +122,8 @@ handle_info({timeout, _TimerRef, flush}, _State) ->
     ets:delete_all_objects(logplex_stats_channels),
 
     [begin
-        io:format("logplex_channel_stats app_id=~w channel_id=~w message_processed=~w~n", [AppId, ChannelId, Val])
-    end || {{message_processed, AppId, ChannelId}, Val} <- ChannelStats, Val > 0],
+        io:format("logplex_channel_stats app_id=~w channel_id=~w ~p=~w~n", [AppId, ChannelId, Key, Val])
+    end || {{Key, AppId, ChannelId}, Val} <- ChannelStats, Val > 0],
 
     {noreply, Stats};
 

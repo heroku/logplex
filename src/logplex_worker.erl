@@ -61,15 +61,15 @@ route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
             Msg1 = iolist_to_binary(re:replace(Msg, Token, TokenName)),
-            process_drains(Drains, Msg1, lists:member(<<"tcp-drain">>, Flags)),
+            process_drains(AppId, ChannelId, Drains, Msg1, lists:member(<<"tcp-drain">>, Flags)),
             process_tails(ChannelId, Msg1),
             process_msg(ChannelId, BufferPid, Msg1);
         _ ->
             ok
     end.
 
-process_drains(Drains, Msg, TcpDrain) ->
-    [logplex_queue:in(logplex_drain_buffer, {TcpDrain, Token, Host, Port, Msg}) ||
+process_drains(AppId, ChannelId, Drains, Msg, TcpDrain) ->
+    [logplex_queue:in(logplex_drain_buffer, {TcpDrain, AppId, ChannelId, Token, Host, Port, Msg}) ||
         #drain{token=Token, resolved_host=Host, port=Port} <- Drains],
     ok.
 
