@@ -67,7 +67,7 @@ send_packet(_TcpDrain, _UdpSocket, _Host, _Port, _Packet, Count) when Count < 0 
 send_packet(true = _TcpDrain, _UdpSocket, Host, Port, Packet, Count) ->
     case tcp_socket(Host, Port) of
         {ok, Sock} ->
-            case gen_tcp:send(Sock, [integer_to_list(size(Packet)), <<" ">>, Packet, <<"\n">>]) of
+            case gen_tcp:send(Sock, [integer_to_list(iolist_size(Packet)), <<" ">>, Packet, <<"\n">>]) of
                 ok ->
                     logplex_stats:incr(message_routed),
                     logplex_realtime:incr(message_routed);
