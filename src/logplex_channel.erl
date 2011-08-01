@@ -32,6 +32,7 @@ create(ChannelName, AppId) when is_binary(ChannelName), is_integer(AppId) ->
         ChannelId when is_integer(ChannelId) ->
             case redis_helper:create_channel(ChannelId, ChannelName, AppId) of
                 ok ->
+                    ok = redis_helper:set_flag(ChannelId, <<"tcp-drain">>),
                     ChannelId;
                 Err ->
                     Err

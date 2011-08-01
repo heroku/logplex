@@ -170,3 +170,9 @@ register_stat_instance() ->
     InstanceName = logplex_utils:instance_name(),
     Domain = logplex_utils:heroku_domain(),
     redo:cmd(config, [<<"SETEX">>, iolist_to_binary([Domain, <<":stats:logplex:">>, InstanceName]), <<"60">>, <<"1">>]).
+
+set_flag(ChannelId, Flag) ->
+    case redo:cmd(config, [<<"SADD">>, iolist_to_binary([<<"flag:">>, integer_to_list(ChannelId), <<":data">>]), Flag]) of
+        1 -> ok;
+        _ -> undefined
+    end.
