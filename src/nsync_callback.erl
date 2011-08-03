@@ -40,17 +40,12 @@ handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
     create_drain(Id, Dict);
 
-handle({load, <<"flags:", Rest/binary>>, List}) when is_list(List) ->
-    Id = list_to_integer(parse_id(Rest)),
-    create_flags(Id, List);
-
 handle({load, _Key, _Val}) ->
     ok;
 
 handle({load, eof}) ->
     populate_token_channel_data(ets:tab2list(tokens)),
     populate_token_drain_data(ets:tab2list(drains)),
-    populate_token_flags(ets:tab2list(flags)),
     error_logger:info_msg("NSYNC sync complete"),
     application:set_env(logplex, read_only, false),
     ok;
@@ -85,22 +80,6 @@ handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
-
-handle({cmd, "sadd", [<<"flags:", Rest/binary>>, Item]}) ->
-    Id = list_to_integer(parse_id(Rest)),
-    Flags = create_flags(Id, [Item]),
-    populate_token_flags(Flags);
-
-handle({cmd, "srem", [<<"flags:", Rest/binary>>, Item]}) ->
-    Id = list_to_integer(parse_id(Rest)),
-    List =
-        case ets:lookup(flags, Id) of
-            [] -> [];
-            [{Id, List0}] -> List0 -- [Item]
-        end,
-    Flags = {Id, lists:usort(List)},
-    ets:insert(flags, Flags),
-    populate_token_flags(Flags);
 
 handle({cmd, _Cmd, _Args}) ->
     ok;
@@ -159,27 +138,19 @@ create_drain(Id, Dict) ->
                             undefined -> undefined;
                             Val2 -> list_to_integer(binary_to_list(Val2))
                         end,
+                    Tcp = (dict_find(<<"tcp">>, Dict) =/= <<"false">>),
                     Drain = #drain{
                         id=Id,
                         channel_id=Ch,
                         token=Token,
                         host=Host,
-                        port=Port
+                        port=Port,
+                        tcp=Tcp
                     },
                     ets:insert(drains, Drain),
                     Drain
             end
     end.
-
-create_flags(Id, List) ->
-    List1 =
-        case ets:lookup(flags, Id) of
-            [] -> List;
-            [{Id, List0}] -> List0 ++ List
-        end,
-    Flags = {Id, lists:usort(List1)},
-    ets:insert(flags, Flags),
-    Flags.
 
 populate_token_channel_data([]) ->
     ok;
@@ -212,22 +183,6 @@ populate_token_drain_data([Drain|Tail]) when is_record(Drain, drain) ->
 
 populate_token_drain_data([_|Tail]) ->
     populate_token_drain_data(Tail).
-
-populate_token_flags([]) ->
-    ok;
-
-populate_token_flags([{ChannelId, Flags}|Tail]) ->
-    populate_token_flags({ChannelId, Flags}),
-    populate_token_flags(Tail);
-    
-populate_token_flags({ChannelId, Flags}) ->
-    T = logplex_utils:empty_token(),
-    case ets:match_object(tokens, T#token{channel_id=ChannelId}) of
-        [] ->
-            ok;
-        Tokens ->
-            [ets:insert(tokens, Token#token{flags=Flags}) || Token <- Tokens]
-    end.
 
 remove_token_drain_data(DrainId) ->
     case logplex_drain:lookup(DrainId) of
