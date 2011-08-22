@@ -47,7 +47,7 @@ stop(_State) ->
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
-        {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
+        {redgrid, {redgrid, start_link, [[{redis_url, os:getenv("LOGPLEX_CONFIG_REDIS_URL")}]]}, permanent, 2000, worker, [redgrid]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
 
@@ -101,7 +101,6 @@ boot_redis() ->
 setup_redgrid_vals() ->
     application:load(redgrid),
     application:set_env(redgrid, local_ip, os:getenv("LOCAL_IP")),
-    application:set_env(redgrid, redis_url, os:getenv("LOGPLEX_CONFIG_REDIS_URL")),
     application:set_env(redgrid, domain, os:getenv("HEROKU_DOMAIN")),
     ok.
 
