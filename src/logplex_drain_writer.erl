@@ -115,6 +115,7 @@ tcp_socket(AppId, ChannelId, Host, Port) ->
             case (timer:now_diff(erlang:now(), Time) div 1000000) > 5 of
                 %% if so, retry connect
                 true ->
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p event=socklookup result=error~n", [AppId, ChannelId]),
                     ets:delete(drain_sockets, {Host, Port}),
                     tcp_socket(AppId, ChannelId, Host, Port);
                 false ->
