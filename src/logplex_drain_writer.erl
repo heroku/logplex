@@ -48,7 +48,7 @@ loop(RE, Socket) ->
                 undefined ->
                     io:format("Error poorly formated drain msg=~1000p~n", [Msg]);
                 Packet ->
-                    case send_packet(TcpDrain, Socket, Host, Port, Packet, 1) of
+                    case send_packet(TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet, 1) of
                         ok ->
                             logplex_stats:incr(logplex_stats_channels, {message_drained, AppId, ChannelId}),
                             logplex_realtime:incr(message_routed);
@@ -67,24 +67,25 @@ format_packet(RE, Token, Msg) ->
             undefined
     end.
 
-send_packet(_TcpDrain, _UdpSocket, _Host, _Port, _Packet, Count) when Count < 0 ->
+send_packet(_TcpDrain, _UdpSocket, _AppId, _ChannelId, _Host, _Port, _Packet, Count) when Count < 0 ->
     {error, failed_max_attempts};
 
-send_packet(true = _TcpDrain, _UdpSocket, Host, Port, Packet, Count) ->
-    case tcp_socket(Host, Port) of
+send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet, Count) ->
+    case tcp_socket(AppId, ChannelId, Host, Port) of
         {ok, Sock} ->
             case gen_tcp:send(Sock, [integer_to_list(iolist_size(Packet)), <<" ">>, Packet, <<"\n">>]) of
                 ok ->
                     ok;
                 _Err ->
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p tcp=true event=send error=~100p~n", [AppId, ChannelId, _Err]),
                     ets:delete(drain_sockets, {Host, Port}),
-                    send_packet(true, _UdpSocket, Host, Port, Packet, Count-1)
+                    send_packet(true, _UdpSocket, AppId, ChannelId, Host, Port, Packet, Count-1)
             end;
         _Err ->
             ok
     end;
 
-send_packet(false = _TcpDrain, Socket, Host, Port, Packet, _Count) ->
+send_packet(false = _TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet, _Count) ->
     case gen_udp:send(Socket, Host, Port, Packet) of
         ok ->
             ok;
@@ -92,17 +93,20 @@ send_packet(false = _TcpDrain, Socket, Host, Port, Packet, _Count) ->
             io:format("nxdomin ~s:~w~n", [Host, Port]),
             {error, nxdomain};
         Err ->
+            io:format("logplex_drain_writer app_id=~p channel_id=~p tcp=false event=send error=~100p~n", [AppId, ChannelId, Err]),
             exit(Err)
     end.
 
-tcp_socket(Host, Port) ->
+tcp_socket(AppId, ChannelId, Host, Port) ->
     case ets:lookup(drain_sockets, {Host, Port}) of
         [] ->
             case gen_tcp:connect(Host, Port, [binary, {packet, raw}, {active, false}]) of
                 {ok, Sock} ->
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p event=connect result=OK~n", [AppId, ChannelId]),
                     ets:insert(drain_sockets, {{Host, Port}, Sock}),
                     {ok, Sock};
                 Err ->
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p event=connect result=~100p~n", [AppId, ChannelId, Err]),
                     Err
             end;
         [{_, Sock}] ->
