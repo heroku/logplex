@@ -77,7 +77,7 @@ send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet, 
                 ok ->
                     ok;
                 _Err ->
-                    io:format("logplex_drain_writer app_id=~p channel_id=~p tcp=true event=send error=~100p~n", [AppId, ChannelId, _Err]),
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~s port=~w tcp=true event=send error=~100p~n", [AppId, ChannelId, self(), Host, Port, _Err]),
                     ets:delete(drain_sockets, {Host, Port}),
                     send_packet(true, _UdpSocket, AppId, ChannelId, Host, Port, Packet, Count-1)
             end;
@@ -93,7 +93,7 @@ send_packet(false = _TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet, _Co
             io:format("nxdomin ~s:~w~n", [Host, Port]),
             {error, nxdomain};
         Err ->
-            io:format("logplex_drain_writer app_id=~p channel_id=~p tcp=false event=send error=~100p~n", [AppId, ChannelId, Err]),
+            io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~s port=~w tcp=false event=send error=~100p~n", [AppId, ChannelId, self(), Host, Port, Err]),
             exit(Err)
     end.
 
@@ -102,11 +102,11 @@ tcp_socket(AppId, ChannelId, Host, Port) ->
         [] ->
             case gen_tcp:connect(Host, Port, [binary, {packet, raw}, {active, false}], 100) of
                 {ok, Sock} ->
-                    io:format("logplex_drain_writer app_id=~p channel_id=~p event=connect result=OK~n", [AppId, ChannelId]),
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~s port=~w event=connect result=OK~n", [AppId, ChannelId, self(), Host, Port]),
                     ets:insert(drain_sockets, {{Host, Port}, Sock}),
                     {ok, Sock};
                 Err ->
-                    io:format("logplex_drain_writer app_id=~p channel_id=~p event=connect result=~100p~n", [AppId, ChannelId, Err]),
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~s port=~w event=connect result=~100p~n", [AppId, ChannelId, self(), Host, Port, Err]),
                     ets:insert(drain_sockets, {{Host, Port}, erlang:now()}),
                     Err
             end;
@@ -115,7 +115,7 @@ tcp_socket(AppId, ChannelId, Host, Port) ->
             case (timer:now_diff(erlang:now(), Time) div 1000000) > 5 of
                 %% if so, retry connect
                 true ->
-                    io:format("logplex_drain_writer app_id=~p channel_id=~p event=socklookup result=error~n", [AppId, ChannelId]),
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~s port=~w event=socklookup result=error~n", [AppId, ChannelId, self(), Host, Port]),
                     ets:delete(drain_sockets, {Host, Port}),
                     tcp_socket(AppId, ChannelId, Host, Port);
                 false ->
