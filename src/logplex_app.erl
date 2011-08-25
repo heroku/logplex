@@ -133,9 +133,9 @@ logplex_drain_buffer_args() ->
             StrNum2 -> list_to_integer(StrNum2)
         end,
     Dict = dict:from_list([
-        {producer_callback, {ok, fun(_Pid, Action) ->
+        {producer_callback, fun(_Pid, Action) ->
             [Pid ! {logplex_drain_buffer, Action} ||{_,Pid,_,_} <- supervisor:which_children(logplex_worker_sup)]
-        end}}
+        end}
     ]),
     [{name, "logplex_drain_buffer"},
      {max_length, MaxLength},
