@@ -133,8 +133,14 @@ logplex_drain_buffer_args() ->
             false -> ?DEFAULT_LOGPLEX_DRAIN_WRITERS;
             StrNum2 -> list_to_integer(StrNum2)
         end,
+    Dict = dict:from_list([
+        {producer_callback, {ok, fun(_Pid, Action) ->
+            [Pid ! {logplex_drain_buffer, Action} ||{_,Pid,_,_} <- supervisor:which_children(logplex_worker_sup)]
+        end}}
+    ]),
     [{name, "logplex_drain_buffer"},
      {max_length, MaxLength},
      {num_workers, NumWorkers},
      {worker_sup, logplex_drain_sup},
-     {worker_args, []}].
+     {worker_args, []},
+     {dict, Dict}].
