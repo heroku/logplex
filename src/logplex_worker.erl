@@ -25,7 +25,7 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {regexp, map, interval}).
+-record(state, {regexp, map, interval, drain_accepting=true}).
 
 %% API functions
 start_link(_QueuePid) ->
@@ -39,7 +39,13 @@ init(Parent) ->
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(#state{regexp=RE, map=Map, interval=Interval}).
 
-loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
+loop(#state{regexp=RE, map=Map, interval=Interval, drain_accepting=DrainAccepting}=State) ->
+    DrainAccepting1 =
+        receive
+            {logplex_drain_buffer, stop_accepting} -> false;
+            {logplex_drain_buffer, start_accepting} -> true
+        after 0 -> DrainAccepting
+        end,
     case catch logplex_queue:out(logplex_work_queue) of
         timeout ->
             ok;
@@ -48,27 +54,32 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
         {1, [Msg]} ->
             case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
                 {match, [Token]} ->
-                    route(Token, Map, Interval, Msg);
+                    route(Token, Map, Interval, Msg, DrainAccepting1);
                 _ ->
                     ok
             end
     end,
-    ?MODULE:loop(State).
+    ?MODULE:loop(State#state{drain_accepting=DrainAccepting1}).
 
-route(Token, Map, Interval, Msg) when is_binary(Token), is_binary(Msg) ->
+route(Token, Map, Interval, Msg, DrainAccepting) when is_binary(Token), is_binary(Msg) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, app_id=AppId, drains=Drains} ->
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
             Msg1 = iolist_to_binary(re:replace(Msg, Token, TokenName)),
-            process_drains(AppId, ChannelId, Drains, Msg1),
+            process_drains(AppId, ChannelId, Drains, Msg1, DrainAccepting),
             process_tails(ChannelId, Msg1),
             process_msg(ChannelId, BufferPid, Msg1);
         _ ->
             ok
     end.
 
-process_drains(AppId, ChannelId, Drains, Msg) ->
+process_drains(_AppId, _ChannelId, _Drains, _Msg, false = _DrainAccepting) ->
+    logplex_stats:incr("dropped_stat_key"),
+    logplex_realtime:incr("dropped_stat_key"),
+    ok;
+
+process_drains(AppId, ChannelId, Drains, Msg, true = _DrainAccepting) ->
     [logplex_queue:in(logplex_drain_buffer, {TcpDrain, AppId, ChannelId, Token, Host, Port, Msg}) ||
         #drain{token=Token, resolved_host=Host, port=Port, tcp=TcpDrain} <- Drains],
     ok.
