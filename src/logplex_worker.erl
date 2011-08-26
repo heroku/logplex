@@ -75,8 +75,8 @@ route(Token, Map, Interval, Msg, DrainAccepting) when is_binary(Token), is_binar
     end.
 
 process_drains(_AppId, _ChannelId, _Drains, _Msg, false = _DrainAccepting) ->
-    logplex_stats:incr("dropped_stat_key"),
-    logplex_realtime:incr("dropped_stat_key"),
+    logplex_stats:incr("drain_buffer_dropped"),
+    logplex_realtime:incr("drain_buffer_dropped"),
     ok;
 
 process_drains(AppId, ChannelId, Drains, Msg, true = _DrainAccepting) ->
