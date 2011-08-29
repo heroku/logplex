@@ -135,7 +135,10 @@ logplex_drain_buffer_args() ->
         end,
     Dict = dict:from_list([
         {producer_callback, fun(_Pid, Action) ->
-            [Pid ! {logplex_drain_buffer, Action} ||{_,Pid,_,_} <- supervisor:which_children(logplex_worker_sup)]
+            [begin
+                io:format("logplex_drain_buffer event=producer_callback action=~p~n", [Action]),
+                Pid ! {logplex_drain_buffer, Action}
+            end ||{_,Pid,_,_} <- supervisor:which_children(logplex_worker_sup)]
         end}
     ]),
     [{name, "logplex_drain_buffer"},

@@ -42,8 +42,12 @@ init(Parent) ->
 loop(#state{regexp=RE, map=Map, interval=Interval, drain_accepting=DrainAccepting}=State) ->
     DrainAccepting1 =
         receive
-            {logplex_drain_buffer, stop_accepting} -> false;
-            {logplex_drain_buffer, start_accepting} -> true
+            {logplex_drain_buffer, stop_accepting} ->
+                io:format("logplex_worker event=producer_callback action=stop_accepting~n"),
+                false;
+            {logplex_drain_buffer, start_accepting} ->
+                io:format("logplex_worker event=producer_callback action=start_accepting~n"),
+                true
         after 0 -> DrainAccepting
         end,
     case catch logplex_queue:out(logplex_work_queue) of
