@@ -100,7 +100,7 @@ send_packet(false = _TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet, _Co
 tcp_socket(AppId, ChannelId, Host, Port) ->
     case ets:lookup(drain_sockets, {Host, Port}) of
         [] ->
-            case gen_tcp:connect(Host, Port, [binary, {packet, raw}, {active, false}], 100) of
+            case gen_tcp:connect(Host, Port, [binary, {packet, raw}, {active, false}, {reuseaddr, true}], 100) of
                 {ok, Sock} ->
                     io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p event=connect result=OK~n", [AppId, ChannelId, self(), Host, Port]),
                     ets:insert(drain_sockets, {{Host, Port}, Sock}),
