@@ -67,7 +67,8 @@ format_packet(RE, Token, Msg) ->
             undefined
     end.
 
-send_packet(_TcpDrain, _UdpSocket, _AppId, _ChannelId, _Host, _Port, _Packet, Count) when Count < 0 ->
+send_packet(_TcpDrain, _UdpSocket, _AppId, _ChannelId, Host, Port, _Packet, Count) when Count < 0 ->
+    ets:insert(drain_sockets, {{Host, Port}, erlang:now()}),
     {error, failed_max_attempts};
 
 send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet, Count) ->
@@ -79,7 +80,7 @@ send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet, 
                 _Err ->
                     catch gen_tcp:close(Sock),
                     io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p tcp=true event=send error=~100p~n", [AppId, ChannelId, self(), Host, Port, _Err]),
-                    ets:delete(drain_sockets, {Host, Port}),
+                    ets:delete_object(drain_sockets, {{Host, Port}, Sock}),
                     send_packet(true, _UdpSocket, AppId, ChannelId, Host, Port, Packet, Count-1)
             end;
         _Err ->
