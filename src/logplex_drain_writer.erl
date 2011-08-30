@@ -48,7 +48,7 @@ loop(RE, Socket) ->
                 undefined ->
                     io:format("Error poorly formated drain msg=~1000p~n", [Msg]);
                 Packet ->
-                    case send_packet(TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet, 1) of
+                    case send_packet(TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet) of
                         ok ->
                             logplex_stats:incr(logplex_stats_channels, {message_drained, AppId, ChannelId}),
                             logplex_realtime:incr(message_routed);
@@ -67,11 +67,7 @@ format_packet(RE, Token, Msg) ->
             undefined
     end.
 
-send_packet(_TcpDrain, _UdpSocket, _AppId, _ChannelId, Host, Port, _Packet, Count) when Count < 0 ->
-    ets:insert(drain_sockets, {{Host, Port}, erlang:now()}),
-    {error, failed_max_attempts};
-
-send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet, Count) ->
+send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet) ->
     case tcp_socket(AppId, ChannelId, Host, Port) of
         {ok, Sock} ->
             case gen_tcp:send(Sock, [integer_to_list(iolist_size(Packet)), <<" ">>, Packet, <<"\n">>]) of
@@ -80,14 +76,14 @@ send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet, 
                 _Err ->
                     catch gen_tcp:close(Sock),
                     io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p tcp=true event=send error=~100p~n", [AppId, ChannelId, self(), Host, Port, _Err]),
-                    ets:delete_object(drain_sockets, {{Host, Port}, Sock}),
-                    send_packet(true, _UdpSocket, AppId, ChannelId, Host, Port, Packet, Count-1)
+                    ets:insert(drain_socket_quarentine, {{Host, Port}, erlang:now()}),
+                    {error, failed_max_attempts}
             end;
         _Err ->
             ok
     end;
 
-send_packet(false = _TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet, _Count) ->
+send_packet(false = _TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet) ->
     case gen_udp:send(Socket, Host, Port, Packet) of
         ok ->
             ok;
@@ -100,29 +96,38 @@ send_packet(false = _TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet, _Co
     end.
 
 tcp_socket(AppId, ChannelId, Host, Port) ->
-    case ets:lookup(drain_sockets, {Host, Port}) of
+    case ets:lookup(drain_socket_quarentine, {Host, Port}) of
+        %% host/port is not quarentined
         [] ->
-            case gen_tcp:connect(Host, Port, [binary, {packet, raw}, {active, false}, {reuseaddr, true}], 100) of
-                {ok, Sock} ->
-                    io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p event=connect result=OK~n", [AppId, ChannelId, self(), Host, Port]),
-                    ets:insert(drain_sockets, {{Host, Port}, Sock}),
-                    {ok, Sock};
-                Err ->
-                    io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p event=connect result=~100p~n", [AppId, ChannelId, self(), Host, Port, Err]),
-                    ets:insert(drain_sockets, {{Host, Port}, erlang:now()}),
-                    Err
+            case ets:lookup(drain_sockets, {Host, Port}) of
+                %% no socket has been cached
+                [] ->
+                    case gen_tcp:connect(Host, Port, [binary, {packet, raw}, {active, false}, {reuseaddr, true}], 100) of
+                        {ok, Sock} ->
+                            io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p event=connect result=OK~n", [AppId, ChannelId, self(), Host, Port]),
+                            %% cache socket
+                            ets:insert(drain_sockets, {{Host, Port}, Sock}),
+                            {ok, Sock};
+                        Err ->
+                            io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p event=connect result=~100p~n", [AppId, ChannelId, self(), Host, Port, Err]),
+                            %% quarentine host/port
+                            ets:insert(drain_socket_quarentine, {{Host, Port}, erlang:now()}),
+                            Err
+                    end;
+                [{_, Sock}] ->
+                    %% return cached socket
+                    {ok, Sock}
             end;
-        [{_, {_,_,_}=Time}] ->
-            %% check if connect error occured more than 30 seconds ago
-            case (timer:now_diff(erlang:now(), Time) div 1000000) > 30 of
+        [{_, Time}] ->
+            %% check if host/port was quarentined more than 60 seconds ago
+            case (timer:now_diff(erlang:now(), Time) div 1000000) > 60 of
                 %% if so, retry connect
                 true ->
                     io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p event=socklookup result=error~n", [AppId, ChannelId, self(), Host, Port]),
-                    ets:delete(drain_sockets, {Host, Port}),
+                    ets:delete(drain_socket_quarentine, {Host, Port}),
                     tcp_socket(AppId, ChannelId, Host, Port);
                 false ->
-                    {error, conn}
-            end;
-        [{_, Sock}] ->
-            {ok, Sock}
+                    {error, quarentined}
+            end
     end.
+ 
