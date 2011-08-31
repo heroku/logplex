@@ -77,6 +77,7 @@ send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet) 
                     catch gen_tcp:close(Sock),
                     io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p tcp=true event=send error=~100p~n", [AppId, ChannelId, self(), Host, Port, _Err]),
                     ets:insert(drain_socket_quarentine, {{Host, Port}, erlang:now()}),
+                    ets:delete_object(drain_sockets, {{Host, Port}, Sock}),
                     {error, failed_max_attempts}
             end;
         _Err ->
