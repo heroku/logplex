@@ -278,6 +278,7 @@ drain(Queue, N, Acc) ->
 enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting=Accepting}=State) ->
   case Accepting of
         false ->
+            io:format("logplex_queue event=enable_producer length=~w enable=~p~n", [Length, (Length < (MaxLength div 2))]),
             case Length < (MaxLength div 2) of
                 true ->
                     case dict:find(producer_callback, Dict) of
