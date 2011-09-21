@@ -34,7 +34,7 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
-    %boot_pagerduty(),
+    boot_pagerduty(),
     boot_redis(),
     setup_redgrid_vals(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
@@ -61,7 +61,6 @@ init([]) ->
         {logplex_worker_sup, {logplex_worker_sup, start_link, [logplex_worker_sup, logplex_worker]}, permanent, 2000, worker, [logplex_worker_sup]},
         {logplex_drain_sup, {logplex_worker_sup, start_link, [logplex_drain_sup, logplex_drain_writer]}, permanent, 2000, worker, [logplex_drain_sup]},
         {logplex_drain_worker_sup, {logplex_worker_sup, start_link, [logplex_drain_worker_sup, logplex_drain_worker]}, permanent, 2000, worker, [logplex_drain_worker_sup]},
-        {logplex_drain_writer_mon, {logplex_drain_writer_mon, start_link, []}, permanent, 2000, worker, [logplex_drain_writer_mon]},
 
         {logplex_shard, {logplex_shard, start_link, []}, permanent, 2000, worker, [logplex_shard]},
 
