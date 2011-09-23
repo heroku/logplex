@@ -1,0 +1,1 @@
+logplex: bin/logplex.local
