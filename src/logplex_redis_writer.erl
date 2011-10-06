@@ -48,7 +48,7 @@ loop(BufferPid, Socket, RedisOpts) ->
     case gen_tcp:recv(Socket, 0, 0) of
         {ok, _} -> ok;
         {error, timeout} -> ok;
-        {error, closed} -> exit(normal)
+        {error, closed} -> exit({error, closed})
     end,
     case catch logplex_queue:out(BufferPid, 100) of
         {'EXIT', {noproc, _}} ->
