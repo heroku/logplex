@@ -134,7 +134,7 @@ init([Props]) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_call({out, Num}, {From, _Mref}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
-    State1 = enable_producer(State),
+    State1 = enable_producer(State, From),
     case drain(Queue, Num) of
         {Items, Queue1} when is_list(Items), length(Items) > 0 ->
             NumItems = length(Items),
@@ -275,10 +275,10 @@ drain(Queue, N, Acc) ->
             {Acc, Queue}
     end.
 
-enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting=Accepting}=State) ->
+enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting=Accepting}=State, From) ->
   case Accepting of
         false ->
-            io:format("logplex_queue event=enable_producer length=~w enable=~p~n", [Length, (Length < (MaxLength div 2))]),
+            io:format("logplex_queue event=enable_producer length=~w enable=~p from=~p~n", [Length, (Length < (MaxLength div 2)), From]),
             case Length < (MaxLength div 2) of
                 true ->
                     case dict:find(producer_callback, Dict) of
