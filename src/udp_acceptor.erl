@@ -45,11 +45,11 @@ loop(Socket, Accept, StopTime) ->
             Accept andalso inet:setopts(Socket, [{active, once}]),
             ?MODULE:loop(Socket, Accept, StopTime);
         {From, stop_accepting} ->
-            error_logger:error_msg("[~p] event=stop_accepting from=~p", [?MODULE, From]),
+            io:format("[~p] event=stop_accepting from=~p", [?MODULE, From]),
             ?MODULE:loop(Socket, false, now());
         {From, start_accepting} ->
             Diff = timer:now_diff(now(), StopTime),
-            error_logger:info_msg("[~p] event=start_accepting from=~p time=~w", [?MODULE, From, Diff]),
+            io:format("[~p] event=start_accepting from=~p time=~w", [?MODULE, From, Diff]),
             inet:setopts(Socket, [{active, once}]),
             ?MODULE:loop(Socket, true, undefined);
         _ ->

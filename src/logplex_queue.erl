@@ -275,21 +275,20 @@ drain(Queue, N, Acc) ->
             {Acc, Queue}
     end.
 
-enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting=Accepting}=State, From) ->
-  case Accepting of
+enable_producer(#state{accepting=true}=State, _From) ->
+    State;
+
+enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting=false}=State, From) ->
+    io:format("logplex_queue event=enable_producer length=~w enable=~p from=~p~n", [Length, (Length < (MaxLength div 2)), From]),
+    case Length < (MaxLength div 2) of
+        true ->
+            case dict:find(producer_callback, Dict) of
+                {ok, Fun} -> Fun(self(), start_accepting);
+                error -> ok
+            end,
+            State#state{accepting=true};
         false ->
-            io:format("logplex_queue event=enable_producer length=~w enable=~p from=~p~n", [Length, (Length < (MaxLength div 2)), From]),
-            case Length < (MaxLength div 2) of
-                true ->
-                    case dict:find(producer_callback, Dict) of
-                        {ok, Fun} ->
-                            Fun(self(), start_accepting),
-                            State#state{accepting=true};
-                        error -> State
-                    end;
-                false -> State
-            end;
-        true -> State
+            State
     end.
 
 report_stats(Pid) ->
