@@ -134,7 +134,7 @@ init([Props]) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_call({out, Num}, {From, _Mref}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
-    State1 = enable_producer(State, From),
+    State1 = enable_producer(State),
     case drain(Queue, Num) of
         {Items, Queue1} when is_list(Items), length(Items) > 0 ->
             NumItems = length(Items),
@@ -174,6 +174,7 @@ handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Le
         {ok, Fun} -> Fun(self(), stop_accepting);
         error -> ok
     end,
+    io:format("logplex_queue accepting=false queue=~p~n", [which_queue()]),
     {noreply, State#state{accepting=false}};
 
 handle_cast({in, Packet}, #state{queue=Queue, length=Length, waiting=Waiting}=State) ->
@@ -275,17 +276,17 @@ drain(Queue, N, Acc) ->
             {Acc, Queue}
     end.
 
-enable_producer(#state{accepting=true}=State, _From) ->
+enable_producer(#state{accepting=true}=State) ->
     State;
 
-enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting=false}=State, From) ->
-    io:format("logplex_queue event=enable_producer length=~w enable=~p from=~p~n", [Length, (Length < (MaxLength div 2)), From]),
+enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting=false}=State) ->
     case Length < (MaxLength div 2) of
         true ->
             case dict:find(producer_callback, Dict) of
                 {ok, Fun} -> Fun(self(), start_accepting);
                 error -> ok
             end,
+            io:format("logplex_queue accepting=true queue=~p~n", [which_queue()]),
             State#state{accepting=true};
         false ->
             State
@@ -295,3 +296,9 @@ report_stats(Pid) ->
     timer:sleep(60000),
     Pid ! report_stats,
     report_stats(Pid).
+
+which_queue() ->
+    case process_info(self(), registered_name) of
+        {registered_name, Name} -> Name;
+        _ -> self()
+    end.
