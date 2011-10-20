@@ -47,15 +47,15 @@ init(_) ->
 %% @hidden
 %%----------------------------------------------------------------------
 handle_event({error, _Gleader, {_Pid, Format, Data}}, State) ->
-    pagerduty:trigger("Logplex", iolist_to_binary(io_lib:format("Logplex: " ++ Format, Data))),
+    pagerduty:trigger("Logplex", iolist_to_binary(io_lib:format("~p: " ++ Format, [instance_name()|Data]))),
     {ok, State};
 
 handle_event({error_report, _Gleader, {_Pid, std_error, Report}}, State) ->
-    pagerduty:trigger("Logplex", iolist_to_binary(io_lib:format("Logplex: ~p", [Report]))),
+    pagerduty:trigger("Logplex", iolist_to_binary(io_lib:format("~p: ~p", [instance_name(), Report]))),
     {ok, State};
 
 handle_event({error_report, _Gleader, {_Pid, Type, Report}}, State) ->
-    pagerduty:trigger("Logplex", iolist_to_binary(io_lib:format("Logplex [~p]: ~p", [Type, Report]))),
+    pagerduty:trigger("Logplex", iolist_to_binary(io_lib:format("~p [~p]: ~p", [instance_name(), Type, Report]))),
     {ok, State};
 
 handle_event(_, State) ->
@@ -95,3 +95,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%%----------------------------------------------------------------------
 %%% Internal functions
 %%%----------------------------------------------------------------------
+instance_name() ->
+    os:getenv("INSTANCE_NAME").
