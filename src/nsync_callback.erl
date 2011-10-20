@@ -93,13 +93,16 @@ handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
 handle({cmd, _Cmd, [<<"stats", _/binary>>|_]}) ->
     ok;
 
+handle({cmd, _Cmd, [<<"heroku.com:stats", _/binary>>|_]}) ->
+    ok;
+
 handle({cmd, _Cmd, _Args}) ->
-    io:format("[~p] event=error cmd=~p~n", [?MODULE, _Cmd]),
+    io:format("[~p] event=error cmd=~p args=~100p~n", [?MODULE, _Cmd, _Args]),
     ok;
 
 handle({error, closed}) ->
     error_logger:error_msg("[~p] event=error msg=closed~n", [?MODULE]),
-    application:set_env(logplex, read_only, true),
+    exit({error, closed}),
     ok;
 
 handle(_Other) ->
