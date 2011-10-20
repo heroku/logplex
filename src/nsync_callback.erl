@@ -98,12 +98,12 @@ handle({cmd, _Cmd, _Args}) ->
     ok;
 
 handle({error, closed}) ->
-    io:format("[~p] event=error msg=closed~n", [?MODULE]),
+    error_logger:error_msg("[~p] event=error msg=closed~n", [?MODULE]),
     application:set_env(logplex, read_only, true),
     ok;
 
 handle(_Other) ->
-    io:format("[~p] event=error msg=~p~n", [?MODULE, _Other]),
+    error_logger:error_msg("[~p] event=error msg=~p~n", [?MODULE, _Other]),
     ok.
 
 %% Helper functions
