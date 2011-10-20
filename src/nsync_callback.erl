@@ -54,42 +54,50 @@ handle({load, eof}) ->
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
+    io:format("[~p] event=set type=channel id=~p~n", [?MODULE, Id]),
     create_channel(Id, Dict);
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Token = create_token(Id, Dict),
+    io:format("[~p] event=set type=token id=~p~n", [?MODULE, Id]),
     populate_token_channel_data([Token]);
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Drain = create_drain(Id, Dict),
+    io:format("[~p] event=set type=drain id=~p~n", [?MODULE, Id]),
     Drain#drain.host =/= undefined andalso populate_token_drain_data([Drain]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
+    io:format("[~p] event=delete type=channel id=~p~n", [?MODULE, Id]),
     ets:delete(channels, Id);
 
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
+    io:format("[~p] event=delete type=token id=~p~n", [?MODULE, Id]),
     ets:delete(tokens, Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
+    io:format("[~p] event=delete type=drain id=~p~n", [?MODULE, Id]),
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
 
 handle({cmd, _Cmd, _Args}) ->
+    io:format("[~p] event=error cmd=~p~n", [?MODULE, _Cmd]),
     ok;
 
 handle({error, closed}) ->
-    io:format("Error NSYNC connection closed. Read-only mode enabled"),
+    io:format("[~p] event=error msg=closed~n", [?MODULE]),
     application:set_env(logplex, read_only, true),
     ok;
 
-handle(_) ->
+handle(_Other) ->
+    io:format("[~p] event=error msg=~p~n", [?MODULE, _Other]),
     ok.
 
 %% Helper functions
