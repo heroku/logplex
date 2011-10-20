@@ -87,6 +87,12 @@ handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
 
+handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
+    ok;
+
+handle({cmd, _Cmd, [<<"stats", _/binary>>|_]}) ->
+    ok;
+
 handle({cmd, _Cmd, _Args}) ->
     io:format("[~p] event=error cmd=~p~n", [?MODULE, _Cmd]),
     ok;
