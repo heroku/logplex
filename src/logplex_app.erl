@@ -35,8 +35,9 @@
 start(_StartType, _StartArgs) ->
     set_cookie(),
     boot_pagerduty(),
-    boot_redis(),
+    application:start(redis),
     setup_redgrid_vals(),
+    application:start(nsync),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
@@ -47,6 +48,7 @@ stop(_State) ->
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
+        {nsync, {nsync, start_link, [nsync_opts()]}, permanent, 2000, worker, [nsync]},
         {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
@@ -95,9 +97,6 @@ boot_pagerduty() ->
             ok
     end.
 
-boot_redis() ->
-    application:start(redis, temporary).
-    
 setup_redgrid_vals() ->
     application:load(redgrid),
     application:set_env(redgrid, local_ip, os:getenv("LOCAL_IP")),
@@ -146,3 +145,14 @@ logplex_drain_buffer_args() ->
      {worker_sup, logplex_drain_sup},
      {worker_args, []},
      {dict, Dict}].
+
+nsync_opts() ->
+    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+    Ip = case proplists:get_value(ip, RedisOpts) of
+        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
+        Other -> Other
+    end,
+    RedisOpts1 = proplists:delete(ip, RedisOpts),
+    RedisOpts2 = [{host, Ip} | RedisOpts1],
+    [{callback, {nsync_callback, handle, []}}, {block, true}, {timeout, 20 * 60 * 1000} | RedisOpts2].
+
