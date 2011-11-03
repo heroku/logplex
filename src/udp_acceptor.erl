@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(udp_acceptor).
--export([start_link/0, init/1, loop/2]).
+-export([start_link/0, init/1, loop/3]).
 
 -include_lib("logplex.hrl").
 
@@ -34,23 +34,24 @@ init(Parent) ->
     register(?MODULE, Self),
     {ok, Socket} = gen_udp:open(?UDP_PORT, [binary, {active, once}]),
     proc_lib:init_ack(Parent, {ok, self()}),
-    ?MODULE:loop(Socket, true).
+    ?MODULE:loop(Socket, true, undefined).
 
-loop(Socket, Accept) ->
+loop(Socket, Accept, StopTime) ->
     receive
         {udp, Socket, _IP, _InPortNo, Packet} ->
             logplex_stats:incr(message_received),
             logplex_realtime:incr(message_received),
             logplex_queue:in(logplex_work_queue, Packet),
             Accept andalso inet:setopts(Socket, [{active, once}]),
-            ?MODULE:loop(Socket, Accept);
-        {_From, stop_accepting} ->
-            error_logger:error_msg("udp_acceptor stop_accepting"),
-            ?MODULE:loop(Socket, false);
-        {_From, start_accepting} ->
-            error_logger:info_msg("udp_acceptor start_accepting"),
+            ?MODULE:loop(Socket, Accept, StopTime);
+        {From, stop_accepting} ->
+            io:format("[~p] event=stop_accepting from=~p", [?MODULE, From]),
+            ?MODULE:loop(Socket, false, now());
+        {From, start_accepting} ->
+            Diff = timer:now_diff(now(), StopTime),
+            io:format("[~p] event=start_accepting from=~p time=~w", [?MODULE, From, Diff]),
             inet:setopts(Socket, [{active, once}]),
-            ?MODULE:loop(Socket, true);
+            ?MODULE:loop(Socket, true, undefined);
         _ ->
-            ?MODULE:loop(Socket, Accept)
+            ?MODULE:loop(Socket, Accept, StopTime)
     end.

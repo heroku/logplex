@@ -34,9 +34,10 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
-    %boot_pagerduty(),
-    boot_redis(),
+    boot_pagerduty(),
+    application:start(redis),
     setup_redgrid_vals(),
+    application:start(nsync),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
@@ -47,7 +48,8 @@ stop(_State) ->
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
-        {redgrid, {redgrid, start_link, [[{redis_url, os:getenv("LOGPLEX_CONFIG_REDIS_URL")}]]}, permanent, 2000, worker, [redgrid]},
+        {nsync, {nsync, start_link, [nsync_opts()]}, permanent, 2000, worker, [nsync]},
+        {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
         {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
 
@@ -61,7 +63,6 @@ init([]) ->
         {logplex_worker_sup, {logplex_worker_sup, start_link, [logplex_worker_sup, logplex_worker]}, permanent, 2000, worker, [logplex_worker_sup]},
         {logplex_drain_sup, {logplex_worker_sup, start_link, [logplex_drain_sup, logplex_drain_writer]}, permanent, 2000, worker, [logplex_drain_sup]},
         {logplex_drain_worker_sup, {logplex_worker_sup, start_link, [logplex_drain_worker_sup, logplex_drain_worker]}, permanent, 2000, worker, [logplex_drain_worker_sup]},
-        {logplex_drain_writer_mon, {logplex_drain_writer_mon, start_link, []}, permanent, 2000, worker, [logplex_drain_writer_mon]},
 
         {logplex_shard, {logplex_shard, start_link, []}, permanent, 2000, worker, [logplex_shard]},
 
@@ -96,12 +97,10 @@ boot_pagerduty() ->
             ok
     end.
 
-boot_redis() ->
-    application:start(redis, temporary).
-    
 setup_redgrid_vals() ->
     application:load(redgrid),
     application:set_env(redgrid, local_ip, os:getenv("LOCAL_IP")),
+    application:set_env(redgrid, redis_url, os:getenv("LOGPLEX_CONFIG_REDIS_URL")),
     application:set_env(redgrid, domain, os:getenv("HEROKU_DOMAIN")),
     ok.
 
@@ -136,7 +135,6 @@ logplex_drain_buffer_args() ->
     Dict = dict:from_list([
         {producer_callback, fun(_Pid, Action) ->
             [begin
-                io:format("logplex_drain_buffer event=producer_callback action=~p~n", [Action]),
                 Pid ! {logplex_drain_buffer, Action}
             end ||{_,Pid,_,_} <- supervisor:which_children(logplex_worker_sup)]
         end}
@@ -147,3 +145,14 @@ logplex_drain_buffer_args() ->
      {worker_sup, logplex_drain_sup},
      {worker_args, []},
      {dict, Dict}].
+
+nsync_opts() ->
+    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+    Ip = case proplists:get_value(ip, RedisOpts) of
+        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
+        Other -> Other
+    end,
+    RedisOpts1 = proplists:delete(ip, RedisOpts),
+    RedisOpts2 = [{host, Ip} | RedisOpts1],
+    [{callback, {nsync_callback, handle, []}}, {block, true}, {timeout, 20 * 60 * 1000} | RedisOpts2].
+

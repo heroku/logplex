@@ -54,42 +54,59 @@ handle({load, eof}) ->
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
+    io:format("[~p] event=set type=channel id=~p~n", [?MODULE, Id]),
     create_channel(Id, Dict);
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Token = create_token(Id, Dict),
+    io:format("[~p] event=set type=token id=~p~n", [?MODULE, Id]),
     populate_token_channel_data([Token]);
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Drain = create_drain(Id, Dict),
+    io:format("[~p] event=set type=drain id=~p~n", [?MODULE, Id]),
     Drain#drain.host =/= undefined andalso populate_token_drain_data([Drain]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
+    io:format("[~p] event=delete type=channel id=~p~n", [?MODULE, Id]),
     ets:delete(channels, Id);
 
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
+    io:format("[~p] event=delete type=token id=~p~n", [?MODULE, Id]),
     ets:delete(tokens, Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
+    io:format("[~p] event=delete type=drain id=~p~n", [?MODULE, Id]),
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
 
+handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
+    ok;
+
+handle({cmd, _Cmd, [<<"stats", _/binary>>|_]}) ->
+    ok;
+
+handle({cmd, _Cmd, [<<"heroku.com:stats", _/binary>>|_]}) ->
+    ok;
+
 handle({cmd, _Cmd, _Args}) ->
+    io:format("[~p] event=error cmd=~p args=~100p~n", [?MODULE, _Cmd, _Args]),
     ok;
 
 handle({error, closed}) ->
-    io:format("Error NSYNC connection closed. Read-only mode enabled"),
-    application:set_env(logplex, read_only, true),
+    error_logger:error_msg("[~p] event=error msg=closed~n", [?MODULE]),
+    exit({error, closed}),
     ok;
 
-handle(_) ->
+handle(_Other) ->
+    error_logger:error_msg("[~p] event=error msg=~p~n", [?MODULE, _Other]),
     ok.
 
 %% Helper functions
