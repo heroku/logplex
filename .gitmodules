@@ -16,3 +16,9 @@
 [submodule "deps/nsync"]
 	path = deps/nsync
 	url = git@git.herokai.com:nsync.git
+[submodule "deps/cowboy"]
+	path = deps/cowboy
+	url = git@git.herokai.com:cowboy.git
+[submodule "deps/quoted"]
+	path = deps/quoted
+	url = git@git.herokai.com:quoted.git
