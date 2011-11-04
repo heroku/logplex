@@ -54,7 +54,10 @@ resolve_host(Host) when is_binary(Host) ->
     case inet:getaddr(binary_to_list(Host), inet) of
         {ok, Ip} -> Ip;
         _ -> undefined
-    end.
+    end;
+
+resolve_host(_) ->
+    undefined.
 
 parse_msg(Msg) when is_binary(Msg) ->
     case re:run(Msg, "^<(\\d+)>(\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (.*)", [{capture, all_but_first, binary}]) of
