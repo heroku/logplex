@@ -41,6 +41,7 @@ start_link() ->
         {name, logplex_api}
     ],
 
+    wait_for_nsync(),
     io:format("START API~n"),
     mochiweb_http:start(Opts).
 
@@ -407,4 +408,12 @@ header_value(Req, Key, Default) ->
     case Req:get_header_value(Key) of
         undefined -> Default;
         Val -> Val
+    end.
+
+wait_for_nsync() ->
+    case application:get_env(logplex, nsync_loaded) of
+        {ok, true} -> ok;
+        _ ->
+            timer:sleep(1000),
+            wait_for_nsync()
     end.
