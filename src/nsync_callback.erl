@@ -47,7 +47,6 @@ handle({load, eof}) ->
     populate_token_channel_data(ets:tab2list(tokens)),
     populate_token_drain_data(ets:tab2list(drains)),
     error_logger:info_msg("NSYNC sync complete"),
-    application:set_env(logplex, read_only, false),
     ok;
 
 %% STREAM
