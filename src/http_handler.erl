@@ -22,29 +22,52 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(http_handler).
 -behaviour(cowboy_http_handler).
--export([init/3, handle/2, terminate/2]).
+-export([opts/0, init/3, handle/2, terminate/2]).
 
 -include_lib("http.hrl").
+
+opts() ->
+    [100,
+     cowboy_tcp_transport,
+     [{port, 8080}],
+     cowboy_http_protocol,
+     [{dispatch, [{'_', [
+        {[<<"channels">>, '_', <<"logs">>], http_handler, []},
+        {[<<"logs">>], http_handler, []}
+     ]}]}]
+    ].
 
 init({tcp, http}, Req, _Opts) ->
     {ok, Req, undefined_state}.
 
 handle(Req, State) ->
-    {ok, Req2} = loop(Req, Req#http_req.buffer),
-    {ok, Req2#http_req{buffer = <<>>}, State}.
+    case cowboy_http_req:header('Transfer-Encoding', Req) of
+        {<<"chunked">>, _Req} ->
+            {ContentType, _Req} = cowboy_http_req:header('Content-Type', Req),
+            {Token, _Req} = cowboy_http_req:header(<<"Token">>, Req),
+            ChannelId =
+                case cowboy_http_req:path(Req) of
+                    {[<<"channels">>, BinCh, <<"logs">>], _Req} -> list_to_integer(binary_to_list(BinCh));
+                    {[<<"logs">>], _Req} -> undefined
+                end,
+            {ok, Req2} = loop(ChannelId, Token, ContentType, Req, Req#http_req.buffer),
+            {ok, Req2#http_req{buffer = <<>>}, State};
+        {_TransferEncoding, _Req} ->
+            {ok, Req2} = cowboy_http_req:reply(415, [], <<"Incorrect Transfer-Encoding">>, Req),
+            {ok, Req2#http_req{buffer = <<>>}, State}
+    end.
 
 terminate(_Req, _State) ->
     ok.
 
-loop(Req, Buffer) ->
-    {Token, _Req} = cowboy_http_req:header(<<"Token">>, Req),
-    case parse_msgs(Buffer, Token) of
+loop(ChannelId, Token, ContentType, Req, Buffer) ->
+    case parse_msgs(Buffer, Token, ContentType) of
         {ok, Rest} ->
             Sock = Req#http_req.socket,
             inet:setopts(Sock, [{active, once}]),
             receive
                 {tcp, Sock, Data} ->
-                    loop(Req, <<Rest/binary, Data/binary>>);
+                    loop(ChannelId, Token, ContentType, Req, <<Rest/binary, Data/binary>>);
                 {tcp_closed, Sock} ->
                     cowboy_http_req:reply(200, [], <<"OK">>, Req);
                 {tcp_error, Sock, _Reason} ->
@@ -69,25 +92,25 @@ process_msg(Props, Token) ->
         <<" - - ">>, proplists:get_value(<<"msg">>, Props, <<>>)
     ])).
 
-parse_msgs(<<>>, _Token) ->
+parse_msgs(<<>>, _Token, _ContentType) ->
     {ok, <<>>};
 
-parse_msgs(<<"\r\n">>, _Token) ->
+parse_msgs(<<"\r\n">>, _Token, _ContentType) ->
     {ok, <<>>};
 
-parse_msgs(Data, Token) ->
+parse_msgs(Data, Token, ContentType) ->
     case read_size(Data) of
         {ok, 0, _Rest} ->
             {error, closed};
         {ok, Size, Rest} ->
             case read_chunk(Rest, Size) of
                 {ok, <<"\r\n">>, Rest1} ->
-                    parse_msgs(Rest1, Token);
+                    parse_msgs(Rest1, Token, ContentType);
                 {ok, Chunk, Rest1} ->
                     case (catch mochijson2:decode(Chunk)) of
                         {struct, Props} ->
                             process_msg(Props, Token),
-                            parse_msgs(Rest1, Token);
+                            parse_msgs(Rest1, Token, ContentType);
                         {'EXIT', Err} ->
                             Err;
                         Err ->
