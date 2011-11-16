@@ -95,6 +95,9 @@ process_msg(Props, Token) ->
 parse_msgs(<<>>, _Token, _ContentType) ->
     {ok, <<>>};
 
+parse_msgs(<<"\n">>, _Token, _ContentType) ->
+    {ok, <<>>};
+
 parse_msgs(<<"\r\n">>, _Token, _ContentType) ->
     {ok, <<>>};
 
@@ -104,6 +107,8 @@ parse_msgs(Data, Token, ContentType) ->
             {error, closed};
         {ok, Size, Rest} ->
             case read_chunk(Rest, Size) of
+                {ok, <<"\n">>, Rest1} ->
+                    parse_msgs(Rest1, Token, ContentType);
                 {ok, <<"\r\n">>, Rest1} ->
                     parse_msgs(Rest1, Token, ContentType);
                 {ok, Chunk, Rest1} ->
@@ -143,6 +148,9 @@ read_size(Data) ->
 read_size(<<>>, _, _) ->
     eof;
 
+read_size(<<"\n", Rest/binary>>, Acc, _) ->
+    {ok, lists:reverse(Acc), Rest};
+
 read_size(<<"\r\n", Rest/binary>>, Acc, _) ->
     {ok, lists:reverse(Acc), Rest};
 
@@ -159,6 +167,8 @@ read_size(<<C, Rest/binary>>, Acc, AddToAcc) ->
 
 read_chunk(Data, Size) ->
     case Data of
+        <<Chunk:Size/binary, "\n", Rest/binary>> ->
+            {ok, Chunk, Rest};
         <<Chunk:Size/binary, "\r\n", Rest/binary>> ->
             {ok, Chunk, Rest};
         <<_Chunk:Size/binary, _Rest/binary>> when size(_Rest) >= 2 ->
