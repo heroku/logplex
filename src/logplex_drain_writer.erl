@@ -73,9 +73,9 @@ send_packet(true = _TcpDrain, _UdpSocket, AppId, ChannelId, Host, Port, Packet) 
             case gen_tcp:send(Sock, [integer_to_list(iolist_size(Packet)), <<" ">>, Packet, <<"\n">>]) of
                 ok ->
                     ok;
-                _Err ->
+                {error, Err} ->
                     catch gen_tcp:close(Sock),
-                    io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p tcp=true event=send error=~100p~n", [AppId, ChannelId, self(), Host, Port, _Err]),
+                    io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p tcp=true event=send error=~p~n", [AppId, ChannelId, self(), Host, Port, Err]),
                     ets:insert(drain_socket_quarentine, {{Host, Port}, erlang:now()}),
                     ets:delete_object(drain_sockets, {{Host, Port}, Sock}),
                     {error, failed_max_attempts}
@@ -109,8 +109,8 @@ tcp_socket(AppId, ChannelId, Host, Port) ->
                             %% cache socket
                             ets:insert(drain_sockets, {{Host, Port}, Sock}),
                             {ok, Sock};
-                        Err ->
-                            io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p event=connect result=~100p~n", [AppId, ChannelId, self(), Host, Port, Err]),
+                        {error, Err} ->
+                            io:format("logplex_drain_writer app_id=~p channel_id=~p writer=~p host=~100p port=~p event=connect result=~p~n", [AppId, ChannelId, self(), Host, Port, Err]),
                             %% quarentine host/port
                             ets:insert(drain_socket_quarentine, {{Host, Port}, erlang:now()}),
                             Err
