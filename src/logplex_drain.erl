@@ -118,7 +118,7 @@ new_token(0) ->
     exit({error, failed_to_reserve_drain_token});
 
 new_token(Retries) ->
-    Token = list_to_binary("d." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+    Token = list_to_binary("d." ++ uuid:to_string(uuid:v4())),
     case ets:match_object(drains, #drain{id='_', channel_id='_', token=Token, resolved_host='_', host='_', port='_', tcp='_'}) of
         [#drain{}] -> new_token(Retries-1);
         [] -> Token

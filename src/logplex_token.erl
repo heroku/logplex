@@ -83,7 +83,7 @@ new_token(0) ->
     exit({error, failed_to_provision_token});
 
 new_token(Retries) ->
-    Token = list_to_binary("t." ++ string:strip(os:cmd("uuidgen"), right, $\n)),
+    Token = list_to_binary("t." ++ uuid:to_string(uuid:v4())),
     T = logplex_utils:empty_token(),
     case ets:match_object(tokens, T#token{id=Token}) of
         [#token{}] -> new_token(Retries-1);

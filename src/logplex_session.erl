@@ -26,7 +26,7 @@
 -include_lib("logplex.hrl").
 
 create(Body) when is_binary(Body) ->
-    SessionId = iolist_to_binary(["/sessions/", string:strip(os:cmd("uuidgen"), right, $\n)]),
+    SessionId = iolist_to_binary(["/sessions/", uuid:to_string(uuid:v4())]),
     Session = #session{id=SessionId, body=Body},
     ets:insert(sessions, Session),
     spawn_link(fun() ->
