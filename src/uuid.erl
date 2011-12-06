@@ -34,6 +34,7 @@
 
 % Generates a random binary UUID.
 v4() ->
+  random:seed(now()),
   v4(random:uniform(round(math:pow(2, 48))) - 1, random:uniform(round(math:pow(2, 12))) - 1, random:uniform(round(math:pow(2, 32))) - 1, random:uniform(round(math:pow(2, 30))) - 1).
 v4(R1, R2, R3, R4) ->
     <<R1:48, 4:4, R2:12, 2:2, R3:32, R4: 30>>.
