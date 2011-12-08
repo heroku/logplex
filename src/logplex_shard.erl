@@ -118,6 +118,7 @@ handle_info(_Info, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 terminate(_Reason, _State) -> 
+    [exit(Pid, normal) || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
     ok.
 
 %%--------------------------------------------------------------------
