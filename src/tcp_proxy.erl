@@ -99,7 +99,7 @@ parse(Accept, RE, Packet) ->
             Size = list_to_integer(binary_to_list(Len)),
             case Packet of
                 <<Len:LSize/binary, 32/integer, Msg:Size/binary, Rest1/binary>> ->
-                    process_msg(Accept, Msg),
+                    process_msg(),
                     parse(Accept, RE, Rest1);
                 _ ->
                     {ok, Packet}
@@ -115,14 +115,7 @@ read_line(<<>>, Acc) ->
 read_line(<<C, Rest/binary>>, Acc) ->
     read_line(Rest, [C|Acc]).
 
-process_msg(Accept, Msg) ->
-    logplex_stats:incr(message_received),
-    logplex_realtime:incr(message_received),
-    case Accept of
-        true ->
-            logplex_queue:in(logplex_work_queue, Msg);
-        false ->
-            logplex_stats:incr(message_dropped),
-            logplex_realtime:incr(message_dropped)
-    end.
+process_msg() ->
+    logplex_stats:incr(message_received_tcp),
+    logplex_realtime:incr(message_received_tcp).
 
