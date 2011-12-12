@@ -6,3 +6,6 @@ channels
 tokens
 drains
 src/*.swp
+deps/
+*~
+ebin/logplex.app
