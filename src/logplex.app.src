@@ -1,0 +1,9 @@
+{application, logplex,
+ [
+  {description, "Log multiplexer"},
+  {vsn, "1.0"},
+  {registered, []},
+  {applications, [kernel, stdlib, sasl, inets, crypto, public_key, ssl]},
+  {mod, {logplex_app, []}}
+ ]}.
+ 
