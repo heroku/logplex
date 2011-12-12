@@ -24,7 +24,7 @@
 -behaviour(cowboy_http_handler).
 -export([opts/0, init/3, handle/2, terminate/2]).
 
--include_lib("http.hrl").
+-include_lib("cowboy/include/http.hrl").
 
 opts() ->
     [100,
