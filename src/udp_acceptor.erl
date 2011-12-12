@@ -41,7 +41,6 @@ loop(Socket, Accept, StopTime) ->
         {udp, Socket, _IP, _InPortNo, Packet} ->
             logplex_stats:incr(message_received),
             logplex_realtime:incr(message_received),
-            logplex_queue:in(logplex_work_queue, Packet),
             Accept andalso inet:setopts(Socket, [{active, once}]),
             ?MODULE:loop(Socket, Accept, StopTime);
         {From, stop_accepting} ->
