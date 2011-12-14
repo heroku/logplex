@@ -44,7 +44,8 @@ push(Bytes, Buf = #buf{bytes=OldBuf, waiting_for=WF})
     push(iolist_to_binary([OldBuf, Bytes]), WF, Buf).
 
 push(Bytes, RequiredLength, Buf)
-  when byte_size(Bytes) < RequiredLength ->
+  when is_integer(RequiredLength),
+       byte_size(Bytes) < RequiredLength ->
     %% Haven't accumulated enough bytes to complete a parse yet.
     {ok, [], Buf#buf{bytes=Bytes}};
 push(Bytes, _, _) ->
