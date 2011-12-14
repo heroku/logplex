@@ -10,7 +10,7 @@
 -export([example1/0, parse/1]).
 
 
--define(SYSLOG_MAX_SIZE, 2048).
+-define(SYSLOG_MAX_SIZE, 4192).
 
 -record(buf, {bytes = <<>> :: binary(),
               waiting_for = unknown :: 'unknown' | non_neg_integer()}).
