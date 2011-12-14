@@ -40,7 +40,7 @@ push(Bytes, Buf = #buf{bytes=OldBuf, waiting_for=RequiredLength}) ->
         true ->
             parse_recursive(NewBuf, []);
         false ->
-            Buf#buf{bytes=NewBuf}
+            {ok, [], Buf#buf{bytes=NewBuf}}
     end.
 
 
