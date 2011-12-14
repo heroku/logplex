@@ -116,5 +116,5 @@ parse_to_nl(Buf) ->
         [Msg, Rest] ->
             {{malformed, Msg}, Rest};
         [Buf] ->
-            {incomplete, Buf}
+            {incomplete, unknown, Buf}
     end.
