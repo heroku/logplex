@@ -34,7 +34,7 @@
          terminate/2,
          code_change/3]).
 
--record(state, {sock, buffer = <<>>, regex}).
+-record(state, {sock, buffer = <<>>}).
 
 %%====================================================================
 %% API functions
@@ -49,9 +49,7 @@ set_socket(Pid, CSock) ->
 %% gen_server callbacks
 %%====================================================================
 init([]) ->
-    process_flag(trap_exit, true),
-    {ok, RE} = re:compile("^(\\d+) "),
-    {ok, #state{regex=RE}}.
+    {ok, #state{buffer=syslog_parser:new()}}.
 
 handle_call(_Request, _From, State) ->
     {reply, ignore, State}.
@@ -62,10 +60,18 @@ handle_cast({set_socket, CSock}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({tcp, Sock, Packet}, #state{sock=Sock, buffer=Buffer, regex=RE}=State) ->
-    {ok, Rest} = parse(true, RE, <<Buffer/binary, Packet/binary>>),
+handle_info({tcp, Sock, Packet}, #state{sock=Sock, buffer=Buffer}=State) ->
+    {Result, Msgs, NewBuf} = syslog_parser:push(Packet, Buffer),
+    case Result of
+        ok -> ok;
+        {error, Err} ->
+            io:format("[~p] event=parse_error, txt=\"~p\"",
+                      [?MODULE, Err]),
+            ok
+    end,
+    process_msgs(Msgs),
     inet:setopts(Sock, [{active, once}]),
-    {noreply, State#state{buffer=Rest}};
+    {noreply, State#state{buffer=NewBuf}};
 
 handle_info({tcp_closed, _}, State) ->
     {stop, normal, State};
@@ -85,38 +91,13 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%% internal
-parse(_Accept, _RE, <<>>) ->
-    {ok, <<>>};
+process_msgs(Msgs) when is_list(Msgs) ->
+    lists:foreach(fun process_msg/1, Msgs).
 
-parse(Accept, RE, Packet) ->
-    case re:run(Packet, RE, [{capture, all_but_first, binary}]) of
-        nomatch ->
-            {ok, _Line, Rest} = read_line(Packet, []),
-            parse(Accept, RE, Rest);
-        {match, [Len]} ->
-            LSize = size(Len),
-            Size = list_to_integer(binary_to_list(Len)),
-            case Packet of
-                <<Len:LSize/binary, 32/integer, Msg:Size/binary, Rest1/binary>> ->
-                    process_msg(Msg),
-                    parse(Accept, RE, Rest1);
-                _ ->
-                    {ok, Packet}
-            end
-    end.
-
-read_line(<<$\n, Rest/binary>>, Acc) ->
-    {ok, iolist_to_binary(lists:reverse([$\n|Acc])), Rest};
-
-read_line(<<>>, Acc) ->
-    {ok, iolist_to_binary(lists:reverse(Acc)), <<>>};
-
-read_line(<<C, Rest/binary>>, Acc) ->
-    read_line(Rest, [C|Acc]).
-
-process_msg(Msg) ->
+process_msg({msg, _Msg}) ->
     logplex_stats:incr(message_received_tcp),
-    logplex_realtime:incr(message_received_tcp),
-    logplex_queue:in(logplex_work_queue, Msg).
-
+    logplex_realtime:incr(message_received_tcp);
+process_msg({malformed, _Msg}) ->
+    %% Log malformed msg
+    logplex_stats:incr(message_received_tcp_malformed).
+    %%logplex_queue:in(logplex_work_queue, Msg).
