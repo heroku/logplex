@@ -15,6 +15,10 @@
 -record(buf, {bytes = <<>> :: binary(),
               waiting_for = unknown :: 'unknown' | non_neg_integer()}).
 
+-opaque parse_buffer() :: #buf{}.
+-type syslog_message() :: {msg, binary()} | {malformed, binary()}.
+-type syslog_messages() :: [syslog_message()].
+
 %% Syslog frames
 %% a) <Length as ascii integer><space><msg:Length>"
 %% b) <msg>\n.
@@ -30,6 +34,11 @@ new() ->
 parse(Bytes) when is_binary(Bytes) ->
     push(Bytes, new()).
 
+-spec push(Bytes::binary(), parse_buffer()) ->
+                  { ok | {error, term()},
+                    syslog_messages(),
+                    parse_buffer()}.
+
 push(Bytes, Buf = #buf{bytes=OldBuf, waiting_for=WF})
   when is_binary(Bytes) ->
     push(iolist_to_binary([OldBuf, Bytes]), WF, Buf).
@@ -42,6 +51,9 @@ push(Bytes, _, _) ->
     parse_recursive(Bytes, []).
 
 
+-spec parse_recursive(binary(), Acc::syslog_messages()) ->
+                             {'ok' | {'error', term()},
+                              syslog_messages(), parse_buffer()}.
 parse_recursive(<<>>, Acc) ->
     {ok, lists:reverse(Acc), #buf{}};
 parse_recursive(Buf, Acc) ->
@@ -77,6 +89,10 @@ msg_type(<<FirstChar, _/binary>> = Buf)
 msg_type(_) ->
     nl_terminated.
 
+-spec parse_beginning(binary()) ->
+                             {syslog_message(), Remaining::binary()} |
+                             {'incomplete', 'unknown' | non_neg_integer(),
+                              Remaining::binary()}.
 parse_beginning(Buf) ->
     case msg_type(Buf) of
         {length_prefixed, Len, Offset} ->
@@ -97,6 +113,11 @@ parse_beginning(Buf) ->
 
 %% Idx 0 must be 1-9.
 %% Finds the ascii encoded integer terminated by a space.
+-spec find_int(binary(), non_neg_integer()) ->
+                      'incomplete' |
+                      {Length::non_neg_integer(),
+                       MsgOffset::non_neg_integer()} |
+                      'bad_int_or_missing_space'.
 find_int(Buf, Idx) when byte_size(Buf) =< Idx ->
     incomplete;
 find_int(Buf, Idx) ->
@@ -109,6 +130,8 @@ find_int(Buf, Idx) ->
             bad_int_or_missing_space
     end.
 
+-spec parse_to_nl(binary()) -> {'incomplete', 'unknown', binary()} |
+                               {{'malformed', binary()}, Rest::binary()}.
 parse_to_nl(Buf) ->
     case binary:split(Buf, [<<"\r\n">>, <<"\n">>]) of
         [Msg, Rest] ->
