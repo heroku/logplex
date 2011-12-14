@@ -30,18 +30,16 @@ new() ->
 parse(Bytes) when is_binary(Bytes) ->
     push(Bytes, new()).
 
-push(Bytes, #buf{bytes=OldBuf, waiting_for=unknown})
-  when is_binary(Bytes), is_binary(OldBuf) ->
-    NewBuf = iolist_to_binary([OldBuf, Bytes]),
-    parse_recursive(NewBuf, []);
-push(Bytes, Buf = #buf{bytes=OldBuf, waiting_for=RequiredLength}) ->
-    NewBuf = iolist_to_binary([OldBuf, Bytes]),
-    case byte_size(NewBuf) >= RequiredLength of
-        true ->
-            parse_recursive(NewBuf, []);
-        false ->
-            {ok, [], Buf#buf{bytes=NewBuf}}
-    end.
+push(Bytes, Buf = #buf{bytes=OldBuf, waiting_for=WF})
+  when is_binary(Bytes) ->
+    push(iolist_to_binary([OldBuf, Bytes]), WF, Buf).
+
+push(Bytes, RequiredLength, Buf)
+  when byte_size(Bytes) < RequiredLength ->
+    %% Haven't accumulated enough bytes to complete a parse yet.
+    {ok, [], Buf#buf{bytes=Bytes}};
+push(Bytes, _, _) ->
+    parse_recursive(Bytes, []).
 
 
 parse_recursive(<<>>, Acc) ->
