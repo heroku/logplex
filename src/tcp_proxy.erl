@@ -97,7 +97,8 @@ process_msgs(Msgs) when is_list(Msgs) ->
 process_msg({msg, _Msg}) ->
     logplex_stats:incr(message_received_tcp),
     logplex_realtime:incr(message_received_tcp);
-process_msg({malformed, _Msg}) ->
-    %% Log malformed msg
+process_msg({malformed, Msg}) ->
+    io:format("[~p] malformed_syslog_message=\"~p\"~n",
+              [?MODULE, Msg]),
     logplex_stats:incr(message_received_tcp_malformed).
     %%logplex_queue:in(logplex_work_queue, Msg).
