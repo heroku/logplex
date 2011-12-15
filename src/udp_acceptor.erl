@@ -32,7 +32,7 @@ start_link() ->
 init(Parent) ->
     Self = self(),
     register(?MODULE, Self),
-    {ok, Socket} = gen_udp:open(?UDP_PORT, [binary, {active, once}]),
+    {ok, Socket} = gen_udp:open(?UDP_PORT, [binary, {active, true}]),
     proc_lib:init_ack(Parent, {ok, self()}),
     ?MODULE:loop(Socket, true, undefined).
 
@@ -41,16 +41,16 @@ loop(Socket, Accept, StopTime) ->
         {udp, Socket, _IP, _InPortNo, _Packet} ->
             logplex_stats:incr(message_received),
             logplex_realtime:incr(message_received),
-            Accept andalso inet:setopts(Socket, [{active, once}]),
             %%logplex_queue:in(logplex_work_queue, Packet),
             ?MODULE:loop(Socket, Accept, StopTime);
         {From, stop_accepting} ->
             io:format("[~p] event=stop_accepting from=~p", [?MODULE, From]),
+            inet:setopts(Socket, [{active, false}]),
             ?MODULE:loop(Socket, false, now());
         {From, start_accepting} ->
             Diff = timer:now_diff(now(), StopTime),
             io:format("[~p] event=start_accepting from=~p time=~w", [?MODULE, From, Diff]),
-            inet:setopts(Socket, [{active, once}]),
+            inet:setopts(Socket, [{active, true}]),
             ?MODULE:loop(Socket, true, undefined);
         _ ->
             ?MODULE:loop(Socket, Accept, StopTime)
