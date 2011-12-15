@@ -38,11 +38,11 @@ init(Parent) ->
 
 loop(Socket, Accept, StopTime) ->
     receive
-        {udp, Socket, _IP, _InPortNo, Packet} ->
+        {udp, Socket, _IP, _InPortNo, _Packet} ->
             logplex_stats:incr(message_received),
             logplex_realtime:incr(message_received),
-            logplex_queue:in(logplex_work_queue, Packet),
             Accept andalso inet:setopts(Socket, [{active, once}]),
+            %%logplex_queue:in(logplex_work_queue, Packet),
             ?MODULE:loop(Socket, Accept, StopTime);
         {From, stop_accepting} ->
             io:format("[~p] event=stop_accepting from=~p", [?MODULE, From]),
