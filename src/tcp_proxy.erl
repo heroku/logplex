@@ -95,10 +95,10 @@ process_msgs(Msgs) when is_list(Msgs) ->
     lists:foreach(fun process_msg/1, Msgs).
 
 process_msg({msg, Msg}) ->
-    logplex_stats:incr(message_received_tcp),
-    logplex_realtime:incr(message_received_tcp),
+    logplex_stats:incr(message_received),
+    logplex_realtime:incr(message_received),
     logplex_queue:in(logplex_work_queue, Msg);
 process_msg({malformed, Msg}) ->
     io:format("[~p] malformed_syslog_message=\"~p\"~n",
               [?MODULE, Msg]),
-    logplex_stats:incr(message_received_tcp_malformed).
+    logplex_stats:incr(message_received_malformed).

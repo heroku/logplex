@@ -86,7 +86,6 @@ handle_info(flush, State) ->
     Stats = ets:tab2list(?MODULE),
     reset_stats(),
     Stats1 = [proplists:lookup(message_received, Stats),
-              proplists:lookup(message_received_tcp, Stats),
              proplists:lookup(message_processed, Stats),
              proplists:lookup(message_routed, Stats),
              proplists:lookup(message_dropped, Stats),
@@ -118,7 +117,6 @@ register() ->
 
 reset_stats() ->
     true = ets:insert(?MODULE, [{message_received, 0},
-                                {message_received_tcp, 0},
                                 {message_processed, 0},
                                 {message_routed, 0},
                                 {message_dropped, 0},
