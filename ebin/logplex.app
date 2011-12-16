@@ -31,7 +31,6 @@
    ,tcp_acceptor
    ,tcp_proxy
    ,tcp_proxy_sup
-   ,udp_acceptor
    ,uuid
   ]},
   {registered, []},
