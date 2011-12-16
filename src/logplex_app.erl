@@ -70,9 +70,11 @@ init([]) ->
         {logplex_work_queue, {logplex_queue, start_link, [logplex_work_queue, logplex_work_queue_args()]}, permanent, 2000, worker, [logplex_work_queue]},
         {logplex_drain_buffer, {logplex_queue, start_link, [logplex_drain_buffer, logplex_drain_buffer_args()]}, permanent, 2000, worker, [logplex_drain_buffer]},
 
+        {tcp_proxy_sup, {tcp_proxy_sup, start_link, []}, permanent, 2000, worker, [tcp_proxy_sup]},
+
         {logplex_api, {logplex_api, start_link, []}, permanent, 2000, worker, [logplex_api]},
-        {udp_acceptor, {udp_acceptor, start_link, []}, permanent, 2000, worker, [udp_acceptor]},
-        {cowboy_listener_sup, {cowboy_listener_sup, start_link, http_handler:opts()}, permanent, 2000, supervisor, [cowboy_listener_sup]}]
+        {cowboy_listener_sup, {cowboy_listener_sup, start_link, http_handler:opts()}, permanent, 2000, supervisor, [cowboy_listener_sup]},
+        {tcp_acceptor, {tcp_acceptor, start_link, [?TCP_PORT]}, permanent, 2000, worker, [tcp_acceptor]}]
     }}.
 
 set_cookie() ->
