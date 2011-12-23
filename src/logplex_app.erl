@@ -53,7 +53,7 @@ init([]) ->
         {logplex_db, {logplex_db, start_link, []}, permanent, 2000, worker, [logplex_db]},
         {nsync, {nsync, start_link, [nsync_opts()]}, permanent, 2000, worker, [nsync]},
         {redgrid, {redgrid, start_link, []}, permanent, 2000, worker, [redgrid]},
-        {logplex_realtime, {logplex_realtime, start_link, [logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL")]}, permanent, 2000, worker, [logplex_realtime]},
+        {logplex_realtime, {logplex_realtime, start_link, [redo_uri:parse(os:getenv("LOGPLEX_CONFIG_REDIS_URL"))]}, permanent, 2000, worker, [logplex_realtime]},
         {logplex_stats, {logplex_stats, start_link, []}, permanent, 2000, worker, [logplex_stats]},
 
         {logplex_token, {logplex_token, refresh_dns, []}, permanent, 2000, worker, [logplex_token]},

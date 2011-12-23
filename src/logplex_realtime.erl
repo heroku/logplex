@@ -70,7 +70,7 @@ init([Opts]) ->
     Self = self(),
     spawn_link(fun() -> flush(Self) end),
     spawn_link(fun() -> register() end),
-    case redis:start_link(undefined, Opts) of
+    case redo:start_link(undefined, Opts) of
         {ok, Conn} ->
             {ok, #state{conn=Conn, opts=Opts}};
         Error ->
@@ -104,7 +104,7 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
                   proplists:lookup(drain_buffer_dropped, Stats),
                   proplists:lookup(redis_buffer_dropped, Stats)],
         Json = iolist_to_binary(mochijson2:encode({struct, Stats1})),
-        redis:q(Conn, [<<"PUBLISH">>, iolist_to_binary([HerokuDomain, <<":stats">>]), Json], 60000)
+        redo:cmd(Conn, [<<"PUBLISH">>, iolist_to_binary([HerokuDomain, <<":stats">>]), Json], 60000)
     end),
     {noreply, State};
 
