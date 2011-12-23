@@ -60,7 +60,13 @@ incr(Key, Inc) when is_integer(Inc) ->
 %%====================================================================
 init([Opts]) ->
     ets:new(?MODULE, [named_table, set, public]),
-    reset_stats(),
+    ets:insert(?MODULE, [{message_received, 0},
+                        {message_processed, 0},
+                        {message_routed, 0},
+                        {message_dropped, 0},
+                        {work_queue_dropped, 0},
+                        {drain_buffer_dropped, 0},
+                        {redis_buffer_dropped, 0}]),
     Self = self(),
     spawn_link(fun() -> flush(Self) end),
     spawn_link(fun() -> register() end),
@@ -82,19 +88,25 @@ handle_info(flush, #state{instance_name=undefined}=State) ->
     InstanceName = logplex_utils:instance_name(),
     handle_info(flush, State#state{instance_name=InstanceName});
 
-handle_info(flush, State) ->
+handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
     Stats = ets:tab2list(?MODULE),
-    reset_stats(),
-    Stats1 = [proplists:lookup(message_received, Stats),
-             proplists:lookup(message_processed, Stats),
-             proplists:lookup(message_routed, Stats),
-             proplists:lookup(message_dropped, Stats),
-             proplists:lookup(work_queue_dropped, Stats),
-             proplists:lookup(drain_buffer_dropped, Stats),
-             proplists:lookup(redis_buffer_dropped, Stats)],
-    Json = {struct, [{Key,Val} || {Key,Val} <- Stats1, Val > 0]},
-    Json1 = iolist_to_binary(mochijson2:encode(Json)),
-    publish(Json1, State);
+    [ets:update_counter(?MODULE, Key, -1 * Val) || {Key, Val} <- Stats],
+    HerokuDomain = heroku_domain(),
+    spawn(fun() ->
+        Stats1 = [{instance_name, InstanceName},
+                  {branch, git_branch()},
+                  {'AZ', availability_zone()},
+                  proplists:lookup(message_received, Stats),
+                  proplists:lookup(message_processed, Stats),
+                  proplists:lookup(message_routed, Stats),
+                  proplists:lookup(message_dropped, Stats),
+                  proplists:lookup(work_queue_dropped, Stats),
+                  proplists:lookup(drain_buffer_dropped, Stats),
+                  proplists:lookup(redis_buffer_dropped, Stats)],
+        Json = iolist_to_binary(mochijson2:encode({struct, Stats1})),
+        redis:q(Conn, [<<"PUBLISH">>, iolist_to_binary([HerokuDomain, <<":stats">>]), Json], 60000)
+    end),
+    {noreply, State};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -115,16 +127,28 @@ register() ->
     timer:sleep(10 * 1000),
     register().
 
-reset_stats() ->
-    true = ets:insert(?MODULE, [{message_received, 0},
-                                {message_processed, 0},
-                                {message_routed, 0},
-                                {message_dropped, 0},
-                                {work_queue_dropped, 0},
-                                {drain_buffer_dropped, 0},
-                                {redis_buffer_dropped, 0}]).
+heroku_domain() ->
+    case get(heroku_domain) of
+        undefined ->
+            Domain = 
+                case os:getenv("HEROKU_DOMAIN") of
+                    false -> <<"">>;
+                    Val -> list_to_binary(Val)
+                end,
+            put(heroku_domain, Domain),
+            Domain;
+        Domain -> Domain
+    end.
 
-publish(Json, #state{instance_name=InstanceName, conn=Conn}=State) ->
-    redis:q(Conn, [<<"PUBLISH">>, iolist_to_binary([<<"stats.">>, InstanceName]), Json], 60000),
-    {noreply, State}.
+git_branch() ->
+    case application:get_env(logplex, git_branch) of
+        {ok, Val} -> list_to_binary(Val);
+        undefined -> <<>>
+    end.
+
+availability_zone() ->
+    case application:get_env(logplex, availability_zone) of
+        {ok, Val} -> list_to_binary(Val);
+        undefined -> <<>>
+    end.
 

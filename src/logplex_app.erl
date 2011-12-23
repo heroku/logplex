@@ -34,6 +34,8 @@
 
 start(_StartType, _StartArgs) ->
     set_cookie(),
+    read_git_branch(),
+    read_availability_zone(),
     boot_pagerduty(),
     application:start(redis),
     setup_redgrid_vals(),
@@ -81,6 +83,23 @@ set_cookie() ->
     case os:getenv("LOGPLEX_COOKIE") of
         false -> ok;
         Cookie -> erlang:set_cookie(node(), list_to_atom(Cookie))
+    end.
+
+read_git_branch() ->
+    GitOutput = hd(string:tokens(os:cmd("git status"), "\n")),
+    case re:run(GitOutput, "\# On branch (\\S+)", [{capture, all_but_first, list}]) of
+        {match,[Branch]} ->
+            application:set_env(logplex, git_branch, Branch);
+        _ ->
+            ok
+    end.
+
+read_availability_zone() ->
+    case httpc:request("http://169.254.169.254/latest/meta-data/placement/availability-zone") of
+        {ok,{{_,200,_}, _Headers, Zone}} ->
+            application:set_env(logplex, availability_zone, Zone);
+        _ ->
+            ok
     end.
 
 boot_pagerduty() ->
