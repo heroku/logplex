@@ -93,7 +93,7 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
     [ets:update_counter(?MODULE, Key, -1 * Val) || {Key, Val} <- Stats],
     HerokuDomain = heroku_domain(),
     spawn(fun() ->
-        Stats1 = [{instance_name, InstanceName},
+        Stats1 = [{instance_name, list_to_binary(InstanceName)},
                   {branch, git_branch()},
                   {'AZ', availability_zone()},
                   proplists:lookup(message_received, Stats),
