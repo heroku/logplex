@@ -69,7 +69,6 @@ init([Opts]) ->
                         {redis_buffer_dropped, 0}]),
     Self = self(),
     spawn_link(fun() -> flush(Self) end),
-    spawn_link(fun() -> register() end),
     case redo:start_link(undefined, Opts) of
         {ok, Conn} ->
             {ok, #state{conn=Conn, opts=Opts}};
@@ -121,11 +120,6 @@ flush(Pid) ->
     timer:sleep(1000),
     Pid ! flush,
     flush(Pid).
-
-register() ->
-    redis_helper:register_stat_instance(),
-    timer:sleep(10 * 1000),
-    register().
 
 heroku_domain() ->
     case get(heroku_domain) of
