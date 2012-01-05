@@ -37,6 +37,7 @@ start_link() ->
         {ip, "0.0.0.0"},
         {port, Port},
         {backlog, 1024},
+        {max, 100000},
         {loop, {logplex_api, loop}},
         {name, logplex_api}
     ],
