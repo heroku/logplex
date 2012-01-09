@@ -106,7 +106,7 @@ set_sockopt(ListSock, CliSocket) ->
     true = inet_db:register_socket(CliSocket, inet_tcp),
     case prim_inet:getopts(ListSock, [nodelay, keepalive, delay_send, priority, tos]) of
     {ok, Opts} ->
-        case prim_inet:setopts(CliSocket, [{active, once}|Opts]) of
+        case prim_inet:setopts(CliSocket, [Opts]) of
         ok    -> ok;
         Error -> gen_tcp:close(CliSocket), Error
         end;

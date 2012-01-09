@@ -55,6 +55,7 @@ handle_call(_Request, _From, State) ->
     {reply, ignore, State}.
 
 handle_cast({set_socket, CSock}, State) ->
+    inet:setopts(CSock, [{active, once}]),
     {noreply, State#state{sock=CSock}};
 
 handle_cast(_Msg, State) ->
