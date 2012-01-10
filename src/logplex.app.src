@@ -3,7 +3,15 @@
   {description, "Log multiplexer"},
   {vsn, "1.0"},
   {registered, []},
-  {applications, [kernel, stdlib, sasl, inets, crypto, public_key, ssl]},
+  {applications, [kernel
+                  ,stdlib
+                  ,sasl
+                  ,inets
+                  ,crypto
+                  ,public_key
+                  ,ssl
+                  ,gproc
+                 ]},
   {mod, {logplex_app, []}}
  ]}.
  
