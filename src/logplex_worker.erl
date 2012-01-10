@@ -25,7 +25,7 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {regexp, map, interval, drain_accepting=true}).
+-record(state, {regexp, map, interval}).
 
 %% API functions
 start_link(_QueuePid) ->
@@ -34,22 +34,13 @@ start_link(_QueuePid) ->
 init(Parent) ->
     io:format("init ~p~n", [?MODULE]),
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
-    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
+    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid}
+                    || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
     {ok, Map, Interval} = redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
     proc_lib:init_ack(Parent, {ok, self()}),
     loop(#state{regexp=RE, map=Map, interval=Interval}).
 
-loop(#state{regexp=RE, map=Map, interval=Interval, drain_accepting=DrainAccepting}=State) ->
-    DrainAccepting1 =
-        receive
-            {logplex_drain_buffer, stop_accepting} ->
-                io:format("logplex_worker event=producer_callback action=stop_accepting~n"),
-                false;
-            {logplex_drain_buffer, start_accepting} ->
-                io:format("logplex_worker event=producer_callback action=start_accepting~n"),
-                true
-        after 0 -> DrainAccepting
-        end,
+loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
     case catch logplex_queue:out(logplex_work_queue) of
         timeout ->
             ok;
@@ -58,34 +49,29 @@ loop(#state{regexp=RE, map=Map, interval=Interval, drain_accepting=DrainAcceptin
         {1, [Msg]} ->
             case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
                 {match, [Token]} ->
-                    route(Token, Map, Interval, Msg, DrainAccepting1);
+                    route(Token, Map, Interval, Msg);
                 _ ->
                     ok
             end
     end,
-    ?MODULE:loop(State#state{drain_accepting=DrainAccepting1}).
+    ?MODULE:loop(State).
 
-route(Token, Map, Interval, Msg, DrainAccepting) when is_binary(Token), is_binary(Msg) ->
+route(Token, Map, Interval, RawMsg)
+  when is_binary(Token), is_binary(RawMsg) ->
     case logplex_token:lookup(Token) of
-        #token{channel_id=ChannelId, name=TokenName, app_id=AppId, drains=Drains} ->
+        #token{channel_id=ChannelId, name=TokenName
+               ,app_id=AppId, drains=Drains} ->
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
-            Msg1 = iolist_to_binary(re:replace(Msg, Token, TokenName)),
-            process_drains(AppId, ChannelId, Drains, Msg1, DrainAccepting),
-            process_tails(ChannelId, Msg1),
-            process_msg(ChannelId, BufferPid, Msg1);
+            CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
+            process_drains(AppId, ChannelId, Drains, CookedMsg),
+            process_tails(ChannelId, CookedMsg),
+            process_msg(ChannelId, BufferPid, CookedMsg);
         _ ->
             ok
     end.
 
-process_drains(_AppId, _ChannelId, _Drains, _Msg, false = _DrainAccepting) ->
-    logplex_stats:incr("drain_buffer_dropped"),
-    logplex_realtime:incr("drain_buffer_dropped"),
-    ok;
-
-process_drains(AppId, ChannelId, Drains, Msg, true = _DrainAccepting) ->
-    [logplex_queue:in(logplex_drain_buffer, {TcpDrain, AppId, ChannelId, Token, Host, Port, Msg}) ||
-        #drain{token=Token, resolved_host=Host, port=Port, tcp=TcpDrain} <- Drains],
+process_drains(_AppId, _ChannelId, _Drains, _Msg) ->
     ok.
 
 process_tails(ChannelId, Msg) ->
