@@ -85,12 +85,13 @@ prop_push_msgs() ->
                 Buf = lists:foldl(fun push/2,
                                   new(),
                                   MsgList),
-                [] =:= lists:foldl(fun (Msg, B) ->
-                                           {{msg, Msg}, B1} =  pop(B),
-                                           B1
-                                   end,
-                                   Buf,
-                                   MsgList)
+                lists:foldl(fun (Msg, B) ->
+                                    {{msg, Msg}, B1} =  pop(B),
+                                    B1
+                            end,
+                            Buf,
+                            MsgList),
+                true
             end).
 
 g_log_msg() ->
@@ -103,7 +104,7 @@ g_log_msg() ->
                                         [F, S, g_date(D), M]))).
 
 g_date(Offset) ->
-    Date = calendar:datetime_to_gregorian_seconds(calendar:now_to_universal_time()),
+    Date = calendar:datetime_to_gregorian_seconds(calendar:now_to_datetime(os:timestamp())),
     {{Y,M,D},{H,MM,S}} = calendar:gregorian_seconds_to_datetime(Date + Offset),
     io_lib:format("~4.10.0B-~2.10.0B-~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B"
                   "Z+00:00",
