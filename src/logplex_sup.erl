@@ -106,6 +106,11 @@ init([]) ->
        ,{tcp_acceptor,
          {tcp_acceptor, start_link, [logplex_app:config(syslog_port)]},
          permanent, 2000, worker, [tcp_acceptor]}
+
+       ,{logplex_drain_sup,
+         {logplex_drain_sup, start_link, []},
+         permanent, 2000, supervisor, [logplex_drain_sup]}
+      ]
     }}.
 
 %%====================================================================
