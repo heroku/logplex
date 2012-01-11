@@ -44,7 +44,7 @@ pop(Buf = #lpdb{loss_count = 0,
     case queue:out(Q) of
         {empty, Q1} ->
             {empty, Buf#lpdb{messages = Q1}};
-        {Item, Q2} ->
+        {{value, Item}, Q2} ->
             {{msg, Item}, Buf#lpdb{messages = Q2}}
     end;
 pop(Buf = #lpdb{loss_count = N,
