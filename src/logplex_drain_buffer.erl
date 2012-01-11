@@ -19,6 +19,8 @@
          ,pop/1
          ]).
 
+-include_lib("proper/include/proper.hrl").
+
 
 -spec new() -> lp_msg_buffer().
 new() ->
@@ -76,3 +78,33 @@ displace(Msg, Buf = #lpdb{messages = Q,
     NewQueue = queue:in(Msg, Q1),
     Buf#lpdb{messages = NewQueue,
              loss_count = N + 1}.
+
+prop_push_msgs() ->
+    ?FORALL(MsgList, list(g_log_msg()),
+            begin
+                Buf = lists:foldl(fun push/2,
+                                  new(),
+                                  MsgList),
+                [] =:= lists:foldl(fun (Msg, B) ->
+                                           {{msg, Msg}, B1} =  pop(B),
+                                           B1
+                                   end,
+                                   Buf,
+                                   MsgList)
+            end).
+
+g_log_msg() ->
+    ?LET({F, S, D, M},
+         {integer(0, 23), % Facility
+          integer(0, 7), % severity
+          integer(-86400, 86400),
+          binary()},
+         iolist_to_binary(io_lib:format("<~p>~p ~s ~s",
+                                        [F, S, g_date(D), M]))).
+
+g_date(Offset) ->
+    Date = calendar:datetime_to_gregorian_seconds(calendar:now_to_universal_time()),
+    {{Y,M,D},{H,MM,S}} = calendar:gregorian_seconds_to_datetime(Date + Offset),
+    io_lib:format("~4.10.0B-~2.10.0B-~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B"
+                  "Z+00:00",
+                  [Y,M,D, H,MM,S]).
