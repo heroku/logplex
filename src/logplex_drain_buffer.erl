@@ -11,8 +11,8 @@
                loss_count = 0 :: non_neg_integer()
               }).
 
--type msg() :: binary().
--opaque lp_msg_buffer() :: #lpdb{}.
+-type msg() :: binary() | tuple().
+-opaque buf() :: #lpdb{}.
 
 -export([new/0
          ,push/2
@@ -22,11 +22,11 @@
 -include_lib("proper/include/proper.hrl").
 
 
--spec new() -> lp_msg_buffer().
+-spec new() -> buf().
 new() ->
     #lpdb{}.
 
--spec push(msg(), lp_msg_buffer()) -> lp_msg_buffer().
+-spec push(msg(), buf()) -> buf().
 push(Msg, Buf = #lpdb{}) ->
     case full(Buf) of
         full ->
@@ -35,8 +35,8 @@ push(Msg, Buf = #lpdb{}) ->
             insert(Msg, Buf)
     end.
 
--spec pop(lp_msg_buffer()) -> {empty, lp_msg_buffer()} |
-                              {{msg, msg()}, lp_msg_buffer()} |
+-spec pop(buf()) -> {empty, buf()} |
+                              {{msg, msg()}, buf()} |
                               {{loss_indication, N::non_neg_integer(),
                                 When::erlang:timestamp()}}.
 pop(Buf = #lpdb{loss_count = 0,
