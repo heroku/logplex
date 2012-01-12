@@ -12,6 +12,11 @@
                   ,ssl
                   ,gproc
                  ]},
-  {mod, {logplex_app, []}}
+  {mod, {logplex_app, []}},
+  {env,
+   [
+    {tcp_syslog_send_timeout_secs, 30} % 30 seconds
+    ,{tcp_syslog_backoff_max, 300} % 5 minutes
+   ]}
  ]}.
  
