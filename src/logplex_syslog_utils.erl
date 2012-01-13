@@ -6,7 +6,9 @@
 -module(logplex_syslog_utils).
 
 -export([to_msg/1
-         ,frame/1]).
+         ,to_msg/2
+         ,frame/1
+        ]).
 
 -type syslog_msg() :: {0..128, 0..7,
                        Time::iolist(), Source::iolist(),
