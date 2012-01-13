@@ -76,8 +76,9 @@ handle_cast({post, Msg}, State = #state{sock=undefined,
     NewBuf = logplex_drain_buffer:push(Msg, Buf),
     {noreply, State#state{buf=NewBuf}};
 
-handle_cast({post, Msg}, State = #state{sock=S}) ->
-    case post(Msg, S) of
+handle_cast({post, Msg}, State = #state{id = Token,
+                                        sock = S}) ->
+    case post(Msg, S, Token) of
         ok ->
             {noreply, tcp_good(State)};
         {error, Reason} ->
@@ -134,11 +135,12 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 
--spec post(logplex_syslog_utils:syslog_msg(), inet:socket()) ->
+-spec post(logplex_syslog_utils:syslog_msg(), inet:socket(),
+           Token::iolist()) ->
                   'ok' |
                   {'error', term()}.
-post(Msg, Sock) ->
-    SyslogMsg = logplex_syslog_utils:to_msg(Msg),
+post(Msg, Sock, Token) ->
+    SyslogMsg = logplex_syslog_utils:to_msg(Msg, Token),
     Packet = logplex_syslog_utils:frame(SyslogMsg),
     gen_tcp:send(Sock, Packet).
 
