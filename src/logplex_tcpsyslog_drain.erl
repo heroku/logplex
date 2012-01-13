@@ -54,7 +54,20 @@ start_link(DrainID, Host, Port) ->
                           []).
 
 post_msg(Server, Msg) when is_tuple(Msg) ->
-    gen_server:cast(Server, {post, Msg}).
+    gen_server:cast(Server, {post, Msg});
+post_msg(Server, Msg) when is_binary(Msg) ->
+    %% <40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 t.xxx web.1 - - State changed from created to starting
+    %% <PriFac>1 Time Host Token Process - - Msg
+    case re:run(Msg, "^<(\\d+)>1 (\\S+) \\S+ (\\S+) (\\S+) \\S+ \\S+ (.*)",
+                [{capture, all_but_first, binary}]) of
+        {match, [PriFac, Time, Source, Ps, Content]} ->
+            <<Facility:5, Severity:3>> =
+                << (list_to_integer(binary_to_list(PriFac))):8 >>,
+            post_msg(Server, {Facility, Severity, Time, Source, Ps, Content});
+        _ ->
+            {error, bad_syslog_msg}
+    end.
+
 
 %%====================================================================
 %% gen_server callbacks
