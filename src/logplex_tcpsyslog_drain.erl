@@ -15,6 +15,7 @@
 
 %% API
 -export([start_link/3
+         ,post_msg/2
         ]).
 
 %% gen_server callbacks
@@ -51,6 +52,9 @@ start_link(DrainID, Host, Port) ->
                                   host=Host,
                                   port=Port}],
                           []).
+
+post_msg(Server, Msg) when is_tuple(Msg) ->
+    gen_server:cast(Server, {post, Msg}).
 
 %%====================================================================
 %% gen_server callbacks
