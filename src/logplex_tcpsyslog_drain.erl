@@ -109,6 +109,15 @@ handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
             {noreply, reconnect(tcp_error, NewState)}
     end;
 
+handle_info({tcp_closed, S}, State = #state{sock = S}) ->
+    {noreply, reconnect(tcp_closed, State#state{sock=undefined})};
+
+handle_info({tcp_error, S, _Reason}, State = #state{sock = S}) ->
+    {noreply, reconnect(tcp_error, State#state{sock=undefined})};
+
+handle_info({tcp, S, _Data}, State = #state{sock = S}) ->
+    {stop, not_implemented, State};
+
 handle_info(Info, State) ->
     ?WARN("Unexpected info ~p", [Info]),
     {noreply, State}.
