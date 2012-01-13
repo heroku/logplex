@@ -29,7 +29,9 @@
 -export([logplex_work_queue_args/0
          ,logplex_drain_buffer_args/0
          ,nsync_opts/0
+         ,config/0
          ,config/1
+         ,config/2
         ]).
 
 -include_lib("logplex.hrl").
@@ -152,7 +154,21 @@ nsync_opts() ->
     [{callback, {nsync_callback, handle, []}} | RedisOpts2].
 
 
+config(Key, Default) ->
+    case application:get_env(logplex, Key) of
+        undefined -> Default;
+        {ok, Val} -> Val
+    end.
+
 config(redis_stats_uri) ->
     redo_uri:parse(os:getenv("LOGPLEX_STATS_REDIS_URL"));
 config(syslog_port) ->
-    ?TCP_PORT.
+    ?TCP_PORT;
+config(Key) ->
+    case application:get_env(logplex, Key) of
+        undefined -> erlang:error({missing_config, Key});
+        {ok, Val} -> Val
+    end.
+
+config() ->
+    application:get_all_env(logplex).
