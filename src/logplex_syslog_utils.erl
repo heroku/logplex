@@ -24,7 +24,7 @@ pri(Facility, Severity)
   when is_integer(Facility),
        is_integer(Severity),
        0 =< Severity, Severity =< 7 ->
-    Facility * 8 + Severity.
+    integer_to_list(Facility * 8 + Severity).
 
 -spec frame(Msg::iolist()) -> iolist().
 frame(Msg) when is_binary(Msg); is_list(Msg) ->
