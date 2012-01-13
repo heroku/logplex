@@ -81,7 +81,7 @@ handle_cast({post, Msg}, State = #state{sock=S}) ->
         ok ->
             {noreply, tcp_good(State)};
         {error, Reason} ->
-            ?ERR("~p (~p:~p) Couldn't write syslog message: ~p",
+            ?ERR("[~p] (~p:~p) Couldn't write syslog message: ~p",
                  [State#state.id, State#state.host, State#state.port,
                   Reason]),
             {noreply, reconnect(tcp_error, State)}
@@ -92,13 +92,17 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 %% @private
-handle_info(?RECONNECT_MSG, State = #state{sock=undefined}) ->
-    case connect(State) of
+handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
+    State1 = State#state{tref = undefined},
+    case connect(State1) of
         {ok, Sock} ->
-            {noreply, tcp_good(State#state{sock=Sock})};
+            ?INFO("[~s] connected to ~p:~p on try ~p.",
+                  [State1#state.id, State1#state.host, State1#state.port,
+                   State1#state.failures + 1]),
+            {noreply, tcp_good(State1#state{sock=Sock})};
         {error, Reason} ->
-            NewState = tcp_bad(State#state{sock=undefined}),
-            ?ERR("~p Couldn't connect to ~p:~p; ~p"
+            NewState = tcp_bad(State1),
+            ?ERR("[~s] Couldn't connect to ~p:~p; ~p"
                  " (try ~p, last success: ~s)",
                  [NewState#state.id, NewState#state.host, NewState#state.port,
                   Reason, NewState#state.failures, time_failed(NewState)]),
@@ -143,19 +147,21 @@ connect(#state{sock = undefined, host=Host, port=Port}) ->
                                  ,{send_timeout_close, true}
                                  ]).
 
--spec reconnect(Why::atom(), #state{}) -> #state{}.
+-spec reconnect('tcp_error' | 'tcp_closed', #state{}) -> #state{}.
 reconnect(_Reason, State = #state{failures = F}) ->
     BackOff = erlang:min(logplex_app:config(tcp_syslog_backoff_max),
                          1 bsl F),
-    Ref = erlang:start_timer(timer:seconds(BackOff), self(), ?RECONNECT_MSG),
+    Ref = erlang:send_after(timer:seconds(BackOff), self(), ?RECONNECT_MSG),
     State#state{tref=Ref}.
 
 tcp_good(State = #state{}) ->
     State#state{last_good_time = os:timestamp(),
                 failures = 0}.
 
+%% Caller must ensure sock is closed before calling this.
 tcp_bad(State = #state{failures = F}) ->
-    State#state{failures = F + 1}.
+    State#state{failures = F + 1,
+                sock = undefined}.
 
 -spec time_failed(#state{}) -> iolist().
 time_failed(State = #state{}) ->
