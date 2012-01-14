@@ -198,7 +198,7 @@ time_failed(Now, #state{last_good_time=T0})
 time_failed(_, #state{last_good_time=undefined}) ->
     "never".
 
-post_buffer(State = #state{id = Token, buf = Buf, sock = S}) ->
+post_buffer(State = #state{id = ID, buf = Buf, sock = S}) ->
     case logplex_drain_buffer:pop(Buf) of
         {empty, NewBuf} ->
             State#state{buf=NewBuf};
@@ -206,9 +206,11 @@ post_buffer(State = #state{id = Token, buf = Buf, sock = S}) ->
             Msg = case Item of
                       {msg, M} -> M;
                       {loss_indication, N, When} ->
+                          ?INFO("Drain ~s dropped ~p messages since ~s.",
+                                [ID, N, logplex_syslog_utils:datetime(When)]),
                           overflow_msg(N, When)
                   end,
-            case post(Msg, S, Token) of
+            case post(Msg, S, ID) of
                 ok ->
                     post_buffer(tcp_good(State#state{buf=NewBuf}));
                 {error, Reason} ->
