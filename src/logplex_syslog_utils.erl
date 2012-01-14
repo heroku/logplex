@@ -20,12 +20,12 @@
 to_msg({Facility, Severity, Time, Source, Process, Msg})
   when is_integer(Facility), is_integer(Severity) ->
     [ <<"<">>, pri(Facility, Severity), <<">1 ">>,
-      Time, $\s, Source, $\s, Process, <<" -- ">>, Msg ].
+      Time, $\s, Source, $\s, Process, <<" - - ">>, Msg ].
 
 -spec to_msg(syslog_msg(), Token::iolist()) -> iolist().
 to_msg({Facility, Severity, Time, Source, Process, Msg}, Token) ->
     [ <<"<">>, pri(Facility, Severity), <<">1 ">>,
-      Time, $\s, Token, $\s, Source, $\s, Process, <<" -- ">>, Msg ].
+      Time, $\s, Token, $\s, Source, $\s, Process, <<" - - ">>, Msg ].
 
 pri(Facility, Severity)
   when is_integer(Facility),
