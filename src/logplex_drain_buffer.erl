@@ -15,6 +15,7 @@
 -opaque buf() :: #lpdb{}.
 
 -export([new/0
+         ,new/1
          ,push/2
          ,pop/1
          ]).
@@ -25,6 +26,10 @@
 -spec new() -> buf().
 new() ->
     #lpdb{}.
+
+-spec new(pos_integer()) -> buf().
+new(Max) when is_integer(Max), Max > 0 ->
+    #lpdb{max_size=Max}.
 
 -spec push(msg(), buf()) -> buf().
 push(Msg, Buf = #lpdb{}) ->
