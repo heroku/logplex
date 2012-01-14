@@ -17,6 +17,7 @@
    [
     {tcp_syslog_send_timeout_secs, 30} % 30 seconds
     ,{tcp_syslog_backoff_max, 300} % 5 minutes
+    ,{tcp_drain_buffer_size, 1024}
    ]}
  ]}.
  
