@@ -41,9 +41,9 @@ push(Msg, Buf = #lpdb{}) ->
     end.
 
 -spec pop(buf()) -> {empty, buf()} |
-                              {{msg, msg()}, buf()} |
-                              {{loss_indication, N::non_neg_integer(),
-                                When::erlang:timestamp()}}.
+                    {{msg, msg()}, buf()} |
+                    {{loss_indication, N::non_neg_integer(),
+                      When::erlang:timestamp()}}.
 pop(Buf = #lpdb{loss_count = 0,
                 messages = Q}) ->
     case queue:out(Q) of
