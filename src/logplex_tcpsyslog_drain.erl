@@ -114,7 +114,8 @@ handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
             ?INFO("[~s] connected to ~p:~p on try ~p.",
                   [State1#state.id, State1#state.host, State1#state.port,
                    State1#state.failures + 1]),
-            {noreply, tcp_good(State1#state{sock=Sock})};
+            NewState = tcp_good(State1#state{sock=Sock}),
+            {noreply, post_buffer(NewState)};
         {error, Reason} ->
             NewState = tcp_bad(State1),
             ?ERR("[~s] Couldn't connect to ~p:~p; ~p"
@@ -197,3 +198,35 @@ time_failed(Now, #state{last_good_time=T0})
 time_failed(_, #state{last_good_time=undefined}) ->
     "never".
 
+post_buffer(State = #state{id = Token, buf = Buf, sock = S}) ->
+    case logplex_drain_buffer:pop(Buf) of
+        {empty, NewBuf} ->
+            State#state{buf=NewBuf};
+        {Item, NewBuf} ->
+            Msg = case Item of
+                      {msg, M} -> M;
+                      {loss_indication, N, When} ->
+                          overflow_msg(N, When)
+                  end,
+            case post(Msg, S, Token) of
+                ok ->
+                    post_buffer(tcp_good(State#state{buf=NewBuf}));
+                {error, Reason} ->
+                    ?ERR("[~p] (~p:~p) Couldn't write syslog message: ~p",
+                         [State#state.id, State#state.host, State#state.port,
+                          Reason]),
+                    reconnect(tcp_error, tcp_bad(State#state{sock=undefined}))
+            end
+    end.
+
+overflow_msg(N, When) ->
+    logplex_syslog_utils:fmt(local5,
+                             warning,
+                             now,
+                             "logplex",
+                             "logplex",
+                             "Logplex drain buffer overflowed."
+                             " ~p messages lost since ~s.",
+                             [N,
+                              logplex_syslog_utils:datetime(When)]
+                            ).
