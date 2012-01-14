@@ -192,7 +192,7 @@ time_failed(State = #state{}) ->
     time_failed(os:timestamp(), State).
 time_failed(Now, #state{last_good_time=T0})
   when is_tuple(T0) ->
-    io_lib:format("~f ago", [timer:now_diff(T0, Now) / 1000000]);
+    io_lib:format("~fs ago", [timer:now_diff(Now, T0) / 1000000]);
 time_failed(_, #state{last_good_time=undefined}) ->
     "never".
 
