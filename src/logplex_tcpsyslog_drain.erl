@@ -75,7 +75,6 @@ post_msg(Server, Msg) when is_binary(Msg) ->
 
 %% @private
 init([State0 = #state{}]) ->
-    self() ! ?RECONNECT_MSG,
     DrainSize = logplex_app:config(tcp_drain_buffer_size),
     {ok, State0#state{buf = logplex_drain_buffer:new(DrainSize)}}.
 
