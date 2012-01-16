@@ -50,7 +50,8 @@ loop(RE, Socket) ->
                 Packet ->
                     case send_packet(TcpDrain, Socket, AppId, ChannelId, Host, Port, Packet) of
                         ok ->
-                            logplex_stats:incr(logplex_stats_channels, {message_drained, AppId, ChannelId}),
+                            TcpDrain andalso logplex_stats:incr(logplex_stats_channels, {message_drained, AppId, ChannelId}),
+                            not TcpDrain andalso logplex_stats:incr(logplex_stats_channels, {udp_message_drained, AppId, ChannelId}),
                             logplex_realtime:incr(message_routed);
                         _ ->
                             ok
