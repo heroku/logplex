@@ -55,8 +55,6 @@ start_link(ChannelID, DrainID, Host, Port) ->
                                   port=Port}],
                           []).
 
-post_msg(Server, Msg) when is_tuple(Msg) ->
-    gen_server:cast(Server, {post, Msg});
 post_msg(Server, Msg) when is_binary(Msg) ->
     %% <40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 t.xxx web.1 - - State changed from created to starting
     %% <PriFac>1 Time Host Token Process - - Msg
@@ -68,8 +66,13 @@ post_msg(Server, Msg) when is_binary(Msg) ->
             post_msg(Server, {Facility, Severity, Time, Source, Ps, Content});
         _ ->
             {error, bad_syslog_msg}
-    end.
-
+    end;
+post_msg({drain, ID}, Msg) when is_tuple(Msg) ->
+    gproc:send({n, l, {drain, ID}}, {post, Msg});
+post_msg({channel, Chan}, Msg) when is_tuple(Msg) ->
+    gproc:send({p, l, {channel, Chan}}, {post, Msg});
+post_msg(Server, Msg) when is_tuple(Msg) ->
+    Server ! Msg.
 
 %%====================================================================
 %% gen_server callbacks
@@ -77,8 +80,11 @@ post_msg(Server, Msg) when is_binary(Msg) ->
 
 %% @private
 init([State0 = #state{id=ID, channel=Chan}]) ->
+    gproc:add_local_name({drain, ID}),
+    %% This is ugly, but there's no other obvious way to do it.
+    gproc:add_local_property({channel, Chan}, true),
     DrainSize = logplex_app:config(tcp_drain_buffer_size),
-    {ok, State0#state{buf = logplex_drain_buffer:new(DrainSize)}}.
+    {ok, State0#state{buf = logplex_drain_buffer:new(DrainSize)}, hibernate}.
 
 %% @private
 handle_call(Call, _From, State) ->
@@ -86,12 +92,17 @@ handle_call(Call, _From, State) ->
     {noreply, State}.
 
 %% @private
-handle_cast({post, Msg}, State = #state{sock=undefined,
+handle_cast(Msg, State) ->
+    ?WARN("Unexpected cast ~p", [Msg]),
+    {noreply, State}.
+
+%% @private
+handle_info({post, Msg}, State = #state{sock=undefined,
                                         buf=Buf}) ->
     NewBuf = logplex_drain_buffer:push(Msg, Buf),
     {noreply, State#state{buf=NewBuf}};
 
-handle_cast({post, Msg}, State = #state{id = Token,
+handle_info({post, Msg}, State = #state{id = Token,
                                         sock = S}) ->
     case post(Msg, S, Token) of
         ok ->
@@ -103,11 +114,6 @@ handle_cast({post, Msg}, State = #state{id = Token,
             {noreply, reconnect(tcp_error, State)}
     end;
 
-handle_cast(Msg, State) ->
-    ?WARN("Unexpected cast ~p", [Msg]),
-    {noreply, State}.
-
-%% @private
 handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
     State1 = State#state{tref = undefined},
     case connect(State1) of
