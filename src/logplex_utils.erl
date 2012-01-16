@@ -46,7 +46,7 @@ set_weight(Weight) when is_integer(Weight) ->
     redgrid:update_meta([{"weight", integer_to_list(Weight)}]).
 
 setup_test_channel(ChannelName, AppId) when is_binary(ChannelName), is_integer(AppId) ->
-    ChannelId = logplex_channel:create(ChannelName, AppId, <<"advanced">>),
+    ChannelId = logplex_channel:create(ChannelName, AppId),
     timer:sleep(100),
     logplex_token:create(ChannelId, <<"app">>).
 
