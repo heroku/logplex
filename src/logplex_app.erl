@@ -52,7 +52,6 @@ start(_StartType, _StartArgs) ->
 
 stop(_State) ->
     io:format("stopping...~n"),
-    logplex_db:dump(),
     ok.
 
 set_cookie() ->
