@@ -140,10 +140,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 
 -spec post(logplex_syslog_utils:syslog_msg(), inet:socket(),
-           Token::iolist()) ->
+           iolist() | binary()) ->
                   'ok' |
                   {'error', term()}.
-post(Msg, Sock, Token) when is_tuple(Msg), is_binary(Token) ->
+post(Msg, Sock, Token) when is_tuple(Msg) ->
     SyslogMsg = logplex_syslog_utils:to_msg(Msg, Token),
     Packet = logplex_syslog_utils:frame(SyslogMsg),
     gen_tcp:send(Sock, Packet).

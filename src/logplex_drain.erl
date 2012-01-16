@@ -29,6 +29,15 @@
 
 -include_lib("logplex.hrl").
 
+-type id() :: binary().
+-export_type([id/0]).
+
+-spec post_msg({'drain', id()} |
+               {'channel', logplex_channel:id()} |
+               atom() |
+               pid(),
+               binary() | logplex_syslog_utils:syslog_msg()) ->
+                      'ok' | {'error', 'bad_syslog_msg'}.
 post_msg(Server, Msg) when is_binary(Msg) ->
     %% <40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 t.xxx web.1 - - State changed from created to starting
     %% <PriFac>1 Time Host Token Process - - Msg
@@ -41,12 +50,19 @@ post_msg(Server, Msg) when is_binary(Msg) ->
         _ ->
             {error, bad_syslog_msg}
     end;
-post_msg({drain, ID}, Msg) when is_tuple(Msg) ->
-    gproc:send({n, l, {drain, ID}}, {post, Msg});
-post_msg({channel, Chan}, Msg) when is_tuple(Msg) ->
-    gproc:send({p, l, {channel, Chan}}, {post, Msg});
-post_msg(Server, Msg) when is_tuple(Msg) ->
-    Server ! Msg.
+post_msg(Server, Msg) when is_tuple(Msg), tuple_size(Msg) =:= 6 ->
+    post_msg2(Server, Msg).
+
+%% @private.
+post_msg2({drain, ID}, Msg) when is_tuple(Msg) ->
+    gproc:send({n, l, {drain, ID}}, {post, Msg}),
+    ok;
+post_msg2({channel, Chan}, Msg) when is_tuple(Msg) ->
+    gproc:send({p, l, {channel, Chan}}, {post, Msg}),
+    ok;
+post_msg2(Server, Msg) when is_tuple(Msg) ->
+    Server ! Msg,
+    ok.
 
 reserve_token() ->
     Token = new_token(),

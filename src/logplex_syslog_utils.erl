@@ -26,7 +26,7 @@ to_msg({Facility, Severity, Time, Source, Process, Msg})
     [ <<"<">>, pri(Facility, Severity), <<">1 ">>,
       Time, $\s, Source, $\s, Process, <<" - - ">>, Msg ].
 
--spec to_msg(syslog_msg(), Token::iolist()) -> iolist().
+-spec to_msg(syslog_msg(), iolist() | binary()) -> iolist().
 to_msg({Facility, Severity, Time, Source, Process, Msg}, Token) ->
     [ <<"<">>, pri(Facility, Severity), <<">1 ">>,
       Time, $\s, Token, $\s, Source, $\s, Process, <<" - - ">>, Msg ].

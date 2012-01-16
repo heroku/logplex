@@ -27,6 +27,11 @@
 
 -include_lib("logplex.hrl").
 
+-type id() :: integer().
+-type name() :: binary().
+-export_type([id/0]).
+
+-spec create(name(), integer()) -> id() | {'error', term()}.
 create(ChannelName, AppId) when is_binary(ChannelName), is_integer(AppId) ->
     case redis_helper:channel_index() of
         ChannelId when is_integer(ChannelId) ->
