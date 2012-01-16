@@ -78,12 +78,14 @@ handle_cast(Msg, State) ->
 
 %% @private
 handle_info({post, Msg}, State = #state{sock=undefined,
-                                        buf=Buf}) ->
+                                        buf=Buf})
+  when is_tuple(Msg) ->
     NewBuf = logplex_drain_buffer:push(Msg, Buf),
     {noreply, State#state{buf=NewBuf}};
 
 handle_info({post, Msg}, State = #state{id = Token,
-                                        sock = S}) ->
+                                        sock = S})
+  when is_tuple(Msg) ->
     case post(Msg, S, Token) of
         ok ->
             {noreply, tcp_good(State)};
@@ -141,7 +143,7 @@ code_change(_OldVsn, State, _Extra) ->
            Token::iolist()) ->
                   'ok' |
                   {'error', term()}.
-post(Msg, Sock, Token) ->
+post(Msg, Sock, Token) when is_tuple(Msg), is_binary(Token) ->
     SyslogMsg = logplex_syslog_utils:to_msg(Msg, Token),
     Packet = logplex_syslog_utils:frame(SyslogMsg),
     gen_tcp:send(Sock, Packet).

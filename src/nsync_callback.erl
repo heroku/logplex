@@ -28,15 +28,15 @@
 %% nsync callbacks
 
 %% LOAD
-handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
+handle({load, <<"ch:", Rest/binary>>, Dict}) ->
     Id = list_to_integer(parse_id(Rest)),
     create_channel(Id, Dict);
 
-handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
+handle({load, <<"tok:", Rest/binary>>, Dict}) ->
     Id = list_to_binary(parse_id(Rest)),
     create_token(Id, Dict);
 
-handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
+handle({load, <<"drain:", Rest/binary>>, Dict}) ->
     Id = list_to_integer(parse_id(Rest)),
     create_drain(Id, Dict);
 
