@@ -27,7 +27,6 @@
 -export([start/2, stop/1]).
 
 -export([logplex_work_queue_args/0
-         ,logplex_drain_buffer_args/0
          ,nsync_opts/0
          ,config/0
          ,config/1
@@ -117,31 +116,6 @@ logplex_work_queue_args() ->
      {num_workers, NumWorkers},
      {worker_sup, logplex_worker_sup},
      {worker_args, []}].
-
-logplex_drain_buffer_args() ->
-    MaxLength =
-        case os:getenv("LOGPLEX_DRAIN_BUFFER_LENGTH") of
-            false -> ?DEFAULT_LOGPLEX_DRAIN_BUFFER_LENGTH;
-            StrNum1 -> list_to_integer(StrNum1)
-        end,
-    NumWorkers =
-        case os:getenv("LOGPLEX_DRAIN_WRITERS") of
-            false -> ?DEFAULT_LOGPLEX_DRAIN_WRITERS;
-            StrNum2 -> list_to_integer(StrNum2)
-        end,
-    Dict = dict:from_list([
-        {producer_callback, fun(_Pid, Action) ->
-            [begin
-                Pid ! {logplex_drain_buffer, Action}
-            end ||{_,Pid,_,_} <- supervisor:which_children(logplex_worker_sup)]
-        end}
-    ]),
-    [{name, "logplex_drain_buffer"},
-     {max_length, MaxLength},
-     {num_workers, NumWorkers},
-     {worker_sup, logplex_drain_sup},
-     {worker_args, []},
-     {dict, Dict}].
 
 nsync_opts() ->
     RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),

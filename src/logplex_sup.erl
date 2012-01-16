@@ -73,14 +73,6 @@ init([]) ->
          {logplex_worker_sup, start_link,
           [logplex_worker_sup, logplex_worker]},
          permanent, 2000, worker, [logplex_worker_sup]}
-       ,{logplex_drain_sup,
-         {logplex_worker_sup, start_link,
-          [logplex_drain_sup, logplex_drain_writer]},
-         permanent, 2000, worker, [logplex_drain_sup]}
-       ,{logplex_drain_worker_sup,
-         {logplex_worker_sup, start_link,
-          [logplex_drain_worker_sup, logplex_drain_worker]},
-         permanent, 2000, worker, [logplex_drain_worker_sup]}
 
        ,{logplex_shard, {logplex_shard, start_link, []},
          permanent, 2000, worker, [logplex_shard]}
@@ -89,10 +81,6 @@ init([]) ->
          {logplex_queue, start_link,
           [logplex_work_queue, logplex_app:logplex_work_queue_args()]},
          permanent, 2000, worker, [logplex_work_queue]}
-       ,{logplex_drain_buffer,
-         {logplex_queue, start_link,
-          [logplex_drain_buffer, logplex_app:logplex_drain_buffer_args()]},
-         permanent, 2000, worker, [logplex_drain_buffer]}
 
        ,{tcp_proxy_sup, {tcp_proxy_sup, start_link, []},
          permanent, 2000, worker, [tcp_proxy_sup]}
