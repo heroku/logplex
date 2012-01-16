@@ -14,7 +14,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
--export([start_link/3
+-export([start_link/4
          ,post_msg/2
         ]).
 
@@ -23,6 +23,7 @@
          terminate/2, code_change/3]).
 
 -record(state, {id :: binary(),
+                channel :: binary(),
                 host :: string() | inet:ip_address(),
                 port :: inet:port_number(),
                 sock = undefined :: 'undefined' | inet:socket(),
@@ -46,9 +47,10 @@
 %% @doc Starts the server
 %% @end
 %%--------------------------------------------------------------------
-start_link(DrainID, Host, Port) ->
+start_link(ChannelID, DrainID, Host, Port) ->
     gen_server:start_link(?MODULE,
                           [#state{id=DrainID,
+                                  channel=ChannelID,
                                   host=Host,
                                   port=Port}],
                           []).
@@ -74,7 +76,7 @@ post_msg(Server, Msg) when is_binary(Msg) ->
 %%====================================================================
 
 %% @private
-init([State0 = #state{}]) ->
+init([State0 = #state{id=ID, channel=Chan}]) ->
     DrainSize = logplex_app:config(tcp_drain_buffer_size),
     {ok, State0#state{buf = logplex_drain_buffer:new(DrainSize)}}.
 
