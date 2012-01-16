@@ -71,8 +71,8 @@ route(Token, Map, Interval, RawMsg)
             ok
     end.
 
-process_drains(_AppId, _ChannelId, _Drains, _Msg) ->
-    ok.
+process_drains(_AppId, ChannelID, _Drains, Msg) ->
+    logplex_drain:post_msg({channel, ChannelID}, Msg).
 
 process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
