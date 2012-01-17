@@ -156,6 +156,13 @@ create_drain(Id, Dict) ->
                             Val2 -> list_to_integer(binary_to_list(Val2))
                         end,
                     Tcp = (dict_find(<<"tcp">>, Dict) =/= <<"false">>),
+                    case Tcp of
+                        true ->
+                            logplex_drain:start(tcpsyslog, Token, [Ch, Token, Host, Port]);
+                        _ ->
+                            io:format("logplex_error no udp support for ~p ~p ~p:~p~n",
+                                      [Ch, Token, Host, Port])
+                    end,
                     Drain = #drain{
                         id=Id,
                         channel_id=Ch,
