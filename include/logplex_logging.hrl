@@ -6,13 +6,13 @@
 -define(logging_macros, true).
 
 -define(INFO(Format, Args),
-        error_logger:info_msg("(~p ~p:~p) " ++ Format,
-                              [self(), ?MODULE, ?LINE | Args])).
+        io:format("(~p info ~p:~p) " ++ Format,
+                  [self(), ?MODULE, ?LINE | Args])).
 -define(WARN(Format, Args),
-        error_logger:warning_msg("(~p ~p:~p) " ++ Format,
-                                 [self(), ?MODULE, ?LINE | Args])).
+        io:format("(~p warn ~p:~p) " ++ Format,
+                  [self(), ?MODULE, ?LINE | Args])).
 -define(ERR(Format, Args),
-        error_logger:error_msg("(~p ~p:~p) " ++ Format,
-                               [self(), ?MODULE, ?LINE | Args])).
+        io:format("(~p err ~p:~p) " ++ Format,
+                  [self(), ?MODULE, ?LINE | Args])).
 
 -endif. %logging
