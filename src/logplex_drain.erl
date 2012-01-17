@@ -23,7 +23,8 @@
 -module(logplex_drain).
 
 -export([post_msg/2
-        ,start/3
+         ,whereis/1
+         ,start/3
         ]).
 
 -export([reserve_token/0, cache/3, create/5, create/4,
@@ -35,36 +36,25 @@
 -export_type([id/0]).
 
 -spec post_msg({'drain', id()} |
-               {'channel', logplex_channel:id()} |
                atom() |
                pid(),
                binary() | logplex_syslog_utils:syslog_msg()) ->
                       'ok' | {'error', 'bad_syslog_msg'}.
-post_msg(Server, Msg) when is_binary(Msg) ->
-    %% <40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 t.xxx web.1 - - State changed from created to starting
-    %% <PriFac>1 Time Host Token Process - - Msg
-    case re:run(Msg, "^<(\\d+)>1 (\\S+) \\S+ (\\S+) (\\S+) \\S+ \\S+ (.*)",
-                [{capture, all_but_first, binary}]) of
-        {match, [PriFac, Time, Source, Ps, Content]} ->
-            <<Facility:5, Severity:3>> =
-                << (list_to_integer(binary_to_list(PriFac))):8 >>,
-            post_msg(Server, {Facility, Severity, Time, Source, Ps, Content});
-        _ ->
-            {error, bad_syslog_msg}
-    end;
-post_msg(Server, Msg) when is_tuple(Msg), tuple_size(Msg) =:= 6 ->
-    post_msg2(Server, Msg).
 
-%% @private.
-post_msg2({drain, ID}, Msg) when is_tuple(Msg) ->
+post_msg(Where, Msg) when is_binary(Msg) ->
+    case logplex_syslog_utils:from_msg(Msg) of
+        {error, _} = E -> E;
+        ParsedMsg -> post_msg(Where, ParsedMsg)
+    end;
+post_msg({drain, ID}, Msg) when is_tuple(Msg) ->
     gproc:send({n, l, {drain, ID}}, {post, Msg}),
     ok;
-post_msg2({channel, Chan}, Msg) when is_tuple(Msg) ->
-    gproc:send({p, l, {channel, Chan}}, {post, Msg}),
-    ok;
-post_msg2(Server, Msg) when is_tuple(Msg) ->
+post_msg(Server, Msg) when is_tuple(Msg) ->
     Server ! Msg,
     ok.
+
+whereis({drain, _ID} = Name) ->
+    gproc:lookup_local_name(Name).
 
 start(tcpsyslog, ID, Args) ->
     supervisor:start_child(logplex_drain_sup,
