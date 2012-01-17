@@ -52,14 +52,14 @@ stop() ->
     ok.
 
 loop(Req) ->
-    Start = now(),
+    Start = os:timestamp(),
     Method = Req:get(method),
     Path = Req:get(path),
     AppId = header_value(Req, "App", ""),
     ChannelId = header_value(Req, "Channel", ""),
     try
         {Code, Body} = serve(handlers(), Method, Path, Req),
-        Time = timer:now_diff(now(), Start) div 1000,
+        Time = timer:now_diff(os:timestamp(), Start) div 1000,
         io:format("logplex_api app_id=~s channel_id=~s method=~p path=~s resp_code=~w time=~w body=~s~n", [AppId, ChannelId, Method, Path, Code, Time, Body]),
         Req:respond({Code, ?HDR, Body}),
         exit(normal)
