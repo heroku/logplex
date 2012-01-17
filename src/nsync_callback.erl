@@ -23,7 +23,9 @@
 -module(nsync_callback).
 -export([handle/1]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
+
 
 %% nsync callbacks
 
@@ -54,36 +56,36 @@ handle({load, eof}) ->
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    io:format("[~p] event=set type=channel id=~p~n", [?MODULE, Id]),
+    ?INFO("event=set type=channel id=~p~n", [Id]),
     create_channel(Id, Dict);
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Token = create_token(Id, Dict),
-    io:format("[~p] event=set type=token id=~p~n", [?MODULE, Id]),
+    ?INFO("event=set type=token id=~p~n", [Id]),
     populate_token_channel_data([Token]);
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Drain = create_drain(Id, Dict),
-    io:format("[~p] event=set type=drain id=~p~n", [?MODULE, Id]),
+    ?INFO("event=set type=drain id=~p~n", [Id]),
     Drain#drain.host =/= undefined andalso populate_token_drain_data([Drain]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    io:format("[~p] event=delete type=channel id=~p~n", [?MODULE, Id]),
+    ?INFO("event=delete type=channel id=~p~n", [Id]),
     ets:delete(channels, Id);
 
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
-    io:format("[~p] event=delete type=token id=~p~n", [?MODULE, Id]),
+    ?INFO("event=delete type=token id=~p~n", [Id]),
     ets:delete(tokens, Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    io:format("[~p] event=delete type=drain id=~p~n", [?MODULE, Id]),
+    ?INFO("event=delete type=drain id=~p~n", [Id]),
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
 
@@ -97,23 +99,24 @@ handle({cmd, _Cmd, [<<"heroku.com:stats", _/binary>>|_]}) ->
     ok;
 
 handle({cmd, _Cmd, _Args}) ->
-    io:format("[~p] event=error cmd=~p args=~100p~n", [?MODULE, _Cmd, _Args]),
+    ?ERR("cmd=~p args=~100p~n", [_Cmd, _Args]),
     ok;
 
 handle({error, closed}) ->
-    error_logger:error_msg("[~p] event=error msg=closed~n", [?MODULE]),
+    ?ERR("msg=closed~n", []),
     exit({error, closed}),
     ok;
 
 handle(_Other) ->
-    error_logger:error_msg("[~p] event=error msg=~p~n", [?MODULE, _Other]),
+    ?ERR("msg=~p~n", [_Other]),
     ok.
 
 %% Helper functions
 create_channel(Id, Dict) ->
     case dict_find(<<"app_id">>, Dict) of
         undefined ->
-            io:format("Error ~p ~p ~p ~p ~p~n", [?MODULE, create_channel, missing_app_id, Id, dict:to_list(Dict)]);
+            ?ERR("~p ~p ~p ~p~n",
+                 [create_channel, missing_app_id, Id, dict:to_list(Dict)]);
         Val ->
             AppId = list_to_integer(binary_to_list(Val)),
             Channel = #channel{id=Id,
@@ -126,7 +129,8 @@ create_channel(Id, Dict) ->
 create_token(Id, Dict) ->
     case dict_find(<<"ch">>, Dict) of
         undefined ->
-            io:format("Error ~p ~p ~p ~p ~p~n", [?MODULE, create_token, missing_ch, Id, dict:to_list(Dict)]);
+            ?ERR("~p ~p ~p ~p~n",
+                 [create_token, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
             Ch = list_to_integer(binary_to_list(Val1)),
             Name = dict_find(<<"name">>, Dict), 
@@ -142,12 +146,14 @@ create_token(Id, Dict) ->
 create_drain(Id, Dict) ->
     case dict_find(<<"ch">>, Dict) of
         undefined ->
-            io:format("Error ~p ~p ~p ~p ~p~n", [?MODULE, create_drain, missing_ch, Id, dict:to_list(Dict)]);
+            ?ERR("~p ~p ~p ~p~n",
+                 [create_drain, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
             Ch = list_to_integer(binary_to_list(Val1)),
             case dict_find(<<"token">>, Dict) of
                 undefined ->
-                    io:format("Error ~p ~p ~p ~p ~p~n", [?MODULE, create_drain, missing_token, Id, dict:to_list(Dict)]);
+                    ?ERR("~p ~p ~p ~p~n",
+                         [create_drain, missing_token, Id, dict:to_list(Dict)]);
                 Token ->
                     Host = dict_find(<<"host">>, Dict),
                     Port =
@@ -158,10 +164,11 @@ create_drain(Id, Dict) ->
                     Tcp = (dict_find(<<"tcp">>, Dict) =/= <<"false">>),
                     case Tcp of
                         true ->
-                            logplex_drain:start(tcpsyslog, Token, [Ch, Token, Host, Port]);
+                            logplex_drain:start(tcpsyslog, Token,
+                                                [Ch, Token, Host, Port]);
                         _ ->
-                            io:format("logplex_error no udp support for ~p ~p ~p:~p~n",
-                                      [Ch, Token, Host, Port])
+                            ?ERR("no udp support for ~p ~p ~p:~p~n",
+                                 [Ch, Token, Host, Port])
                     end,
                     Drain = #drain{
                         id=Id,
@@ -182,7 +189,8 @@ populate_token_channel_data([]) ->
 populate_token_channel_data([Token|Tail]) when is_record(Token, token) ->
     case logplex_channel:lookup(Token#token.channel_id) of
         undefined ->
-            io:format("Error ~p ~p ~p ~p~n", [?MODULE, populate_token_channel_data, undefined_channel, Token]);
+            ?ERR("~p ~p ~p~n",
+                 [populate_token_channel_data, undefined_channel, Token]);
         #channel{app_id=AppId} ->
             ets:insert(tokens, Token#token{app_id=AppId})
     end,
@@ -198,7 +206,8 @@ populate_token_drain_data([Drain|Tail]) when is_record(Drain, drain) ->
     T = logplex_utils:empty_token(),
     case ets:match_object(tokens, T#token{channel_id=Drain#drain.channel_id}) of
         [] ->
-            io:format("Error ~p ~p ~p ~p~n", [?MODULE, populate_token_drain_data, undefined_tokens, Drain]);
+            ?ERR("~p ~p ~p ~p~n",
+                 [populate_token_drain_data, undefined_tokens, Drain]);
         Tokens ->
             Drain1 = Drain#drain{resolved_host=logplex_utils:resolve_host(Drain#drain.host)},
             ets:insert(tokens, [Token#token{drains=[Drain1|Drains]} || #token{drains=Drains}=Token <- Tokens])
@@ -211,12 +220,14 @@ populate_token_drain_data([_|Tail]) ->
 remove_token_drain_data(DrainId) ->
     case logplex_drain:lookup(DrainId) of
         undefined ->
-            io:format("Error ~p ~p ~p ~p~n", [?MODULE, remove_token_drain_data, undefined_drain, DrainId]);
+            ?ERR("~p ~p ~p~n",
+                 [remove_token_drain_data, undefined_drain, DrainId]);
         Drain ->
             T = logplex_utils:empty_token(),
             case ets:match_object(tokens, T#token{channel_id=Drain#drain.channel_id}) of
                 [] ->
-                    io:format("Error ~p ~p ~p ~p~n", [?MODULE, remove_token_drain_data, undefined_tokens, Drain]);
+                    ?ERR("~p ~p ~p~n",
+                         [remove_token_drain_data, undefined_tokens, Drain]);
                 Tokens ->
                     ets:insert(tokens, [begin
                         Drains1 = lists:filter(fun(#drain{id=Id}) -> Id =/= DrainId end, Drains),
