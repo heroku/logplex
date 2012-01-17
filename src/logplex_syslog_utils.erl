@@ -13,6 +13,8 @@
          ,facility_to_int/1
          ,severity_to_int/1
          ,fmt/7
+         ,rfc5424/1
+         ,rfc5424/8
         ]).
 
 -type syslog_msg() :: {0..128, 0..7,
@@ -32,6 +34,24 @@ to_msg({Facility, Severity, Time, Source, Process, Msg}, Token) ->
     [ <<"<">>, pri(Facility, Severity), <<">1 ">>,
       Time, $\s, Token, $\s, Source, $\s, Process, <<" - - ">>, Msg ].
 
+rfc5424({Facility, Severity, Time, Source, Process, Msg}) ->
+    rfc5424(Facility, Severity, Time, Source,
+            Process, undefined, undefined, Msg).
+
+rfc5424(Facility, Severity, Time, Host, AppName, ProcID, MsgID, Msg) ->
+    [ <<"<">>, pri(Facility, Severity), <<">1">>,
+      [ [$\s, nvl(Item)]
+        || Item <- [Time, Host, AppName, ProcID, MsgID] ],
+      case Msg of
+          undefined -> [];
+          _ -> [$\s, Msg]
+      end
+    ].
+
+nvl(undefined) -> $-;
+nvl(Val) -> Val.
+
+
 from_msg(Msg) when is_binary(Msg) ->
     %% <40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 t.xxx web.1 - - State changed from created to starting
     %% <PriFac>1 Time Host Token Process - - Msg
@@ -44,6 +64,14 @@ from_msg(Msg) when is_binary(Msg) ->
         _ ->
             {error, bad_syslog_msg}
     end.
+
+-spec pri(0..128 | atom(), 0..7 | atom()) -> iolist().
+pri(Facility, Severity)
+  when is_atom(Facility) ->
+    pri(facility_to_int(Facility), Severity);
+pri(Facility, Severity)
+  when is_integer(Facility), is_atom(Severity) ->
+    pri(Facility, severity_to_int(Severity));
 pri(Facility, Severity)
   when is_integer(Facility),
        is_integer(Severity),
@@ -75,6 +103,12 @@ fmt(Facility, Severity, Time, Source, Process, Fmt, Args) ->
      Process,
      io_lib:format(Fmt, Args)}.
 
+-type facility() :: 0..127 |
+                    'kernel' | 'user' | 'mail' | 'system' | 'internal' | 'lp' |
+                    'news' | 'uucp' | 'clock' | 'security2' | 'ftp' | 'ntp' |
+                    'audit' | 'alert' | 'clock2' | 'local0' | 'local1' |
+                    'local2' | 'local3' | 'local4' | 'local5' | 'local6' |
+                    'local7'.
 facilities() ->
     [ { 0, kernel, "kernel messages"}
      ,{ 1, user, "user-level messages"}
@@ -101,11 +135,22 @@ facilities() ->
      ,{22, local6, "local use 6  (local6)"}
      ,{23, local7, "local use 7  (local7)"}].
 
-facility_to_int(I) when is_integer(I) ->
+-spec facility_to_int(facility()) -> 0..127.
+facility_to_int(I)
+  when is_integer(I), 0 =< I, I =< 127 ->
     I;
 facility_to_int(A) when is_atom(A) ->
     element(1, lists:keyfind(A, 2, facilities())).
 
+-type severity() :: 0..7 |
+                    'emergency' |
+                    'alert' |
+                    'critical' |
+                    'error' |
+                    'warning' |
+                    'notice' |
+                    'info' |
+                    'debug'.
 severities() ->
     [ {0, emergency, "Emergency: system is unusable"}
      ,{1, alert, "Alert: action must be taken immediately"}
@@ -116,6 +161,7 @@ severities() ->
      ,{6, info, "Informational: informational messages"}
      ,{7, debug, "Debug: debug-level messages"}].
 
+-spec severity_to_int(severity()) -> 0..7.
 severity_to_int(I) when is_integer(I) ->
     I;
 severity_to_int(A) when is_atom(A) ->
