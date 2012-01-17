@@ -22,7 +22,9 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_drain).
 
--export([post_msg/2]).
+-export([post_msg/2
+        ,start/3
+        ]).
 
 -export([reserve_token/0, cache/3, create/5, create/4,
          delete/1, delete/3, clear_all/1, lookup/1]).
@@ -63,6 +65,12 @@ post_msg2({channel, Chan}, Msg) when is_tuple(Msg) ->
 post_msg2(Server, Msg) when is_tuple(Msg) ->
     Server ! Msg,
     ok.
+
+start(tcpsyslog, ID, Args) ->
+    supervisor:start_child(logplex_drain_sup,
+                           {ID, {logplex_tcpsyslog_drain, start_link, Args},
+                            transient, brutal_kill, worker,
+                            [logplex_tcpsyslog_drain]}).
 
 reserve_token() ->
     Token = new_token(),
