@@ -337,10 +337,6 @@ authorize(Req) ->
     end.
 
 error_resp(RespCode, Body) ->
-    error_resp(RespCode, Body, undefined).
-
-error_resp(RespCode, Body, Error) ->
-    Error =/= undefined andalso io:format("server exception: ~1000p~n", [Error]),
     throw({RespCode, Body}).
 
 filter_and_send_logs(Socket, Logs, [], _Num) ->
