@@ -22,6 +22,10 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_channel).
 
+-export([whereis/1
+         ,post_msg/2
+        ]).
+
 -export([create/2, delete/1, lookup/1,
          lookup_tokens/1, lookup_drains/1, logs/2, info/1]).
 
@@ -30,6 +34,24 @@
 -type id() :: integer().
 -type name() :: binary().
 -export_type([id/0]).
+
+whereis({channel, _ID} = Name) ->
+    [ Pid || {Pid, true} <- gproc:lookup_local_properties(Name) ].
+
+post_msg(Where, Msg) when is_binary(Msg) ->
+    case logplex_syslog_utils:from_msg(Msg) of
+        {error, _} = E -> E;
+        ParsedMsg -> post_msg(Where, ParsedMsg)
+    end;
+post_msg({channel, _ID} = Name, Msg) when is_tuple(Msg) ->
+    gproc:send({p, l, Name}, {post, Msg}),
+    ok;
+post_msg(Pids, Msg) when is_list(Pids), is_tuple(Msg) ->
+    lists:foreach(fun (P) ->
+                          P ! {post, Msg}
+                  end,
+                  Pids),
+    ok.
 
 -spec create(name(), integer()) -> id() | {'error', term()}.
 create(ChannelName, AppId) when is_binary(ChannelName), is_integer(AppId) ->
