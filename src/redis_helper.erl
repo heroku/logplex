@@ -46,6 +46,8 @@ channel_index() ->
         ChannelId when is_integer(ChannelId) -> ChannelId
     end.
 
+-spec create_channel(logplex_channel:id(), logplex_channel:name(),
+                     integer()) -> 'ok' | {'error', Reason::term()}.
 create_channel(ChannelId, ChannelName, AppId) when is_integer(ChannelId), is_binary(ChannelName), is_integer(AppId) ->
     Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
     Cmd = [<<"HMSET">>, Key, <<"name">>, ChannelName, <<"app_id">>, integer_to_list(AppId)],
