@@ -98,6 +98,9 @@ handle({cmd, _Cmd, [<<"stats", _/binary>>|_]}) ->
 handle({cmd, _Cmd, [<<"heroku.com:stats", _/binary>>|_]}) ->
     ok;
 
+handle({cmd, _Cmd, [<<"staging.herokudev.com:stats", _/binary>>|_]}) ->
+    ok;
+
 handle({cmd, _Cmd, _Args}) ->
     ?ERR("cmd=~p args=~100p~n", [_Cmd, _Args]),
     ok;
