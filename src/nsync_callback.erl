@@ -34,22 +34,13 @@ handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
     create_channel(Id, Dict);
 
-handle({load, <<"ch:", Rest/binary>>, Dict}) ->
-    ?WARN("Non-dict value: ~p~n", [Dict]), ok;
-
 handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_binary(parse_id(Rest)),
     create_token(Id, Dict);
 
-handle({load, <<"tok:", Rest/binary>>, Dict}) ->
-    ?WARN("Non-dict value: ~p~n", [Dict]), ok;
-
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
     create_drain(Id, Dict);
-
-handle({load, <<"drain:", Rest/binary>>, Dict}) ->
-    ?WARN("Non-dict value: ~p~n", [Dict]), ok;
 
 handle({load, _Key, _Val}) ->
     ok;
