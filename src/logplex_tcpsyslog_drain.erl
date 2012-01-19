@@ -66,10 +66,10 @@ init([State0 = #state{id=ID, channel=Chan}]) ->
         %% This is ugly, but there's no other obvious way to do it.
         gproc:add_local_property({channel, Chan}, true),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
+        State = State0#state{buf = logplex_drain_buffer:new(DrainSize),
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawned",
               log_info(State0, [])),
-        {ok, State0#state{buf = logplex_drain_buffer:new(DrainSize)},
-         hibernate}
+        {ok, State, hibernate}
     catch
         error:badarg -> ignore
     end.
