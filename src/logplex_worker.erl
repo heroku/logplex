@@ -59,18 +59,17 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
 route(Token, Map, Interval, RawMsg)
   when is_binary(Token), is_binary(RawMsg) ->
     case logplex_token:lookup(Token) of
-        #token{channel_id=ChannelId, name=TokenName
-               ,app_id=AppId, drains=Drains} ->
+        #token{channel_id=ChannelId, name=TokenName, drains=Drains} ->
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
-            process_drains(AppId, ChannelId, Drains, CookedMsg),
+            process_drains(ChannelId, Drains, CookedMsg),
             process_tails(ChannelId, CookedMsg),
             process_msg(ChannelId, BufferPid, CookedMsg);
         _ ->
             ok
     end.
 
-process_drains(_AppId, ChannelID, _Drains, Msg) ->
+process_drains(ChannelID, _Drains, Msg) ->
     logplex_channel:post_msg({channel, ChannelID}, Msg).
 
 process_tails(ChannelId, Msg) ->

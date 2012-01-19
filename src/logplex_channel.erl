@@ -26,14 +26,13 @@
          ,post_msg/2
         ]).
 
--export([create/2, delete/1, lookup/1,
+-export([create/0, delete/1, lookup/1,
          lookup_tokens/1, lookup_drains/1, logs/2, info/1]).
 
 -include_lib("logplex.hrl").
 
 -type id() :: integer().
--type name() :: binary().
--export_type([id/0, name/0]).
+-export_type([id/0]).
 
 whereis({channel, _ChannelId} = Name) ->
     [ Pid || {Pid, true} <- gproc:lookup_local_properties(Name) ].
@@ -48,11 +47,11 @@ post_msg({channel, ChannelId} = Name, Msg) when is_tuple(Msg) ->
     gproc:send({p, l, Name}, {post, Msg}),
     ok.
 
--spec create(name(), integer()) -> id() | {'error', term()}.
-create(ChannelName, AppId) when is_binary(ChannelName), is_integer(AppId) ->
+-spec create() -> id() | {'error', term()}.
+create() ->
     case redis_helper:channel_index() of
         ChannelId when is_integer(ChannelId) ->
-            case redis_helper:create_channel(ChannelId, ChannelName, AppId) of
+            case redis_helper:create_channel(ChannelId) of
                 ok ->
                     ChannelId;
                 Err ->
@@ -106,12 +105,10 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
 
 info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
-        #channel{name=ChannelName, app_id=AppId} ->
+        #channel{} ->
             Tokens = lookup_tokens(ChannelId),
             Drains = lookup_drains(ChannelId),
             [{channel_id, ChannelId},
-             {channel_name, ChannelName},
-             {app_id, AppId},
              {tokens, lists:sort([{Name, Token} || #token{id=Token, name=Name} <- Tokens])},
              {drains, [iolist_to_binary([<<"syslog://">>, Host, ":", integer_to_list(Port)]) || #drain{host=Host, port=Port} <- Drains, Port>0]}];
         _ ->
