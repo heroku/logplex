@@ -311,3 +311,11 @@ host_str(H)
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
   when is_list(Rest) ->
     [DrainId, ChannelId, io_lib:format("~s:~p", [host_str(H), P]) | Rest].
+
+-spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered',
+               pos_integer(), #state{}) -> any().
+msg_stat(Key, N,
+         #state{drain_id=DrainId, channel_id=ChannelId}) ->
+    logplex_stats:incr(#drain_stat{drain_id=DrainId,
+                                   channel_id=ChannelId,
+                                   key=Key}, N).
