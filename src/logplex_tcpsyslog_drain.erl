@@ -60,11 +60,18 @@ start_link(ChannelID, DrainID, Host, Port) ->
 
 %% @private
 init([State0 = #state{id=ID, channel=Chan}]) ->
-    gproc:add_local_name({drain, ID}),
-    %% This is ugly, but there's no other obvious way to do it.
-    gproc:add_local_property({channel, Chan}, true),
-    DrainSize = logplex_app:config(tcp_drain_buffer_size),
-    {ok, State0#state{buf = logplex_drain_buffer:new(DrainSize)}, hibernate}.
+    try
+        gproc:add_local_name({drain, ID}),
+        %% This is ugly, but there's no other obvious way to do it.
+        gproc:add_local_property({channel, Chan}, true),
+        DrainSize = logplex_app:config(tcp_drain_buffer_size),
+        ?INFO("drain_id=~p channel_id=~p dest=~s at=spawned",
+              log_info(State0, [])),
+        {ok, State0#state{buf = logplex_drain_buffer:new(DrainSize)},
+         hibernate}
+    catch
+        error:badarg -> ignore
+    end.
 
 %% @private
 handle_call(Call, _From, State) ->
