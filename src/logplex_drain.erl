@@ -34,7 +34,8 @@
 -include_lib("logplex.hrl").
 -compile({no_auto_import,[whereis/1]}).
 
--type id() :: binary().
+-type id() :: integer().
+-type token() :: binary().
 -export_type([id/0]).
 
 -spec post_msg({'drain', id()} |
@@ -48,22 +49,22 @@ post_msg(Where, Msg) when is_binary(Msg) ->
         {error, _} = E -> E;
         ParsedMsg -> post_msg(Where, ParsedMsg)
     end;
-post_msg({drain, ID}, Msg) when is_tuple(Msg) ->
-    logplex_stats:incr({drain_post, ID}),
-    gproc:send({n, l, {drain, ID}}, {post, Msg}),
+post_msg({drain, DrainId}, Msg) when is_tuple(Msg) ->
+    logplex_stats:incr({drain_post, DrainId}),
+    gproc:send({n, l, {drain, DrainId}}, {post, Msg}),
     ok.
 
-whereis({drain, _ID} = Name) ->
+whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
-start(tcpsyslog, ID, Args) ->
+start(tcpsyslog, DrainId, Args) ->
     supervisor:start_child(logplex_drain_sup,
-                           {ID, {logplex_tcpsyslog_drain, start_link, Args},
+                           {DrainId, {logplex_tcpsyslog_drain, start_link, Args},
                             transient, brutal_kill, worker,
                             [logplex_tcpsyslog_drain]}).
 
-stop(tcpsyslog, ID) ->
-    case whereis({drain, ID}) of
+stop(tcpsyslog, DrainId) ->
+    case whereis({drain, DrainId}) of
         Pid when is_pid(Pid) ->
             logplex_tcpsyslog_drain:shutdown(Pid);
         _ ->
