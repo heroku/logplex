@@ -252,7 +252,7 @@ post_buffer(#state{drain_id = DrainId,
         {{loss_indication, N, When}, NewBuf} ->
             logplex_stats:incr(#drain_stat{drain_id=DrainId,
                                            channel_id=ChannelId,
-                                           key=drain_dropped}),
+                                           key=drain_dropped}, N),
             ?INFO("drain_id=~p channel_id=~p dest=~s at=loss"
                   " dropped=~p since=~s",
                   log_info(State, [N, logplex_syslog_utils:datetime(When)])),
