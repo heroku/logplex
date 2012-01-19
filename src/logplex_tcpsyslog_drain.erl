@@ -269,6 +269,8 @@ post_buffer(#state{drain_tok = DrainTok,
                     msg_stat(drain_delivered, 1, State),
                     post_buffer(tcp_good(State#state{buf=NewBuf}));
                 {error, Reason} ->
+                    %% Don't use NewBuf - we want to keep the old
+                    %% buffer state so we don't drop the msg.
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
                          "err=gen_tcp data=~p",
                          log_info(State, [Reason])),
