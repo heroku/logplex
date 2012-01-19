@@ -62,7 +62,6 @@ route(Token, Map, Interval, RawMsg)
         #token{channel_id=ChannelId, name=TokenName
                ,app_id=AppId, drains=Drains} ->
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
-            logplex_stats:incr(logplex_stats_channels, {message_processed, AppId, ChannelId}),
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
             process_drains(AppId, ChannelId, Drains, CookedMsg),
             process_tails(ChannelId, CookedMsg),

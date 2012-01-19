@@ -43,7 +43,8 @@ post_msg(Where, Msg) when is_binary(Msg) ->
         {error, _} = E -> E;
         ParsedMsg -> post_msg(Where, ParsedMsg)
     end;
-post_msg({channel, _ID} = Name, Msg) when is_tuple(Msg) ->
+post_msg({channel, ID} = Name, Msg) when is_tuple(Msg) ->
+    logplex_stats:incr({channel_post, ID}),
     gproc:send({p, l, Name}, {post, Msg}),
     ok.
 

@@ -47,6 +47,7 @@ post_msg(Where, Msg) when is_binary(Msg) ->
         ParsedMsg -> post_msg(Where, ParsedMsg)
     end;
 post_msg({drain, ID}, Msg) when is_tuple(Msg) ->
+    logplex_stats:incr({drain_post, ID}),
     gproc:send({n, l, {drain, ID}}, {post, Msg}),
     ok.
 
