@@ -66,7 +66,7 @@ init([State0 = #state{id=ID, channel=Chan}]) ->
         %% This is ugly, but there's no other obvious way to do it.
         gproc:add_local_property({channel, Chan}, true),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
-        State = State0#state{buf = logplex_drain_buffer:new(DrainSize),
+        State = State0#state{buf = logplex_drain_buffer:new(DrainSize)},
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawned",
               log_info(State, [])),
         {ok, State, hibernate}
@@ -96,7 +96,8 @@ handle_info({post, Msg}, State = #state{sock = undefined,
   when is_tuple(Msg) ->
     logplex_stats:incr({drain_buffered, Token}),
     NewBuf = logplex_drain_buffer:push(Msg, Buf),
-    {noreply, State#state{buf=NewBuf}};
+    NewState = State#state{buf=NewBuf},
+    {noreply, maybe_reconnect(NewState)};
 
 handle_info({post, Msg}, State = #state{id = Token,
                                         sock = S})
@@ -186,7 +187,18 @@ connect(#state{sock = undefined, host=Host, port=Port}) ->
                                  ,{send_timeout_close, true}
                                  ]).
 
--spec reconnect('tcp_error' | 'tcp_closed', #state{}) -> #state{}.
+maybe_reconnect(State = #state{tref = undefined}) ->
+    reconnect(idle, State);
+maybe_reconnect(State = #state{tref = Ref}) when is_reference(Ref) ->
+    case erlang:read_timer(Ref) of
+        false ->
+            reconnect(idle, State);
+        _ ->
+            State
+    end.
+
+
+-spec reconnect('idle' | 'tcp_error' | 'tcp_closed', #state{}) -> #state{}.
 %% @private
 reconnect(_Reason, State = #state{failures = F}) ->
     BackOff = erlang:min(logplex_app:config(tcp_syslog_backoff_max),
