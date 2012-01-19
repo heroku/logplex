@@ -31,7 +31,7 @@
                 sock = undefined :: 'undefined' | inet:socket(),
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
-                %% TCP failures since last_good_time
+                %% UDP failures since last_good_time
                 failures = 0 :: non_neg_integer()
                }).
 
