@@ -69,6 +69,8 @@ init([State0 = #state{drain_id=DrainId, channel_id=ChannelId,
         gproc:add_local_name({drain, DrainId}),
         %% This is ugly, but there's no other obvious way to do it.
         gproc:add_local_property({channel, ChannelId}, true),
+        gproc:add_local_property(drain_dest, {H, P}),
+        gproc:add_local_property(drain_type, tcpsyslog),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_drain_buffer:new(DrainSize)},
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
