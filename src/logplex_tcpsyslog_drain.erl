@@ -42,11 +42,7 @@
 %%====================================================================
 %% API
 %%====================================================================
-%%--------------------------------------------------------------------
-%% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
-%% @doc Starts the server
-%% @end
-%%--------------------------------------------------------------------
+
 start_link(ChannelID, DrainID, Host, Port) ->
     gen_server:start_link(?MODULE,
                           [#state{id=DrainID,
@@ -58,6 +54,7 @@ start_link(ChannelID, DrainID, Host, Port) ->
 shutdown(Pid) ->
     gen_server:cast(Pid, shutdown),
     ok.
+
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -168,11 +165,13 @@ code_change(_OldVsn, State, _Extra) ->
            logplex_drain:id()) ->
                   'ok' |
                   {'error', term()}.
+%% @private
 post(Msg, Sock, Token) when is_tuple(Msg) ->
     SyslogMsg = logplex_syslog_utils:to_msg(Msg, Token),
     Packet = logplex_syslog_utils:frame(SyslogMsg),
     gen_tcp:send(Sock, Packet).
 
+%% @private
 connect(#state{sock = undefined, host=Host, port=Port}) ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
     gen_tcp:connect(Host, Port, [binary
@@ -188,22 +187,26 @@ connect(#state{sock = undefined, host=Host, port=Port}) ->
                                  ]).
 
 -spec reconnect('tcp_error' | 'tcp_closed', #state{}) -> #state{}.
+%% @private
 reconnect(_Reason, State = #state{failures = F}) ->
     BackOff = erlang:min(logplex_app:config(tcp_syslog_backoff_max),
                          1 bsl F),
     Ref = erlang:send_after(timer:seconds(BackOff), self(), ?RECONNECT_MSG),
     State#state{tref=Ref}.
 
+%% @private
 tcp_good(State = #state{}) ->
     State#state{last_good_time = os:timestamp(),
                 failures = 0}.
 
+%% @private
 %% Caller must ensure sock is closed before calling this.
 tcp_bad(State = #state{failures = F}) ->
     State#state{failures = F + 1,
                 sock = undefined}.
 
 -spec time_failed(#state{}) -> iolist().
+%% @private
 time_failed(State = #state{}) ->
     time_failed(os:timestamp(), State).
 time_failed(Now, #state{last_good_time=T0})
@@ -237,6 +240,7 @@ post_buffer(State = #state{id = ID, buf = Buf, sock = S}) ->
             end
     end.
 
+%% @private
 overflow_msg(N, When) ->
     logplex_syslog_utils:fmt(local5,
                              warning,
@@ -249,6 +253,7 @@ overflow_msg(N, When) ->
                               logplex_syslog_utils:datetime(When)]
                             ).
 
+%% @private
 host_str({A,B,C,D}) ->
     Quads = [integer_to_list(Quad) || Quad <- [A,B,C,D]],
     string:join(Quads,".");
@@ -256,6 +261,7 @@ host_str(H)
   when is_list(H); is_binary(H) ->
     H.
 
+%% @private
 log_info(#state{id=ID, channel=Channel, host=H, port=P}, Rest)
   when is_list(Rest) ->
     [ID, Channel, io_lib:format("~s:~p", [host_str(H), P]) | Rest].
