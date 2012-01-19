@@ -241,7 +241,11 @@ time_failed(Now, #state{last_good_time=T0})
 time_failed(_, #state{last_good_time=undefined}) ->
     "never".
 
-post_buffer(State = #state{drain_id = DrainId, drain_tok = DrainTok, channel_id = ChannelId, buf = Buf, sock = S}) ->
+post_buffer(#state{drain_id = DrainId,
+                   drain_tok = DrainTok,
+                   channel_id = ChannelId,
+                   buf = Buf,
+                   sock = S} = State) ->
     case logplex_drain_buffer:pop(Buf) of
         {empty, NewBuf} ->
             State#state{buf=NewBuf};
@@ -256,7 +260,7 @@ post_buffer(State = #state{drain_id = DrainId, drain_tok = DrainTok, channel_id 
                 dont_send ->
                     post_buffer(State#state{buf=NewBuf});
                 _ ->
-                    case post(overflow_msg(N, When), S, DrainId) of
+                    case post(overflow_msg(N, When), S, DrainTok) of
                         ok ->
                             post_buffer(tcp_good(State#state{buf=NewBuf}));
                         {error, Reason} ->
@@ -268,7 +272,7 @@ post_buffer(State = #state{drain_id = DrainId, drain_tok = DrainTok, channel_id 
                     end
             end;
         {{msg, Msg}, NewBuf} ->
-            case post(Msg, S, DrainId) of
+            case post(Msg, S, DrainTok) of
                 ok ->
                     logplex_stats:incr(#drain_stat{drain_id=DrainId,
                                                    channel_id=ChannelId,
