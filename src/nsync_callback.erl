@@ -56,36 +56,36 @@ handle({load, eof}) ->
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    ?INFO("event=set type=channel id=~p~n", [Id]),
+    ?INFO("at=set type=channel id=~p~n", [Id]),
     create_channel(Id, Dict);
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Token = create_token(Id, Dict),
-    ?INFO("event=set type=token id=~p~n", [Id]),
+    ?INFO("at=set type=token id=~p~n", [Id]),
     populate_token_channel_data([Token]);
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Drain = create_drain(Id, Dict),
-    ?INFO("event=set type=drain id=~p~n", [Id]),
+    ?INFO("at=set type=drain id=~p~n", [Id]),
     Drain#drain.host =/= undefined andalso populate_token_drain_data([Drain]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    ?INFO("event=delete type=channel id=~p~n", [Id]),
+    ?INFO("at=delete type=channel id=~p~n", [Id]),
     ets:delete(channels, Id);
 
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
-    ?INFO("event=delete type=token id=~p~n", [Id]),
+    ?INFO("at=delete type=token id=~p~n", [Id]),
     ets:delete(tokens, Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    ?INFO("event=delete type=drain id=~p~n", [Id]),
+    ?INFO("at=delete type=drain id=~p~n", [Id]),
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
 
