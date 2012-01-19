@@ -115,7 +115,7 @@ handle_info({timeout, _TimerRef, flush}, _State) ->
     [ begin
           Kstr = case K of
                      {Type, ID} when is_atom(Type) ->
-                         io_lib:format("~p:~s", [Type, ID]);
+                         io_lib:format("~p:~s", [Type, to_list(ID)]);
                      _ ->
                          to_list(K)
                  end,
