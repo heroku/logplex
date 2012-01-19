@@ -169,7 +169,7 @@ create_drain(Id, Dict) ->
                     case Tcp of
                         true ->
                             logplex_drain:start(tcpsyslog, Token,
-                                                [Ch, Token, Host, Port]);
+                                                [Ch, Id, Token, Host, Port]);
                         _ ->
                             ?ERR("no udp support for ~p ~p ~p:~p",
                                  [Ch, Token, Host, Port])

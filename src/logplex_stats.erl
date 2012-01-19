@@ -45,7 +45,7 @@ workers() ->
 incr(Key) ->
     incr(Key, 1).
 
--spec incr(atom() | {atom(), term()}, integer()) -> any().
+-spec incr(#drain_stat{} | #channel_stat{} | list() | atom(), integer()) -> any().
 incr(Key, Incr) when is_integer(Incr) ->
     try ets:update_counter(?MODULE, Key, Incr)
     catch error:badarg ->
@@ -114,14 +114,7 @@ handle_info({timeout, _TimerRef, flush}, _State) ->
     UnixTS = Mega * 1000000 + S,
     Stats = ets:tab2list(logplex_stats),
     [ begin
-          Kstr = case K of
-                     {Type, ID} when is_atom(Type) ->
-                         io_lib:format("~p:~s", [Type, to_list(ID)]);
-                     _ ->
-                         to_list(K)
-                 end,
-          io:format("logplex_stats ts=~p key=~s value=~p~n",
-                    [UnixTS, Kstr, V]),
+          log_stat(UnixTS, K, V),
           ets:update_counter(?MODULE, K, V * -1)
       end
       || {K, V} <- Stats,
@@ -160,7 +153,13 @@ start_timer() ->
     Time = 60000 - ((Secs rem 60 * 1000) + (Micro div 1000)),
     erlang:start_timer(Time, ?MODULE, flush).
 
-to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom);
-to_list(Int) when is_integer(Int) -> integer_to_list(Int);
-to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin);
-to_list(List) when is_list(List) -> List.
+log_stat(UnixTS, #drain_stat{drain_id=DrainId, channel_id=ChannelId, key=Key}, Val) ->
+    io:format("logplex_stats ts=~p channel_id=~p drain_id=~p ~p=~p~n",
+        [UnixTS, ChannelId, DrainId, Key, Val]);
+
+log_stat(UnixTS, #channel_stat{channel_id=ChannelId, key=Key}, Val) ->
+    io:format("logplex_stats ts=~p channel_id=~p ~p=~p~n",
+        [UnixTS, ChannelId, Key, Val]);
+
+log_stat(UnixTS, Key, Val) when is_atom(Key); is_list(Key) ->
+    io:format("logplex_stats ts=~p ~p=~p~n", [UnixTS, Key, Val]).

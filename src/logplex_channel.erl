@@ -35,7 +35,7 @@
 -type name() :: binary().
 -export_type([id/0, name/0]).
 
-whereis({channel, _ID} = Name) ->
+whereis({channel, _ChannelId} = Name) ->
     [ Pid || {Pid, true} <- gproc:lookup_local_properties(Name) ].
 
 post_msg(Where, Msg) when is_binary(Msg) ->
@@ -43,8 +43,8 @@ post_msg(Where, Msg) when is_binary(Msg) ->
         {error, _} = E -> E;
         ParsedMsg -> post_msg(Where, ParsedMsg)
     end;
-post_msg({channel, ID} = Name, Msg) when is_tuple(Msg) ->
-    logplex_stats:incr({channel_post, ID}),
+post_msg({channel, ChannelId} = Name, Msg) when is_tuple(Msg) ->
+    logplex_stats:incr(#channel_stat{channel_id=ChannelId, key=channel_post}),
     gproc:send({p, l, Name}, {post, Msg}),
     ok.
 

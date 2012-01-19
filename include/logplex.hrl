@@ -5,6 +5,8 @@
 -record(token, {id, channel_id, name, app_id, drains=[]}).
 -record(drain, {id, channel_id, token, resolved_host, host, port, tcp=true}).
 -record(session, {id, body}).
+-record(channel_stat, {channel_id, key}).
+-record(drain_stat, {drain_id, channel_id, key}).
 
 -define(HTTP_PORT, 8001).
 -define(TCP_PORT, 6001).
