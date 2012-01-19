@@ -60,7 +60,9 @@ shutdown(Pid) ->
 %%====================================================================
 
 %% @private
-init([State0 = #state{id=ID, channel=Chan}]) ->
+init([State0 = #state{id=ID, channel=Chan,
+                      host=H, port=P}])
+  when H =/= undefined, is_integer(P) ->
     try
         gproc:add_local_name({drain, ID}),
         %% This is ugly, but there's no other obvious way to do it.
