@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 	     handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, workers/0, incr/1, incr/2, incr/3, cached/0]).
+-export([healthcheck/0, workers/0, incr/1, incr/2, cached/0]).
 
 -include_lib("logplex.hrl").
 
@@ -74,7 +74,6 @@ cached() ->
 %%--------------------------------------------------------------------
 init([]) ->
     ets:new(?MODULE, [public, named_table, set]),
-    ets:new(logplex_stats_channels, [public, named_table, set]),
     start_timer(),
     {ok, []}.
 
