@@ -36,7 +36,9 @@
 
 -type id() :: integer().
 -type token() :: binary().
--export_type([id/0]).
+-export_type([id/0
+              ,token/0
+             ]).
 
 -spec post_msg({'drain', id()} |
                atom() |
