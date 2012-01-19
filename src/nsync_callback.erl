@@ -46,7 +46,6 @@ handle({load, _Key, _Val}) ->
     ok;
 
 handle({load, eof}) ->
-    populate_token_channel_data(ets:tab2list(tokens)),
     populate_token_drain_data(ets:tab2list(drains)),
     error_logger:info_msg("NSYNC sync complete"),
     application:set_env(logplex, nsync_loaded, true),
@@ -62,9 +61,8 @@ handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    Token = create_token(Id, Dict),
-    ?INFO("at=set type=token id=~p", [Id]),
-    populate_token_channel_data([Token]);
+    create_token(Id, Dict),
+    ?INFO("at=set type=token id=~p", [Id]);
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
@@ -116,19 +114,10 @@ handle(_Other) ->
     ok.
 
 %% Helper functions
-create_channel(Id, Dict) ->
-    case dict_find(<<"app_id">>, Dict) of
-        undefined ->
-            ?ERR("~p ~p ~p ~p",
-                 [create_channel, missing_app_id, Id, dict:to_list(Dict)]);
-        Val ->
-            AppId = list_to_integer(binary_to_list(Val)),
-            Channel = #channel{id=Id,
-                   name=dict_find(<<"name">>, Dict),
-                   app_id=AppId},
-            ets:insert(channels, Channel),
-            Channel
-    end.
+create_channel(Id, _Dict) ->
+    Channel = #channel{id=Id},
+    ets:insert(channels, Channel),
+    Channel.
 
 create_token(Id, Dict) ->
     case dict_find(<<"ch">>, Dict) of
@@ -186,22 +175,6 @@ create_drain(Id, Dict) ->
                     Drain
             end
     end.
-
-populate_token_channel_data([]) ->
-    ok;
-
-populate_token_channel_data([Token|Tail]) when is_record(Token, token) ->
-    case logplex_channel:lookup(Token#token.channel_id) of
-        undefined ->
-            ?ERR("~p ~p ~p",
-                 [populate_token_channel_data, undefined_channel, Token]);
-        #channel{app_id=AppId} ->
-            ets:insert(tokens, Token#token{app_id=AppId})
-    end,
-    populate_token_channel_data(Tail);
-
-populate_token_channel_data([_|Tail]) ->
-    populate_token_channel_data(Tail).
 
 populate_token_drain_data([]) ->
     ok;
