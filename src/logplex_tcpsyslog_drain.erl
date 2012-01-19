@@ -62,7 +62,8 @@ shutdown(Pid) ->
 %%====================================================================
 
 %% @private
-init([State0 = #state{drain_id=DrainId, channel_id=ChannelId,
+init([State0 = #state{drain_id=DrainId,
+                      channel_id=ChannelId,
                       host=H, port=P}])
   when H =/= undefined, is_integer(P) ->
     try
