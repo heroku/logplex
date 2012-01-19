@@ -22,8 +22,7 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_drain).
 
--export([post_msg/2
-         ,whereis/1
+-export([whereis/1
          ,start/3
          ,stop/2
         ]).
@@ -39,22 +38,6 @@
 -export_type([id/0
               ,token/0
              ]).
-
--spec post_msg({'drain', id()} |
-               atom() |
-               pid(),
-               binary() | logplex_syslog_utils:syslog_msg()) ->
-                      'ok' | {'error', 'bad_syslog_msg'}.
-
-post_msg(Where, Msg) when is_binary(Msg) ->
-    case logplex_syslog_utils:from_msg(Msg) of
-        {error, _} = E -> E;
-        ParsedMsg -> post_msg(Where, ParsedMsg)
-    end;
-post_msg({drain, DrainId}, Msg) when is_tuple(Msg) ->
-    logplex_stats:incr({drain_post, DrainId}),
-    gproc:send({n, l, {drain, DrainId}}, {post, Msg}),
-    ok.
 
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
