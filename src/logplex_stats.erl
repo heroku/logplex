@@ -111,19 +111,25 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({timeout, _TimerRef, flush}, _State) ->
-    start_timer(),
 
+    {Mega, S, _} = os:timestamp(),
+    UnixTS = Mega * 1000000 + S,
     Stats = ets:tab2list(logplex_stats),
-    ets:delete_all_objects(logplex_stats),
-    io:format("logplex_stats~s~n", [lists:flatten([[" ", to_list(Key), "=", to_list(Value)] || {Key, Value} <- Stats, Value > 0])]),
+    [ begin
+          Kstr = case K of
+                     {Type, ID} when is_atom(Type) ->
+                         io_lib:format("~p:~s", [Type, ID]);
+                     _ ->
+                         to_list(K)
+                 end,
+          io:format("logplex_stats ts=~p key=~s value=~p~n",
+                    [UnixTS, Kstr, V]),
+          ets:update_counter(?MODULE, K, V * -1)
+      end
+      || {K, V} <- Stats,
+         V =/= 0],
 
-    ChannelStats = ets:tab2list(logplex_stats_channels),
-    ets:delete_all_objects(logplex_stats_channels),
-
-    [begin
-        io:format("logplex_channel_stats app_id=~w channel_id=~w ~p=~w~n", [AppId, ChannelId, Key, Val])
-    end || {{Key, AppId, ChannelId}, Val} <- ChannelStats, Val > 0],
-
+    start_timer(),
     {noreply, Stats};
 
 handle_info(_Info, State) ->
