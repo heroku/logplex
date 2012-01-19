@@ -75,12 +75,14 @@ init([State0 = #state{id=ID, channel=Chan}]) ->
 
 %% @private
 handle_call(Call, _From, State) ->
-    ?WARN("Unexpected call ~p.", [Call]),
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_call data=~p",
+          log_info(State, [Call])),
     {noreply, State}.
 
 %% @private
 handle_cast(Msg, State) ->
-    ?WARN("Unexpected cast ~p", [Msg]),
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_cast data=~p",
+          log_info(State, [Msg])),
     {noreply, State}.
 
 %% @private
@@ -97,9 +99,8 @@ handle_info({post, Msg}, State = #state{id = Token,
         ok ->
             {noreply, tcp_good(State)};
         {error, Reason} ->
-            ?ERR("[~p] (~p:~p) Couldn't write syslog message: ~p",
-                 [State#state.id, State#state.host, State#state.port,
-                  Reason]),
+            ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
+                 log_info(State, [Reason])),
             {noreply, reconnect(tcp_error, State)}
     end;
 
@@ -107,31 +108,38 @@ handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
     State1 = State#state{tref = undefined},
     case connect(State1) of
         {ok, Sock} ->
-            ?INFO("[~s] connected to ~p:~p on try ~p.",
-                  [State1#state.id, State1#state.host, State1#state.port,
-                   State1#state.failures + 1]),
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=connected try=~p",
+                  log_info(State1, [State1#state.failures + 1])),
             NewState = tcp_good(State1#state{sock=Sock}),
             {noreply, post_buffer(NewState)};
         {error, Reason} ->
             NewState = tcp_bad(State1),
-            ?ERR("[~s] Couldn't connect to ~p:~p; ~p"
-                 " (try ~p, last success: ~s)",
-                 [NewState#state.id, NewState#state.host, NewState#state.port,
-                  Reason, NewState#state.failures, time_failed(NewState)]),
+            ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
+                 "err=gen_tcp data=~p try=~p last_success=~s",
+                 log_info(State, [Reason, NewState#state.failures,
+                                  time_failed(NewState)])),
             {noreply, reconnect(tcp_error, NewState)}
     end;
 
 handle_info({tcp_closed, S}, State = #state{sock = S}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=close",
+          log_info(State, [])),
     {noreply, reconnect(tcp_closed, State#state{sock=undefined})};
 
-handle_info({tcp_error, S, _Reason}, State = #state{sock = S}) ->
+handle_info({tcp_error, S, Reason}, State = #state{sock = S}) ->
+    ?ERR("drain_id=~p channel_id=~p dest=~s at=idle "
+         "err=gen_tcp data=~p",
+          log_info(State, [Reason])),
     {noreply, reconnect(tcp_error, State#state{sock=undefined})};
 
-handle_info({tcp, S, _Data}, State = #state{sock = S}) ->
-    {stop, not_implemented, State};
+handle_info({tcp, S, Data}, State = #state{sock = S}) ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_peer_data data=~p",
+          log_info(State, [Data])),
+    {noreply, State};
 
 handle_info(Info, State) ->
-    ?WARN("Unexpected info ~p", [Info]),
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
+          log_info(State, [Info])),
     {noreply, State}.
 
 %% @private
@@ -202,17 +210,17 @@ post_buffer(State = #state{id = ID, buf = Buf, sock = S}) ->
             Msg = case Item of
                       {msg, M} -> M;
                       {loss_indication, N, When} ->
-                          ?INFO("Drain ~s dropped ~p messages since ~s.",
-                                [ID, N, logplex_syslog_utils:datetime(When)]),
+                          ?INFO("drain_id=~p channel_id=~p dest=~s at=loss"
+                                " dropped=~p since=~s",
+                                log_info(State, [N, logplex_syslog_utils:datetime(When)])),
                           overflow_msg(N, When)
                   end,
             case post(Msg, S, ID) of
                 ok ->
                     post_buffer(tcp_good(State#state{buf=NewBuf}));
                 {error, Reason} ->
-                    ?ERR("[~p] (~p:~p) Couldn't write syslog message: ~p",
-                         [State#state.id, State#state.host, State#state.port,
-                          Reason]),
+                    ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
+                         log_info(State, [Reason])),
                     reconnect(tcp_error, tcp_bad(State#state{sock=undefined}))
             end
     end.
@@ -228,3 +236,14 @@ overflow_msg(N, When) ->
                              [N,
                               logplex_syslog_utils:datetime(When)]
                             ).
+
+host_str({A,B,C,D}) ->
+    Quads = [integer_to_list(Quad) || Quad <- [A,B,C,D]],
+    string:join(Quads,".");
+host_str(H)
+  when is_list(H); is_binary(H) ->
+    H.
+
+log_info(#state{id=ID, channel=Channel, host=H, port=P}, Rest)
+  when is_list(Rest) ->
+    [ID, Channel, io_lib:format("~s:~p", [host_str(H), P]) | Rest].
