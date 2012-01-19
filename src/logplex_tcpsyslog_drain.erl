@@ -15,6 +15,7 @@
 
 %% API
 -export([start_link/4
+         ,shutdown/1
         ]).
 
 %% gen_server callbacks
@@ -54,6 +55,9 @@ start_link(ChannelID, DrainID, Host, Port) ->
                                   port=Port}],
                           []).
 
+shutdown(Pid) ->
+    gen_server:cast(Pid, shutdown),
+    ok.
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -80,6 +84,9 @@ handle_call(Call, _From, State) ->
     {noreply, State}.
 
 %% @private
+handle_cast(shutdown, State) ->
+    {stop, normal, State};
+
 handle_cast(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_cast data=~p",
           log_info(State, [Msg])),
