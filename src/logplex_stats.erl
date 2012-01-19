@@ -45,6 +45,7 @@ workers() ->
 incr(Key) ->
     incr(Key, 1).
 
+-spec incr(atom() | {atom(), term()}, integer()) -> any().
 incr(Key, Incr) when is_integer(Incr) ->
     try ets:update_counter(?MODULE, Key, Incr)
     catch error:badarg ->
