@@ -86,9 +86,11 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 %% @private
-handle_info({post, Msg}, State = #state{sock=undefined,
-                                        buf=Buf})
+handle_info({post, Msg}, State = #state{sock = undefined,
+                                        id = Token,
+                                        buf = Buf})
   when is_tuple(Msg) ->
+    logplex_stats:incr({drain_buffered, Token}),
     NewBuf = logplex_drain_buffer:push(Msg, Buf),
     {noreply, State#state{buf=NewBuf}};
 
@@ -97,6 +99,7 @@ handle_info({post, Msg}, State = #state{id = Token,
   when is_tuple(Msg) ->
     case post(Msg, S, Token) of
         ok ->
+            logplex_stats:incr({drain_delivered, Token}),
             {noreply, tcp_good(State)};
         {error, Reason} ->
             ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
@@ -210,6 +213,7 @@ post_buffer(State = #state{id = ID, buf = Buf, sock = S}) ->
             Msg = case Item of
                       {msg, M} -> M;
                       {loss_indication, N, When} ->
+                          logplex_stats:incr({drain_dropped, ID}),
                           ?INFO("drain_id=~p channel_id=~p dest=~s at=loss"
                                 " dropped=~p since=~s",
                                 log_info(State, [N, logplex_syslog_utils:datetime(When)])),
@@ -217,6 +221,7 @@ post_buffer(State = #state{id = ID, buf = Buf, sock = S}) ->
                   end,
             case post(Msg, S, ID) of
                 ok ->
+                    logplex_stats:incr({drain_delivered, ID}),
                     post_buffer(tcp_good(State#state{buf=NewBuf}));
                 {error, Reason} ->
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
