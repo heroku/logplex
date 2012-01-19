@@ -43,18 +43,15 @@ workers() ->
     [{Sup, length(supervisor:which_children(Sup))} || Sup <- Sups].
 
 incr(Key) ->
-    incr(?MODULE, Key).
+    incr(Key, 1).
 
-incr(Table, Key) ->
-    incr(Table, Key, 1).
-
-incr(Table, Key, Incr) when is_atom(Table), is_integer(Incr) ->
-    case (catch ets:update_counter(Table, Key, Incr)) of
-        {'EXIT', _} ->
-            ets:insert(Table, {Key, 0}),
-            incr(Table, Key, Incr);
-        Res ->
-            Res
+incr(Key, Incr) when is_integer(Incr) ->
+    try ets:update_counter(?MODULE, Key, Incr)
+    catch error:badarg ->
+            try ets:insert_new(?MODULE, {Key, Incr})
+            catch error:badarg ->
+                    catch ets:update_counter(?MODULE, Key, Incr)
+            end
     end.
 
 cached() ->
