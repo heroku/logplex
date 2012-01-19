@@ -69,7 +69,7 @@ init([State0 = #state{id=ID, channel=Chan,
         gproc:add_local_property({channel, Chan}, true),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_drain_buffer:new(DrainSize)},
-        ?INFO("drain_id=~p channel_id=~p dest=~s at=spawned",
+        ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, State, hibernate}
     catch
@@ -118,7 +118,7 @@ handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
     State1 = State#state{tref = undefined},
     case connect(State1) of
         {ok, Sock} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=connected try=~p",
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p",
                   log_info(State1, [State1#state.failures + 1])),
             NewState = tcp_good(State1#state{sock=Sock}),
             {noreply, post_buffer(NewState)};
