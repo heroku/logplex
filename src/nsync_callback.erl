@@ -168,10 +168,10 @@ create_drain(Id, Dict) ->
                     Tcp = (dict_find(<<"tcp">>, Dict) =/= <<"false">>),
                     case Tcp of
                         true ->
-                            logplex_drain:start(tcpsyslog, Token,
+                            logplex_drain:start(tcpsyslog, Id,
                                                 [Ch, Id, Token, Host, Port]);
                         _ ->
-                            logplex_drain:start(udpsyslog, Token,
+                            logplex_drain:start(udpsyslog, Id,
                                                 [Ch, Id, Token, Host, Port])
                     end,
                     Drain = #drain{
