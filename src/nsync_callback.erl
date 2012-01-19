@@ -171,8 +171,8 @@ create_drain(Id, Dict) ->
                             logplex_drain:start(tcpsyslog, Token,
                                                 [Ch, Id, Token, Host, Port]);
                         _ ->
-                            ?ERR("no udp support for ~p ~p ~p:~p",
-                                 [Ch, Token, Host, Port])
+                            logplex_drain:start(udpsyslog, Token,
+                                                [Ch, Id, Token, Host, Port])
                     end,
                     Drain = #drain{
                         id=Id,
