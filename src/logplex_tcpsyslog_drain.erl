@@ -240,22 +240,34 @@ post_buffer(State = #state{id = ID, buf = Buf, sock = S}) ->
     case logplex_drain_buffer:pop(Buf) of
         {empty, NewBuf} ->
             State#state{buf=NewBuf};
-        {Item, NewBuf} ->
-            Msg = case Item of
-                      {msg, M} -> M;
-                      {loss_indication, N, When} ->
-                          logplex_stats:incr({drain_dropped, ID}),
-                          ?INFO("drain_id=~p channel_id=~p dest=~s at=loss"
-                                " dropped=~p since=~s",
-                                log_info(State, [N, logplex_syslog_utils:datetime(When)])),
-                          overflow_msg(N, When)
-                  end,
+        {{loss_indication, N, When}, NewBuf} ->
+            logplex_stats:incr({drain_dropped, ID}),
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=loss"
+                  " dropped=~p since=~s",
+                  log_info(State, [N, logplex_syslog_utils:datetime(When)])),
+            case logplex_app:config(tcp_syslog_send_loss_msg) of
+                dont_send ->
+                    post_buffer(State#state{buf=NewBuf});
+                _ ->
+                    case post(overflow_msg(N, When), S, ID) of
+                        ok ->
+                            post_buffer(tcp_good(State#state{buf=NewBuf}));
+                        {error, Reason} ->
+                            ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
+                                 "err=gen_tcp data=~p",
+                                 log_info(State, [Reason])),
+                            reconnect(tcp_error,
+                                      tcp_bad(State#state{sock=undefined}))
+                    end
+            end;
+        {{msg, Msg}, NewBuf} ->
             case post(Msg, S, ID) of
                 ok ->
                     logplex_stats:incr({drain_delivered, ID}),
                     post_buffer(tcp_good(State#state{buf=NewBuf}));
                 {error, Reason} ->
-                    ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
+                    ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
+                         "err=gen_tcp data=~p",
                          log_info(State, [Reason])),
                     reconnect(tcp_error, tcp_bad(State#state{sock=undefined}))
             end
