@@ -32,9 +32,7 @@
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
                 %% TCP failures since last_good_time
-                failures = 0 :: non_neg_integer(),
-                %% Reconnect timer reference
-                tref = undefined :: 'undefined' | reference()
+                failures = 0 :: non_neg_integer()
                }).
 
 -define(RECONNECT_MSG, reconnect).
@@ -97,18 +95,19 @@ handle_info({post, Msg}, State = #state{sock = undefined})
   when is_tuple(Msg) ->
     case connect(State) of
         {ok, Addr, Sock} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p",
-                  log_info(State, [State#state.failures + 1])),
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p addr=~s",
+                  log_info(State, [State#state.failures + 1,
+                                   host_str(Addr)])),
             handle_info({post, Msg},
                         udp_good(State#state{address=Addr, sock=Sock}));
         {error, Reason} ->
-            NewState = udp_bad(State),
+            NewState = udp_bad(State#state{sock=undefined}),
             msg_stat(drain_dropped, 1, NewState),
             ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
                  "err=gen_udp data=~p try=~p last_success=~s",
                  log_info(State, [Reason, NewState#state.failures,
                                   time_failed(NewState)])),
-            {noreply, reconnect(udp_error, NewState)}
+            {noreply, NewState}
     end;
 
 handle_info({post, Msg}, State = #state{}) when is_tuple(Msg) ->
@@ -117,11 +116,12 @@ handle_info({post, Msg}, State = #state{}) when is_tuple(Msg) ->
             msg_stat(drain_delivered, 1, State),
             {noreply, udp_good(State)};
         {error, Reason} ->
+            NewState = udp_bad(State#state{sock=undefined}),
             msg_stat(drain_dropped, 1, State),
             ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
                  "err=gen_udp data=~p",
-                 log_info(State, [Reason])),
-            {noreply, reconnect(udp_error, State)}
+                 log_info(NewState, [Reason])),
+            {noreply, NewState}
     end;
 
 handle_info({udp, S, _IP, _Port, Data}, State = #state{sock = S}) ->
@@ -177,14 +177,6 @@ connect(#state{sock = undefined, host=Host, port=Port})
             end;
         {error, _} = E -> E
     end.
-
--spec reconnect('idle' | 'udp_error', #state{}) -> #state{}.
-%% @private
-reconnect(_Reason, State = #state{failures = F}) ->
-    BackOff = erlang:min(logplex_app:config(tcp_syslog_backoff_max),
-                         1 bsl F),
-    Ref = erlang:send_after(timer:seconds(BackOff), self(), ?RECONNECT_MSG),
-    State#state{tref=Ref}.
 
 %% @private
 udp_good(State = #state{}) ->
