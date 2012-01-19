@@ -32,6 +32,7 @@
          delete/1, delete/3, clear_all/1, lookup/1]).
 
 -include_lib("logplex.hrl").
+-compile({no_auto_import,[whereis/1]}).
 
 -type id() :: binary().
 -export_type([id/0]).
