@@ -42,6 +42,8 @@
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
+-spec start('tcpsyslog' | 'udpsyslog',
+            id(), list()) -> any().
 start(tcpsyslog, DrainId, Args) ->
     supervisor:start_child(logplex_drain_sup,
                            {DrainId,
