@@ -173,9 +173,16 @@ post(Msg, Sock, Token) when is_tuple(Msg) ->
     gen_tcp:send(Sock, Packet).
 
 %% @private
-connect(#state{sock = undefined, host=Host, port=Port}) ->
+connect(#state{sock = undefined, host=Host, port=Port})
+    when is_integer(Port) ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
-    gen_tcp:connect(Host, Port, [binary
+    HostS = case Host of
+                B when is_binary(B) -> binary_to_list(B);
+                L when is_list(L) -> L;
+                T when is_tuple(T) -> T;
+                A when is_atom(A) -> A
+            end,
+    gen_tcp:connect(HostS, Port, [binary
                                  %% We don't expect data, but why not.
                                  ,{active, true}
                                  ,{exit_on_close, true}
