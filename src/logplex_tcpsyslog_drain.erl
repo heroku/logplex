@@ -14,7 +14,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
--export([start_link/4
+-export([start_link/5
          ,shutdown/1
         ]).
 
@@ -22,8 +22,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {id :: logplex_drain:id(),
-                channel :: logplex_channel:id(),
+-record(state, {drain_id :: logplex_drain:id(),
+                drain_tok :: logplex_drain:token(),
+                channel_id :: logplex_channel:id(),
                 host :: string() | inet:ip_address(),
                 port :: inet:port_number(),
                 sock = undefined :: 'undefined' | inet:socket(),
@@ -43,10 +44,11 @@
 %% API
 %%====================================================================
 
-start_link(ChannelID, DrainID, Host, Port) ->
+start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
     gen_server:start_link(?MODULE,
-                          [#state{id=DrainID,
-                                  channel=ChannelID,
+                          [#state{drain_id=DrainID,
+                                  drain_tok=DrainTok,
+                                  channel_id=ChannelID,
                                   host=Host,
                                   port=Port}],
                           []).
@@ -60,13 +62,13 @@ shutdown(Pid) ->
 %%====================================================================
 
 %% @private
-init([State0 = #state{id=ID, channel=Chan,
+init([State0 = #state{drain_id=DrainId, channel_id=ChannelId,
                       host=H, port=P}])
   when H =/= undefined, is_integer(P) ->
     try
-        gproc:add_local_name({drain, ID}),
+        gproc:add_local_name({drain, DrainId}),
         %% This is ugly, but there's no other obvious way to do it.
-        gproc:add_local_property({channel, Chan}, true),
+        gproc:add_local_property({channel, ChannelId}, true),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_drain_buffer:new(DrainSize)},
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
@@ -93,20 +95,21 @@ handle_cast(Msg, State) ->
 
 %% @private
 handle_info({post, Msg}, State = #state{sock = undefined,
-                                        id = Token,
+                                        drain_id = DrainId,
                                         buf = Buf})
   when is_tuple(Msg) ->
-    logplex_stats:incr({drain_buffered, Token}),
+    logplex_stats:incr({drain_buffered, DrainId}),
     NewBuf = logplex_drain_buffer:push(Msg, Buf),
     NewState = State#state{buf=NewBuf},
     {noreply, maybe_reconnect(NewState)};
 
-handle_info({post, Msg}, State = #state{id = Token,
+handle_info({post, Msg}, State = #state{drain_id = DrainId,
+                                        drain_tok = DrainTok,
                                         sock = S})
   when is_tuple(Msg) ->
-    case post(Msg, S, Token) of
+    case post(Msg, S, DrainTok) of
         ok ->
-            logplex_stats:incr({drain_delivered, Token}),
+            logplex_stats:incr({drain_delivered, DrainId}),
             {noreply, tcp_good(State)};
         {error, Reason} ->
             ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
@@ -169,8 +172,8 @@ code_change(_OldVsn, State, _Extra) ->
                   'ok' |
                   {'error', term()}.
 %% @private
-post(Msg, Sock, Token) when is_tuple(Msg) ->
-    SyslogMsg = logplex_syslog_utils:to_msg(Msg, Token),
+post(Msg, Sock, DrainTok) when is_tuple(Msg) ->
+    SyslogMsg = logplex_syslog_utils:to_msg(Msg, DrainTok),
     Packet = logplex_syslog_utils:frame(SyslogMsg),
     gen_tcp:send(Sock, Packet).
 
@@ -236,7 +239,7 @@ time_failed(Now, #state{last_good_time=T0})
 time_failed(_, #state{last_good_time=undefined}) ->
     "never".
 
-post_buffer(State = #state{id = ID, buf = Buf, sock = S}) ->
+post_buffer(State = #state{drain_id = DrainId, drain_tok = DrainTok, buf = Buf, sock = S}) ->
     case logplex_drain_buffer:pop(Buf) of
         {empty, NewBuf} ->
             State#state{buf=NewBuf};
@@ -244,15 +247,15 @@ post_buffer(State = #state{id = ID, buf = Buf, sock = S}) ->
             Msg = case Item of
                       {msg, M} -> M;
                       {loss_indication, N, When} ->
-                          logplex_stats:incr({drain_dropped, ID}),
+                          logplex_stats:incr({drain_dropped, DrainId}),
                           ?INFO("drain_id=~p channel_id=~p dest=~s at=loss"
                                 " dropped=~p since=~s",
                                 log_info(State, [N, logplex_syslog_utils:datetime(When)])),
                           overflow_msg(N, When)
                   end,
-            case post(Msg, S, ID) of
+            case post(Msg, S, DrainTok) of
                 ok ->
-                    logplex_stats:incr({drain_delivered, ID}),
+                    logplex_stats:incr({drain_delivered, DrainId}),
                     post_buffer(tcp_good(State#state{buf=NewBuf}));
                 {error, Reason} ->
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
@@ -283,6 +286,6 @@ host_str(H)
     H.
 
 %% @private
-log_info(#state{id=ID, channel=Channel, host=H, port=P}, Rest)
+log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
   when is_list(Rest) ->
-    [ID, Channel, io_lib:format("~s:~p", [host_str(H), P]) | Rest].
+    [DrainId, ChannelId, io_lib:format("~s:~p", [host_str(H), P]) | Rest].
