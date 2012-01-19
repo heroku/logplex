@@ -25,7 +25,7 @@
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
                 channel_id :: logplex_channel:id(),
-                host :: string() | inet:ip_address(),
+                host :: string() | inet:ip_address() | binary(),
                 port :: inet:port_number(),
                 sock = undefined :: 'undefined' | inet:socket(),
                 %% Buffer for messages while disconnected
