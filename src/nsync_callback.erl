@@ -56,36 +56,36 @@ handle({load, eof}) ->
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    ?INFO("at=set type=channel id=~p~n", [Id]),
+    ?INFO("at=set type=channel id=~p", [Id]),
     create_channel(Id, Dict);
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Token = create_token(Id, Dict),
-    ?INFO("at=set type=token id=~p~n", [Id]),
+    ?INFO("at=set type=token id=~p", [Id]),
     populate_token_channel_data([Token]);
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
     Drain = create_drain(Id, Dict),
-    ?INFO("at=set type=drain id=~p~n", [Id]),
+    ?INFO("at=set type=drain id=~p", [Id]),
     Drain#drain.host =/= undefined andalso populate_token_drain_data([Drain]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    ?INFO("at=delete type=channel id=~p~n", [Id]),
+    ?INFO("at=delete type=channel id=~p", [Id]),
     ets:delete(channels, Id);
 
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = list_to_binary(parse_id(Rest)),
-    ?INFO("at=delete type=token id=~p~n", [Id]),
+    ?INFO("at=delete type=token id=~p", [Id]),
     ets:delete(tokens, Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
-    ?INFO("at=delete type=drain id=~p~n", [Id]),
+    ?INFO("at=delete type=drain id=~p", [Id]),
     logplex_drain:stop(tcpsyslog, Id),
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
@@ -103,23 +103,23 @@ handle({cmd, _Cmd, [<<"staging.herokudev.com:stats", _/binary>>|_]}) ->
     ok;
 
 handle({cmd, _Cmd, _Args}) ->
-    ?ERR("cmd=~p args=~100p~n", [_Cmd, _Args]),
+    ?ERR("cmd=~p args=~100p", [_Cmd, _Args]),
     ok;
 
 handle({error, closed}) ->
-    ?ERR("msg=closed~n", []),
+    ?ERR("msg=closed", []),
     exit({error, closed}),
     ok;
 
 handle(_Other) ->
-    ?ERR("msg=~p~n", [_Other]),
+    ?ERR("msg=~p", [_Other]),
     ok.
 
 %% Helper functions
 create_channel(Id, Dict) ->
     case dict_find(<<"app_id">>, Dict) of
         undefined ->
-            ?ERR("~p ~p ~p ~p~n",
+            ?ERR("~p ~p ~p ~p",
                  [create_channel, missing_app_id, Id, dict:to_list(Dict)]);
         Val ->
             AppId = list_to_integer(binary_to_list(Val)),
@@ -133,7 +133,7 @@ create_channel(Id, Dict) ->
 create_token(Id, Dict) ->
     case dict_find(<<"ch">>, Dict) of
         undefined ->
-            ?ERR("~p ~p ~p ~p~n",
+            ?ERR("~p ~p ~p ~p",
                  [create_token, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
             Ch = list_to_integer(binary_to_list(Val1)),
@@ -150,13 +150,13 @@ create_token(Id, Dict) ->
 create_drain(Id, Dict) ->
     case dict_find(<<"ch">>, Dict) of
         undefined ->
-            ?ERR("~p ~p ~p ~p~n",
+            ?ERR("~p ~p ~p ~p",
                  [create_drain, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
             Ch = list_to_integer(binary_to_list(Val1)),
             case dict_find(<<"token">>, Dict) of
                 undefined ->
-                    ?ERR("~p ~p ~p ~p~n",
+                    ?ERR("~p ~p ~p ~p",
                          [create_drain, missing_token, Id, dict:to_list(Dict)]);
                 Token ->
                     Host = dict_find(<<"host">>, Dict),
@@ -171,7 +171,7 @@ create_drain(Id, Dict) ->
                             logplex_drain:start(tcpsyslog, Token,
                                                 [Ch, Token, Host, Port]);
                         _ ->
-                            ?ERR("no udp support for ~p ~p ~p:~p~n",
+                            ?ERR("no udp support for ~p ~p ~p:~p",
                                  [Ch, Token, Host, Port])
                     end,
                     Drain = #drain{
@@ -193,7 +193,7 @@ populate_token_channel_data([]) ->
 populate_token_channel_data([Token|Tail]) when is_record(Token, token) ->
     case logplex_channel:lookup(Token#token.channel_id) of
         undefined ->
-            ?ERR("~p ~p ~p~n",
+            ?ERR("~p ~p ~p",
                  [populate_token_channel_data, undefined_channel, Token]);
         #channel{app_id=AppId} ->
             ets:insert(tokens, Token#token{app_id=AppId})
@@ -210,7 +210,7 @@ populate_token_drain_data([Drain|Tail]) when is_record(Drain, drain) ->
     T = logplex_utils:empty_token(),
     case ets:match_object(tokens, T#token{channel_id=Drain#drain.channel_id}) of
         [] ->
-            ?ERR("~p ~p ~p ~p~n",
+            ?ERR("~p ~p ~p ~p",
                  [populate_token_drain_data, undefined_tokens, Drain]);
         Tokens ->
             Drain1 = Drain#drain{resolved_host=logplex_utils:resolve_host(Drain#drain.host)},
@@ -224,13 +224,13 @@ populate_token_drain_data([_|Tail]) ->
 remove_token_drain_data(DrainId) ->
     case logplex_drain:lookup(DrainId) of
         undefined ->
-            ?ERR("~p ~p ~p~n",
+            ?ERR("~p ~p ~p",
                  [remove_token_drain_data, undefined_drain, DrainId]);
         Drain ->
             T = logplex_utils:empty_token(),
             case ets:match_object(tokens, T#token{channel_id=Drain#drain.channel_id}) of
                 [] ->
-                    ?ERR("~p ~p ~p~n",
+                    ?ERR("~p ~p ~p",
                          [remove_token_drain_data, undefined_tokens, Drain]);
                 Tokens ->
                     ets:insert(tokens, [begin
