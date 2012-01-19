@@ -13,6 +13,7 @@
 
 -type msg() :: binary() | tuple().
 -opaque buf() :: #lpdb{}.
+-export_type([buf/0]).
 
 -export([new/0
          ,new/1

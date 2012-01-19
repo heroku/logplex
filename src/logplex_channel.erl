@@ -33,7 +33,7 @@
 
 -type id() :: integer().
 -type name() :: binary().
--export_type([id/0]).
+-export_type([id/0, name/0]).
 
 whereis({channel, _ID} = Name) ->
     [ Pid || {Pid, true} <- gproc:lookup_local_properties(Name) ].
