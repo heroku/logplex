@@ -170,7 +170,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 
 -spec post(logplex_syslog_utils:syslog_msg(), inet:socket(),
-           logplex_drain:id()) ->
+           logplex_drain:token()) ->
                   'ok' |
                   {'error', term()}.
 %% @private
