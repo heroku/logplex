@@ -46,11 +46,10 @@ channel_index() ->
         ChannelId when is_integer(ChannelId) -> ChannelId
     end.
 
--spec create_channel(logplex_channel:id(), logplex_channel:name(),
-                     integer()) -> 'ok' | {'error', Reason::term()}.
-create_channel(ChannelId, ChannelName, AppId) when is_integer(ChannelId), is_binary(ChannelName), is_integer(AppId) ->
+-spec create_channel(logplex_channel:id()) -> 'ok' | {'error', Reason::term()}.
+create_channel(ChannelId) when is_integer(ChannelId) ->
     Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
-    Cmd = [<<"HMSET">>, Key, <<"name">>, ChannelName, <<"app_id">>, integer_to_list(AppId)],
+    Cmd = [<<"HMSET">>, Key, <<"name">>, ""],
     case redo:cmd(config, Cmd) of
         <<"OK">> ->
             ok;
@@ -74,16 +73,7 @@ build_push_msg(ChannelId, Length, Msg) when is_integer(ChannelId), is_binary(Len
 lookup_channel(ChannelId) when is_integer(ChannelId) ->
     case redo:cmd(config, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
-            #channel{
-                id = ChannelId,
-                name = logplex_utils:field_val(<<"name">>, Fields),
-                app_id =
-                 case logplex_utils:field_val(<<"app_id">>, Fields) of
-                     Val when is_binary(Val), size(Val) > 0 ->
-                         list_to_integer(binary_to_list(Val));
-                     _ -> undefined
-                 end
-            };
+            #channel{id = ChannelId};
         _ ->
             undefined
     end.
