@@ -95,23 +95,19 @@ handle_cast(Msg, State) ->
 
 %% @private
 handle_info({post, Msg}, State = #state{sock = undefined,
-                                        drain_id = DrainId,
-                                        channel_id = ChannelId,
                                         buf = Buf})
   when is_tuple(Msg) ->
-    logplex_stats:incr(#drain_stat{drain_id=DrainId, channel_id=ChannelId, key=drain_buffered}),
+    msg_stat(drain_buffered, 1, State),
     NewBuf = logplex_drain_buffer:push(Msg, Buf),
     NewState = State#state{buf=NewBuf},
     {noreply, maybe_reconnect(NewState)};
 
-handle_info({post, Msg}, State = #state{drain_id = DrainId,
-                                        drain_tok = DrainTok,
-                                        channel_id = ChannelId,
+handle_info({post, Msg}, State = #state{drain_tok = DrainTok,
                                         sock = S})
   when is_tuple(Msg) ->
     case post(Msg, S, DrainTok) of
         ok ->
-            logplex_stats:incr(#drain_stat{drain_id=DrainId, channel_id=ChannelId, key=drain_delivered}),
+            msg_stat(drain_delivered, 1, State),
             {noreply, tcp_good(State)};
         {error, Reason} ->
             ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
@@ -241,18 +237,14 @@ time_failed(Now, #state{last_good_time=T0})
 time_failed(_, #state{last_good_time=undefined}) ->
     "never".
 
-post_buffer(#state{drain_id = DrainId,
-                   drain_tok = DrainTok,
-                   channel_id = ChannelId,
+post_buffer(#state{drain_tok = DrainTok,
                    buf = Buf,
                    sock = S} = State) ->
     case logplex_drain_buffer:pop(Buf) of
         {empty, NewBuf} ->
             State#state{buf=NewBuf};
         {{loss_indication, N, When}, NewBuf} ->
-            logplex_stats:incr(#drain_stat{drain_id=DrainId,
-                                           channel_id=ChannelId,
-                                           key=drain_dropped}, N),
+            msg_stat(drain_dropped, N, State),
             ?INFO("drain_id=~p channel_id=~p dest=~s at=loss"
                   " dropped=~p since=~s",
                   log_info(State, [N, logplex_syslog_utils:datetime(When)])),
@@ -274,9 +266,7 @@ post_buffer(#state{drain_id = DrainId,
         {{msg, Msg}, NewBuf} ->
             case post(Msg, S, DrainTok) of
                 ok ->
-                    logplex_stats:incr(#drain_stat{drain_id=DrainId,
-                                                   channel_id=ChannelId,
-                                                   key=drain_delivered}),
+                    msg_stat(drain_delivered, 1, State),
                     post_buffer(tcp_good(State#state{buf=NewBuf}));
                 {error, Reason} ->
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
