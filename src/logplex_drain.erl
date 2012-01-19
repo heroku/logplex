@@ -48,9 +48,6 @@ post_msg(Where, Msg) when is_binary(Msg) ->
     end;
 post_msg({drain, ID}, Msg) when is_tuple(Msg) ->
     gproc:send({n, l, {drain, ID}}, {post, Msg}),
-    ok;
-post_msg(Server, Msg) when is_tuple(Msg) ->
-    Server ! Msg,
     ok.
 
 whereis({drain, _ID} = Name) ->

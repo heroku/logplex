@@ -45,12 +45,6 @@ post_msg(Where, Msg) when is_binary(Msg) ->
     end;
 post_msg({channel, _ID} = Name, Msg) when is_tuple(Msg) ->
     gproc:send({p, l, Name}, {post, Msg}),
-    ok;
-post_msg(Pids, Msg) when is_list(Pids), is_tuple(Msg) ->
-    lists:foreach(fun (P) ->
-                          P ! {post, Msg}
-                  end,
-                  Pids),
     ok.
 
 -spec create(name(), integer()) -> id() | {'error', term()}.
