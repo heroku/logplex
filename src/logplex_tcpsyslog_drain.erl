@@ -158,7 +158,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 
 -spec post(logplex_syslog_utils:syslog_msg(), inet:socket(),
-           iolist() | binary()) ->
+           logplex_drain:id()) ->
                   'ok' |
                   {'error', term()}.
 post(Msg, Sock, Token) when is_tuple(Msg) ->
