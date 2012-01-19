@@ -18,6 +18,7 @@
          ,new/1
          ,push/2
          ,pop/1
+         ,to_list/1
          ]).
 
 -include_lib("proper/include/proper.hrl").
@@ -66,6 +67,9 @@ full(#lpdb{max_size = Max, messages = Q}) ->
         N when N < Max ->
             have_space
     end.
+
+to_list(#lpdb{messages = Q}) ->
+    queue:to_list(Q).
 
 insert(Msg, Buf = #lpdb{messages = Q}) ->
     Buf#lpdb{messages = queue:in(Msg, Q)}.
