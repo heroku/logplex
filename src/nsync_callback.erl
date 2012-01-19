@@ -86,7 +86,7 @@ handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     ?INFO("at=delete type=drain id=~p", [Id]),
-    logplex_drain:stop(tcpsyslog, Id),
+    logplex_drain:stop(Id),
     remove_token_drain_data(Id),
     ets:delete(drains, Id);
 
