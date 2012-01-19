@@ -24,7 +24,7 @@
 
 -export([whereis/1
          ,start/3
-         ,stop/2
+         ,stop/1
         ]).
 
 -export([reserve_token/0, cache/3, create/5, create/4,
@@ -44,14 +44,22 @@ whereis({drain, _DrainId} = Name) ->
 
 start(tcpsyslog, DrainId, Args) ->
     supervisor:start_child(logplex_drain_sup,
-                           {DrainId, {logplex_tcpsyslog_drain, start_link, Args},
+                           {DrainId,
+                            {logplex_tcpsyslog_drain, start_link, Args},
+                            transient, brutal_kill, worker,
+                            [logplex_tcpsyslog_drain]});
+start(udpsyslog, DrainId, Args) ->
+    supervisor:start_child(logplex_drain_sup,
+                           {DrainId,
+                            {logplex_udpsyslog_drain, start_link, Args},
                             transient, brutal_kill, worker,
                             [logplex_tcpsyslog_drain]}).
 
-stop(tcpsyslog, DrainId) ->
+
+stop(DrainId) ->
     case whereis({drain, DrainId}) of
         Pid when is_pid(Pid) ->
-            logplex_tcpsyslog_drain:shutdown(Pid);
+            gen_server:cast(Pid, shutdown);
         _ ->
             not_running
     end.
