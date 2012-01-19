@@ -68,7 +68,7 @@ init([State0 = #state{id=ID, channel=Chan}]) ->
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_drain_buffer:new(DrainSize),
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawned",
-              log_info(State0, [])),
+              log_info(State, [])),
         {ok, State, hibernate}
     catch
         error:badarg -> ignore
