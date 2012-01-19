@@ -59,7 +59,7 @@ loop(BufferPid, Socket, RedisOpts) ->
         {NumItems, Logs} ->
             case gen_tcp:send(Socket, Logs) of
                 ok ->
-                    logplex_stats:incr(logplex_stats, message_processed, NumItems),
+                    logplex_stats:incr(message_processed, NumItems),
                     logplex_realtime:incr(message_processed, NumItems);
                 {error, closed} ->
                     error_logger:error_msg("~p event=send result=closed", [?MODULE]),
