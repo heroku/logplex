@@ -111,6 +111,7 @@ handle_info({post, Msg}, State = #state{drain_tok = DrainTok,
     case post(Msg, S, DrainTok) of
         ok ->
             msg_stat(drain_delivered, 1, State),
+            logplex_realtime:incr(message_routed),
             {noreply, tcp_good(State)};
         {error, Reason} ->
             msg_stat(drain_buffered, 1, State),
