@@ -24,10 +24,13 @@
 
 -export([whereis/1
          ,post_msg/2
+         ,post_msg/3
         ]).
 
 -export([create/0, delete/1, lookup/1,
          lookup_tokens/1, lookup_drains/1, logs/2, info/1]).
+
+-compile({no_auto_import,[whereis/1]}).
 
 -include_lib("logplex.hrl").
 
@@ -46,6 +49,24 @@ post_msg({channel, ChannelId} = Name, Msg) when is_tuple(Msg) ->
     logplex_stats:incr(#channel_stat{channel_id=ChannelId, key=channel_post}),
     gproc:send({p, l, Name}, {post, Msg}),
     ok.
+
+post_msg(Where, Msg, Drains) when is_binary(Msg) ->
+    case logplex_syslog_utils:from_msg(Msg) of
+        {error, _} = E -> E;
+        ParsedMsg -> post_msg(Where, ParsedMsg, Drains)
+    end;
+post_msg({channel, ChannelId} = Name, Msg, Drains) when is_tuple(Msg) ->
+    Pids = whereis(Name),
+    logplex_stats:incr(#channel_stat{channel_id=ChannelId, key=channel_post}),
+    [ Pid ! {post, Msg} || Pid <- Pids ],
+    case length(Drains) - length(Pids) of
+        0 -> ok; % everything is OK
+        N when N > 0 ->
+            logplex_drain:diagnose_drains(Name, Drains);
+        N when N < 0 ->
+            %% More pids than drains - assume operator intervention
+            ok
+    end.
 
 -spec create() -> id() | {'error', term()}.
 create() ->
