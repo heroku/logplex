@@ -126,8 +126,8 @@ handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
     State1 = State#state{tref = undefined},
     case connect(State1) of
         {ok, Sock} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p",
-                  log_info(State1, [State1#state.failures + 1])),
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p sock=~p",
+                  log_info(State1, [State1#state.failures + 1, Sock])),
             NewState = tcp_good(State1#state{sock=Sock}),
             {noreply, post_buffer(NewState)};
         {error, Reason} ->
@@ -140,9 +140,15 @@ handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
     end;
 
 handle_info({tcp_closed, S}, State = #state{sock = S}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=close",
-          log_info(State, [])),
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=close sock=~p",
+          log_info(State, [S])),
     {noreply, reconnect(tcp_closed, State#state{sock=undefined})};
+
+handle_info({tcp_closed, S}, State = #state{}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s "
+          "err=old_sock_close data=~p sock=~p",
+          log_info(State, [S])),
+    {noreply, State};
 
 handle_info({tcp_error, S, Reason}, State = #state{sock = S}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s at=idle "
