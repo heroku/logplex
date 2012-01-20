@@ -5,8 +5,11 @@
 -record(token, {id, channel_id, name, drains=[]}).
 -record(drain, {id, channel_id, token, resolved_host, host, port, tcp=true}).
 -record(session, {id, body}).
--record(channel_stat, {channel_id, key}).
--record(drain_stat, {drain_id, channel_id, key}).
+-record(channel_stat, {channel_id :: logplex_channel:id(),
+                       key :: atom()}).
+-record(drain_stat, {drain_id :: logplex_drain:id(),
+                     channel_id :: logplex_channel:id(),
+                     key :: atom()}).
 
 -define(HTTP_PORT, 8001).
 -define(TCP_PORT, 6001).
