@@ -159,7 +159,7 @@ post(Msg, #state{sock=Sock,
     gen_udp:send(Sock, Addr, Port, Packet).
 
 %% @private
--spec connect(#state{sock :: undefined}) -> {ok, inet:ip_addr(), port()} |
+-spec connect(#state{sock :: undefined}) -> {ok, inet:ip_address(), port()} |
                                             {'error', term()}.
 connect(#state{sock = undefined, host=Host, port=Port})
     when is_integer(Port) ->
