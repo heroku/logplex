@@ -42,6 +42,7 @@ start_link(Opts) ->
 incr(Key) ->
     incr(Key, 1).
 
+-spec incr(string() | key(), integer()) -> any().
 incr("work_queue_dropped", Inc) when is_integer(Inc) ->
     incr(work_queue_dropped, Inc);
 
@@ -51,22 +52,33 @@ incr("drain_buffer_dropped", Inc) when is_integer(Inc) ->
 incr("redis_buffer_dropped", Inc) when is_integer(Inc) ->
     incr(redis_buffer_dropped, Inc);
 
-incr(Key, Inc) when is_integer(Inc) ->
+incr(Key, Inc) when is_integer(Inc), is_atom(Key) ->
     ets:update_counter(?MODULE, Key, Inc).
 
+-type key() :: 'message_received' |
+               'message_processed' |
+               'message_routed' |
+               'message_dropped' |
+               'work_queue_dropped' |
+               'drain_buffer_dropped' |
+               'redis_buffer_dropped'.
+-spec keys() -> [key()].
+keys() ->
+    [message_received
+     ,message_processed
+     ,message_routed
+     ,message_dropped
+     ,work_queue_dropped
+     ,drain_buffer_dropped
+     ,redis_buffer_dropped
+    ].
 
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
 init([Opts]) ->
     ets:new(?MODULE, [named_table, set, public]),
-    ets:insert(?MODULE, [{message_received, 0},
-                        {message_processed, 0},
-                        {message_routed, 0},
-                        {message_dropped, 0},
-                        {work_queue_dropped, 0},
-                        {drain_buffer_dropped, 0},
-                        {redis_buffer_dropped, 0}]),
+    ets:insert(?MODULE, [{K, 0} || K <- keys()]),
     timer:send_interval(timer:seconds(1), flush),
     case redo:start_link(undefined, Opts) of
         {ok, Conn} ->
@@ -88,19 +100,16 @@ handle_info(flush, #state{instance_name=undefined}=State) ->
 
 handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
     Stats = ets:tab2list(?MODULE),
-    [ets:update_counter(?MODULE, Key, -1 * Val) || {Key, Val} <- Stats],
+    [ets:update_counter(?MODULE, Key, -1 * Val)
+     || {Key, Val} <- Stats,
+        lists:member(Key, keys())],
     HerokuDomain = heroku_domain(),
     spawn(fun() ->
         Stats1 = [{instance_name, list_to_binary(InstanceName)},
                   {branch, git_branch()},
-                  {'AZ', availability_zone()},
-                  proplists:lookup(message_received, Stats),
-                  proplists:lookup(message_processed, Stats),
-                  proplists:lookup(message_routed, Stats),
-                  proplists:lookup(message_dropped, Stats),
-                  proplists:lookup(work_queue_dropped, Stats),
-                  proplists:lookup(drain_buffer_dropped, Stats),
-                  proplists:lookup(redis_buffer_dropped, Stats)],
+                  {'AZ', availability_zone()} |
+                   [ proplists:lookup(K, Stats)
+                     || K <- keys() ]],
         Json = iolist_to_binary(mochijson2:encode({struct, Stats1})),
         redo:cmd(Conn, [<<"PUBLISH">>, iolist_to_binary([HerokuDomain, <<":stats">>]), Json], 60000)
     end),
