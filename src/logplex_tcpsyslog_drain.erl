@@ -147,13 +147,13 @@ handle_info({tcp_closed, S}, State = #state{sock = S}) ->
 handle_info({tcp_closed, S}, State = #state{}) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s "
           "err=old_sock_close data=~p sock=~p",
-          log_info(State, [S])),
+          log_info(State, [S, S])),
     {noreply, State};
 
 handle_info({tcp_error, S, Reason}, State = #state{sock = S}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s at=idle "
-         "err=gen_tcp data=~p",
-          log_info(State, [Reason])),
+         "err=gen_tcp data=~p sock=~p",
+          log_info(State, [Reason, S])),
     {noreply, reconnect(tcp_error, State#state{sock=undefined})};
 
 handle_info({tcp, S, Data}, State = #state{sock = S}) ->
