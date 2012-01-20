@@ -217,7 +217,10 @@ maybe_reconnect(State = #state{tref = Ref}) when is_reference(Ref) ->
 
 -spec reconnect('idle' | 'tcp_error' | 'tcp_closed', #state{}) -> #state{}.
 %% @private
-reconnect(_Reason, State = #state{failures = 0, last_good_time=T}) ->
+reconnect(_Reason, State = #state{failures = 0, last_good_time=undefined}) ->
+    reconnect_in(logplex_app:config(tcp_syslog_reconnect_min, 30), State);
+reconnect(_Reason, State = #state{failures = 0, last_good_time=T})
+  when is_tuple(T), tuple_size(T) =:= 3 ->
     Min = logplex_app:config(tcp_syslog_reconnect_min, 30),
     SecsSinceConnect = timer:now_diff(os:timestamp(), T) div 1000000,
     case SecsSinceConnect of
