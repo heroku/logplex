@@ -183,7 +183,7 @@ populate_token_drain_data([Drain|Tail]) when is_record(Drain, drain) ->
     T = logplex_utils:empty_token(),
     case ets:match_object(tokens, T#token{channel_id=Drain#drain.channel_id}) of
         [] ->
-            ?ERR("~p ~p ~p ~p",
+            ?ERR("~p ~p ~p",
                  [populate_token_drain_data, undefined_tokens, Drain]);
         Tokens ->
             Drain1 = Drain#drain{resolved_host=logplex_utils:resolve_host(Drain#drain.host)},
