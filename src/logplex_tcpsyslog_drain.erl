@@ -217,10 +217,25 @@ maybe_reconnect(State = #state{tref = Ref}) when is_reference(Ref) ->
 
 -spec reconnect('idle' | 'tcp_error' | 'tcp_closed', #state{}) -> #state{}.
 %% @private
+reconnect(_Reason, State = #state{failures = 0, last_good_time=T}) ->
+    Min = logplex_app:config(tcp_syslog_reconnect_min, 30),
+    SecsSinceConnect = timer:now_diff(os:timestamp(), T) div 1000000,
+    case SecsSinceConnect of
+        TooFew when TooFew < Min ->
+            reconnect_in(Min, State);
+        _EnoughTime ->
+            reconnect_in(1, State)
+    end;
 reconnect(_Reason, State = #state{failures = F}) ->
-    BackOff = erlang:min(logplex_app:config(tcp_syslog_backoff_max),
-                         1 bsl F),
-    Ref = erlang:send_after(timer:seconds(BackOff), self(), ?RECONNECT_MSG),
+    Max = logplex_app:config(tcp_syslog_backoff_max, 300),
+    BackOff = case length(integer_to_list(Max, 2)) of
+                  MaxExp when F > MaxExp -> Max;
+                  _ -> 1 bsl F
+              end,
+    reconnect_in(BackOff, State).
+
+reconnect_in(Seconds, State = #state{}) ->
+    Ref = erlang:send_after(timer:seconds(Seconds), self(), ?RECONNECT_MSG),
     State#state{tref=Ref}.
 
 %% @private
