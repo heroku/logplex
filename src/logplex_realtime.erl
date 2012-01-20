@@ -67,8 +67,7 @@ init([Opts]) ->
                         {work_queue_dropped, 0},
                         {drain_buffer_dropped, 0},
                         {redis_buffer_dropped, 0}]),
-    Self = self(),
-    spawn_link(fun() -> flush(Self) end),
+    timer:send_interval(timer:seconds(1), flush),
     case redo:start_link(undefined, Opts) of
         {ok, Conn} ->
             {ok, #state{conn=Conn, opts=Opts}};
@@ -115,11 +114,6 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-flush(Pid) ->
-    timer:sleep(1000),
-    Pid ! flush,
-    flush(Pid).
 
 heroku_domain() ->
     case get(heroku_domain) of
