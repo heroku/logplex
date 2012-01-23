@@ -185,7 +185,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% @private
 post(Msg, Sock, DrainTok) when is_tuple(Msg) ->
     SyslogMsg = logplex_syslog_utils:to_msg(Msg, DrainTok),
-    Packet = logplex_syslog_utils:frame(SyslogMsg),
+    Packet = logplex_syslog_utils:frame([SyslogMsg, $\n]),
     gen_tcp:send(Sock, Packet).
 
 %% @private
