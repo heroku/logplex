@@ -29,7 +29,8 @@
 
 -export([lookup/3, lookup_urls/0, urls/0]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 -record(state, {urls}).
 
@@ -65,7 +66,15 @@ init([]) ->
     io:format("init ~p~n", [?MODULE]),
     Urls = lookup_urls(),
 
-    [logplex_queue_sup:start_child(logplex_redis_buffer_sup, [redis_buffer_args(Url)]) || Url <- Urls],
+    case length(logplex_queue_sup:which_children(logplex_redis_buffer_sup)) of
+        N when N =:= length(Urls) ->
+            ?INFO("at=restart existing_redis_buffer_children=~p", [N]);
+        0 ->
+            [logplex_queue_sup:start_child(logplex_redis_buffer_sup,
+                                           [redis_buffer_args(Url)])
+             || Url <- Urls],
+            ?INFO("at=start new_redis_buffer_children=~p", [length(Urls)])
+    end
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
