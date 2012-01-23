@@ -247,6 +247,8 @@ reconnect_in(Seconds, State = #state{}) ->
     Ref = erlang:start_timer(timer:seconds(Seconds), self(), ?RECONNECT_MSG),
     (cancel_timer(State))#state{tref = Ref}.
 
+cancel_timer(S = #state{tref = undefined}) -> S;
+
 cancel_timer(S = #state{tref = Ref}) when is_reference(Ref) ->
     erlang:cancel_timer(Ref),
     S#state{tref = undefined}.
