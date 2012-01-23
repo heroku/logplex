@@ -147,6 +147,9 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
+code_change(_OldVsn, State, trap_exits) ->
+    process_flag(trap_exit, true),
+    {ok, State};
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
