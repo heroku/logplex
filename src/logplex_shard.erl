@@ -165,8 +165,9 @@ populate_info_table(Urls) ->
         redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
 
     ets:delete_all_objects(logplex_shard_info),
-    ets:insert(logplex_shard_info, {logplex_read_pool_map, {Map1, Interval1}}),
-    ets:insert(logplex_shard_info, {logplex_redis_buffer_map, {Map2, Interval2}}),
+    ets:insert(logplex_shard_info,
+               [{logplex_read_pool_map, {Map1, Interval1}},
+                {logplex_redis_buffer_map, {Map2, Interval2}}]),
 
     ok.
 
