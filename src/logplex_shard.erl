@@ -123,6 +123,11 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({'EXIT', Pid, Reason}, State) ->
+    ?INFO("child=~p exit_reason=~p", [Pid, Reason]),
+    handle_child_death(Pid),
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -208,6 +213,23 @@ redis_buffer_args(Url) ->
      {dict, dict:from_list([
         {redis_url, Url}
      ])}].
+
+handle_child_death(Pid) ->
+    [{logplex_read_pool_map, {Map, V}}]
+        = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+    [ {Shard, {Url, Pid}} ] = shard_info(Pid, Map),
+    NewPid = add_pool(Url),
+    NewMap = dict:store(Shard, {Url, NewPid}, Map),
+    ets:insert(logplex_shard_info, {logplex_read_pool_map, {NewMap, V}}),
+    ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
+          [Pid, NewPid]),
+    ok.
+
+shard_info(Pid, Map) ->
+    [ Item ||
+        Item = {_Shard, {_Url, OldPid}} <- dict:to_list(Map),
+        OldPid =:= Pid].
+
 consistent(URLs) ->
     [{logplex_read_pool_map, {Map, _V}}]
         = ets:lookup(logplex_shard_info, logplex_read_pool_map),
