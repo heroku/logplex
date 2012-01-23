@@ -66,6 +66,8 @@ init([]) ->
     io:format("init ~p~n", [?MODULE]),
     Urls = lookup_urls(),
 
+    erlang:process_flag(trap_exit, true),
+
     case length(logplex_queue_sup:which_children(logplex_redis_buffer_sup)) of
         N when N =:= length(Urls) ->
             ?INFO("at=restart existing_redis_buffer_children=~p", [N]);
