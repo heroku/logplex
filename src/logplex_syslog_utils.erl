@@ -5,8 +5,7 @@
 %% @end
 -module(logplex_syslog_utils).
 
--export([to_msg/1
-         ,to_msg/2
+-export([to_msg/2
          ,from_msg/1
          ,frame/1
          ,datetime/1
@@ -22,12 +21,6 @@
                        Process::iolist(), Msg::iolist()}.
 
 -export_type([ syslog_msg/0 ]).
-
--spec to_msg(syslog_msg()) -> iolist().
-to_msg({Facility, Severity, Time, Source, Process, Msg})
-  when is_integer(Facility), is_integer(Severity) ->
-    [ <<"<">>, pri(Facility, Severity), <<">1 ">>,
-      Time, $\s, Source, $\s, Process, <<" - - ">>, Msg ].
 
 -spec to_msg(syslog_msg(), iolist() | binary()) -> iolist().
 to_msg({Facility, Severity, Time, Source, Process, Msg}, Token) ->
