@@ -94,6 +94,12 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call(consistency_check, _From, State = #state{urls = Urls}) ->
+    {reply, try consistent(Urls)
+            catch C:E ->
+                    {error, {C, E, erlang:get_stacktrace()}}
+            end, State};
+
 handle_call(urls, _From, State) ->
     {reply, State#state.urls, State};
 
@@ -198,3 +204,13 @@ redis_buffer_args(Url) ->
      {dict, dict:from_list([
         {redis_url, Url}
      ])}].
+consistent(URLs) ->
+    [{logplex_read_pool_map, {Map, _V}}]
+        = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+    FlatMap = [{S, U, P} || {S, {U, P}} <- dict:to_list(Map)],
+    true = length(URLs) =:= length(FlatMap),
+    Correct = [true || {_S,U,P} <- FlatMap,
+                       is_process_alive(P),
+                       lists:member(U,URLs)],
+    true = length(Correct) =:= length(URLs),
+    consistent.
