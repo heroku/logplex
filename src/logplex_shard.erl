@@ -180,9 +180,13 @@ populate_info_table(Urls) ->
 add_pools([], Acc) -> Acc;
 
 add_pools([Url|Tail], Acc) ->
+    Pool = add_pool(Url),
+    add_pools(Tail, [{Url, Pool}|Acc]).
+
+add_pool(Url) ->
     Opts = redo_uri:parse(Url),
     {ok, Pool} = redo:start_link(undefined, Opts),
-    add_pools(Tail, [{Url, Pool}|Acc]).
+    Pool.
 
 redis_buffer_args(Url) ->
     MaxLength =
