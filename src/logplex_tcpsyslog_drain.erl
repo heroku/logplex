@@ -122,16 +122,16 @@ handle_info({post, Msg}, State = #state{drain_tok = DrainTok,
             {noreply, reconnect(tcp_error, NewState)}
     end;
 
-handle_info(?RECONNECT_MSG, State = #state{sock = undefined}) ->
-    State1 = State#state{tref = undefined},
-    case connect(State1) of
+handle_info({timeout, TRef, ?RECONNECT_MSG},
+            State = #state{tref = TRef, sock = undefined}) ->
+    case connect(State) of
         {ok, Sock} ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p sock=~p",
-                  log_info(State1, [State1#state.failures + 1, Sock])),
-            NewState = tcp_good(State1#state{sock=Sock}),
+                  log_info(State, [State#state.failures + 1, Sock])),
+            NewState = tcp_good(State#state{sock=Sock}),
             {noreply, post_buffer(NewState)};
         {error, Reason} ->
-            NewState = tcp_bad(State1),
+            NewState = tcp_bad(State),
             ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
                  "err=gen_tcp data=~p try=~p last_success=~s",
                  log_info(State, [Reason, NewState#state.failures,
@@ -244,8 +244,12 @@ reconnect(_Reason, State = #state{failures = F}) ->
     reconnect_in(BackOff, State).
 
 reconnect_in(Seconds, State = #state{}) ->
-    Ref = erlang:send_after(timer:seconds(Seconds), self(), ?RECONNECT_MSG),
-    State#state{tref=Ref}.
+    Ref = erlang:start_timer(timer:seconds(Seconds), self(), ?RECONNECT_MSG),
+    (cancel_timer(State))#state{tref = Ref}.
+
+cancel_timer(S = #state{tref = Ref}) when is_reference(Ref) ->
+    erlang:cancel_timer(Ref),
+    S#state{tref = undefined}.
 
 %% @private
 tcp_good(State = #state{}) ->
