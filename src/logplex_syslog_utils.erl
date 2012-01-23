@@ -25,7 +25,7 @@
 -spec to_msg(syslog_msg(), iolist() | binary()) -> iolist().
 to_msg({Facility, Severity, Time, Source, Process, Msg}, Token) ->
     [ <<"<">>, pri(Facility, Severity), <<">1 ">>,
-      Time, $\s, Token, $\s, Source, $\s, Process, <<" - - ">>, Msg , $\n].
+      Time, $\s, Token, $\s, Source, $\s, Process, <<" - - ">>, Msg ].
 
 rfc5424({Facility, Severity, Time, Source, Process, Msg}) ->
     rfc5424(Facility, Severity, Time, Source,
