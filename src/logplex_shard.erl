@@ -76,7 +76,7 @@ init([]) ->
                                            [redis_buffer_args(Url)])
              || Url <- Urls],
             ?INFO("at=start new_redis_buffer_children=~p", [length(Urls)])
-    end
+    end,
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
