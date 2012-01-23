@@ -29,7 +29,8 @@
 
 -export([lookup/3, lookup_urls/0, urls/0]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 -record(state, {urls}).
 
@@ -65,7 +66,17 @@ init([]) ->
     io:format("init ~p~n", [?MODULE]),
     Urls = lookup_urls(),
 
-    [logplex_queue_sup:start_child(logplex_redis_buffer_sup, [redis_buffer_args(Url)]) || Url <- Urls],
+    erlang:process_flag(trap_exit, true),
+
+    case length(supervisor:which_children(logplex_redis_buffer_sup)) of
+        N when N =:= length(Urls) ->
+            ?INFO("at=restart existing_redis_buffer_children=~p", [N]);
+        0 ->
+            [logplex_queue_sup:start_child(logplex_redis_buffer_sup,
+                                           [redis_buffer_args(Url)])
+             || Url <- Urls],
+            ?INFO("at=start new_redis_buffer_children=~p", [length(Urls)])
+    end,
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
@@ -83,6 +94,12 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call(consistency_check, _From, State = #state{urls = Urls}) ->
+    {reply, try consistent(Urls)
+            catch C:E ->
+                    {error, {C, E, erlang:get_stacktrace()}}
+            end, State};
+
 handle_call(urls, _From, State) ->
     {reply, State#state.urls, State};
 
@@ -106,6 +123,11 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_info({'EXIT', Pid, Reason}, State) ->
+    ?INFO("child=~p exit_reason=~p", [Pid, Reason]),
+    handle_child_death(Pid),
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -117,8 +139,7 @@ handle_info(_Info, State) ->
 %% The return value is ignored.
 %% @hidden
 %%--------------------------------------------------------------------
-terminate(_Reason, _State) -> 
-    [exit(Pid, normal) || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
+terminate(_Reason, _State) ->
     ok.
 
 %%--------------------------------------------------------------------
@@ -145,23 +166,32 @@ lookup_urls() ->
 
 populate_info_table(Urls) ->
     Pools = add_pools(Urls, []),
-    {ok, Map1, Interval1} = redis_shard:generate_map_and_interval(lists:sort(Pools)),
+    {ok, Map1, Interval1} =
+        redis_shard:generate_map_and_interval(lists:sort(Pools)),
 
-    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid} || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
-    {ok, Map2, Interval2} = redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
+    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid}
+                    || {_Id, Pid, worker, _Modules}
+                           <- supervisor:which_children(logplex_redis_buffer_sup)],
+    {ok, Map2, Interval2} =
+        redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
 
     ets:delete_all_objects(logplex_shard_info),
-    ets:insert(logplex_shard_info, {logplex_read_pool_map, {Map1, Interval1}}),
-    ets:insert(logplex_shard_info, {logplex_redis_buffer_map, {Map2, Interval2}}),
+    ets:insert(logplex_shard_info,
+               [{logplex_read_pool_map, {Map1, Interval1}},
+                {logplex_redis_buffer_map, {Map2, Interval2}}]),
 
     ok.
 
 add_pools([], Acc) -> Acc;
 
 add_pools([Url|Tail], Acc) ->
+    Pool = add_pool(Url),
+    add_pools(Tail, [{Url, Pool}|Acc]).
+
+add_pool(Url) ->
     Opts = redo_uri:parse(Url),
     {ok, Pool} = redo:start_link(undefined, Opts),
-    add_pools(Tail, [{Url, Pool}|Acc]).
+    Pool.
 
 redis_buffer_args(Url) ->
     MaxLength =
@@ -183,3 +213,30 @@ redis_buffer_args(Url) ->
      {dict, dict:from_list([
         {redis_url, Url}
      ])}].
+
+handle_child_death(Pid) ->
+    [{logplex_read_pool_map, {Map, V}}]
+        = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+    [ {Shard, {Url, Pid}} ] = shard_info(Pid, Map),
+    NewPid = add_pool(Url),
+    NewMap = dict:store(Shard, {Url, NewPid}, Map),
+    ets:insert(logplex_shard_info, {logplex_read_pool_map, {NewMap, V}}),
+    ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
+          [Pid, NewPid]),
+    ok.
+
+shard_info(Pid, Map) ->
+    [ Item ||
+        Item = {_Shard, {_Url, OldPid}} <- dict:to_list(Map),
+        OldPid =:= Pid].
+
+consistent(URLs) ->
+    [{logplex_read_pool_map, {Map, _V}}]
+        = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+    FlatMap = [{S, U, P} || {S, {U, P}} <- dict:to_list(Map)],
+    true = length(URLs) =:= length(FlatMap),
+    Correct = [true || {_S,U,P} <- FlatMap,
+                       is_process_alive(P),
+                       lists:member(U,URLs)],
+    true = length(Correct) =:= length(URLs),
+    consistent.
