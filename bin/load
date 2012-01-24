@@ -8,9 +8,10 @@ main([]) ->
 main(Modules) ->
     application:start(inets),
     JSON = iolist_to_binary(mochijson2:encode([list_to_binary(Module) || Module <- Modules])),
-    {match, [Auth]} = re:run(Body, "export LOGPLEX_AUTH_KEY='(\\S+)'", [{capture, all_but_first, binary}]),
+    {ok, File} = file:read_file("keys.sh"),
+    {match, [Auth]} = re:run(File, "export LOGPLEX_AUTH_KEY='(\\S+)'", [{capture, all_but_first, binary}]),
     Headers = [
-        {'Authorization', Auth}
+        {"Authorization", Auth}
     ],
     case httpc:request(post, {"http://localhost:8001/load", Headers, "application/json", JSON}, [], []) of
         {ok, {{_, 200, _}, _, Body}} ->

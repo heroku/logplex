@@ -90,7 +90,7 @@ handlers() ->
     {['POST', "/load$"], fun(Req, _Match) ->
         authorize(Req),
         Body = Req:recv_body(),
-        {struct, Modules} = mochijson2:decode(Body),
+        Modules = mochijson2:decode(Body),
         not is_list(Modules) andalso exit({expected_list}),
 
         {RespCode, Json} = lists:foldl(fun(Module, {Code, Acc}) ->
