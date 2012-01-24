@@ -32,7 +32,9 @@
 -export([reserve_token/0, cache/3, create/5, create/4,
          delete/1, delete/3, clear_all/1, lookup/1]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
+
 -compile({no_auto_import,[whereis/1]}).
 
 -type id() :: integer().
@@ -101,7 +103,8 @@ create(DrainId, Token, ChannelId, Host, Port) when is_integer(DrainId),
         [] ->
             case logplex_utils:resolve_host(Host) of
                 undefined ->
-                    io:format("~p at=create_drain result=invalid host=~s port=~p~n", [?MODULE, Host, Port]),
+                    ?INFO("at=create_drain result=invalid dest=~s",
+                          [logplex_logging:dest(Host, Port)]),
                     {error, invalid_drain};
                 _Ip ->
                     case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
@@ -124,7 +127,8 @@ create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
                 [] ->
                     case logplex_utils:resolve_host(Host) of
                         undefined ->
-                            io:format("~p at=create_drain result=invalid host=~s port=~p~n", [?MODULE, Host, Port]),
+                            ?INFO("at=create_drain result=invalid dest=~s",
+                                  [logplex_logging:dest(Host, Port)]),
                             {error, invalid_drain};
                         _Ip ->
                             case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
