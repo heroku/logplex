@@ -346,17 +346,9 @@ overflow_msg(N, When) ->
                             ).
 
 %% @private
-host_str({A,B,C,D}) ->
-    Quads = [integer_to_list(Quad) || Quad <- [A,B,C,D]],
-    string:join(Quads,".");
-host_str(H)
-  when is_list(H); is_binary(H) ->
-    H.
-
-%% @private
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
   when is_list(Rest) ->
-    [DrainId, ChannelId, io_lib:format("~s:~p", [host_str(H), P]) | Rest].
+    [DrainId, ChannelId, logplex_logging:dest(H,P) | Rest].
 
 -spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered',
                pos_integer(), #state{}) -> any().
