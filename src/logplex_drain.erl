@@ -101,7 +101,7 @@ create(DrainId, Token, ChannelId, Host, Port) when is_integer(DrainId),
         [] ->
             case logplex_utils:resolve_host(Host) of
                 undefined ->
-                    error_logger:error_msg("invalid drain: ~p:~p~n", [Host, Port]),
+                    io:format("~p at=create_drain result=invalid host=~s port=~p~n", [?MODULE, Host, Port]),
                     {error, invalid_drain};
                 _Ip ->
                     case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
@@ -124,7 +124,7 @@ create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
                 [] ->
                     case logplex_utils:resolve_host(Host) of
                         undefined ->
-                            error_logger:error_msg("invalid drain: ~p:~p~n", [Host, Port]),
+                            io:format("~p at=create_drain result=invalid host=~s port=~p~n", [?MODULE, Host, Port]),
                             {error, invalid_drain};
                         _Ip ->
                             case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
