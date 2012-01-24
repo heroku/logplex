@@ -63,7 +63,7 @@ urls() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    io:format("init ~p~n", [?MODULE]),
+    ?INFO("at=init", []),
     Urls = lookup_urls(),
 
     erlang:process_flag(trap_exit, true),
