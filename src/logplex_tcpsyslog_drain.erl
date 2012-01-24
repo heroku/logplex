@@ -314,7 +314,7 @@ post_buffer(#state{drain_tok = DrainTok,
                                  "err=gen_tcp data=~p",
                                  log_info(State, [Reason])),
                             reconnect(tcp_error,
-                                      tcp_bad(State#state{sock=undefined}))
+                                      tcp_bad(State))
                     end
             end;
         {{msg, Msg}, NewBuf} ->
@@ -328,7 +328,7 @@ post_buffer(#state{drain_tok = DrainTok,
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
                          "err=gen_tcp data=~p",
                          log_info(State, [Reason])),
-                    reconnect(tcp_error, tcp_bad(State#state{sock=undefined}))
+                    reconnect(tcp_error, tcp_bad(State))
             end
     end.
 
