@@ -116,7 +116,6 @@ handle_info({post, Msg}, State = #state{drain_tok = DrainTok,
         {error, Reason} ->
             msg_stat(drain_buffered, 1, State),
             NewBuf = logplex_drain_buffer:push(Msg, State#state.buf),
-            catch gen_tcp:close(S),
             NewState = tcp_bad(State#state{buf=NewBuf}),
             ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
                  log_info(NewState, [Reason])),
@@ -275,9 +274,12 @@ tcp_good(State = #state{}) ->
 
 %% @private
 %% Caller must ensure sock is closed before calling this.
-tcp_bad(State = #state{failures = F}) ->
-    State#state{failures = F + 1,
-                sock = undefined}.
+tcp_bad(State = #state{sock = S}) when is_port(S) ->
+    catch gen_tcp:close(S),
+    State#state{sock = undefined};
+tcp_bad(State = #state{sock = undefined,
+                       failures = F}) ->
+    State#state{failures = F + 1}.
 
 -spec time_failed(#state{}) -> iolist().
 %% @private
