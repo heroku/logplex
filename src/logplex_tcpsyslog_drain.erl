@@ -190,7 +190,7 @@ post(Msg, Sock, DrainTok) when is_tuple(Msg) ->
 
 %% @private
 connect(#state{sock = undefined, host=Host, port=Port})
-    when is_integer(Port) ->
+    when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
     HostS = case Host of
                 B when is_binary(B) -> binary_to_list(B);
@@ -208,7 +208,10 @@ connect(#state{sock = undefined, host=Host, port=Port})
                                  ,{send_timeout,
                                    timer:seconds(SendTimeoutS)}
                                  ,{send_timeout_close, true}
-                                 ]).
+                                 ]);
+connect(#state{}) ->
+    {error, bogus_port_number}.
+
 
 maybe_reconnect(State = #state{tref = undefined}) ->
     reconnect(idle, State);
