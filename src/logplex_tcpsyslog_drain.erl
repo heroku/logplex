@@ -139,6 +139,17 @@ handle_info({timeout, TRef, ?RECONNECT_MSG},
             {noreply, reconnect(tcp_error, NewState)}
     end;
 
+handle_info({timeout, OldRef, ?RECONNECT_MSG}, State = #state{tref = NewRef})
+  when OldRef =/= NewRef ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s at=reconnect "
+          "err=ignoring_old_timer data=\"~p\" current_timer=~p",
+          log_info(State, [OldRef,
+                           case NewRef of
+                               undefined -> not_set;
+                               _ -> set
+                           end])),
+    {noreply, State};
+
 handle_info({tcp_closed, S}, State = #state{sock = S}) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s at=close sock=~p",
           log_info(State, [S])),
