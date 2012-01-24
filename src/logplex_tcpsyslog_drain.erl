@@ -116,7 +116,8 @@ handle_info({post, Msg}, State = #state{drain_tok = DrainTok,
         {error, Reason} ->
             msg_stat(drain_buffered, 1, State),
             NewBuf = logplex_drain_buffer:push(Msg, State#state.buf),
-            NewState = State#state{buf=NewBuf},
+            catch gen_tcp:close(S),
+            NewState = tcp_bad(State#state{buf=NewBuf}),
             ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p",
                  log_info(NewState, [Reason])),
             {noreply, reconnect(tcp_error, NewState)}
