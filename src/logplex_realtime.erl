@@ -33,7 +33,8 @@
                 opts,
                 conn}).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 %% API functions
 start_link(Opts) ->
@@ -87,11 +88,12 @@ init([Opts]) ->
             {stop, Error}
     end.
 
-handle_call(_Msg, _From, State) ->
-    {reply, {error, invalid_call}, State}.
+handle_call(Msg, _From, State) ->
+    ?WARN("err=unexpected_call data=~p", [Msg]),
+    {noreply, State}.
 
-handle_cast(_Msg, State) ->
-    io:format("realtime: recv'd ~p~n", [_Msg]),
+handle_cast(Msg, State) ->
+    ?WARN("err=unexpected_cast data=~p", [Msg]),
     {noreply, State}.
 
 handle_info(flush, #state{instance_name=undefined}=State) ->
@@ -115,7 +117,8 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
     end),
     {noreply, State};
 
-handle_info(_Info, State) ->
+handle_info(Msg, State) ->
+    ?WARN("err=unexpected_info data=~p", [Msg]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->
