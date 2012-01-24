@@ -87,6 +87,24 @@ handlers() ->
         {200, <<"OK">>}
     end},
 
+    {['POST', "/load$"], fun(Req, _Match) ->
+        authorize(Req),
+        Body = Req:recv_body(),
+        {struct, Modules} = mochijson2:decode(Body),
+        not is_list(Modules) andalso exit({expected_list}),
+
+        {RespCode, Json} = lists:foldl(fun(Module, {Code, Acc}) ->
+            Module1 = binary_to_atom(Module, latin1),
+            case c:l(Module1) of
+                {module, _} when Code == 200 -> {200, Acc};
+                {module, _} -> {Code, Acc};
+                {error, Reason} -> {400, [{Module, atom_to_binary(Reason, latin1)}|Acc]}
+            end
+        end, {200, []}, Modules),
+
+        {RespCode, iolist_to_binary(mochijson2:encode(Json))}
+    end},
+
     {['POST', "/channels$"], fun(Req, _Match) ->
         authorize(Req),
         Body = Req:recv_body(),
