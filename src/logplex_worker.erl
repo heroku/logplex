@@ -51,8 +51,9 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
                 {match, [Token]} ->
                     ?MODULE:loop(NewState);
                 _ ->
-                    logplex_stats:incr(#logplex_stat{module=?MODULE,
-                                                     key=bogus_log_message}),
+                    K = #logplex_stat{module=?MODULE,
+                                      key=msg_drop_missing_token},
+                    logplex_stats:incr(K),
                     ?MODULE:loop(State)
             end
     end.
@@ -67,6 +68,9 @@ route(Token, Map, Interval, RawMsg)
             process_tails(ChannelId, CookedMsg),
             process_msg(ChannelId, BufferPid, CookedMsg);
         _ ->
+            K = #logplex_stat{module=?MODULE,
+                              key=msg_drop_unknown_token},
+            logplex_stats:incr(K),
             ok
     end.
 
