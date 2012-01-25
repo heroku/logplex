@@ -178,10 +178,8 @@ populate_info_table(Urls) ->
     {ok, Map2, Interval2} =
         redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
 
-    ets:insert(logplex_shard_info,
-               [{logplex_read_pool_map, {Map1, Interval1}},
-                {logplex_redis_buffer_map, {Map2, Interval2}}]),
-
+    logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
+    logplex_shard_info:save(logplex_redis_buffer_map, Map2, Interval2),
     ok.
 
 add_pools([], Acc) -> Acc;
@@ -222,7 +220,7 @@ handle_child_death(Pid) ->
     [ {Shard, {Url, Pid}} ] = shard_info(Pid, Map),
     NewPid = add_pool(Url),
     NewMap = dict:store(Shard, {Url, NewPid}, Map),
-    ets:insert(logplex_shard_info, {logplex_read_pool_map, {NewMap, V}}),
+    logplex_shard_info:save(logplex_read_pool_map, NewMap, V),
     ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
           [Pid, NewPid]),
     ok.
