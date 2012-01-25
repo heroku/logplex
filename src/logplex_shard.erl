@@ -147,6 +147,15 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
+code_change(v32, State, _Extra) ->
+    [begin
+         SI = logplex_shard_info:read(K),
+         {Map, Interval} = logplex_shard_info:map_interval(SI),
+         logplex_shard_info:save(K, Map, Interval)
+     end
+     || K <- [logplex_read_pool_map, logplex_redis_buffer_map]],
+    ?INFO("at=upgrade msg=\"read and redis buffer maps updated\"", []),
+    {ok, State};
 code_change(_OldVsn, State, trap_exits) ->
     process_flag(trap_exit, true),
     {ok, State};
