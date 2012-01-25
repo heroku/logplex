@@ -43,18 +43,17 @@ init(Parent) ->
 loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
     case catch logplex_queue:out(logplex_work_queue) of
         timeout ->
-            ok;
+            ?MODULE:loop(State);
         {'EXIT', _} ->
-            exit(normal);
+            normal;
         {1, [Msg]} ->
             case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
                 {match, [Token]} ->
-                    route(Token, Map, Interval, Msg);
+                    ?MODULE:loop(NewState);
                 _ ->
-                    ok
+                    ?MODULE:loop(State)
             end
-    end,
-    ?MODULE:loop(State).
+    end.
 
 route(Token, Map, Interval, RawMsg)
   when is_binary(Token), is_binary(RawMsg) ->
