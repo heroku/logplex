@@ -34,7 +34,13 @@
          terminate/2,
          code_change/3]).
 
--record(state, {sock, buffer = <<>>}).
+-record(state, {sock :: 'undefined' | port(),
+                buffer = syslog_parser:new(),
+                peername :: 'undefined' | {inet:ip4_address(),
+                                           inet:port_number()}
+               }).
+
+-include("logplex_logging.hrl").
 
 %%====================================================================
 %% API functions
@@ -49,24 +55,39 @@ set_socket(Pid, CSock) ->
 %% gen_server callbacks
 %%====================================================================
 init([]) ->
-    {ok, #state{buffer=syslog_parser:new()}}.
+    {ok, #state{}}.
 
-handle_call(_Request, _From, State) ->
-    {reply, ignore, State}.
-
-handle_cast({set_socket, CSock}, State) ->
-    inet:setopts(CSock, [{active, once}]),
-    {noreply, State#state{sock=CSock}};
-
-handle_cast(_Msg, State) ->
+handle_call(Msg, _From, State) ->
+    ?WARN("err=unexpected_call data=~p", [Msg]),
     {noreply, State}.
 
-handle_info({tcp, Sock, Packet}, #state{sock=Sock, buffer=Buffer}=State) ->
+handle_cast({set_socket, CSock}, State) ->
+    case inet:peername(CSock) of
+        {ok, PeerName = {PHost, PPort}} ->
+            {ok, {Host, Port}} = inet:sockname(CSock),
+            ?INFO("at=new_connection peer=~s local=~s",
+                  [logplex_logging:dest(PHost, PPort),
+                   logplex_logging:dest(Host, Port)]),
+            inet:setopts(CSock, [{active, once}]),
+            {noreply, State#state{sock=CSock,
+                                  peername=PeerName}};
+        {error, Reason} ->
+            ?INFO("at=new_connection err=\"~p\"",
+                  [Reason]),
+            {stop, normal, State}
+    end;
+
+handle_cast(Msg, State) ->
+    ?WARN("err=unexpected_cast data=~p", [Msg]),
+    {noreply, State}.
+
+handle_info({tcp, Sock, Packet},
+            #state{sock=Sock, buffer=Buffer}=State) ->
     {Result, Msgs, NewBuf} = syslog_parser:push(Packet, Buffer),
     case Result of
         ok -> ok;
         {error, Err} ->
-            io:format("[~p] event=parse_error, txt=\"~p\"",
+            ?INFO("[~p] event=parse_error, txt=\"~p\"",
                       [?MODULE, Err]),
             ok
     end,
@@ -74,13 +95,18 @@ handle_info({tcp, Sock, Packet}, #state{sock=Sock, buffer=Buffer}=State) ->
     inet:setopts(Sock, [{active, once}]),
     {noreply, State#state{buffer=NewBuf}};
 
-handle_info({tcp_closed, _}, State) ->
+handle_info({tcp_closed, Sock}, State = #state{sock = Sock}) ->
     {stop, normal, State};
 
-handle_info({tcp_error, _ ,_}, State) ->
+handle_info({tcp_error, Sock, Reason},
+            State = #state{sock = Sock,
+                           peername = {H,P}}) ->
+    ?WARN("err=gen_tcp peer=~s data=~p",
+          [loglex_logging:dest(H,P), Reason]),
     {stop, normal, State};
 
-handle_info(_Info, State) ->
+handle_info(Msg, State) ->
+    ?WARN("err=unexpected_cast data=~p", [Msg]),
     {noreply, State}.
 
 terminate(shutdown, _State) ->
@@ -100,6 +126,6 @@ process_msg({msg, Msg}) ->
     logplex_realtime:incr(message_received),
     logplex_queue:in(logplex_work_queue, Msg);
 process_msg({malformed, Msg}) ->
-    io:format("[~p] malformed_syslog_message=\"~p\"~n",
-              [?MODULE, Msg]),
+    ?WARN("err=malformed_syslog_message data=\"~p\"~n",
+          [Msg]),
     logplex_stats:incr(message_received_malformed).
