@@ -168,18 +168,22 @@ lookup_urls() ->
     end.
 
 populate_info_table(Urls) ->
+    %% Populate Read pool
     Pools = add_pools(Urls, []),
     {ok, Map1, Interval1} =
         redis_shard:generate_map_and_interval(lists:sort(Pools)),
+    logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
 
-    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid}
-                    || {_Id, Pid, worker, _Modules}
-                           <- supervisor:which_children(logplex_redis_buffer_sup)],
+    %% Populate write pool
+    RedisBuffers =
+        [{logplex_queue:get(Pid, redis_url), Pid}
+         || {_Id, Pid, worker, _Modules}
+                <- supervisor:which_children(logplex_redis_buffer_sup)],
     {ok, Map2, Interval2} =
         redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
 
-    logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
     logplex_shard_info:save(logplex_redis_buffer_map, Map2, Interval2),
+
     ok.
 
 add_pools([], Acc) -> Acc;
