@@ -23,7 +23,8 @@
 -module(logplex_api).
 -export([loop/1, start_link/0, stop/0]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 -define(HDR, [{"Content-Type", "text/html"}]).
 
@@ -43,7 +44,7 @@ start_link() ->
     ],
 
     wait_for_nsync(),
-    io:format("START API~n"),
+    ?INFO("at=start", []),
     mochiweb_http:start(Opts).
 
 stop() ->
@@ -59,15 +60,20 @@ loop(Req) ->
     try
         {Code, Body} = serve(handlers(), Method, Path, Req),
         Time = timer:now_diff(os:timestamp(), Start) div 1000,
-        io:format("logplex_api channel_id=~s method=~p path=~s resp_code=~w time=~w body=~s~n", [ChannelId, Method, Path, Code, Time, Body]),
+        ?INFO("at=request channel_id=~s method=~p path=~s"
+              " resp_code=~w time=~w body=~s",
+              [ChannelId, Method, Path, Code, Time, Body]),
         Req:respond({Code, ?HDR, Body}),
         exit(normal)
-    catch 
+    catch
         exit:normal ->
             exit(normal);
         Class:Exception ->
-            Time1 = timer:now_diff(now(), Start) div 1000,
-            io:format("logplex_api channel_id=~s method=~p path=~s time=~w exception=~1000p:~1000p~n", [ChannelId, Method, Path, Time1, Class, Exception]),
+            Time1 = timer:now_diff(os:timestamp(), Start) div 1000,
+            ?ERR("channel_id=~s method=~p path=~s "
+                 "time=~w exception=~1000p:~1000p stack=~1000p",
+                 [ChannelId, Method, Path, Time1, Class, Exception,
+                  erlang:get_stacktrace()]),
             Req:respond({500, ?HDR, ""}),
             exit(normal)
     end.
@@ -146,12 +152,12 @@ handlers() ->
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
-        A = now(),
+        A = os:timestamp(),
         Token = logplex_token:create(list_to_integer(ChannelId), TokenName),
-        B = now(),
+        B = os:timestamp(),
         not is_binary(Token) andalso exit({expected_binary, Token}),
 
-        io:format("create_token name=~s channel_id=~s time=~w~n",
+        ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
             [TokenName, ChannelId, timer:now_diff(B,A) div 1000]),
 
         {201, Token}
