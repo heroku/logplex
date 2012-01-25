@@ -33,13 +33,15 @@
          ,config/2
         ]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    ?INFO("at=start", []),
     set_cookie(),
     read_git_branch(),
     read_availability_zone(),
@@ -51,7 +53,7 @@ start(_StartType, _StartArgs) ->
     logplex_sup:start_link().
 
 stop(_State) ->
-    io:format("stopping...~n"),
+    ?INFO("at=stop", []),
     ok.
 
 set_cookie() ->
