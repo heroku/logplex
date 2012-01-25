@@ -215,8 +215,8 @@ redis_buffer_args(Url) ->
      ])}].
 
 handle_child_death(Pid) ->
-    [{logplex_read_pool_map, {Map, V}}]
-        = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+    {Map, V, _TS}
+        = logplex_shard_info:read(logplex_read_pool_map),
     [ {Shard, {Url, Pid}} ] = shard_info(Pid, Map),
     NewPid = add_pool(Url),
     NewMap = dict:store(Shard, {Url, NewPid}, Map),
@@ -231,8 +231,8 @@ shard_info(Pid, Map) ->
         OldPid =:= Pid].
 
 consistent(URLs) ->
-    [{logplex_read_pool_map, {Map, _V}}]
-        = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+    {Map, _V, _TS}
+        = logplex_shard_info:read(logplex_read_pool_map),
     FlatMap = [{S, U, P} || {S, {U, P}} <- dict:to_list(Map)],
     true = length(URLs) =:= length(FlatMap),
     Correct = [true || {_S,U,P} <- FlatMap,
