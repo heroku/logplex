@@ -45,7 +45,9 @@ workers() ->
 incr(Key) ->
     incr(Key, 1).
 
--spec incr(#drain_stat{} | #channel_stat{} | list() | atom(), integer()) -> any().
+-spec incr(#drain_stat{} | #channel_stat{} | #logplex_stat{} |
+           list() | atom(),
+           integer()) -> any().
 incr(Key, Incr) when is_integer(Incr) ->
     try ets:update_counter(?MODULE, Key, Incr)
     catch error:badarg ->
@@ -160,6 +162,10 @@ log_stat(UnixTS, #drain_stat{drain_id=DrainId, channel_id=ChannelId, key=Key}, V
 log_stat(UnixTS, #channel_stat{channel_id=ChannelId, key=Key}, Val) ->
     io:format("logplex_stats ts=~p channel_id=~p ~p=~p~n",
         [UnixTS, ChannelId, Key, Val]);
+
+log_stat(UnixTS, #logplex_stat{module=Mod, key=K}, Val) ->
+    io:format("logplex_stats ts=~p system module=~p ~p=~p~n",
+        [UnixTS, Mod, K, Val]);
 
 log_stat(UnixTS, Key, Val) when is_atom(Key); is_list(Key) ->
     io:format("logplex_stats ts=~p ~p=~p~n", [UnixTS, Key, Val]).
