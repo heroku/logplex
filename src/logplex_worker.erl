@@ -23,7 +23,8 @@
 -module(logplex_worker).
 -export([start_link/1, init/1, loop/1]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 -record(state, {regexp, map, interval}).
 
@@ -32,7 +33,7 @@ start_link(_QueuePid) ->
     proc_lib:start_link(?MODULE, init, [self()], 5000).
 
 init(Parent) ->
-    io:format("init ~p~n", [?MODULE]),
+    ?INFO("at=init parent=~p", [Parent]),
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
     RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid}
                     || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
