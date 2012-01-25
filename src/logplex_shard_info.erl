@@ -1,7 +1,7 @@
 %% @copyright Geoff Cant
 %% @author Geoff Cant <nem@erlang.geek.nz>
 %% @version {@vsn}, {@date} {@time}
-%% @doc 
+%% @doc Access functions for reading and caching logplex redis shard info
 %% @end
 -module(logplex_shard_info).
 
@@ -31,6 +31,9 @@ read(Key) ->
     case ets:lookup(?TABLE, Key) of
         [{Key, Map, Interval, TS}] ->
             {Map, Interval, TS};
+        [{Key, {Map, Interval}}] ->
+            %% XXX Legacy read -- phase this out post v33.
+            {Map, Interval, os:timestamp()};
         [] ->
             no_such_key
     end.
@@ -49,15 +52,15 @@ ts({_Map, _Interval, TS}) -> TS.
 
 -spec info_outdated(key(), erlang:timestamp()) ->
                            'up_to_date' |
-                           'out_of_date' |
-                           'no_such_key'.
+                           'out_of_date'.
 info_outdated(Key, TS) ->
     try ets:lookup_element(?TABLE, Key, ?TS_POS) of
         TS -> up_to_date;
         _Newer -> out_of_date
     catch
         error:badarg ->
-            no_such_key
+            %% XXX - change to 'no_such_key' post v33
+            out_of_date
     end.
 
 -spec map_interval(shard_info()) -> {map(), interval()}.
