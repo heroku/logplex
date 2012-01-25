@@ -112,7 +112,8 @@ drain_match_expr(ChannelId) ->
     #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host='_', port='_', tcp='_'}.
 
 logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
-    [{logplex_read_pool_map, {Map, Interval}}] = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+
+    {Map, Interval, _TS} = logplex_shard_info:read(logplex_read_pool_map),
     Index = redis_shard:key_to_index(integer_to_list(ChannelId)),
     {_RedisUrl, Pool} = redis_shard:get_matching_pool(Index, Map, Interval),
     Cmd = [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))],
