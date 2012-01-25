@@ -51,6 +51,8 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
                 {match, [Token]} ->
                     ?MODULE:loop(NewState);
                 _ ->
+                    logplex_stats:incr(#logplex_stat{module=?MODULE,
+                                                     key=bogus_log_message}),
                     ?MODULE:loop(State)
             end
     end.
