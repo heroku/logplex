@@ -30,7 +30,8 @@
 -export([in/2, out/1, out/2, info/1, get/2, set_max_length/2, stop/1]).
 -export([register/2, all_workers/1]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 -record(state, {
     dropped_stat_key,
@@ -107,7 +108,7 @@ stop(NameOrPid) when is_atom(NameOrPid); is_pid(NameOrPid) ->
 init([Props]) ->
     Name = proplists:get_value(name, Props),
     Self = self(),
-    io:format("init logplex_queue ~p (~p)~n", [Name, Self]),
+    ?INFO("at=init name=~p", [Name]),
     State = #state{
         dropped_stat_key = build_stat_key(Name, "dropped"),
         length_stat_key = build_stat_key(Name, "length"),
@@ -286,7 +287,7 @@ enable_producer(#state{dict=Dict, length=Length, max_length=MaxLength, accepting
                 {ok, Fun} -> Fun(self(), start_accepting);
                 error -> ok
             end,
-            io:format("logplex_queue accepting=true num_dropped=~w key=~p queue=~p~n", [NumDropped, Key, which_queue()]),
+            ?INFO("at=enable_producer accepting=true num_dropped=~w key=~p queue=~p~n", [NumDropped, Key, which_queue()]),
             State#state{accepting=true, num_dropped=0};
         false ->
             State
