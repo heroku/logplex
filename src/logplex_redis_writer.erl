@@ -23,15 +23,16 @@
 -module(logplex_redis_writer).
 -export([start_link/2, init/3, loop/3]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 %% API functions
 start_link(BufferPid, RedisOpts) ->
-    io:format("logplex_redis_writer start_link ~p~n", [RedisOpts]),
+    ?INFO("at=start_link redis_opts=~p~n", [RedisOpts]),
     proc_lib:start_link(?MODULE, init, [self(), BufferPid, RedisOpts], 5000).
 
 init(Parent, BufferPid, RedisOpts) ->
-    io:format("init ~p~n", [?MODULE]),
+    ?INFO("at=init buffer_pid=~p parent=~p~n", [BufferPid, Parent]),
     logplex_queue:register(BufferPid, self()),
     case open_socket(RedisOpts) of
         {error, Err} ->
