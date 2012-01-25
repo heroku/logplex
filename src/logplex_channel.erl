@@ -32,7 +32,8 @@
 
 -compile({no_auto_import,[whereis/1]}).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 -type id() :: integer().
 -export_type([id/0]).
@@ -119,7 +120,8 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
     Cmd = [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))],
     case catch redo:cmd(Pool, Cmd) of
         {'EXIT', Err} ->
-            io:format("Error fetching logs channel_id=~w error=~100p~n", [ChannelId, Err]),
+            ?ERR("at=fetch_logs channel_id=~p err=\"~p\"",
+                 [ChannelId, Err]),
             [];
         Logs ->
             Logs
