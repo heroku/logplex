@@ -25,7 +25,8 @@
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
          empty_token/0, redis_opts/1, parse_redis_url/1, instance_name/0, heroku_domain/0]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
 
 rpc(Node, M, F, A) when is_atom(Node), is_atom(M), is_atom(F), is_list(A) ->
     case net_adm:ping(Node) of
