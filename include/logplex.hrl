@@ -10,6 +10,8 @@
 -record(drain_stat, {drain_id :: logplex_drain:id(),
                      channel_id :: logplex_channel:id(),
                      key :: atom()}).
+-record(logplex_stat, {module :: atom(),
+                       key :: atom()}).
 
 -define(HTTP_PORT, 8001).
 -define(TCP_PORT, 6001).

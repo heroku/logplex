@@ -168,20 +168,21 @@ lookup_urls() ->
     end.
 
 populate_info_table(Urls) ->
+    %% Populate Read pool
     Pools = add_pools(Urls, []),
     {ok, Map1, Interval1} =
         redis_shard:generate_map_and_interval(lists:sort(Pools)),
+    logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
 
-    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid}
-                    || {_Id, Pid, worker, _Modules}
-                           <- supervisor:which_children(logplex_redis_buffer_sup)],
+    %% Populate write pool
+    RedisBuffers =
+        [{logplex_queue:get(Pid, redis_url), Pid}
+         || {_Id, Pid, worker, _Modules}
+                <- supervisor:which_children(logplex_redis_buffer_sup)],
     {ok, Map2, Interval2} =
         redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
 
-    ets:delete_all_objects(logplex_shard_info),
-    ets:insert(logplex_shard_info,
-               [{logplex_read_pool_map, {Map1, Interval1}},
-                {logplex_redis_buffer_map, {Map2, Interval2}}]),
+    logplex_shard_info:save(logplex_redis_buffer_map, Map2, Interval2),
 
     ok.
 
@@ -218,12 +219,12 @@ redis_buffer_args(Url) ->
      ])}].
 
 handle_child_death(Pid) ->
-    [{logplex_read_pool_map, {Map, V}}]
-        = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+    {Map, V, _TS}
+        = logplex_shard_info:read(logplex_read_pool_map),
     [ {Shard, {Url, Pid}} ] = shard_info(Pid, Map),
     NewPid = add_pool(Url),
     NewMap = dict:store(Shard, {Url, NewPid}, Map),
-    ets:insert(logplex_shard_info, {logplex_read_pool_map, {NewMap, V}}),
+    logplex_shard_info:save(logplex_read_pool_map, NewMap, V),
     ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
           [Pid, NewPid]),
     ok.
@@ -234,8 +235,8 @@ shard_info(Pid, Map) ->
         OldPid =:= Pid].
 
 consistent(URLs) ->
-    [{logplex_read_pool_map, {Map, _V}}]
-        = ets:lookup(logplex_shard_info, logplex_read_pool_map),
+    {Map, _V, _TS}
+        = logplex_shard_info:read(logplex_read_pool_map),
     FlatMap = [{S, U, P} || {S, {U, P}} <- dict:to_list(Map)],
     true = length(URLs) =:= length(FlatMap),
     Correct = [true || {_S,U,P} <- FlatMap,
