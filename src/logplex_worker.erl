@@ -25,7 +25,10 @@
 
 -include_lib("logplex.hrl").
 
--record(state, {regexp, map, interval}).
+-record(state, {regexp,
+                shard_info :: logplex_shard_info:shard_info()}).
+
+-define(SI_KEY, logplex_redis_buffer_map).
 
 %% API functions
 start_link(_QueuePid) ->
@@ -34,13 +37,16 @@ start_link(_QueuePid) ->
 init(Parent) ->
     io:format("init ~p~n", [?MODULE]),
     {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
-    RedisBuffers = [{logplex_queue:get(Pid, redis_url), Pid}
-                    || {_Id, Pid, worker, _Modules} <- supervisor:which_children(logplex_redis_buffer_sup)],
-    {ok, Map, Interval} = redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
+    SInfo = logplex_shard_info:read(?SI_KEY),
     proc_lib:init_ack(Parent, {ok, self()}),
-    loop(#state{regexp=RE, map=Map, interval=Interval}).
+    loop(#state{regexp=RE, shard_info = SInfo}).
 
-loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
+%% Temporary code upgrade path.
+loop({state, RE, _Map, _Interval}) ->
+    SInfo = logplex_shard_info:read(logplex_redis_buffer_map),
+    loop(#state{regexp=RE, shard_info=SInfo});
+
+loop(#state{regexp=RE} = State) ->
     case catch logplex_queue:out(logplex_work_queue) of
         timeout ->
             ?MODULE:loop(State);
@@ -49,6 +55,8 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
         {1, [Msg]} ->
             case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
                 {match, [Token]} ->
+                    NewState = maybe_update_cache(State),
+                    route(Token, NewState, Msg),
                     ?MODULE:loop(NewState);
                 _ ->
                     K = #logplex_stat{module=?MODULE,
@@ -58,11 +66,20 @@ loop(#state{regexp=RE, map=Map, interval=Interval}=State) ->
             end
     end.
 
-route(Token, Map, Interval, RawMsg)
+maybe_update_cache(S = #state{shard_info = SI}) ->
+    NewSI = logplex_shard_info:cached_read(?SI_KEY, SI),
+    S#state{shard_info=NewSI}.
+
+map_interval(#state{shard_info=SI}) ->
+    logplex_shard_info:map_interval(SI).
+
+route(Token, State = #state{}, RawMsg)
   when is_binary(Token), is_binary(RawMsg) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName, drains=Drains} ->
-            BufferPid = logplex_shard:lookup(integer_to_list(ChannelId), Map, Interval),
+            {Map, Interval} = map_interval(State),
+            BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
+                                             Map, Interval),
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
             process_drains(ChannelId, Drains, CookedMsg),
             process_tails(ChannelId, CookedMsg),
@@ -82,5 +99,6 @@ process_tails(ChannelId, Msg) ->
     ok.
 
 process_msg(ChannelId, BufferPid, Msg) ->
-    logplex_queue:in(BufferPid, redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg)),
+    logplex_queue:in(BufferPid,
+                     redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg)),
     ok.
