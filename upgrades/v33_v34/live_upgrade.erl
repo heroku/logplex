@@ -5,7 +5,7 @@ ChildPids = fun (Sup) ->
 
 f(UpgradeNode).
 UpgradeNode = fun () ->
-  io:format(whereis(user), "at=upgrade_start~n", []),
+  io:format(whereis(user), "at=upgrade_start cur_vsn=33~n", []),
 
   Proxies = ChildPids(tcp_proxy_sup),
   lists:map(fun sys:suspend/1, Proxies),
@@ -22,6 +22,6 @@ UpgradeNode = fun () ->
   lists:map(fun sys:resume/1, Drains),
 
 
-  io:format(whereis(user), "at=upgrade_end~n", []),
+  io:format(whereis(user), "at=upgrade_end cur_vsn=34~n", []),
   length(Drains ++ Proxies)
 end.
