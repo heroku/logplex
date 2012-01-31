@@ -37,7 +37,8 @@
 -record(state, {sock :: 'undefined' | port(),
                 buffer = syslog_parser:new(),
                 peername :: 'undefined' | {inet:ip4_address(),
-                                           inet:port_number()}
+                                           inet:port_number()},
+                connect_time :: 'undefined' | erlang:timestamp()
                }).
 
 -include("logplex_logging.hrl").
@@ -70,7 +71,8 @@ handle_cast({set_socket, CSock}, State) ->
                    logplex_logging:dest(Host, Port)]),
             inet:setopts(CSock, [{active, once}]),
             {noreply, State#state{sock=CSock,
-                                  peername=PeerName}};
+                                  peername=PeerName,
+                                  connect_time=os:timestamp()}};
         {error, Reason} ->
             ?INFO("at=new_connection err=\"~p\"",
                   [Reason]),
@@ -95,14 +97,17 @@ handle_info({tcp, Sock, Packet},
     inet:setopts(Sock, [{active, once}]),
     {noreply, State#state{buffer=NewBuf}};
 
-handle_info({tcp_closed, Sock}, State = #state{sock = Sock}) ->
+handle_info({tcp_closed, Sock}, State = #state{sock = Sock,
+                                               peername={H,P}}) ->
+    ?INFO("at=close peer=~s duration=~p",
+          [logplex_logging:dest(H, P), duration(State)]),
     {stop, normal, State};
 
 handle_info({tcp_error, Sock, Reason},
             State = #state{sock = Sock,
                            peername = {H,P}}) ->
-    ?WARN("err=gen_tcp peer=~s data=~p",
-          [loglex_logging:dest(H,P), Reason]),
+    ?WARN("err=gen_tcp peer=~s data=~p duration=~p",
+          [loglex_logging:dest(H,P), Reason, duration(State)]),
     {stop, normal, State};
 
 handle_info(Msg, State) ->
@@ -114,6 +119,12 @@ terminate(shutdown, _State) ->
 
 terminate(_Reason, _State) ->
     ok.
+
+code_change(v33, {state, Sock, Buffer, PeerName}, _Extra) ->
+    %% Can't easily obtain a connection timestamp for an established connection.
+    {ok, #state{sock = Sock,
+                peername = PeerName,
+                buffer = Buffer}};
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -129,3 +140,9 @@ process_msg({malformed, Msg}) ->
     ?WARN("err=malformed_syslog_message data=\"~p\"~n",
           [Msg]),
     logplex_stats:incr(message_received_malformed).
+
+duration(#state{connect_time=undefined}) ->
+    undefined;
+duration(#state{connect_time=T0}) ->
+    US = timer:now_diff(os:timestamp(), T0),
+    US / 1000000.
