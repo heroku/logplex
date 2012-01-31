@@ -35,7 +35,8 @@
                 %% TCP failures since last_good_time
                 failures = 0 :: non_neg_integer(),
                 %% Reconnect timer reference
-                tref = undefined :: 'undefined' | reference()
+                tref = undefined :: 'undefined' | reference(),
+                connect_time :: 'undefined' | erlang:timestamp()
                }).
 
 -define(RECONNECT_MSG, reconnect).
@@ -182,6 +183,13 @@ terminate(_Reason, _State) ->
     ok.
 
 %% @private
+code_change(v33,
+            State, _Extra) when is_tuple(State) ->
+    {ok,
+     %% Nasty way to write it but we're appending one field (default
+     %% undefined) and there are lots of existing fields.
+     list_to_tuple(tuple_to_list(State) ++ [undefined])};
+
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
