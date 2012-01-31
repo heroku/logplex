@@ -115,12 +115,6 @@ terminate(shutdown, _State) ->
 terminate(_Reason, _State) ->
     ok.
 
-code_change(v32, {state, Sock, Buffer}, _Extra) ->
-    {ok, PeerName} = inet:peername(Sock),
-    {ok, #state{sock = Sock,
-                peername = PeerName,
-                buffer = Buffer}};
-
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
