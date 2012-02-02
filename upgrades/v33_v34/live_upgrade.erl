@@ -14,7 +14,7 @@ UpgradeNode = fun () ->
   lists:map(fun sys:resume/1, Proxies),
 
   Drains = [Pid ||
-               {Pid, tcp_syslog} <- gproc:lookup_local_properties(drain_type)],
+               {Pid, tcpsyslog} <- gproc:lookup_local_properties(drain_type)],
   lists:map(fun sys:suspend/1, Drains),
   l(logplex_tcpsyslog_drain),
   [ sys:change_code(P, logplex_tcpsyslog_drain,
