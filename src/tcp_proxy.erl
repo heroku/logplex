@@ -99,14 +99,14 @@ handle_info({tcp, Sock, Packet},
 
 handle_info({tcp_closed, Sock}, State = #state{sock = Sock,
                                                peername={H,P}}) ->
-    ?INFO("at=close peer=~s duration=~p",
+    ?INFO("at=close peer=~s duration=~s",
           [logplex_logging:dest(H, P), duration(State)]),
     {stop, normal, State};
 
 handle_info({tcp_error, Sock, Reason},
             State = #state{sock = Sock,
                            peername = {H,P}}) ->
-    ?WARN("err=gen_tcp peer=~s data=~p duration=~p",
+    ?WARN("err=gen_tcp peer=~s data=~p duration=~s",
           [loglex_logging:dest(H,P), Reason, duration(State)]),
     {stop, normal, State};
 
@@ -142,7 +142,7 @@ process_msg({malformed, Msg}) ->
     logplex_stats:incr(message_received_malformed).
 
 duration(#state{connect_time=undefined}) ->
-    undefined;
+    "undefined";
 duration(#state{connect_time=T0}) ->
     US = timer:now_diff(os:timestamp(), T0),
-    US / 1000000.
+    io_lib:format("~f", [US / 1000000]).

@@ -118,7 +118,7 @@ handle_info({post, Msg}, State = #state{drain_tok = DrainTok,
             msg_stat(drain_buffered, 1, State),
             NewBuf = logplex_drain_buffer:push(Msg, State#state.buf),
             NewState = tcp_bad(State#state{buf=NewBuf}),
-            ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p duration=~p",
+            ?ERR("drain_id=~p channel_id=~p dest=~s at=post err=gen_tcp data=~p duration=~s",
                  log_info(NewState, [Reason, duration(State)])),
             {noreply, reconnect(tcp_error, NewState)}
     end;
@@ -153,7 +153,7 @@ handle_info({timeout, OldRef, ?RECONNECT_MSG}, State = #state{tref = NewRef})
     {noreply, State};
 
 handle_info({tcp_closed, S}, State = #state{sock = S}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=close sock=~p duration=~p",
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=close sock=~p duration=~s",
           log_info(State, [S, duration(State)])),
     {noreply, reconnect(tcp_closed, State#state{sock=undefined})};
 
@@ -165,7 +165,7 @@ handle_info({tcp_closed, S}, State = #state{}) ->
 
 handle_info({tcp_error, S, Reason}, State = #state{sock = S}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s at=idle "
-         "err=gen_tcp data=~p sock=~p duration=~p",
+         "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [Reason, S, duration(State)])),
     {noreply, reconnect(tcp_error, State#state{sock=undefined})};
 
@@ -320,7 +320,7 @@ post_buffer(#state{drain_tok = DrainTok,
                             post_buffer(tcp_good(State#state{buf=NewBuf}));
                         {error, Reason} ->
                             ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
-                                 "err=gen_tcp data=~p duration=~p",
+                                 "err=gen_tcp data=~p duration=~s",
                                  log_info(State, [Reason, duration(State)])),
                             reconnect(tcp_error,
                                       tcp_bad(State))
@@ -335,7 +335,7 @@ post_buffer(#state{drain_tok = DrainTok,
                     %% Don't use NewBuf - we want to keep the old
                     %% buffer state so we don't drop the msg.
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
-                         "err=gen_tcp data=~p duration=~p",
+                         "err=gen_tcp data=~p duration=~s",
                          log_info(State, [Reason, duration(State)])),
                     reconnect(tcp_error, tcp_bad(State))
             end
@@ -367,8 +367,9 @@ msg_stat(Key, N,
                                    channel_id=ChannelId,
                                    key=Key}, N).
 
+-spec duration(#state{}) -> iolist().
 duration(#state{connect_time=undefined}) ->
-    undefined;
+    "undefined";
 duration(#state{connect_time=T0}) ->
     US = timer:now_diff(os:timestamp(), T0),
-    US / 1000000.
+    io_lib:format("~f", [US / 1000000]).
