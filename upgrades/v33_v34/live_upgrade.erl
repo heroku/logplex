@@ -6,6 +6,7 @@ ChildPids = fun (Sup) ->
 f(UpgradeNode).
 UpgradeNode = fun () ->
   io:format(whereis(user), "at=upgrade_start cur_vsn=33~n", []),
+  l(nsync_callback),
 
   Proxies = ChildPids(tcp_proxy_sup),
   lists:map(fun sys:suspend/1, Proxies),
