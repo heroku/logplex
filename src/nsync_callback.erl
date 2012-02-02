@@ -47,6 +47,7 @@ handle({load, _Key, _Val}) ->
 
 handle({load, eof}) ->
     populate_token_drain_data(ets:tab2list(drains)),
+    ?INFO("at=nsync_load_complete", []),
     error_logger:info_msg("NSYNC sync complete"),
     application:set_env(logplex, nsync_loaded, true),
     ok;
@@ -101,7 +102,6 @@ handle({cmd, _Cmd, [<<"staging.herokudev.com:stats", _/binary>>|_]}) ->
     ok;
 
 handle({cmd, _Cmd, _Args}) ->
-    ?ERR("cmd=~p args=~100p", [_Cmd, _Args]),
     ok;
 
 handle({error, closed}) ->
@@ -126,7 +126,7 @@ create_token(Id, Dict) ->
                  [create_token, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
             Ch = list_to_integer(binary_to_list(Val1)),
-            Name = dict_find(<<"name">>, Dict), 
+            Name = dict_find(<<"name">>, Dict),
             Token = #token{
                 id=Id,
                 channel_id=Ch,
