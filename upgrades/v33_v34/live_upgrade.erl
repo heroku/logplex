@@ -7,6 +7,10 @@ f(UpgradeNode).
 UpgradeNode = fun () ->
   io:format(whereis(user), "at=upgrade_start cur_vsn=33~n", []),
   l(nsync_callback),
+  l(logplex_worker),
+  %% Clean up bogus stats entries.
+  ets:select_delete(logplex_stats, 
+                    ets:fun2ms(fun ({{drain_stat, K, _, _}, 0}) when is_tuple(K) -> true end)),
 
   Proxies = ChildPids(tcp_proxy_sup),
   lists:map(fun sys:suspend/1, Proxies),
