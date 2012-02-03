@@ -185,11 +185,14 @@ terminate(_Reason, _State) ->
 
 %% @private
 code_change(v33,
-            State, _Extra) when is_tuple(State) ->
+            {state, ID, Tok, CID, Host, Port,
+             Sock, Buf, LGT, Failures, TREF},
+            _Extra) ->
     {ok,
-     %% Nasty way to write it but we're appending one field (default
-     %% undefined) and there are lots of existing fields.
-     list_to_tuple(tuple_to_list(State) ++ [undefined])};
+     #state{drain_id=ID, drain_tok=Tok,
+            channel_id=CID, host=Host, port=Port,
+            sock=Sock, buf=Buf, last_good_time=LGT,
+            failures=Failures, tref=TREF}};
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
