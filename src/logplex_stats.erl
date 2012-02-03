@@ -167,5 +167,9 @@ log_stat(UnixTS, #logplex_stat{module=Mod, key=K}, Val) ->
     io:format("logplex_stats ts=~p system module=~p ~p=~p~n",
         [UnixTS, Mod, K, Val]);
 
+log_stat(UnixTS, {Class, Key}, Val) ->
+    io:format("logplex_stats ts=~p freeform class=~p key=~p count=~p~n",
+        [UnixTS, Class, Key, Val]);
+
 log_stat(UnixTS, Key, Val) when is_atom(Key); is_list(Key) ->
     io:format("logplex_stats ts=~p ~p=~p~n", [UnixTS, Key, Val]).
