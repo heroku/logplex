@@ -89,6 +89,7 @@ route(Token, State = #state{}, RawMsg)
             K = #logplex_stat{module=?MODULE,
                               key=msg_drop_unknown_token},
             logplex_stats:incr(K),
+            logplex_stats:incr({unknown_token, Token}),
             ok
     end.
 
