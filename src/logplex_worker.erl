@@ -93,7 +93,8 @@ route(Token, State = #state{}, RawMsg)
     end.
 
 process_drains(ChannelID, Drains, Msg) ->
-    logplex_channel:post_msg({channel, ChannelID}, Msg, Drains).
+    logplex_channel:post_msg({channel, ChannelID}, Msg,
+                             lists:map(fun drain_id/1, Drains)).
 
 process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
@@ -103,3 +104,6 @@ process_msg(ChannelId, BufferPid, Msg) ->
     logplex_queue:in(BufferPid,
                      redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg)),
     ok.
+
+drain_id(#drain{id=ID}) -> ID;
+drain_id(ID) -> ID.
