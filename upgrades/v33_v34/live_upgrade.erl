@@ -14,14 +14,14 @@ UpgradeNode = fun () ->
                     ets:fun2ms(fun ({{drain_stat, K, _, _}, 0}) when is_tuple(K) -> true end)),
 
   Proxies = ChildPids(tcp_proxy_sup),
-  lists:map(fun sys:suspend/1, Proxies),
+  [ sys:suspend(P, timer:seconds(10)) || P <- Proxies, erlang:is_process_alive(P) ],
   l(tcp_proxy),
   [ sys:change_code(P, tcp_proxy, v33, undefined) || P <- Proxies, erlang:is_process_alive(P) ],
   lists:map(fun sys:resume/1, Proxies),
 
   Drains = [Pid ||
                {Pid, tcpsyslog} <- gproc:lookup_local_properties(drain_type)],
-  lists:map(fun sys:suspend/1, Drains),
+  [ sys:suspend(P, timer:seconds(10)) || P <- Drains, erlang:is_process_alive(P) ],
   l(logplex_tcpsyslog_drain),
   [ sys:change_code(P, logplex_tcpsyslog_drain,
                     v33, undefined) || P <- Drains, erlang:is_process_alive(P) ],
