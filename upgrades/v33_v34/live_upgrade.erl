@@ -1,6 +1,7 @@
 f(ChildPids).
 ChildPids = fun (Sup) ->
-              [ element(2, R) || R <- supervisor:which_children(Sup) ]
+              [ Pid || {_, Pid, _, _} <- supervisor:which_children(Sup),
+                       erlang:is_process_alive(Pid) ]
             end.
 
 f(UpgradeNode).
@@ -15,7 +16,7 @@ UpgradeNode = fun () ->
   Proxies = ChildPids(tcp_proxy_sup),
   lists:map(fun sys:suspend/1, Proxies),
   l(tcp_proxy),
-  [ sys:change_code(P, tcp_proxy, v33, undefined) || P <- Proxies ],
+  [ sys:change_code(P, tcp_proxy, v33, undefined) || P <- Proxies, erlang:is_process_alive(P) ],
   lists:map(fun sys:resume/1, Proxies),
 
   Drains = [Pid ||
@@ -23,7 +24,7 @@ UpgradeNode = fun () ->
   lists:map(fun sys:suspend/1, Drains),
   l(logplex_tcpsyslog_drain),
   [ sys:change_code(P, logplex_tcpsyslog_drain,
-                    v33, undefined) || P <- Drains ],
+                    v33, undefined) || P <- Drains, erlang:is_process_alive(P) ],
   lists:map(fun sys:resume/1, Drains),
 
 
