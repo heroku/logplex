@@ -186,8 +186,8 @@ populate_token_drain_data([Drain = #drain{} | Tail]) ->
             ?ERR("~p ~p ~p",
                  [populate_token_drain_data, undefined_tokens, Drain]);
         Tokens ->
-            Drain1 = Drain#drain{resolved_host=logplex_utils:resolve_host(Drain#drain.host)},
-            ets:insert(tokens, [Token#token{drains=[Drain1|Drains]} || #token{drains=Drains}=Token <- Tokens])
+            ets:insert(tokens, [Token#token{drains=[Drain|Drains]}
+                                || #token{drains=Drains}=Token <- Tokens])
     end,
     populate_token_drain_data(Tail);
 
