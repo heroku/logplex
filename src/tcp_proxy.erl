@@ -150,14 +150,22 @@ code_change(v33, {state, Sock, Buffer, PeerName}, _Extra) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+-spec process_msgs([{msg, binary()} |
+                    {malformed_msg, binary()}], #state{}) -> #state{}.
 process_msgs(Msgs, S = #state{cb=undefined}) when is_list(Msgs) ->
     lists:foreach(fun process_msg/1, Msgs),
     S;
 process_msgs(Msgs, S = #state{cb={Mod,ModState}}) ->
-    NewModState = lists:foldl(fun (Msg, MS) ->
-                                      {ok, MS1} = Mod:handle_message(Msg, MS),
-                                      MS1
-                              end,
+    Fold = fun ({msg, Msg}, MS) ->
+                   {ok, NewMS} = Mod:handle_message(Msg, MS),
+                   NewMS;
+               ({malformed, Msg}, MS) ->
+                   ?WARN("err=malformed_syslog_message data=\"~p\"~n",
+                         [Msg]),
+                   logplex_stats:incr(message_received_malformed),
+                   MS
+           end,
+    NewModState = lists:foldl(Fold,
                               ModState,
                               Msgs),
     S#state{cb={Mod,NewModState}}.
