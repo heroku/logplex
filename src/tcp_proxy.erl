@@ -42,6 +42,9 @@
                 cb :: 'undefined' | {Module::atom(), State::term()}
                }).
 
+-define(DEFAULT_MSG_CB,
+        {logplex_worker, logplex_worker:init_state()}).
+
 -include("logplex_logging.hrl").
 
 %%====================================================================
@@ -57,7 +60,7 @@ set_socket(Pid, CSock) ->
 %% gen_server callbacks
 %%====================================================================
 init([]) ->
-    {ok, #state{}}.
+    {ok, #state{cb=?DEFAULT_MSG_CB}}.
 
 handle_call(Msg, _From, State) ->
     ?WARN("err=unexpected_call data=~p", [Msg]),
@@ -136,7 +139,7 @@ code_change(v34,
                 buffer = Buffer,
                 peername = PeerName,
                 connect_time = ConnectTime,
-                cb = {logplex_worker, logplex_worker:init_state()}}};
+                cb = ?DEFAULT_MSG_CB}};
 
 code_change(v33, {state, Sock, Buffer, PeerName}, _Extra) ->
     %% Can't easily obtain a connection timestamp for an established connection.
