@@ -37,10 +37,14 @@ start_link(_QueuePid) ->
 
 init(Parent) ->
     ?INFO("at=init parent=~p", [Parent]),
-    {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
-    SInfo = logplex_shard_info:read(?SI_KEY),
+    State = init_state(),
     proc_lib:init_ack(Parent, {ok, self()}),
-    loop(#state{regexp=RE, shard_info = SInfo}).
+    loop(State).
+
+init_state() ->
+    SInfo = logplex_shard_info:read(?SI_KEY),
+    {ok, RE} = re:compile("^<\\d+>\\S+ \\S+ \\S+ (t[.]\\S+) "),
+    #state{regexp=RE, shard_info = SInfo}.
 
 %% Temporary code upgrade path.
 loop({state, RE, _Map, _Interval}) ->
