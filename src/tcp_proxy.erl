@@ -38,7 +38,8 @@
                 buffer = syslog_parser:new(),
                 peername :: 'undefined' | {inet:ip4_address(),
                                            inet:port_number()},
-                connect_time :: 'undefined' | erlang:timestamp()
+                connect_time :: 'undefined' | erlang:timestamp(),
+                cb :: 'undefined' | {Module::atom(), State::term()}
                }).
 
 -include("logplex_logging.hrl").
@@ -93,9 +94,16 @@ handle_info({tcp, Sock, Packet},
                       [?MODULE, Err]),
             ok
     end,
-    process_msgs(Msgs),
+    NewState = try process_msgs(Msgs, State) of
+                   S = #state{} -> S
+               catch
+                   Class:Ex ->
+                       ?WARN("at=process_msgs class=~p ex=~p "
+                             "msg_len=~p stack=~p",
+                             [Class, Ex, length(Msgs), erlang:get_stacktrace()])
+               end,
     inet:setopts(Sock, [{active, once}]),
-    {noreply, State#state{buffer=NewBuf}};
+    {noreply, NewState#state{buffer=NewBuf}};
 
 handle_info({tcp_closed, Sock}, State = #state{sock = Sock,
                                                peername={H,P}}) ->
@@ -120,6 +128,16 @@ terminate(shutdown, _State) ->
 terminate(_Reason, _State) ->
     ok.
 
+code_change(v34,
+            {state, Sock, Buffer, PeerName,
+             ConnectTime},
+            _Extra) ->
+    {ok, #state{sock = Sock,
+                buffer = Buffer,
+                peername = PeerName,
+                connect_time = ConnectTime,
+                cb = {logplex_worker, logplex_worker:init_state()}}};
+
 code_change(v33, {state, Sock, Buffer, PeerName}, _Extra) ->
     %% Can't easily obtain a connection timestamp for an established connection.
     {ok, #state{sock = Sock,
@@ -129,8 +147,17 @@ code_change(v33, {state, Sock, Buffer, PeerName}, _Extra) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-process_msgs(Msgs) when is_list(Msgs) ->
-    lists:foreach(fun process_msg/1, Msgs).
+process_msgs(Msgs, S = #state{cb=undefined}) when is_list(Msgs) ->
+    lists:foreach(fun process_msg/1, Msgs),
+    S;
+process_msgs(Msgs, S = #state{cb={Mod,ModState}}) ->
+    NewModState = lists:foldl(fun (Msg, MS) ->
+                                      {ok, MS1} = Mod:handle_message(Msg, MS),
+                                      MS1
+                              end,
+                              ModState,
+                              Msgs),
+    S#state{cb={Mod,NewModState}}.
 
 process_msg({msg, Msg}) ->
     logplex_stats:incr(message_received),
