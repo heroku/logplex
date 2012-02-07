@@ -51,24 +51,28 @@ loop({state, RE, _Map, _Interval}) ->
     SInfo = logplex_shard_info:read(logplex_redis_buffer_map),
     loop(#state{regexp=RE, shard_info=SInfo});
 
-loop(#state{regexp=RE} = State) ->
+loop(#state{} = State) ->
     case catch logplex_queue:out(logplex_work_queue) of
         timeout ->
             ?MODULE:loop(State);
         {'EXIT', _} ->
             normal;
         {1, [Msg]} ->
-            case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
-                {match, [Token]} ->
-                    NewState = maybe_update_cache(State),
-                    route(Token, NewState, Msg),
-                    ?MODULE:loop(NewState);
-                _ ->
-                    K = #logplex_stat{module=?MODULE,
-                                      key=msg_drop_missing_token},
-                    logplex_stats:incr(K),
-                    ?MODULE:loop(State)
-            end
+            {ok, NewState} = handle_message(Msg, State),
+            ?MODULE:loop(NewState)
+    end.
+
+handle_message(Msg, State = #state{regexp = RE}) ->
+    case re:run(Msg, RE, [{capture, all_but_first, binary}]) of
+        {match, [Token]} ->
+            NewState = maybe_update_cache(State),
+            route(Token, NewState, Msg),
+            {ok, NewState};
+        _ ->
+            K = #logplex_stat{module=?MODULE,
+                              key=msg_drop_missing_token},
+            logplex_stats:incr(K),
+            {ok, State}
     end.
 
 maybe_update_cache(S = #state{shard_info = SI}) ->
