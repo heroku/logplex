@@ -179,7 +179,7 @@ create_drain(Id, Dict) ->
 populate_token_drain_data([]) ->
     ok;
 
-populate_token_drain_data([Drain|Tail]) when is_record(Drain, drain) ->
+populate_token_drain_data([Drain = #drain{} | Tail]) ->
     T = logplex_utils:empty_token(),
     case ets:match_object(tokens, T#token{channel_id=Drain#drain.channel_id}) of
         [] ->
