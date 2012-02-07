@@ -157,6 +157,8 @@ process_msgs(Msgs, S = #state{cb=undefined}) when is_list(Msgs) ->
     S;
 process_msgs(Msgs, S = #state{cb={Mod,ModState}}) ->
     Fold = fun ({msg, Msg}, MS) ->
+                   logplex_stats:incr(message_received),
+                   logplex_realtime:incr(message_received),
                    {ok, NewMS} = Mod:handle_message(Msg, MS),
                    NewMS;
                ({malformed, Msg}, MS) ->
