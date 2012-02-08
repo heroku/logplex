@@ -51,8 +51,6 @@ init([]) ->
        ,{logplex_stats, {logplex_stats, start_link, []},
          permanent, 2000, worker, [logplex_stats]}
 
-       ,{logplex_token, {logplex_token, refresh_dns, []},
-         permanent, 2000, worker, [logplex_token]}
        ,{logplex_tail, {logplex_tail, start_link, []},
          permanent, 2000, worker, [logplex_tail]}
 
