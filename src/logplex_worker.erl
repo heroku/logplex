@@ -87,12 +87,12 @@ map_interval(#state{shard_info=SI}) ->
 route(Token, State = #state{}, RawMsg)
   when is_binary(Token), is_binary(RawMsg) ->
     case logplex_token:lookup(Token) of
-        #token{channel_id=ChannelId, name=TokenName, drains=Drains} ->
+        #token{channel_id=ChannelId, name=TokenName} ->
             {Map, Interval} = map_interval(State),
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
                                              Map, Interval),
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
-            process_drains(ChannelId, Drains, CookedMsg),
+            process_drains(ChannelId, CookedMsg),
             process_tails(ChannelId, CookedMsg),
             process_msg(ChannelId, BufferPid, CookedMsg);
         _ ->
@@ -102,9 +102,8 @@ route(Token, State = #state{}, RawMsg)
             ok
     end.
 
-process_drains(ChannelID, Drains, Msg) ->
-    logplex_channel:post_msg({channel, ChannelID}, Msg,
-                             lists:map(fun drain_id/1, Drains)).
+process_drains(ChannelID, Msg) ->
+    logplex_channel:post_msg({channel, ChannelID}, Msg).
 
 process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
@@ -114,6 +113,3 @@ process_msg(ChannelId, BufferPid, Msg) ->
     logplex_queue:in(BufferPid,
                      redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg)),
     ok.
-
-drain_id(#drain{id=ID}) -> ID;
-drain_id(ID) -> ID.
