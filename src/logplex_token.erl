@@ -22,7 +22,7 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_token).
 
--export([create/2, lookup/1, delete/1, refresh_dns/0, init/1, loop/0]).
+-export([create/2, lookup/1, delete/1]).
 
 -include_lib("logplex.hrl").
 
@@ -50,31 +50,6 @@ lookup(TokenId) when is_binary(TokenId) ->
         _ ->
             undefined
     end.
-
-refresh_dns() ->
-    proc_lib:start_link(?MODULE, init, [self()]).
-
-init(Parent) ->
-    proc_lib:init_ack(Parent, {ok, self()}),
-    loop().
-
-loop() ->
-    timer:sleep(60 * 1000),
-    refresh_tokens(ets:tab2list(tokens)),
-    loop().
-
-refresh_tokens([]) ->
-    ok;
-
-refresh_tokens([#token{drains=Drains}=Token|Tail]) ->
-    Drains1 = [begin
-        case logplex_utils:resolve_host(Host) of
-            undefined -> Drain;
-            Ip -> Drain#drain{resolved_host=Ip}
-        end
-    end || #drain{host=Host}=Drain <- Drains],
-    ets:insert(tokens, Token#token{drains=Drains1}),
-    refresh_tokens(Tail).
 
 new_token() ->
     new_token(10).
