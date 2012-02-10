@@ -2,7 +2,7 @@
 
 -record(msg, {time, source, ps, content}).
 -record(channel, {id}).
--record(token, {id, channel_id, name, drains=[]}).
+-record(token, {id, channel_id, name}).
 -record(drain, {id, channel_id, token, resolved_host, host, port, tcp=true}).
 -record(session, {id, body}).
 -record(channel_stat, {channel_id :: logplex_channel:id(),
