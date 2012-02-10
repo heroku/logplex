@@ -46,7 +46,6 @@ handle({load, _Key, _Val}) ->
     ok;
 
 handle({load, eof}) ->
-    populate_token_drain_data(ets:tab2list(drains)),
     ?INFO("at=nsync_load_complete", []),
     error_logger:info_msg("NSYNC sync complete"),
     application:set_env(logplex, nsync_loaded, true),
@@ -68,9 +67,8 @@ handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    Drain = create_drain(Id, Dict),
-    ?INFO("at=set type=drain id=~p", [Id]),
-    Drain#drain.host =/= undefined andalso populate_token_drain_data([Drain]);
+    _Drain = create_drain(Id, Dict),
+    ?INFO("at=set type=drain id=~p", [Id]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
@@ -86,7 +84,6 @@ handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     ?INFO("at=delete type=drain id=~p", [Id]),
     logplex_drain:stop(Id),
-    remove_token_drain_data(Id),
     ets:delete(drains, Id);
 
 handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
@@ -173,43 +170,6 @@ create_drain(Id, Dict) ->
                     },
                     ets:insert(drains, Drain),
                     Drain
-            end
-    end.
-
-populate_token_drain_data([]) ->
-    ok;
-
-populate_token_drain_data([Drain = #drain{} | Tail]) ->
-    T = logplex_utils:empty_token(),
-    case ets:match_object(tokens, T#token{channel_id=Drain#drain.channel_id}) of
-        [] ->
-            ?ERR("~p ~p ~p",
-                 [populate_token_drain_data, undefined_tokens, Drain]);
-        Tokens ->
-            ets:insert(tokens, [Token#token{drains=[Drain|Drains]}
-                                || #token{drains=Drains}=Token <- Tokens])
-    end,
-    populate_token_drain_data(Tail);
-
-populate_token_drain_data([_|Tail]) ->
-    populate_token_drain_data(Tail).
-
-remove_token_drain_data(DrainId) ->
-    case logplex_drain:lookup(DrainId) of
-        undefined ->
-            ?ERR("~p ~p ~p",
-                 [remove_token_drain_data, undefined_drain, DrainId]);
-        Drain ->
-            T = logplex_utils:empty_token(),
-            case ets:match_object(tokens, T#token{channel_id=Drain#drain.channel_id}) of
-                [] ->
-                    ?ERR("~p ~p ~p",
-                         [remove_token_drain_data, undefined_tokens, Drain]);
-                Tokens ->
-                    ets:insert(tokens, [begin
-                        Drains1 = lists:filter(fun(#drain{id=Id}) -> Id =/= DrainId end, Drains),
-                        Token#token{drains=Drains1} 
-                    end || #token{drains=Drains}=Token <- Tokens])
             end
     end.
 
