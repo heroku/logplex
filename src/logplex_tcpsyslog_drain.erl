@@ -221,17 +221,19 @@ connect(#state{sock = undefined, host=Host, port=Port})
                 T when is_tuple(T) -> T;
                 A when is_atom(A) -> A
             end,
-    gen_tcp:connect(HostS, Port, [binary
-                                 %% We don't expect data, but why not.
-                                 ,{active, true}
-                                 ,{exit_on_close, true}
-                                 ,{keepalive, true}
-                                 ,{packet, raw}
-                                 ,{reuseaddr, true}
-                                 ,{send_timeout,
-                                   timer:seconds(SendTimeoutS)}
-                                 ,{send_timeout_close, true}
-                                 ]);
+    Options = [binary
+               %% We don't expect data, but why not.
+               ,{active, true}
+               ,{exit_on_close, true}
+               ,{keepalive, true}
+               ,{packet, raw}
+               ,{reuseaddr, true}
+               ,{send_timeout,
+                 timer:seconds(SendTimeoutS)}
+               ,{send_timeout_close, true}
+              ],
+    gen_tcp:connect(HostS, Port, Options,
+                    SendTimeoutS);
 connect(#state{}) ->
     {error, bogus_port_number}.
 
