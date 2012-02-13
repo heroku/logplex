@@ -118,7 +118,7 @@ handle_info({tcp_error, Sock, Reason},
             State = #state{sock = Sock,
                            peername = {H,P}}) ->
     ?WARN("err=gen_tcp peer=~s data=~p duration=~s",
-          [loglex_logging:dest(H,P), Reason, duration(State)]),
+          [logplex_logging:dest(H,P), Reason, duration(State)]),
     {stop, normal, State};
 
 handle_info(Msg, State) ->

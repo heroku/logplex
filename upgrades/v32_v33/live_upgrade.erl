@@ -24,7 +24,7 @@ UpgradeNode = fun () ->
   
   %% logplex_shard_info stuff
   l(logplex_channel),
-  l(loglex_worker),
+  l(logplex_worker),
 
   Pid = whereis(logplex_shard),
 
