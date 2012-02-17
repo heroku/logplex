@@ -19,6 +19,7 @@
          ,new/1
          ,push/2
          ,push_ext/2
+         ,len/1
          ,pop/1
          ,to_list/1
          ]).
@@ -67,13 +68,16 @@ pop(Buf = #lpdb{loss_count = N,
      Buf#lpdb{loss_count = 0,
               loss_start = undefined}}.
 
-full(#lpdb{max_size = Max, messages = Q}) ->
-    case queue:len(Q) of
+full(Buf = #lpdb{max_size = Max}) ->
+    case len(Buf) of
         N when N >= Max ->
             full;
         N when N < Max ->
             have_space
     end.
+
+len(#lpdb{messages=Q}) ->
+    queue:len(Q).
 
 to_list(#lpdb{messages = Q}) ->
     queue:to_list(Q).
