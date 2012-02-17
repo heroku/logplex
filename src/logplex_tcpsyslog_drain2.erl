@@ -174,7 +174,7 @@ handle_info({tcp_closed, S}, StateName, State) ->
           log_info(State, [StateName, closed, S, duration(State)])),
     {next_state, disconnected, State};
 handle_info(Info, StateName, State) ->
-    StateName(Info, State).
+    ?MODULE:StateName(Info, State).
 
 %% @private
 terminate(_Reason, _StateName, _State) ->
