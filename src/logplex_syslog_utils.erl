@@ -21,7 +21,7 @@
                        Time::iolist(), Source::iolist(),
                        Process::iolist(), Msg::iolist()}.
 
--type datetime() :: 'now' | erlang:timestamp() | calendar:datetime().
+-type datetime() :: 'now' | erlang:timestamp() | calendar:datetime1970().
 
 -export_type([ syslog_msg/0, datetime/0 ]).
 
@@ -47,7 +47,7 @@ rfc5424(Facility, Severity, Time, Host, AppName, ProcID, MsgID, Msg) ->
 nvl(undefined) -> $-;
 nvl(Val) -> Val.
 
--spec overflow_msg(N::non_neg_integer(), datetime()) -> iolist().
+-spec overflow_msg(N::non_neg_integer(), datetime()) -> syslog_msg().
 overflow_msg(N, When) ->
     fmt(local5,
         warning,
