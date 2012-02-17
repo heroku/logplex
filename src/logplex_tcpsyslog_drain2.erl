@@ -378,8 +378,19 @@ buffer_to_pkts(Buf, BytesRemaining, DrainTok) when BytesRemaining > 0 ->
             SyslogMsg = logplex_syslog_utils:to_msg(MData, DrainTok),
             Data = logplex_syslog_utils:frame([SyslogMsg, $\n]),
             DataSize = iolist_size(Data),
-            {Rest, FinalBuf} = buffer_to_pkts(NewBuf,
-                                              BytesRemaining - DataSize,
-                                              DrainTok),
-            {[Data, Rest], FinalBuf}
+            case BytesRemaining - DataSize of
+                Remaining when Remaining > 0 ->
+                    {Rest, FinalBuf} = buffer_to_pkts(NewBuf,
+                                                      Remaining,
+                                                      DrainTok),
+                    {[Data, Rest], FinalBuf};
+                _ when DataSize > ?TARGET_SEND_SIZE ->
+                    %% We will exceed bytes remaining, but this
+                    %% message is a pig, so send it anyway.
+                    {Data, NewBuf};
+                _ ->
+                    %% Would have exceeded BytesRemaining, pretend we
+                    %% didn't pop it.
+                    {[], Buf}
+            end
     end.
