@@ -71,12 +71,8 @@ start(udpsyslog, DrainId, Args) ->
 
 
 stop(DrainId) ->
-    case whereis({drain, DrainId}) of
-        Pid when is_pid(Pid) ->
-            gen_server:cast(Pid, shutdown);
-        _ ->
-            not_running
-    end.
+    supervisor:terminate_child(logplex_drain_sup, DrainId),
+    supervisor:delete_child(logplex_drain_sup, DrainId).
 
 reserve_token() ->
     Token = new_token(),
