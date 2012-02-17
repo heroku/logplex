@@ -250,12 +250,12 @@ reconnect(State = #state{failures = F}) ->
 
 reconnect_in(Seconds, State = #state{}) ->
     Ref = erlang:start_timer(timer:seconds(Seconds), self(), ?RECONNECT_MSG),
-    (cancel_timer(State))#state{reconnect_tref = Ref}.
+    State#state{reconnect_tref = Ref}.
 
-cancel_timer(S = #state{reconnect_tref = undefined}) -> S;
-cancel_timer(S = #state{reconnect_tref = Ref}) when is_reference(Ref) ->
-    erlang:cancel_timer(Ref),
-    S#state{reconnect_tref = undefined}.
+%% cancel_timer(S = #state{reconnect_tref = undefined}) -> S;
+%% cancel_timer(S = #state{reconnect_tref = Ref}) when is_reference(Ref) ->
+%%     erlang:cancel_timer(Ref),
+%%     S#state{reconnect_tref = undefined}.
 
 %% @private
 tcp_good(State = #state{}) ->
@@ -264,9 +264,9 @@ tcp_good(State = #state{}) ->
 
 %% @private
 %% Caller must ensure sock is closed before calling this.
-tcp_bad(State = #state{sock = S}) when is_port(S) ->
-    catch gen_tcp:close(S),
-    State#state{sock = undefined};
+tcp_bad(State = #state{sock = Sock}) when is_port(Sock) ->
+    catch gen_tcp:close(Sock),
+    tcp_bad(State#state{sock = undefined});
 tcp_bad(State = #state{sock = undefined,
                        failures = F}) ->
     State#state{failures = F + 1}.
