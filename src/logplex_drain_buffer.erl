@@ -18,6 +18,7 @@
 -export([new/0
          ,new/1
          ,push/2
+         ,push_ext/2
          ,pop/1
          ,to_list/1
          ]).
@@ -35,11 +36,16 @@ new(Max) when is_integer(Max), Max > 0 ->
 
 -spec push(msg(), buf()) -> buf().
 push(Msg, Buf = #lpdb{}) ->
+    {_, NewBuf} = push_ext(Msg, Buf),
+    NewBuf.
+
+-spec push_ext(msg(), buf()) -> {'displace' | 'insert', buf()}.
+push_ext(Msg, Buf = #lpdb{}) ->
     case full(Buf) of
         full ->
-            displace(Msg, Buf);
+            {displace, displace(Msg, Buf)};
         have_space ->
-            insert(Msg, Buf)
+            {insert, insert(Msg, Buf)}
     end.
 
 -spec pop(buf()) -> {empty, buf()} |
