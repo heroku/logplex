@@ -70,18 +70,9 @@ init([]) ->
          {logplex_worker_sup, start_link,
           [logplex_reader_sup, logplex_reader]},
          permanent, 2000, worker, [logplex_reader_sup]}
-       ,{logplex_worker_sup,
-         {logplex_worker_sup, start_link,
-          [logplex_worker_sup, logplex_worker]},
-         permanent, 2000, worker, [logplex_worker_sup]}
 
        ,{logplex_shard, {logplex_shard, start_link, []},
          permanent, 2000, worker, [logplex_shard]}
-
-       ,{logplex_work_queue,
-         {logplex_queue, start_link,
-          [logplex_work_queue, logplex_app:logplex_work_queue_args()]},
-         permanent, 2000, worker, [logplex_work_queue]}
 
        ,{tcp_proxy_sup, {tcp_proxy_sup, start_link, []},
          permanent, 2000, worker, [tcp_proxy_sup]}
