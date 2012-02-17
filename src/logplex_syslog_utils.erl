@@ -16,7 +16,7 @@
          ,rfc5424/8
         ]).
 
--type syslog_msg() :: {0..128, 0..7,
+-type syslog_msg() :: {facility(), severity(),
                        Time::iolist(), Source::iolist(),
                        Process::iolist(), Msg::iolist()}.
 
