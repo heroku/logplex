@@ -326,7 +326,7 @@ buffer(Msg, State = #state{buf = Buf}) ->
     case Result of
         displace ->
             msg_stat(drain_dropped, 1, State);
-        have_space -> ok
+        insert -> ok
     end,
     State#state{buf=NewBuf}.
 
