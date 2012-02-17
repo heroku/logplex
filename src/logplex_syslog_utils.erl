@@ -14,13 +14,16 @@
          ,fmt/7
          ,rfc5424/1
          ,rfc5424/8
+         ,overflow_msg/2
         ]).
 
 -type syslog_msg() :: {facility(), severity(),
                        Time::iolist(), Source::iolist(),
                        Process::iolist(), Msg::iolist()}.
 
--export_type([ syslog_msg/0 ]).
+-type datetime() :: 'now' | erlang:timestamp() | calendar:datetime().
+
+-export_type([ syslog_msg/0, datetime/0 ]).
 
 -spec to_msg(syslog_msg(), iolist() | binary()) -> iolist().
 to_msg({Facility, Severity, Time, Source, Process, Msg}, Token) ->
@@ -43,6 +46,20 @@ rfc5424(Facility, Severity, Time, Host, AppName, ProcID, MsgID, Msg) ->
 
 nvl(undefined) -> $-;
 nvl(Val) -> Val.
+
+-spec overflow_msg(N::non_neg_integer(), datetime()) -> iolist().
+overflow_msg(N, When) ->
+    logplex_syslog_utils:fmt(local5,
+                             warning,
+                             now,
+                             "logplex",
+                             "logplex",
+                             "Logplex drain buffer overflowed."
+                             " ~p messages lost since ~s.",
+                             [N,
+                              datetime(When)]
+                            ).
+
 
 
 from_msg(Msg) when is_binary(Msg) ->
@@ -78,6 +95,7 @@ frame(Msg) when is_binary(Msg); is_list(Msg) ->
       " ",
       Msg ].
 
+-spec datetime(datetime()) -> iolist().
 datetime(now) ->
     datetime(os:timestamp());
 datetime({_,_,_} = Now) ->
