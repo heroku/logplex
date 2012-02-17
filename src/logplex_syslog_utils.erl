@@ -49,16 +49,15 @@ nvl(Val) -> Val.
 
 -spec overflow_msg(N::non_neg_integer(), datetime()) -> iolist().
 overflow_msg(N, When) ->
-    logplex_syslog_utils:fmt(local5,
-                             warning,
-                             now,
-                             "logplex",
-                             "logplex",
-                             "Logplex drain buffer overflowed."
-                             " ~p messages lost since ~s.",
-                             [N,
-                              datetime(When)]
-                            ).
+    fmt(local5,
+        warning,
+        now,
+        "logplex",
+        "logplex",
+        "Logplex drain buffer overflowed."
+        " ~p messages lost since ~s.",
+        [N,
+         datetime(When)]).
 
 
 
