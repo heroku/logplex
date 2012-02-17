@@ -70,19 +70,11 @@ init([]) ->
          {logplex_worker_sup, start_link,
           [logplex_reader_sup, logplex_reader]},
          permanent, 2000, worker, [logplex_reader_sup]}
-       ,{logplex_worker_sup,
-         {logplex_worker_sup, start_link,
-          [logplex_worker_sup, logplex_worker]},
-         permanent, 2000, worker, [logplex_worker_sup]}
 
        ,{logplex_shard, {logplex_shard, start_link, []},
          permanent, 2000, worker, [logplex_shard]}
 
-       ,{logplex_work_queue,
-         {logplex_queue, start_link,
-          [logplex_work_queue, logplex_app:logplex_work_queue_args()]},
-         permanent, 2000, worker, [logplex_work_queue]}
-
+       %% Supervisor for tcp_proxy processes spawned by the tcp_acceptor
        ,{tcp_proxy_sup, {tcp_proxy_sup, start_link, []},
          permanent, 2000, worker, [tcp_proxy_sup]}
 
@@ -92,6 +84,7 @@ init([]) ->
          {cowboy_listener_sup, start_link, http_handler:opts()},
          permanent, 2000, supervisor, [cowboy_listener_sup]}
 
+       %% Socket acceptor for TCP syslog processes
        ,{tcp_acceptor,
          {tcp_acceptor, start_link, [logplex_app:config(syslog_port)]},
          permanent, 2000, worker, [tcp_acceptor]}

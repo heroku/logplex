@@ -233,7 +233,7 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{send_timeout_close, true}
               ],
     gen_tcp:connect(HostS, Port, Options,
-                    SendTimeoutS);
+                    timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.
 
