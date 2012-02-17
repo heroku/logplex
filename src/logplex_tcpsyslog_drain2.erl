@@ -134,11 +134,12 @@ ready_to_send(Msg, State) ->
 sending({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State)};
 sending({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
-    %% XXX - RTS Transition!
-    {next_state, ready_to_send, S};
-sending({inet_reply, Sock, {error, _Reason}}, S = #state{sock = Sock}) ->
-    %% XXX - Reconnect!
-    {next_state, disconnected, S};
+    send(S);
+sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
+    ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
+         "err=gen_tcp data=~p sock=~p duration=~s",
+          log_info(S, [sending, Reason, Sock, duration(S)])),
+    {next_state, disconnected, reconnect(tcp_bad(S))};
 sending(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
           log_info(State, [Msg])),
