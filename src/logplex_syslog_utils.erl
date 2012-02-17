@@ -172,7 +172,8 @@ severities() ->
      ,{7, debug, "Debug: debug-level messages"}].
 
 -spec severity_to_int(severity()) -> 0..7.
-severity_to_int(I) when is_integer(I) ->
+severity_to_int(I) when is_integer(I),
+                        0 =< I, I =< 7 ->
     I;
 severity_to_int(A) when is_atom(A) ->
     element(1, lists:keyfind(A, 2, severities())).
