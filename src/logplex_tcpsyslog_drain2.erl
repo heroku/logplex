@@ -301,14 +301,6 @@ duration(#state{connect_time=T0}) ->
     US = timer:now_diff(os:timestamp(), T0),
     io_lib:format("~f", [US / 1000000]).
 
-
-%% @private
-%% @doc Send buffered messages.
-send(State = #state{sock = Sock}) ->
-    {Data, NewState} = buffer_to_pkts(State),
-    erlang:port_command(Sock, Data),
-    {next_state, sending, NewState}.
-
 %% -spec buffer_status(#state{}) -> 'empty' | 'has_messages_to_send'.
 %% %% @private
 %% buffer_status(State = #state{buf = Buf}) ->
@@ -348,6 +340,13 @@ register_with_gproc(#state{drain_id=DrainId,
 %%     gproc:munreg(p, l, [{channel, ChannelId},
 %%                         drain_dest,
 %%                         drain_type]).
+
+%% @private
+%% @doc Send buffered messages.
+send(State = #state{sock = Sock}) ->
+    {Data, NewState} = buffer_to_pkts(State),
+    erlang:port_command(Sock, Data, []),
+    {next_state, sending, NewState}.
 
 buffer_to_pkts(State = #state{buf = Buf, drain_tok = DrainTok}) ->
     {Data, NewBuf} = buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
