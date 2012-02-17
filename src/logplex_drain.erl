@@ -54,12 +54,18 @@ diagnose_drains(ChannelId, Drains) ->
      || Id <- Drains,
         not is_pid(whereis({drain, Id}))].
 
--spec start('tcpsyslog' | 'udpsyslog',
+-spec start('tcpsyslog' | 'tcpsyslog2' | 'udpsyslog',
             id(), list()) -> any().
 start(tcpsyslog, DrainId, Args) ->
     supervisor:start_child(logplex_drain_sup,
                            {DrainId,
                             {logplex_tcpsyslog_drain, start_link, Args},
+                            transient, brutal_kill, worker,
+                            [logplex_tcpsyslog_drain]});
+start(tcpsyslog2, DrainId, Args) ->
+    supervisor:start_child(logplex_drain_sup,
+                           {DrainId,
+                            {logplex_tcpsyslog_drain2, start_link, Args},
                             transient, brutal_kill, worker,
                             [logplex_tcpsyslog_drain]});
 start(udpsyslog, DrainId, Args) ->
