@@ -132,7 +132,7 @@ ready_to_send(Msg, State) ->
 %% the send operation.
 sending({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State)};
-sending({inet_reply, S, ok}, S = #state{sock = S}) ->
+sending({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
     %% XXX - RTS Transition!
     {next_state, ready_to_send, S};
 sending({inet_reply, Sock, {error, _Reason}}, S = #state{sock = Sock}) ->
