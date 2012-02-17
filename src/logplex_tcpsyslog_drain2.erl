@@ -10,6 +10,7 @@
 -behaviour(gen_fsm).
 -define(SERVER, ?MODULE).
 -define(RECONNECT_MSG, reconnect).
+-define(TARGET_SEND_SIZE, 4096).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -301,14 +302,12 @@ duration(#state{connect_time=T0}) ->
     io_lib:format("~f", [US / 1000000]).
 
 
-%% to_syslog_pkt(Msg, #state{drain_tok = DrainTok}) ->
-%%     SyslogMsg = logplex_syslog_utils:to_msg(Msg, DrainTok),
-%%     logplex_syslog_utils:frame([SyslogMsg, $\n]).
-
 %% @private
 %% @doc Send buffered messages.
-send(State) ->
-    {next_state, sending, State}.
+send(State = #state{sock = Sock}) ->
+    {Data, NewState} = buffer_to_pkts(State),
+    erlang:port_command(Sock, Data),
+    {next_state, sending, NewState}.
 
 %% -spec buffer_status(#state{}) -> 'empty' | 'has_messages_to_send'.
 %% %% @private
@@ -349,3 +348,38 @@ register_with_gproc(#state{drain_id=DrainId,
 %%     gproc:munreg(p, l, [{channel, ChannelId},
 %%                         drain_dest,
 %%                         drain_type]).
+
+buffer_to_pkts(State = #state{buf = Buf, drain_tok = DrainTok}) ->
+    {Data, NewBuf} = buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
+    {Data, State#state{buf = NewBuf}}.
+
+buffer_to_pkts(Buf, BytesRemaining, DrainTok) when BytesRemaining > 0 ->
+    {Item, NewBuf} = logplex_drain_buffer:pop(Buf),
+    Msg = case Item of
+              empty ->
+                  finished;
+              {loss_indication, N, When} ->
+                  case logplex_app:config(tcp_syslog_send_loss_msg) of
+                      dont_send ->
+                          skip;
+                      _ ->
+                          {msg,
+                           logplex_syslog_utils:overflow_msg(N, When)}
+                  end;
+              {msg, M} ->
+                  {msg, M}
+          end,
+    case Msg of
+        finished ->
+            {[], NewBuf};
+        skip ->
+            buffer_to_pkts(NewBuf, BytesRemaining, DrainTok);
+        {msg, MData} ->
+            SyslogMsg = logplex_syslog_utils:to_msg(MData, DrainTok),
+            Data = logplex_syslog_utils:frame([SyslogMsg, $\n]),
+            DataSize = iolist_size(Data),
+            {Rest, FinalBuf} = buffer_to_pkts(NewBuf,
+                                              BytesRemaining - DataSize,
+                                              DrainTok),
+            {[Data, Rest], FinalBuf}
+    end.
