@@ -40,7 +40,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/0]).
+-export([start_link/5]).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
@@ -58,8 +58,14 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link() ->
-    gen_fsm:start_link(?MODULE, [], []).
+start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
+    gen_fsm:start_link(?MODULE,
+                       [#state{drain_id=DrainID,
+                               drain_tok=DrainTok,
+                               channel_id=ChannelID,
+                               host=Host,
+                               port=Port}],
+                       []).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
