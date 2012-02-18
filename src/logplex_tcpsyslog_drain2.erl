@@ -212,9 +212,6 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{keepalive, true}
                ,{packet, raw}
                ,{reuseaddr, true}
-               ,{send_timeout,
-                 timer:seconds(SendTimeoutS)}
-               ,{send_timeout_close, true}
               ],
     gen_tcp:connect(HostS, Port, Options,
                     timer:seconds(SendTimeoutS));
@@ -349,14 +346,16 @@ register_with_gproc(#state{drain_id=DrainId,
 
 %% @private
 %% @doc Send buffered messages.
-send(State = #state{sock = Sock}) ->
-    {Data, NewState} = buffer_to_pkts(State),
-    erlang:port_command(Sock, Data, []),
-    {next_state, sending, NewState}.
-
-buffer_to_pkts(State = #state{buf = Buf, drain_tok = DrainTok}) ->
-    {Data, NewBuf} = buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
-    {Data, State#state{buf = NewBuf}}.
+send(State = #state{buf = Buf, sock = Sock,
+                    drain_tok = DrainTok}) ->
+    case logplex_drain_buffer:empty(Buf) of
+        empty ->
+            {next_state, ready_to_send, State};
+        not_empty ->
+            {Data, NewBuf} = buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
+            erlang:port_command(Sock, Data, []),
+            {next_state, sending, State#state{buf = NewBuf}}
+    end.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok) when BytesRemaining > 0 ->
     {Item, NewBuf} = logplex_drain_buffer:pop(Buf),
