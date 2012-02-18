@@ -20,6 +20,7 @@
          ,push/2
          ,push_ext/2
          ,len/1
+         ,empty/1
          ,pop/1
          ,to_list/1
          ]).
@@ -74,6 +75,12 @@ full(Buf = #lpdb{max_size = Max}) ->
             full;
         N when N < Max ->
             have_space
+    end.
+
+empty(Buf = #lpdb{}) ->
+    case len(Buf) of
+        0 -> empty;
+        _ -> not_empty
     end.
 
 len(#lpdb{messages=Q}) ->
