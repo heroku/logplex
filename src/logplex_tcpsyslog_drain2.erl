@@ -97,10 +97,11 @@ disconnected({timeout, TRef, ?RECONNECT_MSG},
             ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p sock=~p",
                   log_info(State, [State#state.failures + 1, Sock])),
             NewState = tcp_good(State#state{sock=Sock,
+                                            reconnect_tref = undefined,
                                             connect_time=os:timestamp()}),
             send(NewState);
         {error, Reason} ->
-            NewState = tcp_bad(State),
+            NewState = tcp_bad(State#state{reconnect_tref = undefined}),
             ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
                  "err=gen_tcp data=~p try=~p last_success=~s",
                  log_info(State, [Reason, NewState#state.failures,
@@ -242,7 +243,7 @@ reconnect(State = #state{failures = 0, last_good_time=T})
     SecsSinceConnect = timer:now_diff(os:timestamp(), T) div 1000000,
     case SecsSinceConnect of
         TooFew when TooFew < Min ->
-            reconnect_in(Min, State);
+            reconnect_in(timer:seconds(Min), State);
         _EnoughTime ->
             reconnect_in(1, State)
     end;
@@ -252,10 +253,10 @@ reconnect(State = #state{failures = F}) ->
                   MaxExp when F > MaxExp -> Max;
                   _ -> 1 bsl F
               end,
-    reconnect_in(BackOff, State).
+    reconnect_in(timer:seconds(BackOff), State).
 
-reconnect_in(Seconds, State = #state{}) ->
-    Ref = erlang:start_timer(timer:seconds(Seconds), self(), ?RECONNECT_MSG),
+reconnect_in(MS, State = #state{}) ->
+    Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
     State#state{reconnect_tref = Ref}.
 
 %% cancel_timer(S = #state{reconnect_tref = undefined}) -> S;
