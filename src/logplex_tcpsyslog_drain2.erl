@@ -94,7 +94,8 @@ disconnected({timeout, TRef, ?RECONNECT_MSG},
              State = #state{reconnect_tref = TRef, sock = undefined}) ->
     case connect(State) of
         {ok, Sock} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p sock=~p",
+            ?INFO("drain_id=~p channel_id=~p dest=~s "
+                  "state=disconnected at=connect try=~p sock=~p",
                   log_info(State, [State#state.failures + 1, Sock])),
             NewState = tcp_good(State#state{sock=Sock,
                                             reconnect_tref = undefined,
@@ -103,7 +104,8 @@ disconnected({timeout, TRef, ?RECONNECT_MSG},
         {error, Reason} ->
             NewState = tcp_bad(State#state{reconnect_tref = undefined}),
             ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
-                 "err=gen_tcp data=~p try=~p last_success=~s",
+                 "err=gen_tcp data=~p try=~p last_success=~s "
+                 "state=disconnected",
                  log_info(State, [Reason, NewState#state.failures,
                                   time_failed(NewState)])),
             {next_state, disconnected, reconnect(NewState)}
@@ -112,7 +114,8 @@ disconnected({post, Msg}, State) ->
     {next_state, disconnected,
      reconnect(buffer(Msg, State))};
 disconnected(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+          "data=~p state=disconnected",
           log_info(State, [Msg])),
     {next_state, disconnected, State}.
 
@@ -124,7 +127,8 @@ ready_to_send({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
     %% Stale inet reply
     send(S);
 ready_to_send(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+          "data=~p state=ready_to_send",
           log_info(State, [Msg])),
     {next_state, disconnected, State}.
 
@@ -137,11 +141,12 @@ sending({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
     send(S);
 sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
-         "err=gen_tcp data=~p sock=~p duration=~s",
+         "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     {next_state, disconnected, reconnect(tcp_bad(S))};
 sending(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+          "data=~p state=sending",
           log_info(State, [Msg])),
     {next_state, disconnected, State}.
 
@@ -257,6 +262,9 @@ reconnect(State = #state{failures = F}) ->
 
 reconnect_in(MS, State = #state{}) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=reconnect_delay delay=~p "
+          "ref=~p",
+          log_info(State, [MS, Ref])),
     State#state{reconnect_tref = Ref}.
 
 %% cancel_timer(S = #state{reconnect_tref = undefined}) -> S;
