@@ -117,9 +117,8 @@ disconnected(Msg, State) ->
 
 %% @doc We have a socket open and messages to send. Collect up an
 %% appropriate amount and flush them to the socket.
-ready_to_send({post, _Msg}, State) ->
-    %% XXX - Send!
-    {next_state, sending, State};
+ready_to_send({post, Msg}, State) ->
+    send(buffer(Msg, State));
 ready_to_send({inet_reply, Sock, _Reason}, S = #state{sock = Sock}) ->
     %% Stale inet reply
     {next_state, ready_to_send, S};
@@ -169,17 +168,15 @@ handle_info({tcp, S, Data}, StateName, State = #state{sock = S}) ->
           log_info(State, [StateName, Data])),
     {next_state, StateName, State};
 handle_info({tcp_error, S, Reason}, StateName, State) ->
-    %% XXX - Reconnect!
     ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, S, duration(State)])),
-    {next_state, disconnected, State};
+    {next_state, disconnected, reconnect(tcp_bad(State))};
 handle_info({tcp_closed, S}, StateName, State) ->
-    %% XXX - Reconnect!
     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
           "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, closed, S, duration(State)])),
-    {next_state, disconnected, State};
+    {next_state, disconnected, reconnect(tcp_bad(State))};
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
