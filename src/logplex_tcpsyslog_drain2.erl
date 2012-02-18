@@ -370,12 +370,15 @@ send(State = #state{buf = Buf, sock = Sock,
         empty ->
             {next_state, ready_to_send, State};
         not_empty ->
-            {Data, NewBuf} = buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
+            {Data, N, NewBuf} =
+                buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
             erlang:port_command(Sock, Data, []),
+            msg_stat(drain_delivered, N, State),
             {next_state, sending, State#state{buf = NewBuf}}
     end.
 
-buffer_to_pkts(Buf, BytesRemaining, DrainTok) when BytesRemaining > 0 ->
+buffer_to_pkts(Buf, BytesRemaining, DrainTok)
+  when BytesRemaining > 0 ->
     {Item, NewBuf} = logplex_drain_buffer:pop(Buf),
     Msg = case Item of
               empty ->
@@ -393,7 +396,7 @@ buffer_to_pkts(Buf, BytesRemaining, DrainTok) when BytesRemaining > 0 ->
           end,
     case Msg of
         finished ->
-            {[], NewBuf};
+            {[], 0, NewBuf};
         skip ->
             buffer_to_pkts(NewBuf, BytesRemaining, DrainTok);
         {msg, MData} ->
@@ -402,17 +405,17 @@ buffer_to_pkts(Buf, BytesRemaining, DrainTok) when BytesRemaining > 0 ->
             DataSize = iolist_size(Data),
             case BytesRemaining - DataSize of
                 Remaining when Remaining > 0 ->
-                    {Rest, FinalBuf} = buffer_to_pkts(NewBuf,
-                                                      Remaining,
-                                                      DrainTok),
-                    {[Data, Rest], FinalBuf};
+                    {Rest, Count, FinalBuf} = buffer_to_pkts(NewBuf,
+                                                             Remaining,
+                                                             DrainTok),
+                    {[Data, Rest], Count + 1, FinalBuf};
                 _ when DataSize > ?TARGET_SEND_SIZE ->
                     %% We will exceed bytes remaining, but this
                     %% message is a pig, so send it anyway.
-                    {Data, NewBuf};
+                    {Data, 1, NewBuf};
                 _ ->
                     %% Would have exceeded BytesRemaining, pretend we
                     %% didn't pop it.
-                    {[], Buf}
+                    {[], 0, Buf}
             end
     end.
