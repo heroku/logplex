@@ -119,9 +119,9 @@ disconnected(Msg, State) ->
 %% appropriate amount and flush them to the socket.
 ready_to_send({post, Msg}, State) ->
     send(buffer(Msg, State));
-ready_to_send({inet_reply, Sock, _Reason}, S = #state{sock = Sock}) ->
+ready_to_send({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
     %% Stale inet reply
-    {next_state, ready_to_send, S};
+    send(S);
 ready_to_send(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
           log_info(State, [Msg])),
