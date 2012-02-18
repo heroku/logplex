@@ -110,6 +110,12 @@ disconnected({timeout, TRef, ?RECONNECT_MSG},
                                   time_failed(NewState)])),
             {next_state, disconnected, reconnect(NewState)}
     end;
+disconnected({timeout, Received, ?RECONNECT_MSG},
+             State = #state{reconnect_tref = Expected}) ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_reconnect "
+          "expected=~p received=~p state=disconnected",
+          log_info(State, [Expected, Received])),
+    {next_state, disconnected, State};
 disconnected({post, Msg}, State) ->
     {next_state, disconnected,
      reconnect(buffer(Msg, State))};
