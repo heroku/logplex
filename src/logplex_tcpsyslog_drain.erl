@@ -184,15 +184,6 @@ terminate(_Reason, _State) ->
     ok.
 
 %% @private
-code_change(v33,
-            {state, ID, Tok, CID, Host, Port,
-             Sock, Buf, LGT, Failures, TREF},
-            _Extra) ->
-    {ok,
-     #state{drain_id=ID, drain_tok=Tok,
-            channel_id=CID, host=Host, port=Port,
-            sock=Sock, buf=Buf, last_good_time=LGT,
-            failures=Failures, tref=TREF}};
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
