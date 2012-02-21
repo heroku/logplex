@@ -27,8 +27,6 @@
          ,stop/1
         ]).
 
--export([diagnose_drains/2]).
-
 -export([reserve_token/0, cache/3, create/5, create/4,
          delete/1, delete/3, clear_all/1, lookup/1]).
 
@@ -45,14 +43,6 @@
 
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
-
-
-diagnose_drains(ChannelId, Drains) ->
-    [logplex_stats:incr(#drain_stat{channel_id=ChannelId,
-                                    drain_id = Id,
-                                    key = post_to_missing_drain})
-     || Id <- Drains,
-        not is_pid(whereis({drain, Id}))].
 
 -spec start('tcpsyslog' | 'tcpsyslog2' | 'udpsyslog',
             id(), list()) -> any().
