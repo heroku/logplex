@@ -82,8 +82,8 @@ stop(DrainId, Timeout) ->
         {'DOWN', Ref, process, DrainPid, _} ->
             ok
     after Timeout ->
-              erlang:demonitor(Ref, [flush]),
-          supervisor:terminate_child(DrainId)
+            erlang:demonitor(Ref, [flush]),
+            supervisor:terminate_child(DrainId)
     end,
     supervisor:delete_child(logplex_drain_sup, DrainId).
 
