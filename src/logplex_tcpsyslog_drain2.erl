@@ -34,6 +34,7 @@
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
+                %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
 
