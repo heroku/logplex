@@ -45,15 +45,17 @@
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
--spec start('tcpsyslog' | 'tcpsyslog2' | 'udpsyslog',
+-spec start('tcpsyslog_old' | 'tcpsyslog' | 'tcpsyslog2' | 'udpsyslog',
             id(), list()) -> any().
-start(tcpsyslog, DrainId, Args) ->
+start(tcpsyslog_old, DrainId, Args) ->
     supervisor:start_child(logplex_drain_sup,
                            {DrainId,
                             {logplex_tcpsyslog_drain, start_link, Args},
                             transient, brutal_kill, worker,
                             [logplex_tcpsyslog_drain]});
-start(tcpsyslog2, DrainId, Args) ->
+start(Type, DrainId, Args)
+  when Type =:= tcpsyslog;
+       Type =:= tcpsyslog2 ->
     supervisor:start_child(logplex_drain_sup,
                            {DrainId,
                             {logplex_tcpsyslog_drain2, start_link, Args},
