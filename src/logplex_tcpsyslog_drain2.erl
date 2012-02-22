@@ -95,24 +95,7 @@ init([State0 = #state{sock = undefined,
 %% fire before initiating the reconnect sequence.
 disconnected({timeout, TRef, ?RECONNECT_MSG},
              State = #state{reconnect_tref = TRef, sock = undefined}) ->
-    case connect(State) of
-        {ok, Sock} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s "
-                  "state=disconnected at=connect try=~p sock=~p",
-                  log_info(State, [State#state.failures + 1, Sock])),
-            NewState = tcp_good(State#state{sock=Sock,
-                                            reconnect_tref = undefined,
-                                            connect_time=os:timestamp()}),
-            send(NewState);
-        {error, Reason} ->
-            NewState = tcp_bad(State#state{reconnect_tref = undefined}),
-            ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
-                 "err=gen_tcp data=~p try=~p last_success=~s "
-                 "state=disconnected",
-                 log_info(State, [Reason, NewState#state.failures,
-                                  time_failed(NewState)])),
-            {next_state, disconnected, reconnect(NewState)}
-    end;
+    do_reconnect(State#state{reconnect_tref=undefined});
 disconnected({timeout, Received, ?RECONNECT_MSG},
              State = #state{reconnect_tref = Expected}) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_reconnect "
@@ -212,6 +195,32 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+%% @private
+%% @doc Time has finally come to reconnect. Attempt the reconnection,
+%% send buffered messages on success, schedule a delayed reconnect if
+%% not.
+do_reconnect(State = #state{sock = undefined,
+                            reconnect_tref = undefined}) ->
+    case connect(State) of
+        {ok, Sock} ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s "
+                  "state=disconnected at=connect try=~p sock=~p",
+                  log_info(State, [State#state.failures + 1, Sock])),
+            NewState = tcp_good(State#state{sock=Sock,
+                                            reconnect_tref = undefined,
+                                            send_tref = undefined,
+                                            connect_time=os:timestamp()}),
+            send(NewState);
+        {error, Reason} ->
+            NewState = tcp_bad(State),
+            ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
+                 "err=gen_tcp data=~p try=~p last_success=~s "
+                 "state=disconnected",
+                 log_info(State, [Reason, NewState#state.failures,
+                                  time_failed(NewState)])),
+            reconnect(NewState)
+    end.
 
 %% @private
 connect(#state{sock = undefined, host=Host, port=Port})
