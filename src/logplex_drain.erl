@@ -25,6 +25,7 @@
 -export([whereis/1
          ,start/3
          ,stop/1
+         ,stop/2
         ]).
 
 -export([reserve_token/0, cache/3, create/5, create/4,
@@ -67,7 +68,21 @@ start(udpsyslog, DrainId, Args) ->
 
 
 stop(DrainId) ->
-    supervisor:terminate_child(logplex_drain_sup, DrainId),
+    stop(DrainId, timer:seconds(5)).
+
+%% Attempt a graceful shutdown of a drain process, followed by a
+%% forceful supervisor based shutdown if that fails.
+stop(DrainId, Timeout) ->
+    DrainPid = whereis({drain, DrainId}),
+    Ref = erlang:monitor(process, DrainPid),
+    DrainPid ! shutdown,
+    receive
+        {'DOWN', Ref, process, DrainPid, _} ->
+            ok
+    after Timeout ->
+              erlang:demonitor(Ref, [flush]),
+          supervisor:terminate_child(DrainId)
+    end,
     supervisor:delete_child(logplex_drain_sup, DrainId).
 
 reserve_token() ->
