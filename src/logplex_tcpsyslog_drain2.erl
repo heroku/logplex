@@ -11,6 +11,8 @@
 -define(SERVER, ?MODULE).
 -define(RECONNECT_MSG, reconnect).
 -define(TARGET_SEND_SIZE, 4096).
+-define(SEND_TIMEOUT_MSG, send_timeout).
+-define(SEND_TIMEOUT, timer:seconds(4)).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
