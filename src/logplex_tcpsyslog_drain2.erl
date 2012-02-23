@@ -38,7 +38,7 @@
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
 
-%% -type pstate() :: 'disconnected' | 'ready_to_send' | 'sending'.
+-type pstate() :: 'disconnected' | 'ready_to_send' | 'sending'.
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -101,46 +101,56 @@ disconnected({timeout, Received, ?RECONNECT_MSG},
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_reconnect "
           "expected=~p received=~p state=disconnected",
           log_info(State, [Expected, Received])),
-    {next_state, disconnected, State};
+    reconnect(State);
 disconnected({post, Msg}, State) ->
-    {next_state, disconnected,
-     reconnect(buffer(Msg, State))};
+    reconnect(buffer(Msg, State));
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=disconnected",
           log_info(State, [Msg])),
-    {next_state, disconnected, State}.
+    reconnect(State).
 
 %% @doc We have a socket open and messages to send. Collect up an
 %% appropriate amount and flush them to the socket.
-ready_to_send({post, Msg}, State) ->
+ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
+              State = #state{sock = Sock})
+  when is_port(Sock) ->
+    %% Stale message.
+    send(State);
+ready_to_send({post, Msg}, State = #state{sock = Sock})
+  when is_port(Sock) ->
     send(buffer(Msg, State));
-ready_to_send({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
+ready_to_send({inet_reply, Sock, ok}, S = #state{sock = Sock})
+  when is_port(Sock) ->
     %% Stale inet reply
     send(S);
-ready_to_send(Msg, State) ->
+ready_to_send(Msg, State = #state{sock = Sock})
+  when is_port(Sock) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=ready_to_send",
           log_info(State, [Msg])),
-    {next_state, disconnected, State}.
+    reconnect(State).
 
 
 %% @doc We sent some data to the socket and are waiting the result of
 %% the send operation.
+sending({timeout, Ref, ?SEND_TIMEOUT_MSG},
+        S = #state{send_tref=Ref}) ->
+    reconnect(tcp_bad(S#state{send_tref=undefined}));
 sending({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State)};
 sending({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
-    send(S);
+    send(tcp_good(S));
 sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
-    {next_state, disconnected, reconnect(tcp_bad(S))};
+    reconnect(tcp_bad(S));
 sending(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=sending",
           log_info(State, [Msg])),
-    {next_state, disconnected, State}.
+    {next_state, sending, State}.
 
 
 %% @private
@@ -169,18 +179,18 @@ handle_info({tcp_error, Sock, Reason}, StateName, State) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, Sock, duration(State)])),
-    {next_state, disconnected, reconnect(tcp_bad(State))};
+    reconnect(tcp_bad(State));
 handle_info({inet_reply, Sock, {error, Reason}}, StateName,
             State = #state{sock = Sock}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, Sock, duration(State)])),
-    {next_state, disconnected, reconnect(tcp_bad(State))};
+    reconnect(tcp_bad(State));
 handle_info({tcp_closed, Sock}, StateName, State) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
           "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, closed, Sock, duration(State)])),
-    {next_state, disconnected, reconnect(tcp_bad(State))};
+    reconnect(tcp_bad(State));
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
@@ -200,6 +210,8 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% @doc Time has finally come to reconnect. Attempt the reconnection,
 %% send buffered messages on success, schedule a delayed reconnect if
 %% not.
+-spec do_reconnect(#state{}) ->
+                          {next_state, pstate(), #state{}}.
 do_reconnect(State = #state{sock = undefined,
                             reconnect_tref = undefined}) ->
     case connect(State) of
@@ -245,7 +257,7 @@ connect(#state{sock = undefined, host=Host, port=Port})
 connect(#state{}) ->
     {error, bogus_port_number}.
 
--spec reconnect(#state{}) -> #state{}.
+-spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private
 reconnect(State = #state{reconnect_tref = Ref}) when is_reference(Ref) ->
     %% Reconnect timer was set
@@ -255,20 +267,22 @@ reconnect(State = #state{reconnect_tref = Ref}) when is_reference(Ref) ->
             reconnect(State#state{reconnect_tref=undefined});
         _ ->
             %% and is still valid
-            State
+            {next_state, disconnected, State}
     end;
 reconnect(State = #state{failures = 0, last_good_time=undefined}) ->
     %% First reconnect ever
-    reconnect_in(1, State);
+    %% Skip straight through to reconnection code.
+    do_reconnect(State);
 reconnect(State = #state{failures = 0, last_good_time=T})
   when is_tuple(T), tuple_size(T) =:= 3 ->
     Min = logplex_app:config(tcp_syslog_reconnect_min, 30),
     SecsSinceConnect = timer:now_diff(os:timestamp(), T) div 1000000,
     case SecsSinceConnect of
         TooFew when TooFew < Min ->
-            reconnect_in(timer:seconds(Min), State);
+            {next_state, disconnected,
+             reconnect_in(timer:seconds(Min), State)};
         _EnoughTime ->
-            reconnect_in(1, State)
+            do_reconnect(State)
     end;
 reconnect(State = #state{failures = F}) ->
     Max = logplex_app:config(tcp_syslog_backoff_max, 300),
@@ -276,7 +290,8 @@ reconnect(State = #state{failures = F}) ->
                   MaxExp when F > MaxExp -> Max;
                   _ -> 1 bsl F
               end,
-    reconnect_in(timer:seconds(BackOff), State).
+    {next_state, disconnected,
+     reconnect_in(timer:seconds(BackOff), State)}.
 
 reconnect_in(MS, State = #state{}) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
@@ -284,11 +299,6 @@ reconnect_in(MS, State = #state{}) ->
           "ref=~p",
           log_info(State, [MS, Ref])),
     State#state{reconnect_tref = Ref}.
-
-%% cancel_timer(S = #state{reconnect_tref = undefined}) -> S;
-%% cancel_timer(S = #state{reconnect_tref = Ref}) when is_reference(Ref) ->
-%%     erlang:cancel_timer(Ref),
-%%     S#state{reconnect_tref = undefined}.
 
 %% @private
 tcp_good(State = #state{}) ->
@@ -320,7 +330,7 @@ log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
     [DrainId, ChannelId, logplex_logging:dest(H,P) | Rest].
 
 -spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered',
-               pos_integer(), #state{}) -> any().
+               non_neg_integer(), #state{}) -> any().
 msg_stat(Key, N,
          #state{drain_id=DrainId, channel_id=ChannelId}) ->
     logplex_stats:incr(#drain_stat{drain_id=DrainId,
@@ -376,6 +386,7 @@ register_with_gproc(#state{drain_id=DrainId,
 
 %% @private
 %% @doc Send buffered messages.
+-spec send(#state{}) -> {next_state, 'sending' | 'ready_to_send', #state{}}.
 send(State = #state{buf = Buf, sock = Sock,
                     drain_tok = DrainTok}) ->
     case logplex_drain_buffer:empty(Buf) of
@@ -384,9 +395,11 @@ send(State = #state{buf = Buf, sock = Sock,
         not_empty ->
             {Data, N, NewBuf} =
                 buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
+            Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
             erlang:port_command(Sock, Data, []),
             msg_stat(drain_delivered, N, State),
-            {next_state, sending, State#state{buf = NewBuf}}
+            {next_state, sending, State#state{buf = NewBuf,
+                                              send_tref=Ref}}
     end.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok)
