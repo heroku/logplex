@@ -137,8 +137,6 @@ config(Key, Default) ->
 
 config(redis_stats_uri) ->
     redo_uri:parse(os:getenv("LOGPLEX_STATS_REDIS_URL"));
-config(syslog_port) ->
-    ?TCP_PORT;
 config(Key) ->
     case application:get_env(logplex, Key) of
         undefined -> erlang:error({missing_config, Key});
