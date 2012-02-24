@@ -408,10 +408,23 @@ send(State = #state{buf = Buf, sock = Sock,
             {Data, N, NewBuf} =
                 buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
             Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
-            erlang:port_command(Sock, Data, []),
-            msg_stat(drain_delivered, N, State),
-            {next_state, sending, State#state{buf = NewBuf,
-                                              send_tref=Ref}}
+            try
+                erlang:port_command(Sock, Data, []),
+                msg_stat(drain_delivered, N, State),
+                {next_state, sending,
+                 State#state{buf = NewBuf,
+                             send_tref=Ref}}
+            catch
+                exit:badarg ->
+                    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+                          "err=gen_tcp data=~p sock=~p duration=~s",
+                          log_info(State, [send, closed, Sock,
+                                           duration(State)])),
+                    erlang:cancel_timer(Ref),
+                    %% Re-use old state as we know the messages we
+                    %% just de-buffered are lost to tcp.
+                    reconnect(tcp_bad(State))
+            end
     end.
 
 -spec cancel_send_timeout(#state{}) -> #state{send_tref :: undefined}.
