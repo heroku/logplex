@@ -19,7 +19,7 @@
     ,{tcp_syslog_backoff_max, 300} % 5 minutes
     ,{tcp_syslog_reconnect_min, 30} % 0.5 minutes
     ,{tcp_drain_buffer_size, 1024}
-    ,{tcp_syslog_send_loss_msg, dont_send}
+    ,{tcp_syslog_send_loss_msg, send}
    ]}
  ]}.
  
