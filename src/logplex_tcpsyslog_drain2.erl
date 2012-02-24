@@ -191,6 +191,15 @@ handle_info({tcp_closed, Sock}, StateName, State) ->
           "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, closed, Sock, duration(State)])),
     reconnect(tcp_bad(State));
+handle_info(shutdown, StateName, State = #state{sock = Sock})
+  when is_port(Sock) ->
+    catch gen_tcp:close(Sock),
+    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+          "err=gen_tcp data=~p sock=~p duration=~s",
+          log_info(State, [StateName, shutdown, Sock, duration(State)])),
+    {stop, shutdown, State#state{sock = undefined}};
+handle_info(shutdown, _StateName, State) ->
+    {stop, shutdown, State};
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
