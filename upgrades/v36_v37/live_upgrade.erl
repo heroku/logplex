@@ -31,5 +31,6 @@ UpgradeNode = fun () ->
       {Id, Pid, _, _} <- Drains],
 
   io:format(whereis(user), "at=upgrade_end cur_vsn=37~n", []),
+  application:set_env(logplex, git_branch, "v37"),
   length(Drains)
 end.
