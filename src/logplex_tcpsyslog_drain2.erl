@@ -228,10 +228,10 @@ do_reconnect(State = #state{sock = undefined,
             ?INFO("drain_id=~p channel_id=~p dest=~s "
                   "state=disconnected at=connect try=~p sock=~p",
                   log_info(State, [State#state.failures + 1, Sock])),
-            NewState = tcp_good(State#state{sock=Sock,
-                                            reconnect_tref = undefined,
-                                            send_tref = undefined,
-                                            connect_time=os:timestamp()}),
+            NewState = State#state{sock=Sock,
+                                   reconnect_tref = undefined,
+                                   send_tref = undefined,
+                                   connect_time=os:timestamp()},
             send(NewState);
         {error, Reason} ->
             NewState = tcp_bad(State),
