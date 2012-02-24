@@ -25,9 +25,8 @@
 -export([whereis/1
          ,start/3
          ,stop/1
+         ,stop/2
         ]).
-
--export([diagnose_drains/2]).
 
 -export([reserve_token/0, cache/3, create/5, create/4,
          delete/1, delete/3, clear_all/1, lookup/1]).
@@ -46,20 +45,20 @@
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
-
-diagnose_drains(ChannelId, Drains) ->
-    [logplex_stats:incr(#drain_stat{channel_id=ChannelId,
-                                    drain_id = Id,
-                                    key = post_to_missing_drain})
-     || Id <- Drains,
-        not is_pid(whereis({drain, Id}))].
-
--spec start('tcpsyslog' | 'udpsyslog',
+-spec start('tcpsyslog_old' | 'tcpsyslog' | 'tcpsyslog2' | 'udpsyslog',
             id(), list()) -> any().
-start(tcpsyslog, DrainId, Args) ->
+start(tcpsyslog_old, DrainId, Args) ->
     supervisor:start_child(logplex_drain_sup,
                            {DrainId,
                             {logplex_tcpsyslog_drain, start_link, Args},
+                            transient, brutal_kill, worker,
+                            [logplex_tcpsyslog_drain]});
+start(Type, DrainId, Args)
+  when Type =:= tcpsyslog;
+       Type =:= tcpsyslog2 ->
+    supervisor:start_child(logplex_drain_sup,
+                           {DrainId,
+                            {logplex_tcpsyslog_drain2, start_link, Args},
                             transient, brutal_kill, worker,
                             [logplex_tcpsyslog_drain]});
 start(udpsyslog, DrainId, Args) ->
@@ -71,12 +70,22 @@ start(udpsyslog, DrainId, Args) ->
 
 
 stop(DrainId) ->
-    case whereis({drain, DrainId}) of
-        Pid when is_pid(Pid) ->
-            gen_server:cast(Pid, shutdown);
-        _ ->
-            not_running
-    end.
+    stop(DrainId, timer:seconds(5)).
+
+%% Attempt a graceful shutdown of a drain process, followed by a
+%% forceful supervisor based shutdown if that fails.
+stop(DrainId, Timeout) ->
+    DrainPid = whereis({drain, DrainId}),
+    Ref = erlang:monitor(process, DrainPid),
+    DrainPid ! shutdown,
+    receive
+        {'DOWN', Ref, process, DrainPid, _} ->
+            ok
+    after Timeout ->
+            erlang:demonitor(Ref, [flush]),
+            supervisor:terminate_child(logplex_drain_sup, DrainId)
+    end,
+    supervisor:delete_child(logplex_drain_sup, DrainId).
 
 reserve_token() ->
     Token = new_token(),

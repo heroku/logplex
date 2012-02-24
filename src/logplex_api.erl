@@ -52,6 +52,7 @@ stop() ->
     gen_tcp:close(LSock),
     ok.
 
+-spec loop(term()) -> no_return().
 loop(Req) ->
     Start = os:timestamp(),
     Method = Req:get(method),

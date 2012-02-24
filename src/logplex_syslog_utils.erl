@@ -14,13 +14,16 @@
          ,fmt/7
          ,rfc5424/1
          ,rfc5424/8
+         ,overflow_msg/2
         ]).
 
--type syslog_msg() :: {0..128, 0..7,
+-type syslog_msg() :: {facility(), severity(),
                        Time::iolist(), Source::iolist(),
                        Process::iolist(), Msg::iolist()}.
 
--export_type([ syslog_msg/0 ]).
+-type datetime() :: 'now' | erlang:timestamp() | calendar:datetime1970().
+
+-export_type([ syslog_msg/0, datetime/0 ]).
 
 -spec to_msg(syslog_msg(), iolist() | binary()) -> iolist().
 to_msg({Facility, Severity, Time, Source, Process, Msg}, Token) ->
@@ -43,6 +46,19 @@ rfc5424(Facility, Severity, Time, Host, AppName, ProcID, MsgID, Msg) ->
 
 nvl(undefined) -> $-;
 nvl(Val) -> Val.
+
+-spec overflow_msg(N::non_neg_integer(), datetime()) -> syslog_msg().
+overflow_msg(N, When) ->
+    fmt(local5,
+        warning,
+        now,
+        "logplex",
+        "logplex",
+        "Logplex drain buffer overflowed."
+        " ~p messages lost since ~s.",
+        [N,
+         datetime(When)]).
+
 
 
 from_msg(Msg) when is_binary(Msg) ->
@@ -78,6 +94,7 @@ frame(Msg) when is_binary(Msg); is_list(Msg) ->
       " ",
       Msg ].
 
+-spec datetime(datetime()) -> iolist().
 datetime(now) ->
     datetime(os:timestamp());
 datetime({_,_,_} = Now) ->
@@ -155,7 +172,8 @@ severities() ->
      ,{7, debug, "Debug: debug-level messages"}].
 
 -spec severity_to_int(severity()) -> 0..7.
-severity_to_int(I) when is_integer(I) ->
+severity_to_int(I) when is_integer(I),
+                        0 =< I, I =< 7 ->
     I;
 severity_to_int(A) when is_atom(A) ->
     element(1, lists:keyfind(A, 2, severities())).

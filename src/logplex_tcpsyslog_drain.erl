@@ -174,6 +174,9 @@ handle_info({tcp, S, Data}, State = #state{sock = S}) ->
           log_info(State, [Data])),
     {noreply, State};
 
+handle_info(shutdown, State) ->
+    {stop, normal, State};
+
 handle_info(Info, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
           log_info(State, [Info])),
@@ -184,15 +187,6 @@ terminate(_Reason, _State) ->
     ok.
 
 %% @private
-code_change(v33,
-            {state, ID, Tok, CID, Host, Port,
-             Sock, Buf, LGT, Failures, TREF},
-            _Extra) ->
-    {ok,
-     #state{drain_id=ID, drain_tok=Tok,
-            channel_id=CID, host=Host, port=Port,
-            sock=Sock, buf=Buf, last_good_time=LGT,
-            failures=Failures, tref=TREF}};
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -233,7 +227,7 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{send_timeout_close, true}
               ],
     gen_tcp:connect(HostS, Port, Options,
-                    SendTimeoutS);
+                    timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.
 
