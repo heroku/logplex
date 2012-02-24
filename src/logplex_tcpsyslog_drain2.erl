@@ -411,6 +411,7 @@ send(State = #state{buf = Buf, sock = Sock,
             try
                 erlang:port_command(Sock, Data, []),
                 msg_stat(drain_delivered, N, State),
+                logplex_realtime:incr(message_routed),
                 {next_state, sending,
                  State#state{buf = NewBuf,
                              send_tref=Ref}}
