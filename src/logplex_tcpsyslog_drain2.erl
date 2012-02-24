@@ -108,7 +108,7 @@ disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=disconnected",
           log_info(State, [Msg])),
-    reconnect(State).
+    {next_state, disconnected, State}.
 
 %% @doc We have a socket open and messages to send. Collect up an
 %% appropriate amount and flush them to the socket.
@@ -129,7 +129,7 @@ ready_to_send(Msg, State = #state{sock = Sock})
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=ready_to_send",
           log_info(State, [Msg])),
-    reconnect(State).
+    {next_state, ready_to_send, State}.
 
 
 %% @doc We sent some data to the socket and are waiting the result of
