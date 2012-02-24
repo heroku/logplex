@@ -416,7 +416,7 @@ send(State = #state{buf = Buf, sock = Sock,
                  State#state{buf = NewBuf,
                              send_tref=Ref}}
             catch
-                exit:badarg ->
+                error:badarg ->
                     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
                           "err=gen_tcp data=~p sock=~p duration=~s",
                           log_info(State, [send, closed, Sock,
