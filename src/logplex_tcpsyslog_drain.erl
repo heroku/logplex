@@ -174,6 +174,9 @@ handle_info({tcp, S, Data}, State = #state{sock = S}) ->
           log_info(State, [Data])),
     {noreply, State};
 
+handle_info(shutdown, State) ->
+    {stop, normal, State};
+
 handle_info(Info, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
           log_info(State, [Info])),
