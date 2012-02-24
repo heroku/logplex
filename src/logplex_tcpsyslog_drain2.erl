@@ -170,12 +170,14 @@ handle_sync_event(Event, _From, StateName, State) ->
     {next_state, StateName, State}.
 
 %% @private
-handle_info({tcp, Sock, Data}, StateName, State = #state{sock = Sock}) ->
+handle_info({tcp, Sock, Data}, StateName,
+            State = #state{sock = Sock}) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s state=~p"
           "err=unexpected_peer_data data=~p",
           log_info(State, [StateName, Data])),
     {next_state, StateName, State};
-handle_info({tcp_error, Sock, Reason}, StateName, State) ->
+handle_info({tcp_error, Sock, Reason}, StateName,
+            State = #state{sock = Sock}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, Sock, duration(State)])),
@@ -186,7 +188,8 @@ handle_info({inet_reply, Sock, {error, Reason}}, StateName,
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, Sock, duration(State)])),
     reconnect(tcp_bad(State));
-handle_info({tcp_closed, Sock}, StateName, State) ->
+handle_info({tcp_closed, Sock}, StateName,
+            State = #state{sock = Sock}) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
           "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, closed, Sock, duration(State)])),
