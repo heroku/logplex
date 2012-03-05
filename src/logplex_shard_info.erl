@@ -12,12 +12,14 @@
          ,read/1
          ,cached_read/2
          ,map_interval/1
+         ,pid_info/1
         ]).
 
 -type key() :: 'logplex_read_pool_map' | 'logplex_redis_buffer_map'.
 -type map() :: dict().
 -type interval() :: pos_integer().
 -type shard_info() :: {map(), interval(), erlang:timestamp()}.
+-type entry() :: {interval(), {Url::iolist(), pid()}}.
 
 -export_type([shard_info/0]).
 
@@ -66,3 +68,28 @@ info_outdated(Key, TS) ->
 -spec map_interval(shard_info()) -> {map(), interval()}.
 map_interval({Map, Interval, _TS}) ->
     {Map, Interval}.
+
+
+-spec pid_info(pid()) ->
+                      'undefined' |
+                      {key(),
+                       {entry(), map(), interval()}}.
+pid_info(Pid) ->
+    case pid_info(Pid, read(logplex_read_pool_map)) of
+        undefined ->
+            case pid_info(Pid, read(logplex_redis_buffer_map)) of
+                undefined -> undefined;
+                Info -> {logplex_redis_buffer_map, Info}
+            end;
+        Info ->
+            {logplex_read_pool_map, Info}
+    end.
+
+pid_info(Pid, {Map, V, _TS}) ->
+    case [ Item
+           || Item = {_Shard, {_Url, OldPid}} <- dict:to_list(Map),
+              OldPid =:= Pid] of
+        [ Item ] ->
+            {Item, Map, V};
+        [] -> undefined
+    end.
