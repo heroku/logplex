@@ -86,8 +86,16 @@ empty(Buf = #lpdb{}) ->
 len(#lpdb{messages=Q}) ->
     queue:len(Q).
 
-to_list(#lpdb{messages = Q}) ->
-    queue:to_list(Q).
+-spec to_list(buf()) -> [msg()].
+to_list(#lpdb{messages = Q,
+              loss_count = 0}) ->
+    queue:to_list(Q);
+to_list(#lpdb{messages = Q,
+              loss_count = N,
+              loss_start = When})
+  when N > 0 ->
+    [{loss_indication, N, When} |
+     queue:to_list(Q)].
 
 insert(Msg, Buf = #lpdb{messages = Q}) ->
     Buf#lpdb{messages = queue:in(Msg, Q)}.
