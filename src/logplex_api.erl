@@ -210,7 +210,9 @@ handlers() ->
                 gen_tcp:close(Socket);
             _ ->
                 logplex_stats:incr(session_tailed),
-                tail_loop(Socket, Filters)
+                {ok, Buffer} =
+                    logplex_tail_buffer:start_link(ChannelId, self()),
+                tail_init(Socket, Buffer, Filters)
         end,
 
         {200, ""}
@@ -373,18 +375,41 @@ filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
         false ->
             filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
     end.
-    
-tail_loop(Socket, Filters) ->
+
+tail_init(Socket, Buffer, Filters) ->
+    tail_loop(Socket, Buffer, Filters).
+
+tail_loop(Socket, Buffer, Filters) ->
+    logplex_tail_buffer:active_once(Buffer),
     receive
-        {log, Msg} ->
-            Msg1 = logplex_utils:parse_msg(Msg),
-            logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1)),
-            tail_loop(Socket, Filters);
+        {logplex_tail_msgs, Buffer, Msgs} ->
+            gen_tcp:send(Socket,
+                         [ logplex_utils:format(Msg)
+                           || Msg <- parse_msgs(Msgs),
+                              logplex_utils:filter(Msg, Filters) ]),
+            tail_loop(Socket, Buffer, Filters);
+        {tcp_data, Socket, _} ->
+            tail_loop(Socket, Buffer, Filters);
         {tcp_closed, Socket} ->
             ok;
         {tcp_error, Socket, _Reason} ->
             ok
     end.
+
+parse_msgs(Msgs) ->
+    [ case Msg of
+          {loss_indication, N, When} ->
+              #msg{time = logplex_syslog_utils:datetime(now),
+                   source = <<"logplex">>,
+                   ps = <<"1">>,
+                   content=io_lib:format("Tail buffer overflowed. "
+                                         "~p messages lost since ~s.",
+                                         [N, logplex_syslog_utils:datetime(When)]
+                                        )};
+          _ when is_binary(Msg) ->
+              logplex_utils:parse_msg(Msg)
+      end
+      || Msg <- Msgs ].
 
 filters(Data) ->
     filters(Data, []).
