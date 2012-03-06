@@ -39,8 +39,8 @@
 %% ------------------------------------------------------------------
 
 start_link(ChannelId, Owner) ->
-    gen_fsm:start_link(?MODULE, [#state{channel_id = ChannelId,
-                                        owner = Owner}], []).
+    gen_fsm:start_link(?MODULE, #state{channel_id = ChannelId,
+                                       owner = Owner}, []).
 
 active_once(Buffer) ->
     Buffer ! {active, once}.
