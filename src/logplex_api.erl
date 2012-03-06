@@ -377,6 +377,7 @@ filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
     end.
 
 tail_init(Socket, Buffer, Filters) ->
+    inet:setopts(Socket, [{active, once}]),
     tail_loop(Socket, Buffer, Filters).
 
 tail_loop(Socket, Buffer, Filters) ->
@@ -389,6 +390,7 @@ tail_loop(Socket, Buffer, Filters) ->
                               logplex_utils:filter(Msg, Filters) ]),
             tail_loop(Socket, Buffer, Filters);
         {tcp_data, Socket, _} ->
+            inet:setopts(Socket, [{active, once}]),
             tail_loop(Socket, Buffer, Filters);
         {tcp_closed, Socket} ->
             ok;
