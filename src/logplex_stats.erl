@@ -39,7 +39,7 @@ healthcheck() ->
     redis_helper:healthcheck().
 
 workers() ->
-    Sups = [logplex_redis_writer_sup, logplex_redis_buffer_sup],
+    Sups = [logplex_redis_writer_sup],
     [{Sup, length(supervisor:which_children(Sup))} || Sup <- Sups].
 
 incr(Key) ->
