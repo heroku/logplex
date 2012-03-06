@@ -101,7 +101,7 @@ datetime({_,_,_} = Now) ->
     DT = calendar:now_to_universal_time(Now),
     datetime(DT);
 datetime({{Y,M,D},{H,MM,S}}) ->
-    io_lib:format("~4.10.0B-~2.10.0B-~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B"
+    io_lib:format("~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0B"
                   "Z+00:00",
                   [Y,M,D, H,MM,S]).
 
