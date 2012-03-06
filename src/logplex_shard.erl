@@ -68,16 +68,6 @@ init([]) ->
 
     erlang:process_flag(trap_exit, true),
 
-    case length(supervisor:which_children(logplex_redis_buffer_sup)) of
-        N when N =:= length(Urls) ->
-            ?INFO("at=restart existing_redis_buffer_children=~p", [N]);
-        0 ->
-            [logplex_queue_sup:start_child(logplex_redis_buffer_sup,
-                                           [redis_buffer_args(Url)])
-             || Url <- Urls],
-            ?INFO("at=start new_redis_buffer_children=~p", [length(Urls)])
-    end,
-
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
     populate_info_table(Urls),
@@ -166,35 +156,32 @@ lookup_urls() ->
 
 populate_info_table(Urls) ->
     %% Populate Read pool
-    Pools = add_pools(Urls, []),
+    ReadPools = [ {Url, add_pool(Url)} || Url <- Urls],
     {ok, Map1, Interval1} =
-        redis_shard:generate_map_and_interval(lists:sort(Pools)),
+        redis_shard:generate_map_and_interval(lists:sort(ReadPools)),
     logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
 
     %% Populate write pool
-    RedisBuffers =
-        [{logplex_queue:get(Pid, redis_url), Pid}
-         || {_Id, Pid, worker, _Modules}
-                <- supervisor:which_children(logplex_redis_buffer_sup)],
+    WritePools = [ {Url, add_buffer(Url)}
+                   || Url <- Urls],
     {ok, Map2, Interval2} =
-        redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
+        redis_shard:generate_map_and_interval(lists:sort(WritePools)),
 
     logplex_shard_info:save(logplex_redis_buffer_map, Map2, Interval2),
 
     ok.
-
-add_pools([], Acc) -> Acc;
-
-add_pools([Url|Tail], Acc) ->
-    Pool = add_pool(Url),
-    add_pools(Tail, [{Url, Pool}|Acc]).
 
 add_pool(Url) ->
     Opts = redo_uri:parse(Url),
     {ok, Pool} = redo:start_link(undefined, Opts),
     Pool.
 
-redis_buffer_args(Url) ->
+add_buffer(Url) ->
+    Opts = redis_buffer_opts(Url),
+    {ok, Buffer} = logplex_queue:start_link(Opts),
+    Buffer.
+
+redis_buffer_opts(Url) ->
     MaxLength =
         case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
             false -> ?DEFAULT_LOGPLEX_REDIS_BUFFER_LENGTH;
@@ -216,20 +203,21 @@ redis_buffer_args(Url) ->
      ])}].
 
 handle_child_death(Pid) ->
-    {Map, V, _TS}
-        = logplex_shard_info:read(logplex_read_pool_map),
-    [ {Shard, {Url, Pid}} ] = shard_info(Pid, Map),
-    NewPid = add_pool(Url),
-    NewMap = dict:store(Shard, {Url, NewPid}, Map),
-    logplex_shard_info:save(logplex_read_pool_map, NewMap, V),
-    ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
-          [Pid, NewPid]),
+    case logplex_shard_info:pid_info(Pid) of
+        {logplex_read_pool_map, {{Shard, {Url, Pid}}, Map, V}} ->
+            NewPid = add_pool(Url),
+            NewMap = dict:store(Shard, {Url, NewPid}, Map),
+            logplex_shard_info:save(logplex_read_pool_map, NewMap, V),
+            ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
+                  [Pid, NewPid]);
+        {logplex_redis_buffer_map, {{Shard, {Url, Pid}}, Map, V}} ->
+            NewPid = add_pool(Url),
+            NewMap = dict:store(Shard, {Url, NewPid}, Map),
+            logplex_shard_info:save(logplex_redis_buffer_map, NewMap, V),
+            ?INFO("at=write_pool_restart oldpid=~p newpid=~p",
+                  [Pid, NewPid])
+    end,
     ok.
-
-shard_info(Pid, Map) ->
-    [ Item ||
-        Item = {_Shard, {_Url, OldPid}} <- dict:to_list(Map),
-        OldPid =:= Pid].
 
 consistent(URLs) ->
     {Map, _V, _TS}
