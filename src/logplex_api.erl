@@ -210,7 +210,6 @@ handlers() ->
                 gen_tcp:close(Socket);
             _ ->
                 logplex_stats:incr(session_tailed),
-                logplex_tail:register(ChannelId),
                 tail_loop(Socket, Filters)
         end,
 
