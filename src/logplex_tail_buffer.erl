@@ -26,6 +26,9 @@
          ,active_once/1
         ]).
 
+-export([active/2,
+         passive/2]).
+
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
 %% ------------------------------------------------------------------
@@ -48,6 +51,14 @@ active_once(Buffer) ->
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
 %% ------------------------------------------------------------------
+
+active(Msg, S = #state{}) ->
+    ?WARN("state=~p Unexpected msg ~p", [active, Msg]),
+    {next_state, active, S}.
+
+passive(Msg, S = #state{}) ->
+    ?WARN("state=~p Unexpected msg ~p", [passive, Msg]),
+    {next_state, passive, S}.
 
 %% @private
 init(S = #state{channel_id = ChannelId}) ->
