@@ -376,7 +376,6 @@ filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
     end.
     
 tail_loop(Socket, Filters) ->
-    inet:setopts(Socket, [{packet, raw}, {active, once}]),
     receive
         {log, Msg} ->
             Msg1 = logplex_utils:parse_msg(Msg),
