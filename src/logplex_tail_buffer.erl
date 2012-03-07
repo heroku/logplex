@@ -9,6 +9,7 @@
 -module(logplex_tail_buffer).
 -behaviour(gen_fsm).
 
+-include("logplex.hrl").
 -include("logplex_logging.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -118,7 +119,22 @@ become_active(S = #state{buf = Buf}) ->
     end.
 
 send(S = #state{owner = Owner, buf = Buf}) ->
-    Msgs = logplex_drain_buffer:to_list(Buf),
-    Owner ! {logplex_tail_msgs, self(), Msgs},
+    {Data, _Count, NewBuf} = logplex_drain_buffer:to_pkts(Buf, 4096, pkt_fmt()),
+    Owner ! {logplex_tail_data, self(), Data},
     {next_state, passive,
-     S#state{buf=logplex_drain_buffer:new()}}.
+     S#state{buf=NewBuf}}.
+
+pkt_fmt() ->
+    fun ({loss_indication, N, When}) ->
+            M = #msg{time = logplex_syslog_utils:datetime(now),
+                     source = <<"logplex">>,
+                     ps = <<"1">>,
+                     content=io_lib:format("Tail buffer overflowed. "
+                                           "~p messages lost since ~s.",
+                                           [N, logplex_syslog_utils:datetime(When)]
+                                          )},
+            {frame, logplex_utils:format(M)};
+        ({msg, Msg}) ->
+            M = logplex_utils:parse_msg(Msg),
+            {frame, logplex_utils:format(M)}
+    end.
