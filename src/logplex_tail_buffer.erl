@@ -15,7 +15,9 @@
 
 -record(state, {buf = logplex_drain_buffer:new() :: logplex_drain_buffer:buf(),
                 channel_id :: logplex_channel:id(),
-                owner :: pid()}).
+                owner :: pid(),
+                active_fun :: 'undefined' | logplex_drain_buffer:framing_fun()
+               }).
 
 %-type pstates() :: 'passive' | 'active'.
 
@@ -24,7 +26,7 @@
 %% ------------------------------------------------------------------
 
 -export([start_link/2
-         ,active_once/1
+         ,set_active/2
         ]).
 
 -export([active/2,
@@ -46,8 +48,9 @@ start_link(ChannelId, Owner) ->
     gen_fsm:start_link(?MODULE, #state{channel_id = ChannelId,
                                        owner = Owner}, []).
 
-active_once(Buffer) ->
-    Buffer ! {active, once}.
+-spec set_active(pid() | atom(), logplex_drain_buffer:framing_fun()) -> any().
+set_active(Buffer, Fun) when is_function(Fun, 1) ->
+    Buffer ! {active, Fun}.
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
@@ -87,12 +90,13 @@ handle_info({log, Msg}, StateName, S = #state{buf = OldBuf}) ->
             send(NewState)
     end;
 
-handle_info({active, once}, passive, S = #state{}) ->
-    become_active(S);
-handle_info({active, once}, active, S = #state{}) ->
+handle_info({active, _}, active, S = #state{}) ->
     %% XXX - duplicate active once - is ignoring this the right thing
     %% to do? Otherwise report an error to parent?
     {next_state, active, S};
+
+handle_info({active, Fun}, passive, S = #state{}) ->
+    become_active(S#state{active_fun=Fun});
 
 handle_info(Info, StateName, State) ->
     ?WARN("state=~p Unexpected info ~p", [StateName, Info]),
@@ -118,23 +122,9 @@ become_active(S = #state{buf = Buf}) ->
             send(S)
     end.
 
-send(S = #state{owner = Owner, buf = Buf}) ->
-    {Data, _Count, NewBuf} = logplex_drain_buffer:to_pkts(Buf, 4096, pkt_fmt()),
+send(S = #state{owner = Owner, buf = Buf,
+                active_fun = Fun}) ->
+    {Data, _Count, NewBuf} = logplex_drain_buffer:to_pkts(Buf, 4096, Fun),
     Owner ! {logplex_tail_data, self(), Data},
     {next_state, passive,
      S#state{buf=NewBuf}}.
-
-pkt_fmt() ->
-    fun ({loss_indication, N, When}) ->
-            M = #msg{time = logplex_syslog_utils:datetime(now),
-                     source = <<"logplex">>,
-                     ps = <<"1">>,
-                     content=io_lib:format("Tail buffer overflowed. "
-                                           "~p messages lost since ~s.",
-                                           [N, logplex_syslog_utils:datetime(When)]
-                                          )},
-            {frame, logplex_utils:format(M)};
-        ({msg, Msg}) ->
-            M = logplex_utils:parse_msg(Msg),
-            {frame, logplex_utils:format(M)}
-    end.
