@@ -12,6 +12,9 @@
               }).
 
 -type msg() :: binary() | tuple().
+-type loss_indication() :: {loss_indication,
+                            N::non_neg_integer(),
+                            When::erlang:timestamp()}.
 -opaque buf() :: #lpdb{}.
 -export_type([buf/0]).
 
@@ -52,8 +55,7 @@ push_ext(Msg, Buf = #lpdb{}) ->
 
 -spec pop(buf()) -> {empty, buf()} |
                     {{msg, msg()}, buf()} |
-                    {{loss_indication, N::non_neg_integer(),
-                      When::erlang:timestamp()}}.
+                    {loss_indication(), buf()}.
 pop(Buf = #lpdb{loss_count = 0,
                 messages = Q}) ->
     case queue:out(Q) of
