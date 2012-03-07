@@ -212,7 +212,11 @@ handlers() ->
                 logplex_stats:incr(session_tailed),
                 {ok, Buffer} =
                     logplex_tail_buffer:start_link(ChannelId, self()),
-                tail_init(Socket, Buffer, Filters)
+                try
+                    tail_init(Socket, Buffer, Filters)
+                after
+                    exit(Buffer, shutdown)
+                end
         end,
 
         {200, ""}
