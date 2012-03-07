@@ -15,8 +15,10 @@
 -type loss_indication() :: {loss_indication,
                             N::non_neg_integer(),
                             When::erlang:timestamp()}.
+-type framing_fun()::fun (({msg, msg()} | loss_indication()) ->
+                                 {frame, iolist()} | skip).
 -opaque buf() :: #lpdb{}.
--export_type([buf/0]).
+-export_type([buf/0, framing_fun/0]).
 
 -export([new/0
          ,new/1
@@ -118,8 +120,7 @@ displace(Msg, Buf = #lpdb{messages = Q,
              loss_count = N + 1}.
 
 -spec to_pkts(buf(), IdealBytes::pos_integer(),
-              FramingFun::fun (({msg, msg()} | loss_indication()) ->
-                                      {frame, iolist()})) ->
+              framing_fun()) ->
                      {iolist(), Count::non_neg_integer(), buf()}.
 to_pkts(Buf = #lpdb{},
         Bytes, Fun) when is_integer(Bytes),
