@@ -26,6 +26,7 @@
          ,empty/1
          ,pop/1
          ,to_list/1
+         ,to_pkts/3
          ]).
 
 -include_lib("proper/include/proper.hrl").
@@ -115,6 +116,51 @@ displace(Msg, Buf = #lpdb{messages = Q,
     NewQueue = queue:in(Msg, Q1),
     Buf#lpdb{messages = NewQueue,
              loss_count = N + 1}.
+
+-spec to_pkts(buf(), IdealBytes::pos_integer(),
+              FramingFun::fun (({msg, msg()} | loss_indication()) ->
+                                      {frame, iolist()})) ->
+                     {iolist(), Count::non_neg_integer(), buf()}.
+to_pkts(Buf = #lpdb{},
+        Bytes, Fun) when is_integer(Bytes),
+                         is_function(Fun, 1) ->
+    to_pkts(Buf, Bytes, Bytes, Fun).
+
+to_pkts(Buf, BytesTotal, BytesRemaining, Fun)
+  when BytesRemaining > 0 ->
+    {Item, NewBuf} = pop(Buf),
+    Msg = case Item of
+              empty ->
+                  finished;
+              {loss_indication, _N, _When} ->
+                  Fun(Item);
+              {msg, _M} ->
+                  Fun(Item)
+          end,
+    case Msg of
+        finished ->
+            {[], 0, NewBuf};
+        skip ->
+            to_pkts(NewBuf, BytesTotal, BytesRemaining, Fun);
+        {frame, Data} ->
+            DataSize = iolist_size(Data),
+            case BytesRemaining - DataSize of
+                Remaining when Remaining > 0 ->
+                    {Rest, Count, FinalBuf} = to_pkts(NewBuf,
+                                                      BytesTotal,
+                                                      Remaining,
+                                                      Fun),
+                    {[Data, Rest], Count + 1, FinalBuf};
+                _ when DataSize > BytesTotal ->
+                    %% We will exceed bytes remaining, but this
+                    %% message is a pig, so send it anyway.
+                    {Data, 1, NewBuf};
+                _ ->
+                    %% Would have exceeded BytesRemaining, pretend we
+                    %% didn't pop it.
+                    {[], 0, Buf}
+            end
+    end.
 
 prop_push_msgs() ->
     ?FORALL(MsgList, list(g_log_msg()),
