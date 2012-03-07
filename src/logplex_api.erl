@@ -381,13 +381,12 @@ tail_init(Socket, Buffer, Filters) ->
     tail_loop(Socket, Buffer, Filters).
 
 tail_loop(Socket, Buffer, Filters) ->
-    logplex_tail_buffer:active_once(Buffer),
+    logplex_tail_buffer:set_active(Buffer,
+                                   tail_filter(Filters)),
     receive
-        {logplex_tail_msgs, Buffer, Msgs} ->
+        {logplex_tail_data, Buffer, Data} ->
             gen_tcp:send(Socket,
-                         [ logplex_utils:format(Msg)
-                           || Msg <- parse_msgs(Msgs),
-                              logplex_utils:filter(Msg, Filters) ]),
+                         Data),
             tail_loop(Socket, Buffer, Filters);
         {tcp_data, Socket, _} ->
             inet:setopts(Socket, [{active, once}]),
@@ -398,20 +397,25 @@ tail_loop(Socket, Buffer, Filters) ->
             ok
     end.
 
-parse_msgs(Msgs) ->
-    [ case Msg of
-          {loss_indication, N, When} ->
-              #msg{time = logplex_syslog_utils:datetime(now),
-                   source = <<"logplex">>,
-                   ps = <<"1">>,
-                   content=io_lib:format("Tail buffer overflowed. "
-                                         "~p messages lost since ~s.",
-                                         [N, logplex_syslog_utils:datetime(When)]
-                                        )};
-          _ when is_binary(Msg) ->
-              logplex_utils:parse_msg(Msg)
-      end
-      || Msg <- Msgs ].
+tail_filter(Filters) ->
+    fun (Item) ->
+            M = case Item of
+                    {loss_indication, N, When} ->
+                        #msg{time = logplex_syslog_utils:datetime(now),
+                             source = <<"logplex">>,
+                             ps = <<"1">>,
+                             content=io_lib:format("Tail buffer overflowed. "
+                                               "~p messages lost since ~s.",
+                                                   [N, logplex_syslog_utils:datetime(When)]
+                                                  )};
+                    {msg, Msg} when is_binary(Msg) ->
+                        logplex_utils:parse_msg(Msg)
+                end,
+            case logplex_utils:filter(M, Filters) of
+                false -> skip;
+                true -> {frame, logplex_utils:format(M)}
+            end
+    end.
 
 filters(Data) ->
     filters(Data, []).
