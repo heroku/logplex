@@ -223,7 +223,7 @@ handle_child_death(Pid) ->
             ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
                   [Pid, NewPid]);
         {logplex_redis_buffer_map, {{Shard, {Url, Pid}}, Map, V}} ->
-            NewPid = add_pool(Url),
+            NewPid = add_buffer(Url),
             NewMap = dict:store(Shard, {Url, NewPid}, Map),
             logplex_shard_info:save(logplex_redis_buffer_map, NewMap, V),
             ?INFO("at=write_pool_restart oldpid=~p newpid=~p",
