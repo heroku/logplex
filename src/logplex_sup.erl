@@ -58,10 +58,6 @@ init([]) ->
          {logplex_worker_sup, start_link,
           [logplex_redis_writer_sup, logplex_redis_writer]},
          permanent, 2000, worker, [logplex_redis_writer_sup]}
-       ,{logplex_redis_buffer_sup,
-         {logplex_queue_sup, start_link,
-          [logplex_redis_buffer_sup, logplex_redis_buffer]},
-         permanent, 2000, worker, [logplex_redis_buffer_sup]}
        ,{logplex_read_queue_sup,
          {logplex_queue_sup, start_link,
           [logplex_read_queue_sup, logplex_read_queue]},

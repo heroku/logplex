@@ -12,8 +12,13 @@
               }).
 
 -type msg() :: binary() | tuple().
+-type loss_indication() :: {loss_indication,
+                            N::non_neg_integer(),
+                            When::erlang:timestamp()}.
+-type framing_fun()::fun (({msg, msg()} | loss_indication()) ->
+                                 {frame, iolist()} | skip).
 -opaque buf() :: #lpdb{}.
--export_type([buf/0]).
+-export_type([buf/0, framing_fun/0]).
 
 -export([new/0
          ,new/1
@@ -23,6 +28,7 @@
          ,empty/1
          ,pop/1
          ,to_list/1
+         ,to_pkts/3
          ]).
 
 -include_lib("proper/include/proper.hrl").
@@ -52,8 +58,7 @@ push_ext(Msg, Buf = #lpdb{}) ->
 
 -spec pop(buf()) -> {empty, buf()} |
                     {{msg, msg()}, buf()} |
-                    {{loss_indication, N::non_neg_integer(),
-                      When::erlang:timestamp()}}.
+                    {loss_indication(), buf()}.
 pop(Buf = #lpdb{loss_count = 0,
                 messages = Q}) ->
     case queue:out(Q) of
@@ -86,8 +91,16 @@ empty(Buf = #lpdb{}) ->
 len(#lpdb{messages=Q}) ->
     queue:len(Q).
 
-to_list(#lpdb{messages = Q}) ->
-    queue:to_list(Q).
+-spec to_list(buf()) -> [msg()].
+to_list(#lpdb{messages = Q,
+              loss_count = 0}) ->
+    queue:to_list(Q);
+to_list(#lpdb{messages = Q,
+              loss_count = N,
+              loss_start = When})
+  when N > 0 ->
+    [{loss_indication, N, When} |
+     queue:to_list(Q)].
 
 insert(Msg, Buf = #lpdb{messages = Q}) ->
     Buf#lpdb{messages = queue:in(Msg, Q)}.
@@ -105,6 +118,50 @@ displace(Msg, Buf = #lpdb{messages = Q,
     NewQueue = queue:in(Msg, Q1),
     Buf#lpdb{messages = NewQueue,
              loss_count = N + 1}.
+
+-spec to_pkts(buf(), IdealBytes::pos_integer(),
+              framing_fun()) ->
+                     {iolist(), Count::non_neg_integer(), buf()}.
+to_pkts(Buf = #lpdb{},
+        Bytes, Fun) when is_integer(Bytes),
+                         is_function(Fun, 1) ->
+    to_pkts(Buf, Bytes, Bytes, Fun).
+
+to_pkts(Buf, BytesTotal, BytesRemaining, Fun)
+  when BytesRemaining > 0 ->
+    {Item, NewBuf} = pop(Buf),
+    Msg = case Item of
+              empty ->
+                  finished;
+              {loss_indication, _N, _When} ->
+                  Fun(Item);
+              {msg, _M} ->
+                  Fun(Item)
+          end,
+    case Msg of
+        finished ->
+            {[], 0, NewBuf};
+        skip ->
+            to_pkts(NewBuf, BytesTotal, BytesRemaining, Fun);
+        {frame, Data} ->
+            DataSize = iolist_size(Data),
+            case BytesRemaining - DataSize of
+                Remaining when Remaining > 0 ->
+                    {Rest, Count, FinalBuf} = to_pkts(NewBuf,
+                                                      BytesTotal,
+                                                      Remaining,
+                                                      Fun),
+                    {[Data, Rest], Count + 1, FinalBuf};
+                _ when DataSize > BytesTotal ->
+                    %% We will exceed bytes remaining, but this
+                    %% message is a pig, so send it anyway.
+                    {Data, 1, NewBuf};
+                _ ->
+                    %% Would have exceeded BytesRemaining, pretend we
+                    %% didn't pop it.
+                    {[], 0, Buf}
+            end
+    end.
 
 prop_push_msgs() ->
     ?FORALL(MsgList, list(g_log_msg()),

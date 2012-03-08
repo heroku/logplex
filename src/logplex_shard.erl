@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -24,8 +24,8 @@
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
-	     handle_info/2, terminate/2, code_change/3]).
+-export([start_link/0, init/1, handle_call/3, handle_cast/2,
+         handle_info/2, terminate/2, code_change/3]).
 
 -export([lookup/3, lookup_urls/0, urls/0]).
 
@@ -67,16 +67,6 @@ init([]) ->
     Urls = lookup_urls(),
 
     erlang:process_flag(trap_exit, true),
-
-    case length(supervisor:which_children(logplex_redis_buffer_sup)) of
-        N when N =:= length(Urls) ->
-            ?INFO("at=restart existing_redis_buffer_children=~p", [N]);
-        0 ->
-            [logplex_queue_sup:start_child(logplex_redis_buffer_sup,
-                                           [redis_buffer_args(Url)])
-             || Url <- Urls],
-            ?INFO("at=start new_redis_buffer_children=~p", [length(Urls)])
-    end,
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
@@ -147,18 +137,18 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
-code_change(v32, State, _Extra) ->
-    [begin
-         SI = logplex_shard_info:read(K),
-         {Map, Interval} = logplex_shard_info:map_interval(SI),
-         logplex_shard_info:save(K, Map, Interval)
-     end
-     || K <- [logplex_read_pool_map, logplex_redis_buffer_map]],
-    ?INFO("at=upgrade msg=\"read and redis buffer maps updated\"", []),
+code_change(v37, State, _Extra) ->
+    %% Need to link to existing redis buffer processes.
+    [ begin
+          link(Pid),
+          %% Exit(RemotePid, shutdown) will work as the supervisor
+          %% will simply delete the child and remove its spec
+          exit(Pid, shutdown)
+      end
+      || {_Id, Pid, worker, _Modules}
+             <- supervisor:which_children(logplex_redis_buffer_sup)],
     {ok, State};
-code_change(_OldVsn, State, trap_exits) ->
-    process_flag(trap_exit, true),
-    {ok, State};
+
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -178,35 +168,32 @@ lookup_urls() ->
 
 populate_info_table(Urls) ->
     %% Populate Read pool
-    Pools = add_pools(Urls, []),
+    ReadPools = [ {Url, add_pool(Url)} || Url <- Urls],
     {ok, Map1, Interval1} =
-        redis_shard:generate_map_and_interval(lists:sort(Pools)),
+        redis_shard:generate_map_and_interval(lists:sort(ReadPools)),
     logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
 
     %% Populate write pool
-    RedisBuffers =
-        [{logplex_queue:get(Pid, redis_url), Pid}
-         || {_Id, Pid, worker, _Modules}
-                <- supervisor:which_children(logplex_redis_buffer_sup)],
+    WritePools = [ {Url, add_buffer(Url)}
+                   || Url <- Urls],
     {ok, Map2, Interval2} =
-        redis_shard:generate_map_and_interval(lists:sort(RedisBuffers)),
+        redis_shard:generate_map_and_interval(lists:sort(WritePools)),
 
     logplex_shard_info:save(logplex_redis_buffer_map, Map2, Interval2),
 
     ok.
-
-add_pools([], Acc) -> Acc;
-
-add_pools([Url|Tail], Acc) ->
-    Pool = add_pool(Url),
-    add_pools(Tail, [{Url, Pool}|Acc]).
 
 add_pool(Url) ->
     Opts = redo_uri:parse(Url),
     {ok, Pool} = redo:start_link(undefined, Opts),
     Pool.
 
-redis_buffer_args(Url) ->
+add_buffer(Url) ->
+    Opts = redis_buffer_opts(Url),
+    {ok, Buffer} = logplex_queue:start_link(Opts),
+    Buffer.
+
+redis_buffer_opts(Url) ->
     MaxLength =
         case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
             false -> ?DEFAULT_LOGPLEX_REDIS_BUFFER_LENGTH;
@@ -228,20 +215,21 @@ redis_buffer_args(Url) ->
      ])}].
 
 handle_child_death(Pid) ->
-    {Map, V, _TS}
-        = logplex_shard_info:read(logplex_read_pool_map),
-    [ {Shard, {Url, Pid}} ] = shard_info(Pid, Map),
-    NewPid = add_pool(Url),
-    NewMap = dict:store(Shard, {Url, NewPid}, Map),
-    logplex_shard_info:save(logplex_read_pool_map, NewMap, V),
-    ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
-          [Pid, NewPid]),
+    case logplex_shard_info:pid_info(Pid) of
+        {logplex_read_pool_map, {{Shard, {Url, Pid}}, Map, V}} ->
+            NewPid = add_pool(Url),
+            NewMap = dict:store(Shard, {Url, NewPid}, Map),
+            logplex_shard_info:save(logplex_read_pool_map, NewMap, V),
+            ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
+                  [Pid, NewPid]);
+        {logplex_redis_buffer_map, {{Shard, {Url, Pid}}, Map, V}} ->
+            NewPid = add_buffer(Url),
+            NewMap = dict:store(Shard, {Url, NewPid}, Map),
+            logplex_shard_info:save(logplex_redis_buffer_map, NewMap, V),
+            ?INFO("at=write_pool_restart oldpid=~p newpid=~p",
+                  [Pid, NewPid])
+    end,
     ok.
-
-shard_info(Pid, Map) ->
-    [ Item ||
-        Item = {_Shard, {_Url, OldPid}} <- dict:to_list(Map),
-        OldPid =:= Pid].
 
 consistent(URLs) ->
     {Map, _V, _TS}

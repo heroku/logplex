@@ -83,8 +83,6 @@ handlers() ->
     [{['GET', "/healthcheck"], fun(Req, _Match) ->
         authorize(Req),
 
-        [throw({500, io_lib:format("Zero ~p child processes running", [Worker])}) || {Worker, 0} <- logplex_stats:workers()],
-
         RegisteredMods = [logplex_realtime, logplex_stats, logplex_tail, logplex_shard, tcp_acceptor],
         [(whereis(Name) == undefined orelse not is_process_alive(whereis(Name))) andalso throw({500, io_lib:format("Process dead: ~p", [Name])}) || Name <- RegisteredMods],
 
@@ -210,8 +208,13 @@ handlers() ->
                 gen_tcp:close(Socket);
             _ ->
                 logplex_stats:incr(session_tailed),
-                logplex_tail:register(ChannelId),
-                tail_loop(Socket, Filters)
+                {ok, Buffer} =
+                    logplex_tail_buffer:start_link(ChannelId, self()),
+                try
+                    tail_init(Socket, Buffer, Filters)
+                after
+                    exit(Buffer, shutdown)
+                end
         end,
 
         {200, ""}
@@ -297,7 +300,7 @@ handlers() ->
         Drains = logplex_channel:lookup_drains(list_to_integer(ChannelId)),
         not is_list(Drains) andalso exit({expected_list, Drains}),
         
-        Drains1 = [{struct, [{host, Host}, {port, Port}]} || #drain{host=Host, port=Port} <- Drains],
+        Drains1 = [{struct, [{token, Token}, {host, Host}, {port, Port}]} || #drain{token=Token, host=Host, port=Port} <- Drains, Host =/= undefined],
         {200, iolist_to_binary(mochijson2:encode(Drains1))}
     end},
 
@@ -374,18 +377,46 @@ filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
         false ->
             filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
     end.
-    
-tail_loop(Socket, Filters) ->
-    inet:setopts(Socket, [{packet, raw}, {active, once}]),
+
+tail_init(Socket, Buffer, Filters) ->
+    inet:setopts(Socket, [{active, once}]),
+    tail_loop(Socket, Buffer, Filters).
+
+tail_loop(Socket, Buffer, Filters) ->
+    logplex_tail_buffer:set_active(Buffer,
+                                   tail_filter(Filters)),
     receive
-        {log, Msg} ->
-            Msg1 = logplex_utils:parse_msg(Msg),
-            logplex_utils:filter(Msg1, Filters) andalso gen_tcp:send(Socket, logplex_utils:format(Msg1)),
-            tail_loop(Socket, Filters);
+        {logplex_tail_data, Buffer, Data} ->
+            gen_tcp:send(Socket,
+                         Data),
+            tail_loop(Socket, Buffer, Filters);
+        {tcp_data, Socket, _} ->
+            inet:setopts(Socket, [{active, once}]),
+            tail_loop(Socket, Buffer, Filters);
         {tcp_closed, Socket} ->
             ok;
         {tcp_error, Socket, _Reason} ->
             ok
+    end.
+
+tail_filter(Filters) ->
+    fun (Item) ->
+            M = case Item of
+                    {loss_indication, N, When} ->
+                        #msg{time = logplex_syslog_utils:datetime(now),
+                             source = <<"logplex">>,
+                             ps = <<"1">>,
+                             content=io_lib:format("Tail buffer overflowed. "
+                                               "~p messages lost since ~s.",
+                                                   [N, logplex_syslog_utils:datetime(When)]
+                                                  )};
+                    {msg, Msg} when is_binary(Msg) ->
+                        logplex_utils:parse_msg(Msg)
+                end,
+            case logplex_utils:filter(M, Filters) of
+                false -> skip;
+                true -> {frame, logplex_utils:format(M)}
+            end
     end.
 
 filters(Data) ->
