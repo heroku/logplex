@@ -44,34 +44,20 @@ incr(Key) ->
     incr(Key, 1).
 
 -spec incr(string() | key(), integer()) -> any().
-incr("work_queue_dropped", Inc) when is_integer(Inc) ->
-    incr(work_queue_dropped, Inc);
+incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
+    ets:update_counter(?MODULE, Key, Inc);
 
-incr("drain_buffer_dropped", Inc) when is_integer(Inc) ->
-    incr(drain_buffer_dropped, Inc);
-
-incr("redis_buffer_dropped", Inc) when is_integer(Inc) ->
-    incr(redis_buffer_dropped, Inc);
-
-incr(Key, Inc) when is_integer(Inc), is_atom(Key) ->
-    ets:update_counter(?MODULE, Key, Inc).
+incr(_Key, _Inc) ->
+    ok.
 
 -type key() :: 'message_received' |
                'message_processed' |
-               'message_routed' |
-               'message_dropped' |
-               'work_queue_dropped' |
-               'drain_buffer_dropped' |
-               'redis_buffer_dropped'.
+               'message_routed'.
 -spec keys() -> [key()].
 keys() ->
     [message_received
      ,message_processed
      ,message_routed
-     ,message_dropped
-     ,work_queue_dropped
-     ,drain_buffer_dropped
-     ,redis_buffer_dropped
     ].
 
 %%====================================================================
