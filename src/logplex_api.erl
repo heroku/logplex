@@ -406,8 +406,8 @@ tail_filter(Filters) ->
                         #msg{time = logplex_syslog_utils:datetime(now),
                              source = <<"logplex">>,
                              ps = <<"1">>,
-                             content=io_lib:format("Tail buffer overflowed. "
-                                               "~p messages lost since ~s.",
+                             content=io_lib:format("Error L11 (Tail buffer overflow) -> "
+                                                   "This tail session dropped ~p messages since ~s.",
                                                    [N, logplex_syslog_utils:datetime(When)]
                                                   )};
                     {msg, Msg} when is_binary(Msg) ->
