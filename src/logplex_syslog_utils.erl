@@ -54,8 +54,8 @@ overflow_msg(N, When) ->
         now,
         "logplex",
         "logplex",
-        "Logplex drain buffer overflowed."
-        " ~p messages lost since ~s.",
+        "Error L10 (Drain buffer overflow) -> This drain dropped ~p"
+        " messages since ~s.",
         [N,
          datetime(When)]).
 
