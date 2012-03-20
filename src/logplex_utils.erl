@@ -57,7 +57,7 @@ resolve_host(_) ->
 
 parse_msg(Msg) when is_binary(Msg) ->
     case re:run(Msg, "^<(\\d+)>(\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (.*)",
-                [multiline, {capture, all_but_first, binary}]) of
+                [dotall, {capture, all_but_first, binary}]) of
         {match, [_PriFac, _Lines, Time, _Host, Source, Ps, _, _, Content]} ->
             #msg{time=Time, source=Source, ps=Ps, content=Content};
         _ ->
