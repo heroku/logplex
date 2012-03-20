@@ -96,7 +96,7 @@ frame(Msg) when is_binary(Msg); is_list(Msg) ->
 
 -spec datetime(datetime()) -> iolist().
 datetime(now) ->
-    datetime(os:timestamp());
+    datetime(calendar:universal_time());
 datetime({_,_,_} = Now) ->
     DT = calendar:now_to_universal_time(Now),
     datetime(DT);
