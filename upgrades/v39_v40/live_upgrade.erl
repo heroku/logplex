@@ -22,5 +22,6 @@ UpgradeNode = fun () ->
   application:start(ehmon),
 
   io:format(whereis(user), "at=upgrade_end cur_vsn=40~n", []),
-  application:set_env(logplex, git_branch, "v40")
+  application:set_env(logplex, git_branch, "v40"),
+  ok
 end.

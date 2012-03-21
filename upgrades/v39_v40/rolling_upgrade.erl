@@ -17,7 +17,7 @@ f(RollingUpgrade).
 RollingUpgrade = fun (Nodes) ->
   lists:foldl(fun (N, {good, Upgraded}) ->
     case rpc:call(N, erlang, apply, [ UpgradeNode, [] ]) of
-      consistent ->
+      ok ->
         {good, [N | Upgraded]};
       Else ->
         {{bad, N, Else}, Upgraded}
