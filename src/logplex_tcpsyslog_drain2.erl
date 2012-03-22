@@ -452,7 +452,7 @@ buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
 pkt_fmt(DrainTok) ->
     Frame = fun (Msg) ->
                     SyslogMsg = logplex_syslog_utils:to_msg(Msg, DrainTok),
-                    logplex_syslog_utils:frame([SyslogMsg, $\n])
+                    logplex_syslog_utils:frame(SyslogMsg)
             end,
     fun ({loss_indication, N, When}) ->
             case logplex_app:config(tcp_syslog_send_loss_msg) of

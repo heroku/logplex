@@ -85,7 +85,8 @@ format(Msg) when is_record(Msg, msg) ->
             undefined -> <<>>;
             _ -> [<<"[">>, Msg#msg.ps, <<"]">>]
         end,
-    iolist_to_binary([Msg#msg.time, <<" ">>, Msg#msg.source, Ps, <<": ">>, Msg#msg.content, <<"\n">>]);
+    iolist_to_binary([Msg#msg.time, <<" ">>, Msg#msg.source, Ps, <<": ">>,
+                      nl(Msg#msg.content)]);
 
 format(_Msg) ->
     "".
