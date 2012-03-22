@@ -23,7 +23,8 @@
 -module(logplex_utils).
 -export([rpc/4, set_weight/1, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
-         empty_token/0, redis_opts/1, parse_redis_url/1, instance_name/0, heroku_domain/0]).
+         empty_token/0, redis_opts/1, parse_redis_url/1, instance_name/0, heroku_domain/0
+         ,nl/1]).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -88,6 +89,15 @@ format(Msg) when is_record(Msg, msg) ->
 
 format(_Msg) ->
     "".
+
+-spec nl(Msg::iolist()) -> iolist().
+nl(Msg) when is_binary(Msg) ->
+    case binary:at(Msg, byte_size(Msg)-1) of
+        $\n -> [Msg];
+        _ -> [Msg, $\n]
+    end;
+nl(Msg) when is_list(Msg) ->
+    nl(iolist_to_binary(Msg)).
 
 field_val(Key, Fields) ->
     field_val(Key, Fields, undefined).
