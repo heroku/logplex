@@ -14,8 +14,9 @@ UpgradeNode = fun () ->
 
   %% Stateless
   l(logplex_api),
-  l(logplex_syslog_utils),
   l(logplex_utils),
+  l(logplex_syslog_utils),
+  l(logplex_tcpsyslog_drain2),
 
   %% Add ehmon app
   code:add_pathz("deps/ehmon/ebin"),
