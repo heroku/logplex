@@ -92,6 +92,7 @@ format(_Msg) ->
     "".
 
 -spec nl(Msg::iolist()) -> iolist().
+nl(<<>>) -> <<"\n">>;
 nl(Msg) when is_binary(Msg) ->
     case binary:at(Msg, byte_size(Msg)-1) of
         $\n -> [Msg];
