@@ -351,6 +351,14 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
 authorize(Req) ->
     AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
     case Req:get_header_value("Authorization") of
+        [$B, $a, $s, $i, $c, $  | Encoded] ->
+            CoreUserPass = os:getenv("LOGPLEX_CORE_USERPASS"),
+            case binary_to_list(base64:decode(list_to_binary(Encoded))) of
+                CoreUserPass when is_list(CoreUserPass), length(CoreUserPass) > 0 ->
+                    true;
+                _ ->
+                    throw({401, <<"Not Authorized">>})
+            end;
         AuthKey ->
             true;
         _ ->
