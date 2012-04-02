@@ -172,7 +172,7 @@ handle_sync_event(Event, _From, StateName, State) ->
 %% @private
 handle_info({tcp, Sock, Data}, StateName,
             State = #state{sock = Sock}) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s state=~p"
+    ?WARN("drain_id=~p channel_id=~p dest=~s state=~p "
           "err=unexpected_peer_data data=~p",
           log_info(State, [StateName, Data])),
     {next_state, StateName, State};
