@@ -27,7 +27,7 @@
         ]).
 
 -export([create/0, delete/1, lookup/1,
-         lookup_tokens/1, lookup_drains/1, logs/2, info/1, info_v2/1]).
+         lookup_tokens/1, lookup_drains/1, logs/2, info/1]).
 
 -compile({no_auto_import,[whereis/1]}).
 
@@ -111,27 +111,8 @@ logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
 info(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
         #channel{} ->
-            Tokens = lookup_tokens(ChannelId),
-            Drains = lookup_drains(ChannelId),
-            [{channel_id, ChannelId},
-             {tokens, lists:sort([{Name, Token} || #token{id=Token, name=Name} <- Tokens])},
-             {drains, [iolist_to_binary([<<"syslog://">>, Host, ":", integer_to_list(Port)]) || #drain{host=Host, port=Port} <- Drains, Port>0]}];
-        _ ->
-            []
-    end.
-
-info_v2(ChannelId) when is_integer(ChannelId) ->
-    case lookup(ChannelId) of
-        #channel{} ->
-            Tokens = lookup_tokens(ChannelId),
-            Drains = lookup_drains(ChannelId),
-            [{channel_id, ChannelId},
-             {tokens, lists:sort([[{name, Name}, {token, Token}] || #token{id=Token, name=Name} <- Tokens])},
-             {drains, lists:sort([
-                [{id, DrainId},
-                 {token, DrainToken},
-                 {url, iolist_to_binary([<<"syslog://">>, Host, ":", integer_to_list(Port)])}]
-                  || #drain{id=DrainId, token=DrainToken, host=Host, port=Port} <- Drains, Port>0])}];
-        _ ->
-            []
+            {ChannelId,
+             lookup_tokens(ChannelId),
+             lookup_drains(ChannelId)};
+        _ -> not_found
     end.
