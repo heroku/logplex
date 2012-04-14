@@ -132,10 +132,11 @@ handlers() ->
     %% V2
     {['GET', "^/v2/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Info = logplex_channel:info_v2(list_to_integer(ChannelId)),
-        not is_list(Info) andalso exit({expected_list, Info}),
-
-        {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
+        case channel_info(api_v2, list_to_integer(ChannelId)) of
+            not_found -> not_found_json();
+            Info ->
+                {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
+        end
     end},
 
     {['DELETE', "^/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
