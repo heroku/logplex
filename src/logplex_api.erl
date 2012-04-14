@@ -271,6 +271,7 @@ handlers() ->
         {200, ""}
     end},
 
+    %% V1
     {['GET', "^/channels/(\\d+)/info$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         Info = channel_info(api_v1, ChannelId),
