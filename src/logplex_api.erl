@@ -582,7 +582,9 @@ wait_for_nsync() ->
             wait_for_nsync()
     end.
 
-channel_info(ApiVsn, ChannelId)  ->
+channel_info(ApiVsn, ChannelId) when is_list(ChannelId) ->
+    channel_info(ApiVsn, list_to_integer(ChannelId));
+channel_info(ApiVsn, ChannelId) when is_integer(ChannelId) ->
     case logplex_channel:info(ChannelId) of
         {ChannelId, Tokens, Drains} ->
             [{channel_id, ChannelId},
