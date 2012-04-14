@@ -191,7 +191,7 @@ handlers() ->
         A = os:timestamp(),
         Token = logplex_token:create(list_to_integer(ChannelId), Name),
         B = os:timestamp(),
-        not is_binary(Token) andalso exit({expected_binary, Token}),
+       not is_binary(Token) andalso exit({expected_binary, Token}),
 
         ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
             [Name, ChannelId, timer:now_diff(B,A) div 1000]),
@@ -595,14 +595,14 @@ channel_info(ApiVsn, ChannelId)  ->
         not_found -> not_found
     end.
 
-token_info(api_v1, #token{name=Name, token=Token}) ->
+token_info(api_v1, #token{name=Name, id=Token}) ->
     {Name, Token};
-token_info(api_v2, #token{name=Name, token=Token}) ->
+token_info(api_v2, #token{name=Name, id=Token}) ->
     [{name, Name},
      {token, Token}].
 
 drain_info(api_v1, Drain) ->
-    logplex_drain:iolist_to_binary(url(Drain));
+    iolist_to_binary(logplex_drain:url(Drain));
 drain_info(api_v2, Drain = #drain{id = Id, token = Token}) ->
     [{id, Id},
      {token, Token},
