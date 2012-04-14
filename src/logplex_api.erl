@@ -132,7 +132,7 @@ handlers() ->
     %% V2
     {['GET', "^/v2/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        case channel_info(api_v2, list_to_integer(ChannelId)) of
+        case channel_info(api_v2, ChannelId) of
             not_found -> not_found_json();
             Info ->
                 {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
@@ -273,7 +273,7 @@ handlers() ->
 
     {['GET', "^/channels/(\\d+)/info$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Info = logplex_channel:info(list_to_integer(ChannelId)),
+        Info = channel_info(api_v1, ChannelId),
         not is_list(Info) andalso exit({expected_list, Info}),
 
         {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
