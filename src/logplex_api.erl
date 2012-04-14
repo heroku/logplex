@@ -581,3 +581,6 @@ wait_for_nsync() ->
             timer:sleep(1000),
             wait_for_nsync()
     end.
+not_found_json() ->
+    Json = {struct, [{error, <<"Not found">>}]},
+    {404, iolist_to_binary(mochijson2:encode(Json))}.
