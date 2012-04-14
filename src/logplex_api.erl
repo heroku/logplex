@@ -167,13 +167,12 @@ handlers() ->
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
-        A = os:timestamp(),
-        Token = logplex_token:create(list_to_integer(ChannelId), TokenName),
-        B = os:timestamp(),
+        {Time, Token} = timer:tc(fun logplex_token:create/2,
+                                 [list_to_integer(ChannelId), TokenName]),
         not is_binary(Token) andalso exit({expected_binary, Token}),
 
         ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
-            [TokenName, ChannelId, timer:now_diff(B,A) div 1000]),
+            [TokenName, ChannelId, Time div 1000]),
 
         {201, Token}
     end},
@@ -189,13 +188,12 @@ handlers() ->
                 {error, <<"NAME is a required field">>}
             ]}))),
 
-        A = os:timestamp(),
-        Token = logplex_token:create(list_to_integer(ChannelId), Name),
-        B = os:timestamp(),
-       not is_binary(Token) andalso exit({expected_binary, Token}),
+       {Time, Token} = timer:tc(fun logplex_token:create/2,
+                                 [list_to_integer(ChannelId), Name]),
+        not is_binary(Token) andalso exit({expected_binary, Token}),
 
         ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
-            [Name, ChannelId, timer:now_diff(B,A) div 1000]),
+            [Name, ChannelId, Time div 1000]),
 
         {201, iolist_to_binary(mochijson2:encode({struct, [
             {name, Name}, {token, Token}
