@@ -581,6 +581,33 @@ wait_for_nsync() ->
             timer:sleep(1000),
             wait_for_nsync()
     end.
+
+channel_info(ApiVsn, ChannelId)  ->
+    case logplex_channel:info(ChannelId) of
+        {ChannelId, Tokens, Drains} ->
+            [{channel_id, ChannelId},
+             {tokens, lists:sort([ token_info(ApiVsn, Token)
+                                   || Token = #token{} <- Tokens])},
+
+             {drains, lists:sort([drain_info(ApiVsn, Drain)
+                                  || Drain = #drain{port = Port} <- Drains,
+                                     Port =/= 0])}];
+        not_found -> not_found
+    end.
+
+token_info(api_v1, #token{name=Name, token=Token}) ->
+    {Name, Token};
+token_info(api_v2, #token{name=Name, token=Token}) ->
+    [{name, Name},
+     {token, Token}].
+
+drain_info(api_v1, Drain) ->
+    logplex_drain:iolist_to_binary(url(Drain));
+drain_info(api_v2, Drain = #drain{id = Id, token = Token}) ->
+    [{id, Id},
+     {token, Token},
+     {url, iolist_to_binary(logplex_drain:url(Drain))}].
+
 not_found_json() ->
     Json = {struct, [{error, <<"Not found">>}]},
     {404, iolist_to_binary(mochijson2:encode(Json))}.
