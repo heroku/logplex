@@ -31,6 +31,9 @@
 -export([reserve_token/0, cache/3, create/5, create/4,
          delete/1, delete/3, clear_all/1, lookup/1]).
 
+-export([url/1
+        ]).
+
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
 
@@ -185,3 +188,6 @@ new_token(Retries) ->
         [#drain{}] -> new_token(Retries-1);
         [] -> Token
     end.
+
+url(#drain{host=Host, port=Port}) ->
+    [<<"syslog://">>, Host, ":", integer_to_list(Port)].

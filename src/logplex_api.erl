@@ -110,7 +110,7 @@ handlers() ->
         {RespCode, iolist_to_binary(mochijson2:encode(Json))}
     end},
 
-    {['POST', "/channels$"], fun(Req, _Match) ->
+    {['POST', "^/channels$"], fun(Req, _Match) ->
         authorize(Req),
         Body = Req:recv_body(),
         {struct, Params} = mochijson2:decode(Body),
@@ -129,12 +129,17 @@ handlers() ->
         {201, iolist_to_binary(mochijson2:encode({struct, Info}))}
     end},
 
-    {['POST', "/channels/(\\d+)/addon$"], fun(Req, [_ChannelId]) ->
+    %% V2
+    {['GET', "^/v2/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        {200, <<"OK">>}
+        case channel_info(api_v2, ChannelId) of
+            not_found -> not_found_json();
+            Info ->
+                {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
+        end
     end},
 
-    {['DELETE', "/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
+    {['DELETE', "^/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         case logplex_channel:delete(list_to_integer(ChannelId)) of
             ok -> {200, <<"OK">>};
@@ -142,25 +147,60 @@ handlers() ->
         end
     end},
 
-    {['POST', "/channels/(\\d+)/token$"], fun(Req, [ChannelId]) ->
+    %% V2
+    {['DELETE', "^/v2/channels/(\\d+)$"], fun(Req, [ChannelId]) ->
+        authorize(Req),
+        case logplex_channel:delete(list_to_integer(ChannelId)) of
+            ok ->
+                {200, <<>>};
+            {error, not_found} ->
+                {404, iolist_to_binary(mochijson2:encode({struct, [
+                    {error, <<"Not found">>}
+                ]}))}
+        end
+    end},
+
+    {['POST', "^/channels/(\\d+)/token$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         {struct, Params} = mochijson2:decode(Req:recv_body()),
 
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
-        A = os:timestamp(),
-        Token = logplex_token:create(list_to_integer(ChannelId), TokenName),
-        B = os:timestamp(),
+        {Time, Token} = timer:tc(fun logplex_token:create/2,
+                                 [list_to_integer(ChannelId), TokenName]),
         not is_binary(Token) andalso exit({expected_binary, Token}),
 
         ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
-            [TokenName, ChannelId, timer:now_diff(B,A) div 1000]),
+            [TokenName, ChannelId, Time div 1000]),
 
         {201, Token}
     end},
 
-    {['POST', "/sessions$"], fun(Req, _Match) ->
+    %% V2
+    {['POST', "^/v2/channels/(\\d+)/tokens$"], fun(Req, [ChannelId]) ->
+        authorize(Req),
+        {struct, Params} = mochijson2:decode(Req:recv_body()),
+
+        Name = proplists:get_value(<<"name">>, Params),
+        Name == undefined andalso
+            error_resp(422, iolist_to_binary(mochijson2:encode({struct, [
+                {error, <<"NAME is a required field">>}
+            ]}))),
+
+       {Time, Token} = timer:tc(fun logplex_token:create/2,
+                                 [list_to_integer(ChannelId), Name]),
+        not is_binary(Token) andalso exit({expected_binary, Token}),
+
+        ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
+            [Name, ChannelId, Time div 1000]),
+
+        {201, iolist_to_binary(mochijson2:encode({struct, [
+            {name, Name}, {token, Token}
+        ]}))}
+    end},
+
+    {['POST', "^/sessions$"], fun(Req, _Match) ->
         authorize(Req),
         Body = Req:recv_body(),
         Session = logplex_session:create(Body),
@@ -168,7 +208,18 @@ handlers() ->
         {201, Session}
     end},
 
-    {['GET', "/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
+    %% V2
+    {['POST', "^/v2/sessions$"], fun(Req, _Match) ->
+        authorize(Req),
+        Body = Req:recv_body(),
+        Session = logplex_session:create(Body),
+        not is_binary(Session) andalso exit({expected_binary, Session}),
+        {201, iolist_to_binary(mochijson2:encode({struct, [
+            {url, Session}
+        ]}))}
+    end},
+
+    {['GET', "^/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
         proplists:get_value("srv", Req:parse_qs()) == undefined
             andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version. If this error message persists then uninstall the Heroku client gem completely and re-install.\n">>),
         Body = logplex_session:lookup(list_to_binary("/sessions/" ++ Session)),
@@ -218,15 +269,16 @@ handlers() ->
         {200, ""}
     end},
 
-    {['GET', "/channels/(\\d+)/info$"], fun(Req, [ChannelId]) ->
+    %% V1
+    {['GET', "^/channels/(\\d+)/info$"], fun(Req, [ChannelId]) ->
         authorize(Req),
-        Info = logplex_channel:info(list_to_integer(ChannelId)),
+        Info = channel_info(api_v1, ChannelId),
         not is_list(Info) andalso exit({expected_list, Info}),
 
         {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
     end},
 
-    {['POST', "/channels/(\\d+)/drains/tokens$"], fun(Req, [ChannelId]) ->
+    {['POST', "^/channels/(\\d+)/drains/tokens$"], fun(Req, [ChannelId]) ->
         authorize(Req),
 
         {ok, DrainId, Token} = logplex_drain:reserve_token(),
@@ -238,7 +290,7 @@ handlers() ->
         {201, iolist_to_binary(mochijson2:encode({struct, Resp}))}
     end},
 
-    {['POST', "/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
+    {['POST', "^/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
         authorize(Req),
 
         {struct, Data} = mochijson2:decode(Req:recv_body()),
@@ -262,7 +314,7 @@ handlers() ->
         end  
     end},
 
-    {['POST', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    {['POST', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
 
         {struct, Data} = mochijson2:decode(Req:recv_body()),
@@ -293,7 +345,51 @@ handlers() ->
         end
     end},
 
-    {['GET', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    %% V2
+    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+        authorize(Req),
+
+        {struct, Data} = mochijson2:decode(Req:recv_body()),
+
+        Url = proplists:get_value(<<"url">>, Data, <<>>),
+
+        {Host, Port} =
+            case Url of
+                <<>> -> {undefined, undefined};
+                _ ->
+                    case catch http_uri_r15b:parse(binary_to_list(Url)) of
+                        {ok, {_Proto, _Auth, Host0, Port0, _Path, _}} ->
+                            {list_to_binary(Host0), Port0};
+                        _ ->
+                            error_resp(422,
+                            iolist_to_binary(mochijson2:encode(
+                            {struct, [{error, <<"Invalid drain url">>}]})))
+                    end
+            end,
+
+        case logplex_channel:lookup_drains(list_to_integer(ChannelId)) of
+            List when length(List) >= ?MAX_DRAINS ->
+                {422, iolist_to_binary(mochijson2:encode({struct, [
+                    {error, <<"You have already added the maximum number of drains allowed">>}]}))};
+            _ ->
+                {ok, DrainId, Token} = logplex_drain:reserve_token(),
+                case logplex_drain:create(DrainId, Token, list_to_integer(ChannelId), Host, Port) of
+                    #drain{} ->
+                        Resp = [
+                            {id, DrainId},
+                            {token, Token},
+                            {url, Url}
+                        ],
+                        {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
+                    {error, already_exists} ->
+                        {409, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Already exists">>}]}))};
+                    {error, invalid_drain} ->
+                        {422, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Invalid drain">>}]}))}
+                end
+        end
+    end},
+
+    {['GET', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
         Drains = logplex_channel:lookup_drains(list_to_integer(ChannelId)),
         not is_list(Drains) andalso exit({expected_list, Drains}),
@@ -302,7 +398,7 @@ handlers() ->
         {200, iolist_to_binary(mochijson2:encode(Drains1))}
     end},
 
-    {['DELETE', "/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    {['DELETE', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
 
         Data = Req:parse_qs(),
@@ -319,6 +415,22 @@ handlers() ->
                     ok -> {200, io_lib:format("Successfully removed drain syslog://~s:~s", [Host, Port])};
                     {error, not_found} -> {404, io_lib:format("Drain syslog://~s:~s does not exist", [Host, Port])}
                 end
+        end
+    end},
+
+    %% V2
+    {['DELETE', "^/v2/channels/(\\d+)/drains/(\\S+)$"], fun(Req, [ChannelId, DrainId]) ->
+        authorize(Req),
+
+        ChannelIdInt = list_to_integer(ChannelId),
+        case logplex_drain:lookup(list_to_integer(DrainId)) of
+            #drain{channel_id = Ch} when Ch == ChannelIdInt ->
+                ok = logplex_drain:delete(list_to_integer(DrainId)),
+                {200, <<>>};
+            _ ->
+                {404, iolist_to_binary(mochijson2:encode({struct, [
+                    {error, <<"Not found">>}
+                ]}))}
         end
     end}].
 
@@ -469,3 +581,35 @@ wait_for_nsync() ->
             timer:sleep(1000),
             wait_for_nsync()
     end.
+
+channel_info(ApiVsn, ChannelId) when is_list(ChannelId) ->
+    channel_info(ApiVsn, list_to_integer(ChannelId));
+channel_info(ApiVsn, ChannelId) when is_integer(ChannelId) ->
+    case logplex_channel:info(ChannelId) of
+        {ChannelId, Tokens, Drains} ->
+            [{channel_id, ChannelId},
+             {tokens, lists:sort([ token_info(ApiVsn, Token)
+                                   || Token = #token{} <- Tokens])},
+
+             {drains, lists:sort([drain_info(ApiVsn, Drain)
+                                  || Drain = #drain{port = Port} <- Drains,
+                                     Port =/= 0])}];
+        not_found -> not_found
+    end.
+
+token_info(api_v1, #token{name=Name, id=Token}) ->
+    {Name, Token};
+token_info(api_v2, #token{name=Name, id=Token}) ->
+    [{name, Name},
+     {token, Token}].
+
+drain_info(api_v1, Drain) ->
+    iolist_to_binary(logplex_drain:url(Drain));
+drain_info(api_v2, Drain = #drain{id = Id, token = Token}) ->
+    [{id, Id},
+     {token, Token},
+     {url, iolist_to_binary(logplex_drain:url(Drain))}].
+
+not_found_json() ->
+    Json = {struct, [{error, <<"Not found">>}]},
+    {404, iolist_to_binary(mochijson2:encode(Json))}.
