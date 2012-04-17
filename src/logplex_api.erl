@@ -462,9 +462,10 @@ authorize(Req) ->
     AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
     case Req:get_header_value("Authorization") of
         [$B, $a, $s, $i, $c, $  | Encoded] ->
-            CoreUserPass = os:getenv("LOGPLEX_CORE_USERPASS"),
-            case binary_to_list(base64:decode(list_to_binary(Encoded))) of
-                CoreUserPass when is_list(CoreUserPass), length(CoreUserPass) > 0 ->
+            TrustedValues = [os:getenv("LOGPLEX_CORE_USERPASS"),
+                             os:getenv("LOGPLEX_ION_USERPASS")],
+            case basic_auth_is_valid(binary_to_list(base64:decode(list_to_binary(Encoded))), TrustedValues) of
+                true ->
                     true;
                 _ ->
                     throw({401, <<"Not Authorized">>})
@@ -474,6 +475,15 @@ authorize(Req) ->
         _ ->
             throw({401, <<"Not Authorized">>})
     end.
+
+basic_auth_is_valid(Val, [Val|_]) when is_list(Val), length(Val) > 0 ->
+    true;
+
+basic_auth_is_valid(Val, [_|Tail]) ->
+    basic_auth_is_valid(Val, Tail);
+
+basic_auth_is_valid(_, []) ->
+    false.
 
 error_resp(RespCode, Body) ->
     throw({RespCode, Body}).
