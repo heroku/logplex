@@ -31,8 +31,9 @@
          ,to_pkts/3
          ]).
 
+-ifdef(TEST).
 -include_lib("proper/include/proper.hrl").
-
+-endif.
 
 -spec new() -> buf().
 new() ->
@@ -163,6 +164,8 @@ to_pkts(Buf, BytesTotal, BytesRemaining, Fun)
             end
     end.
 
+-ifdef(TEST).
+
 prop_push_msgs() ->
     ?FORALL(MsgList, list(g_log_msg()),
             begin
@@ -193,3 +196,5 @@ g_date(Offset) ->
     io_lib:format("~4.10.0B-~2.10.0B-~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B"
                   "Z+00:00",
                   [Y,M,D, H,MM,S]).
+
+-endif.
