@@ -1,7 +1,0 @@
-#!/bin/sh
-
-HOSTNAME=`hostname --fqdn`
-COOKIE=`awk -F"'" '/LOGPLEX_COOKIE/ { print $2 }' /home/logplex/keys.sh`
-HOME=/home/logplex
-
-erl -name nodes@$HOSTNAME -pa ebin -pa deps/*/ebin -hidden -setcookie $COOKIE -noinput -eval "logplex_utils:rpc('logplex@$HOSTNAME', 'logplex_utils', 'set_weight', [$1])" -s init stop
