@@ -314,6 +314,42 @@ handlers() ->
         end  
     end},
 
+    {['POST', "^/v2/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
+        authorize(Req),
+
+        {struct, Data} = mochijson2:decode(Req:recv_body()),
+
+        Url = proplists:get_value(<<"url">>, Data, <<>>),
+
+        {Host, Port} =
+            case Url of
+                <<>> -> {undefined, undefined};
+                _ ->
+                    case catch http_uri_r15b:parse(binary_to_list(Url)) of
+                        {ok, {_Proto, _Auth, Host0, Port0, _Path, _}} ->
+                            {list_to_binary(Host0), Port0};
+                        _ ->
+                            error_resp(422,
+                            iolist_to_binary(mochijson2:encode(
+                            {struct, [{error, <<"Invalid drain url">>}]})))
+                    end
+            end,
+
+        case logplex_drain:create(list_to_integer(DrainId), list_to_integer(ChannelId), Host, Port) of
+            #drain{token=Token} ->
+                Resp = [
+                    {id, list_to_integer(DrainId)},
+                    {token, Token},
+                    {url, Url}
+                ],
+                {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
+            {error, already_exists} ->
+                {409, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Already exists">>}]}))};
+            {error, invalid_drain} ->
+                {422, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Invalid drain">>}]}))}
+        end
+    end},
+
     {['POST', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
         authorize(Req),
 
