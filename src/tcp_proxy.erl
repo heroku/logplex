@@ -103,7 +103,8 @@ handle_info({tcp, Sock, Packet},
                    Class:Ex ->
                        ?WARN("at=process_msgs class=~p ex=~p "
                              "msg_len=~p stack=~p",
-                             [Class, Ex, length(Msgs), erlang:get_stacktrace()])
+                             [Class, Ex, length(Msgs), erlang:get_stacktrace()]),
+                       State
                end,
     inet:setopts(Sock, [{active, once}]),
     {noreply, NewState#state{buffer=NewBuf}};
