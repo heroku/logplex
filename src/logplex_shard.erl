@@ -317,7 +317,7 @@ prepare_new_shard_info(OldNewMap) ->
 -define(BACKUP_READ_MAP, backup_logplex_read_pool_map).
 -define(NEW_WRITE_MAP, new_logplex_redis_buffer_map).
 -define(OLD_WRITE_MAP, logplex_redis_buffer_map).
--define(BACKUP_WRITE_MAP, logplex_redis_buffer_map).
+-define(BACKUP_WRITE_MAP, backup_logplex_redis_buffer_map).
 
 delete_new_shard_info() ->
     logplex_shard_info:delete(?NEW_READ_MAP),
