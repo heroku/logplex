@@ -14,6 +14,7 @@
          ,map_interval/1
          ,pid_info/1
          ,map_list/1
+         ,pid_list/1
          ,copy/2
          ,delete/1
         ]).
@@ -102,6 +103,9 @@ pid_info(Pid, {Map, V, _TS}) ->
 map_list(Key) ->
     {Map, _, _} = read(Key),
     dict:to_list(Map).
+
+pid_list(Key) ->
+    [ Pid || {_, {_, Pid}} <- map_list(Key) ].
 
 copy(FromKey, ToKey) when FromKey =/= ToKey ->
     {Map, Interval, _} = read(FromKey),
