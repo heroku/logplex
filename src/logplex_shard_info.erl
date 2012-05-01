@@ -18,7 +18,9 @@
          ,delete/1
         ]).
 
--type key() :: 'logplex_read_pool_map' | 'logplex_redis_buffer_map'.
+-type key() :: 'logplex_read_pool_map' | 'logplex_redis_buffer_map' |
+               'new_logplex_read_pool_map' | 'new_logplex_redis_buffer_map' |
+               'backup_logplex_read_pool_map' | 'backup_logplex_redis_buffer_map'.
 -type map() :: dict().
 -type interval() :: pos_integer().
 -type shard_info() :: {map(), interval(), erlang:timestamp()}.
