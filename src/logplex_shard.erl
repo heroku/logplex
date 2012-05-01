@@ -227,7 +227,9 @@ handle_child_death(Pid) ->
             NewMap = dict:store(Shard, {Url, NewPid}, Map),
             logplex_shard_info:save(logplex_redis_buffer_map, NewMap, V),
             ?INFO("at=write_pool_restart oldpid=~p newpid=~p",
-                  [Pid, NewPid])
+                  [Pid, NewPid]);
+        undefined ->
+            ?WARN("at=trap_exit err=unknown_pid pid=~p", [Pid])
     end,
     ok.
 
