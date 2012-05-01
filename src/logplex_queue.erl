@@ -191,7 +191,9 @@ handle_cast({in, Packet}, #state{queue=Queue, length=Length, waiting=Waiting}=St
 handle_cast({max_length, MaxLength}, State) ->
     {noreply, State#state{max_length=MaxLength}};
 
-handle_cast(stop, State) ->
+handle_cast(stop, State = #state{workers=Workers}) ->
+    [ exit(Worker, shutdown) ||
+        Worker <- Workers ],
     {stop, normal, State};
 
 handle_cast({register, WorkerPid}, #state{workers=Workers}=State) ->
