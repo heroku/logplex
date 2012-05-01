@@ -118,6 +118,15 @@ handle_call(consistency_check, _From, State = #state{urls = Urls}) ->
                     {error, {C, E, erlang:get_stacktrace()}}
             end, State};
 
+handle_call({state_apply, F}, _From, State)
+  when is_function(F, 1) ->
+    case catch F(State) of
+        NewState = #state{} ->
+            {reply, ok, NewState};
+        Else ->
+            {reply, {error, Else}, State}
+    end;
+
 handle_call(urls, _From, State) ->
     {reply, State#state.urls, State};
 
