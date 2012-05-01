@@ -13,6 +13,9 @@
          ,cached_read/2
          ,map_interval/1
          ,pid_info/1
+         ,map_list/1
+         ,copy/2
+         ,delete/1
         ]).
 
 -type key() :: 'logplex_read_pool_map' | 'logplex_redis_buffer_map'.
@@ -93,3 +96,16 @@ pid_info(Pid, {Map, V, _TS}) ->
             {Item, Map, V};
         [] -> undefined
     end.
+
+map_list(Key) ->
+    {Map, _, _} = read(Key),
+    dict:to_list(Map).
+
+copy(FromKey, ToKey) when FromKey =/= ToKey ->
+    {Map, Interval, _} = read(FromKey),
+    save(ToKey, Map, Interval).
+
+delete('logplex_read_pool_map') -> {error, not_allowed};
+delete('logplex_redis_buffer_map') -> {error, not_allowed};
+delete(Key) ->
+    ets:delete(logplex_shard_info, Key).
