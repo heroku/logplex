@@ -33,7 +33,8 @@
 -export([prepare_new_urls/1,
          update_redis/1,
          prepare_url_update/2,
-         attempt_to_commit_url_update/1
+         attempt_to_commit_url_update/1,
+         make_update_permanent/1
         ]).
 
 -include("logplex.hrl").
@@ -118,6 +119,20 @@ handle_call({abort, new_shard_info}, _From, State) ->
 
 handle_call({prepare, {new_shard_info, OldNewMap}}, _From, State) ->
     {reply, prepare_new_shard_info(OldNewMap), State};
+
+handle_call({make_permanent, new_shard_info}, _From, State) ->
+    try
+        [ stop_buffer(B)
+          || B <- logplex_shard_info:pid_list(?OLD_WRITE_MAP) ],
+        logplex_shard_info:delete(?OLD_WRITE_MAP),
+        [ stop_pool(P)
+          || P <- logplex_shard_info:pid_list(?OLD_READ_MAP) ],
+        logplex_shard_info:delete(?OLD_READ_MAP),
+        {reply, ok, State}
+    catch
+        C:E ->
+            {reply, {error, {C,E}}, State}
+    end;
 
 handle_call(consistency_check, _From, State = #state{urls = Urls}) ->
     {reply, try consistent(Urls)
@@ -424,3 +439,14 @@ attempt_to_commit_url_update(Nodes) ->
 abort_url_update(Nodes) ->
     [ {N, catch gen_server:call({?MODULE, N}, {abort, new_shard_info})}
       || N <- Nodes].
+
+make_update_permanent(Nodes) ->
+    [ {N, catch gen_server:call({?MODULE, N},
+                                {make_permanent, new_shard_info})}
+      || N <- Nodes].
+
+stop_pool(Pid) ->
+    redo:shutdown(Pid).
+
+stop_buffer(Pid) ->
+    logplex_queue:stop(Pid).
