@@ -39,6 +39,13 @@
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
 
+-define(NEW_READ_MAP, new_logplex_read_pool_map).
+-define(CURRENT_READ_MAP, logplex_read_pool_map).
+-define(BACKUP_READ_MAP, backup_logplex_read_pool_map).
+-define(NEW_WRITE_MAP, new_logplex_redis_buffer_map).
+-define(CURRENT_WRITE_MAP, logplex_redis_buffer_map).
+-define(BACKUP_WRITE_MAP, backup_logplex_redis_buffer_map).
+
 -record(state, {urls}).
 
 -define(TIMEOUT, 30000).
@@ -312,21 +319,14 @@ prepare_new_shard_info(OldNewMap) ->
             {error, {C,E}}
     end.
 
--define(NEW_READ_MAP, new_logplex_read_pool_map).
--define(OLD_READ_MAP, logplex_read_pool_map).
--define(BACKUP_READ_MAP, backup_logplex_read_pool_map).
--define(NEW_WRITE_MAP, new_logplex_redis_buffer_map).
--define(OLD_WRITE_MAP, logplex_redis_buffer_map).
--define(BACKUP_WRITE_MAP, backup_logplex_redis_buffer_map).
-
 delete_new_shard_info() ->
     logplex_shard_info:delete(?NEW_READ_MAP),
     logplex_shard_info:delete(?NEW_WRITE_MAP),
     ok.
 
 backup_shard_info() ->
-    logplex_shard_info:copy(?OLD_WRITE_MAP, ?BACKUP_WRITE_MAP),
-    logplex_shard_info:copy(?OLD_READ_MAP, ?BACKUP_READ_MAP),
+    logplex_shard_info:copy(?CURRENT_WRITE_MAP, ?BACKUP_WRITE_MAP),
+    logplex_shard_info:copy(?CURRENT_READ_MAP, ?BACKUP_READ_MAP),
     ok.
 
 have_backup() ->
@@ -334,24 +334,24 @@ have_backup() ->
         andalso logplex_shard_info:read(?BACKUP_READ_MAP) =/= no_such_key.
 
 revert_shard_info() ->
-    logplex_shard_info:copy(?BACKUP_WRITE_MAP, ?OLD_WRITE_MAP),
-    logplex_shard_info:copy(?BACKUP_READ_MAP, ?OLD_READ_MAP),
+    logplex_shard_info:copy(?BACKUP_WRITE_MAP, ?CURRENT_WRITE_MAP),
+    logplex_shard_info:copy(?BACKUP_READ_MAP, ?CURRENT_READ_MAP),
     ok.
 
 make_new_shard_info_permanent() ->
-    logplex_shard_info:copy(?NEW_WRITE_MAP, ?OLD_WRITE_MAP),
-    logplex_shard_info:copy(?NEW_READ_MAP, ?OLD_READ_MAP),
+    logplex_shard_info:copy(?NEW_WRITE_MAP, ?CURRENT_WRITE_MAP),
+    logplex_shard_info:copy(?NEW_READ_MAP, ?CURRENT_READ_MAP),
     ok.
 
 new_shard_info(OldNewMap) ->
-    {RM, RI, _} = logplex_shard_info:read(?OLD_READ_MAP),
+    {RM, RI, _} = logplex_shard_info:read(?CURRENT_READ_MAP),
     NewReadMap = dict:map(fun (_Slice, {OldUrl, _OldPid}) ->
                                   NewUrl = proplists:get_value(OldUrl, OldNewMap),
                                   NewPid = add_pool(NewUrl),
                                   {NewUrl, NewPid}
                           end,
                           RM),
-    {WM, WI, _} = logplex_shard_info:read(?OLD_WRITE_MAP),
+    {WM, WI, _} = logplex_shard_info:read(?CURRENT_WRITE_MAP),
     NewWriteMap = dict:map(fun (_Slice, {OldUrl, _OldPid}) ->
                                    NewUrl = proplists:get_value(OldUrl, OldNewMap),
                                    NewPid = add_buffer(NewUrl),
