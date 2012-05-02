@@ -313,11 +313,10 @@ consistent(URLs) ->
 %% Update the boot-time list of redis servers
 update_redis(OldNewMap) ->
     {OldUrls, NewUrls} = lists:unzip(OldNewMap),
-    redo:cmd(config, [[<<"SADD">>, <<"redis:shard:urls">> |
-                       [ list_to_binary(New) || New <- NewUrls]],
-                      [<<"SREM">>, <<"redis:shard:urls">> |
-                       [ list_to_binary(Old) || Old <- OldUrls]]
-                     ]).
+    [redo:cmd(config, [<<"SADD">>, <<"redis:shard:urls">>, list_to_binary(New)])
+     || New <- NewUrls] ++
+        [redo:cmd(config, [<<"SREM">>, <<"redis:shard:urls">>, list_to_binary(Old)])
+         || Old <- OldUrls].
 
 %% Attempt to create new shard maps with new redo processes. Catch
 %% errors and destroy any created processes.
