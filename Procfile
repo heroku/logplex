@@ -1,1 +1,1 @@
-logplex: bin/logplex.local
+logplex: bin/logplex

@@ -13,9 +13,15 @@
          ,cached_read/2
          ,map_interval/1
          ,pid_info/1
+         ,map_list/1
+         ,pid_list/1
+         ,copy/2
+         ,delete/1
         ]).
 
--type key() :: 'logplex_read_pool_map' | 'logplex_redis_buffer_map'.
+-type key() :: 'logplex_read_pool_map' | 'logplex_redis_buffer_map' |
+               'new_logplex_read_pool_map' | 'new_logplex_redis_buffer_map' |
+               'backup_logplex_read_pool_map' | 'backup_logplex_redis_buffer_map'.
 -type map() :: dict().
 -type interval() :: pos_integer().
 -type shard_info() :: {map(), interval(), erlang:timestamp()}.
@@ -93,3 +99,19 @@ pid_info(Pid, {Map, V, _TS}) ->
             {Item, Map, V};
         [] -> undefined
     end.
+
+map_list(Key) ->
+    {Map, _, _} = read(Key),
+    dict:to_list(Map).
+
+pid_list(Key) ->
+    [ Pid || {_, {_, Pid}} <- map_list(Key) ].
+
+copy(FromKey, ToKey) when FromKey =/= ToKey ->
+    {Map, Interval, _} = read(FromKey),
+    save(ToKey, Map, Interval).
+
+delete('logplex_read_pool_map') -> {error, not_allowed};
+delete('logplex_redis_buffer_map') -> {error, not_allowed};
+delete(Key) ->
+    ets:delete(logplex_shard_info, Key).

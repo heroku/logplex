@@ -1,3 +1,0 @@
-#!/bin/sh
-
-envdir keys erl -name logplex_api_test@$hostname -pa ebin -pa deps/*/ebin -boot start_sasl -boot crypto -noshell -eval 'eunit:test({application,logplex})' -s init stop
