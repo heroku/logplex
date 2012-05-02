@@ -125,9 +125,11 @@ handle_call({make_permanent, new_shard_info}, _From, State) ->
         [ stop_buffer(B)
           || B <- logplex_shard_info:pid_list(?BACKUP_WRITE_MAP) ],
         logplex_shard_info:delete(?BACKUP_WRITE_MAP),
+        logplex_shard_info:delete(?NEW_WRITE_MAP),
         [ stop_pool(P)
           || P <- logplex_shard_info:pid_list(?BACKUP_READ_MAP) ],
         logplex_shard_info:delete(?BACKUP_READ_MAP),
+        logplex_shard_info:delete(?NEW_READ_MAP),
         {reply, ok, State}
     catch
         C:E ->
