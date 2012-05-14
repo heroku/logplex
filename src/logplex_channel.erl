@@ -70,7 +70,7 @@ delete(ChannelId) when is_integer(ChannelId) ->
             {error, not_found};
         _ ->
             [logplex_token:delete(TokenId) || #token{id=TokenId} <- lookup_tokens(ChannelId)],
-            [logplex_drain:delete(DrainId) || #drain{id=DrainId} <- lookup_drains(ChannelId)], 
+            logplex_drain:delete_by_channel(ChannelId),
             redis_helper:delete_channel(ChannelId)
     end.
 
@@ -91,7 +91,7 @@ token_match_expr(ChannelId) ->
     T#token{channel_id=ChannelId}.
 
 drain_match_expr(ChannelId) ->
-    #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host='_', port='_', tcp='_'}.
+    logplex_drain:lookup_by_channel(ChannelId).
 
 logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
 

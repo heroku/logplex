@@ -29,13 +29,17 @@
         ]).
 
 -export([reserve_token/0, cache/3, create/5, create/4,
-         delete/1, delete/3, clear_all/1, lookup/1]).
+         delete/1, delete/3, lookup/1
+         ,delete_by_channel/1
+         ,lookup_by_channel/1
+        ]).
 
 -export([url/1
         ]).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
+-include_lib("stdlib/include/ms_transform.hrl").
 
 -compile({no_auto_import,[whereis/1]}).
 
@@ -191,3 +195,16 @@ new_token(Retries) ->
 
 url(#drain{host=Host, port=Port}) ->
     [<<"syslog://">>, Host, ":", integer_to_list(Port)].
+delete_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select_delete(drains,
+                      ets:fun2ms(fun (#drain{channel_id=C})
+                                     when C =:= ChannelId ->
+                                         true
+                                 end)).
+
+lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select(drains,
+               ets:fun2ms(fun (#drain{channel_id=C})
+                                when C =:= ChannelId ->
+                                  object()
+                          end)).
