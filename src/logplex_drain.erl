@@ -113,7 +113,7 @@ create(DrainId, Token, ChannelId, Host, Port) when is_integer(DrainId),
                                                    is_integer(ChannelId),
                                                    is_binary(Host),
                                                    (is_integer(Port) orelse Port == undefined) ->
-    case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port, tcp='_'}) of
+    case ets:match_object(drains, #drain{channel_id=ChannelId, host=Host, port=Port, _='_'}) of
         [_] ->
             {error, already_exists};
         [] ->
@@ -137,7 +137,7 @@ create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
                                             is_binary(Host) ->
     case ets:lookup(drains, DrainId) of
         [#drain{channel_id=ChannelId, token=Token}] ->
-            case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port, tcp='_'}) of
+            case ets:match_object(drains, #drain{channel_id=ChannelId, host=Host, port=Port, _='_'}) of
                 [_] ->
                     {error, already_exists};
                 [] ->
@@ -159,7 +159,7 @@ create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
 
 delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
     Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
-    case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port1, tcp='_'}) of
+    case ets:match_object(drains, #drain{channel_id=ChannelId, host=Host, port=Port1, _='_'}) of
         [#drain{id=DrainId}|_] ->
             delete(DrainId);
         _ ->
@@ -188,7 +188,7 @@ new_token(0) ->
 
 new_token(Retries) ->
     Token = list_to_binary("d." ++ uuid:to_string(uuid:v4())),
-    case ets:match_object(drains, #drain{id='_', channel_id='_', token=Token, resolved_host='_', host='_', port='_', tcp='_'}) of
+    case ets:match_object(drains, #drain{token=Token, _='_'}) of
         [#drain{}] -> new_token(Retries-1);
         [] -> Token
     end.
