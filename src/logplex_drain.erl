@@ -69,8 +69,9 @@ start_mod({error, _} = Err, _Drain, _Args) ->
 
 mod(tcpsyslog) -> logplex_tcpsyslog_drain2;
 mod(udpsyslog) -> logplex_udpsyslog_drain;
-mod(tcpsyslog2) -> logplex_tcpsyslog_drain2;
-mod(tcpsyslog_old) -> logplex_tcpsyslog_drain.
+mod(http) -> logplex_http_drain;
+mod(tcpsyslog2) -> {error, deprecated};
+mod(tcpsyslog_old) -> {error, deprecated}.
 
 stop(DrainId) ->
     stop(DrainId, timer:seconds(5)).
