@@ -26,7 +26,6 @@
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
 
-
 %% nsync callbacks
 
 %% LOAD
