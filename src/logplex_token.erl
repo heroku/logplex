@@ -25,6 +25,13 @@
 -export([create/2, lookup/1, delete/1]).
 -export([lookup_by_channel/1]).
 
+-type id() :: binary().
+-type name() :: binary().
+
+-export_type([id/0
+              ,name/0
+             ]).
+
 -include("logplex.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
 
