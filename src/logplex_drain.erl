@@ -46,6 +46,7 @@
 -type id() :: integer().
 -type token() :: binary().
 -type type() :: 'tcpsyslog' | 'http'.
+-type deprecated_types() :: 'tcpsyslog2' | 'tcpsyslog_old'.
 
 -export_type([id/0
               ,token/0
@@ -67,11 +68,13 @@ start_mod(Mod, DrainId, Args) when is_atom(Mod) ->
 start_mod({error, _} = Err, _Drain, _Args) ->
     Err.
 
+-spec mod(type() | deprecated_types()) -> atom() | {'error', term()}.
 mod(tcpsyslog) -> logplex_tcpsyslog_drain2;
 mod(udpsyslog) -> logplex_udpsyslog_drain;
 mod(http) -> logplex_http_drain;
 mod(tcpsyslog2) -> {error, deprecated};
-mod(tcpsyslog_old) -> {error, deprecated}.
+mod(tcpsyslog_old) -> {error, deprecated};
+mod(_) -> {error, unknown_drain_type}.
 
 stop(DrainId) ->
     stop(DrainId, timer:seconds(5)).
