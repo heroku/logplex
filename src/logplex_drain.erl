@@ -24,6 +24,7 @@
 
 -export([whereis/1
          ,start/3
+         ,start/1
          ,stop/1
          ,stop/2
         ]).
@@ -56,6 +57,9 @@
 
 new(Id, ChannelId, Token, Type, Uri) ->
     #drain{id=Id, channel_id=ChannelId, token=Token, type=Type, uri=Uri}.
+
+start(Drain = #drain{type=Type, id=Id}) ->
+    start(Type, Id, Drain).
 
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
