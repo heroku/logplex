@@ -145,31 +145,14 @@ create_drain(Id, Dict) ->
                     ?ERR("~p ~p ~p ~p",
                          [create_drain, missing_token, Id, dict:to_list(Dict)]);
                 Token ->
-                    Host = dict_find(<<"host">>, Dict),
-                    Port =
-                        case dict_find(<<"port">>, Dict) of
-                            undefined -> undefined;
-                            Val2 -> list_to_integer(binary_to_list(Val2))
-                        end,
-                    Tcp = (dict_find(<<"tcp">>, Dict) =/= <<"false">>),
-                    case Tcp of
-                        true ->
-                            logplex_drain:start(tcpsyslog, Id,
-                                                [Ch, Id, Token, Host, Port]);
-                        _ ->
-                            logplex_drain:start(udpsyslog, Id,
-                                                [Ch, Id, Token, Host, Port])
-                    end,
-                    Drain = #drain{
-                        id=Id,
-                        channel_id=Ch,
-                        token=Token,
-                        host=Host,
-                        port=Port,
-                        tcp=Tcp
-                    },
-                    ets:insert(drains, Drain),
-                    Drain
+                    case logplex_drain:valid_uri(drain_uri(Dict)) of
+                        {valid, Type, Uri} ->
+                            Drain = logplex_drain:new(Id, Ch, Token,
+                                                      Type, Uri),
+                            ets:insert(drains, Drain),
+                            logplex_drain:start(Drain),
+                            Drain
+                    end
             end
     end.
 
