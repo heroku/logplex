@@ -45,8 +45,11 @@
 
 -type id() :: integer().
 -type token() :: binary().
+-type type() :: 'tcpsyslog' | 'http'.
+
 -export_type([id/0
               ,token/0
+              ,type/0
              ]).
 
 whereis({drain, _DrainId} = Name) ->
