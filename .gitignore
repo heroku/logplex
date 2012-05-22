@@ -9,3 +9,4 @@ src/*.swp
 deps/
 *~
 ebin/logplex.app
+.eunit/
