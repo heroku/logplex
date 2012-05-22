@@ -81,16 +81,9 @@ lookup(ChannelId) when is_integer(ChannelId) ->
     end.
 
 lookup_tokens(ChannelId) when is_integer(ChannelId) ->
-    ets:match_object(tokens, token_match_expr(ChannelId)).
+    logplex_token:lookup_by_channel(ChannelId).
 
 lookup_drains(ChannelId) when is_integer(ChannelId) ->
-    ets:match_object(drains, drain_match_expr(ChannelId)).
-
-token_match_expr(ChannelId) ->
-    T = logplex_utils:empty_token(),
-    T#token{channel_id=ChannelId}.
-
-drain_match_expr(ChannelId) ->
     logplex_drain:lookup_by_channel(ChannelId).
 
 logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
