@@ -37,6 +37,9 @@
         ]).
 
 -export([url/1
+         ,parse_url/1
+         ,valid_url/1
+         ,valid_uri/1
         ]).
 
 -include("logplex.hrl").
@@ -198,6 +201,32 @@ new_token(Retries) ->
 
 url(#drain{host=Host, port=Port}) ->
     [<<"syslog://">>, Host, ":", integer_to_list(Port)].
+
+parse_url(Url) ->
+    case uri:parse(Url) of
+        {ok, Uri} ->
+            Uri;
+        {error, _} = Err ->
+            Err
+    end.
+
+valid_url(Url) ->
+    valid_uri(parse_url(Url)).
+
+-spec valid_uri(uri:parse_uri() | {error, term()}) ->
+                       {valid, type(), uri:parsed_uri()} |
+                       {error, term()}.
+valid_uri({syslog, _, _Host, _Port, _, _} = Uri) ->
+    {valid, tcpsyslog, Uri};
+valid_uri({http, _, _, _, _, _} = Uri) ->
+    {valid, http, Uri};
+valid_uri({https, _, _, _, _, _} = Uri) ->
+    {valid, http, Uri};
+valid_uri({Type, _, _, _, _, _}) ->
+    {error, {unknown_type, Type}};
+valid_uri({error, _} = Err) -> Err.
+
+
 delete_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select_delete(drains,
                       ets:fun2ms(fun (#drain{channel_id=C})
