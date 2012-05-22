@@ -23,8 +23,10 @@
 -module(logplex_token).
 
 -export([create/2, lookup/1, delete/1]).
+-export([lookup_by_channel/1]).
 
 -include("logplex.hrl").
+-include_lib("stdlib/include/ms_transform.hrl").
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_token(),
@@ -64,3 +66,10 @@ new_token(Retries) ->
         [#token{}] -> new_token(Retries-1);
         [] -> Token
     end.
+
+lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select(tokens,
+               ets:fun2ms(fun (#token{channel_id=C})
+                                when C =:= ChannelId ->
+                                  object()
+                          end)).
