@@ -24,6 +24,7 @@
 -export([loop/1, start_link/0, stop/0]).
 
 -include("logplex.hrl").
+-include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 
 -define(HDR, [{"Content-Type", "text/html"}]).

@@ -43,6 +43,7 @@
         ]).
 
 -include("logplex.hrl").
+-include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
 
