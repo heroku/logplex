@@ -24,7 +24,7 @@
 
 -export([create/2, lookup/1, delete/1]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_token(),
