@@ -59,7 +59,7 @@ new_token() ->
 new_token(0) ->
     exit({error, failed_to_provision_token});
 
-new_token(Retries) ->
+new_token(Retries) when is_integer(Retries), Retries > 0 ->
     Token = list_to_binary("t." ++ uuid:to_string(uuid:v4())),
     T = logplex_utils:empty_token(),
     case ets:match_object(tokens, T#token{id=Token}) of
