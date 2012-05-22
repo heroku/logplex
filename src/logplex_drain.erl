@@ -55,29 +55,22 @@
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
--spec start('tcpsyslog_old' | 'tcpsyslog' | 'tcpsyslog2' | 'udpsyslog',
-            id(), list()) -> any().
-start(tcpsyslog_old, DrainId, Args) ->
-    supervisor:start_child(logplex_drain_sup,
-                           {DrainId,
-                            {logplex_tcpsyslog_drain, start_link, Args},
-                            transient, brutal_kill, worker,
-                            [logplex_tcpsyslog_drain]});
-start(Type, DrainId, Args)
-  when Type =:= tcpsyslog;
-       Type =:= tcpsyslog2 ->
-    supervisor:start_child(logplex_drain_sup,
-                           {DrainId,
-                            {logplex_tcpsyslog_drain2, start_link, Args},
-                            transient, brutal_kill, worker,
-                            [logplex_tcpsyslog_drain]});
-start(udpsyslog, DrainId, Args) ->
-    supervisor:start_child(logplex_drain_sup,
-                           {DrainId,
-                            {logplex_udpsyslog_drain, start_link, Args},
-                            transient, brutal_kill, worker,
-                            [logplex_tcpsyslog_drain]}).
+start(Type, DrainId, Args) ->
+    start_mod(mod(Type), DrainId, Args).
 
+start_mod(Mod, DrainId, Args) when is_atom(Mod) ->
+    supervisor:start_child(logplex_drain_sup,
+                           {DrainId,
+                            {Mod, start_link, Args},
+                            transient, brutal_kill, worker,
+                            [Mod]});
+start_mod({error, _} = Err, _Drain, _Args) ->
+    Err.
+
+mod(tcpsyslog) -> logplex_tcpsyslog_drain2;
+mod(udpsyslog) -> logplex_udpsyslog_drain;
+mod(tcpsyslog2) -> logplex_tcpsyslog_drain2;
+mod(tcpsyslog_old) -> logplex_tcpsyslog_drain.
 
 stop(DrainId) ->
     stop(DrainId, timer:seconds(5)).
