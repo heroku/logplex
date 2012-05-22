@@ -444,7 +444,7 @@ handlers() ->
 
         case Host == undefined andalso Port == undefined of
             true ->
-                logplex_drain:clear_all(list_to_integer(ChannelId)),
+                logplex_drain:delete_by_channel(list_to_integer(ChannelId)),
                 {200, <<"Cleared all drains">>};
             false ->
                 case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of

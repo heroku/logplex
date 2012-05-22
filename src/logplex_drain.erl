@@ -169,11 +169,6 @@ delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
 delete(DrainId) when is_integer(DrainId) ->
     redis_helper:delete_drain(DrainId).
 
-clear_all(ChannelId) when is_integer(ChannelId) ->
-    List = ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host='_', port='_', tcp='_'}),
-    [delete(DrainId) || #drain{id=DrainId} <- List],
-    ok.
-
 lookup(DrainId) when is_integer(DrainId) ->
     case ets:lookup(drains, DrainId) of
         [Drain] -> Drain;
