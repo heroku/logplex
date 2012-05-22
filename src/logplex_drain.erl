@@ -30,6 +30,7 @@
 
 -export([reserve_token/0, cache/3, create/5, create/4,
          delete/1, delete/3, lookup/1
+         ,new/5
          ,delete_by_channel/1
          ,lookup_by_channel/1
         ]).
@@ -52,6 +53,9 @@
               ,token/0
               ,type/0
              ]).
+
+new(Id, ChannelId, Token, Type, Uri) ->
+    #drain{id=Id, channel_id=ChannelId, token=Token, type=Type, uri=Uri}.
 
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
