@@ -173,6 +173,25 @@ create_drain(Id, Dict) ->
             end
     end.
 
+%% Until we can rely on every record containing a 'url' value, we need
+%% this shim to convert old tcpsyslog drains.
+drain_uri(Dict) ->
+    case dict_find(<<"url">>, Dict) of
+        undefined ->
+            %% Old style Host/Port record
+            Host = dict_find(<<"host">>, Dict),
+            Port =
+                case dict_find(<<"port">>, Dict) of
+                    undefined -> undefined;
+                    Val2 -> list_to_integer(binary_to_list(Val2))
+                end,
+            {syslog, "", Host, Port, "/", []};
+        url ->
+            %% New style URI record
+            URL = dict_find(<<"url">>, Dict),
+            logplex_drain:parse_url(URL)
+    end.
+
 parse_id(Bin) ->
     parse_id(Bin, []).
 
