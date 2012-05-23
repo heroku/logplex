@@ -33,6 +33,7 @@
          delete/1, delete/3, lookup/1
          ,delete_by_channel/1
          ,lookup_by_channel/1
+         ,count_by_channel/1
         ]).
 
 -export([new/5
@@ -250,6 +251,14 @@ delete_by_channel(ChannelId) when is_integer(ChannelId) ->
                                      when C =:= ChannelId ->
                                          true
                                  end)).
+
+count_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select_count(drains,
+                      ets:fun2ms(fun (#drain{channel_id=C})
+                                     when C =:= ChannelId ->
+                                         true
+                                 end)).
+
 
 lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select(drains,
