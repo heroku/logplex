@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -312,7 +312,7 @@ handlers() ->
                 {404, <<"Failed to create drain">>};
             {error, invalid_drain} ->
                 {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
-        end  
+        end
     end},
 
     {['POST', "^/v2/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
@@ -430,7 +430,7 @@ handlers() ->
         authorize(Req),
         Drains = logplex_channel:lookup_drains(list_to_integer(ChannelId)),
         not is_list(Drains) andalso exit({expected_list, Drains}),
-        
+
         Drains1 = [{struct, [{token, Token}, {host, Host}, {port, Port}]} || #drain{token=Token, host=Host, port=Port} <- Drains, Host =/= undefined],
         {200, iolist_to_binary(mochijson2:encode(Drains1))}
     end},
