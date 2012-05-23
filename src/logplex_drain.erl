@@ -31,9 +31,15 @@
 
 -export([reserve_token/0, cache/3, create/5, create/4,
          delete/1, delete/3, lookup/1
-         ,new/5
          ,delete_by_channel/1
          ,lookup_by_channel/1
+        ]).
+
+-export([new/5
+         ,id/1
+         ,token/1
+         ,channel_id/1
+         ,uri/1
         ]).
 
 -export([parse_url/1
@@ -60,6 +66,11 @@
 
 new(Id, ChannelId, Token, Type, Uri) ->
     #drain{id=Id, channel_id=ChannelId, token=Token, type=Type, uri=Uri}.
+
+id(#drain{id=Id}) -> Id.
+token(#drain{token=Token}) -> Token.
+channel_id(#drain{channel_id=CID}) -> CID.
+uri(#drain{uri=Uri}) -> Uri.
 
 start(Drain = #drain{type=Type, id=Id}) ->
     start(Type, Id, Drain).
