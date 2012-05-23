@@ -36,9 +36,7 @@
          ,lookup_by_channel/1
         ]).
 
--export([url/1
-         ,parse_url/1
-         ,valid_url/1
+-export([parse_url/1
          ,valid_uri/1
          ,has_valid_uri/1
         ]).
@@ -207,11 +205,6 @@ new_token(Retries) ->
         [] -> Token
     end.
 
-url(#drain{uri=Uri}) when is_tuple(Uri) ->
-    uri:format(Uri);
-url(#drain{host=Host, port=Port}) ->
-    [<<"syslog://">>, Host, ":", integer_to_list(Port)].
-
 parse_url(Url) ->
     case uri:parse(Url) of
         {ok, Uri} ->
@@ -219,9 +212,6 @@ parse_url(Url) ->
         {error, _} = Err ->
             Err
     end.
-
-valid_url(Url) ->
-    valid_uri(parse_url(Url)).
 
 -spec valid_uri(uri:parsed_uri() | {error, term()}) ->
                        {valid, type(), uri:parsed_uri()} |
