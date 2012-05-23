@@ -116,6 +116,19 @@ create_drain(DrainId, ChannelId, Token, Host, Port) when is_integer(DrainId), is
         Err -> Err
     end.
 
+create_url_drain(DrainId, ChannelId, Token, URL)
+  when is_integer(DrainId), is_integer(ChannelId),
+       is_binary(Token), is_binary(URL) ->
+    Key = drain_redis_key(DrainId),
+    Res = redo:cmd(config, [<<"HMSET">>, Key,
+                            <<"ch">>, integer_to_list(ChannelId),
+                            <<"token">>, Token,
+                            <<"url">>, URL]),
+    case Res of
+        <<"OK">> -> ok;
+        Err -> Err
+    end.
+
 drain_redis_key(DrainId) when is_integer(DrainId) ->
     iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>]).
 
