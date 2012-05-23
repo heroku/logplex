@@ -615,3 +615,18 @@ drain_info(api_v2, Drain) ->
 not_found_json() ->
     Json = {struct, [{error, <<"Not found">>}]},
     {404, iolist_to_binary(mochijson2:encode(Json))}.
+
+req_drain_uri(Req) ->
+    {struct, Data} = mochijson2:decode(Req:recv_body()),
+    case proplists:get_value(<<"url">>, Data) of
+        undefined ->
+            Port = proplists:get_value(<<"port">>, Data),
+            case proplists:get_value(<<"host">>, Data) of
+                undefined ->
+                    {error, missing_host_param};
+                Host ->
+                    logplex_tcpsyslog_drain2:uri(Host, Port)
+            end;
+        UrlString ->
+            logplex_drain:parse_url(UrlString)
+    end.
