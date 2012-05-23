@@ -295,39 +295,31 @@ handlers() ->
         {501, <<"V1 Drain Creation API deprecated">>}
     end},
 
-    {['POST', "^/v2/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
+    {['POST', "^/v2/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelIdStr, DrainIdStr]) ->
         authorize(Req),
 
-        {struct, Data} = mochijson2:decode(Req:recv_body()),
+        DrainId = list_to_integer(DrainIdStr),
+        ChannelId = list_to_integer(ChannelIdStr),
+        URI = req_drain_uri(Req),
 
-        Url = proplists:get_value(<<"url">>, Data, <<>>),
-
-        {Host, Port} =
-            case Url of
-                <<>> -> {undefined, undefined};
-                _ ->
-                    case catch http_uri_r15b:parse(binary_to_list(Url)) of
-                        {ok, {_Proto, _Auth, Host0, Port0, _Path, _}} ->
-                            {list_to_binary(Host0), Port0};
-                        _ ->
-                            error_resp(422,
-                            iolist_to_binary(mochijson2:encode(
-                            {struct, [{error, <<"Invalid drain url">>}]})))
-                    end
-            end,
-
-        case logplex_drain:create(list_to_integer(DrainId), list_to_integer(ChannelId), Host, Port) of
-            {drain, _Id, Token} ->
-                Resp = [
-                    {id, list_to_integer(DrainId)},
-                    {token, Token},
-                    {url, Url}
-                ],
-                {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
-            {error, already_exists} ->
-                {409, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Already exists">>}]}))};
-            {error, invalid_drain} ->
-                {422, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Invalid drain">>}]}))}
+        case logplex_channel:can_add_drain(ChannelId) of
+            cannot_add_drain ->
+                {422, mochijson2:encode({struct, [
+                       {error, <<"You have already added the maximum number of drains allowed">>}]})};
+            can_add_drain ->
+                case logplex_drain:create(DrainId, ChannelId, URI) of
+                    {drain, _Id, Token} ->
+                        Resp = [
+                                {id, DrainId},
+                                {token, Token},
+                                {url, uri:to_binary(URI)}
+                               ],
+                        {201, mochijson2:encode({struct, Resp})};
+                    {error, already_exists} ->
+                        {409, mochijson2:encode({struct, [{error, <<"Already exists">>}]})};
+                    {error, invalid_drain} ->
+                        {422, mochijson2:encode({struct, [{error, <<"Invalid drain">>}]})}
+                end
         end
     end},
 
@@ -338,45 +330,29 @@ handlers() ->
     end},
 
     %% V2
-    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [ChannelIdStr]) ->
         authorize(Req),
+        ChannelId = list_to_integer(ChannelIdStr),
+        URI = req_drain_uri(Req),
 
-        {struct, Data} = mochijson2:decode(Req:recv_body()),
-
-        Url = proplists:get_value(<<"url">>, Data, <<>>),
-
-        {Host, Port} =
-            case Url of
-                <<>> -> {undefined, undefined};
-                _ ->
-                    case catch http_uri_r15b:parse(binary_to_list(Url)) of
-                        {ok, {_Proto, _Auth, Host0, Port0, _Path, _}} ->
-                            {list_to_binary(Host0), Port0};
-                        _ ->
-                            error_resp(422,
-                            iolist_to_binary(mochijson2:encode(
-                            {struct, [{error, <<"Invalid drain url">>}]})))
-                    end
-            end,
-
-        case logplex_channel:lookup_drains(list_to_integer(ChannelId)) of
-            List when length(List) >= ?MAX_DRAINS ->
-                {422, iolist_to_binary(mochijson2:encode({struct, [
-                    {error, <<"You have already added the maximum number of drains allowed">>}]}))};
-            _ ->
+        case logplex_channel:can_add_drain(ChannelId) of
+            cannot_add_drain  ->
+                {422, mochijson2:encode({struct, [
+                    {error, <<"You have already added the maximum number of drains allowed">>}]})};
+            can_add_drain ->
                 {ok, DrainId, Token} = logplex_drain:reserve_token(),
-                case logplex_drain:create(DrainId, Token, list_to_integer(ChannelId), Host, Port) of
+                case logplex_drain:create(DrainId, Token, ChannelId, URI) of
                     {drain, _, _} ->
                         Resp = [
                             {id, DrainId},
                             {token, Token},
-                            {url, Url}
+                            {url, uri:to_binary(URI)}
                         ],
-                        {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
+                        {201, mochijson2:encode({struct, Resp})};
                     {error, already_exists} ->
-                        {409, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Already exists">>}]}))};
+                        {409, mochijson2:encode({struct, [{error, <<"Already exists">>}]})};
                     {error, invalid_drain} ->
-                        {422, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Invalid drain">>}]}))}
+                        {422, mochijson2:encode({struct, [{error, <<"Invalid drain">>}]})}
                 end
         end
     end},
