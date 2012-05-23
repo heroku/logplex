@@ -638,8 +638,8 @@ channel_info(ApiVsn, ChannelId) when is_integer(ChannelId) ->
                                    || Token = #token{} <- Tokens])},
 
              {drains, lists:sort([drain_info(ApiVsn, Drain)
-                                  || Drain = #drain{port = Port} <- Drains,
-                                     Port =/= 0])}];
+                                  || Drain = #drain{host = Host, port = Port} <- Drains,
+                                     Host =/= undefined, Port =/= 0])}];
         not_found -> not_found
     end.
 
