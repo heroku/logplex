@@ -24,7 +24,6 @@
 -export([loop/1, start_link/0, stop/0]).
 
 -include("logplex.hrl").
--include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 
 -define(HDR, [{"Content-Type", "text/html"}]).
@@ -454,16 +453,20 @@ handlers() ->
     %% V2
     {['DELETE', "^/v2/channels/(\\d+)/drains/(\\S+)$"], fun(Req, [ChannelId, DrainId]) ->
         authorize(Req),
-
-        ChannelIdInt = list_to_integer(ChannelId),
-        case logplex_drain:lookup(list_to_integer(DrainId)) of
-            #drain{channel_id = Ch} when Ch == ChannelIdInt ->
-                ok = logplex_drain:delete(list_to_integer(DrainId)),
-                {200, <<>>};
-            _ ->
-                {404, iolist_to_binary(mochijson2:encode({struct, [
+        Deletable = try
+            ChannelIdInt = list_to_integer(ChannelId),
+            Drain = logplex_drain:lookup(list_to_integer(DrainId)),
+            ChannelIdInt =:= logplex_drain:channel_id(Drain)
+            catch _:_ -> false end,
+        case Deletable of
+            false ->
+                {404,
+                 iolist_to_binary(mochijson2:encode({struct, [
                     {error, <<"Not found">>}
-                ]}))}
+                ]}))};
+            true ->
+                ok = logplex_drain:delete(list_to_integer(DrainId)),
+                {200, <<>>}
         end
     end}].
 
@@ -635,8 +638,8 @@ channel_info(ApiVsn, ChannelId) when is_integer(ChannelId) ->
                                    || Token = #token{} <- Tokens])},
 
              {drains, lists:sort([drain_info(ApiVsn, Drain)
-                                  || Drain = #drain{port = Port} <- Drains,
-                                     Port =/= 0])}];
+                                  || Drain <- Drains,
+                                     logplex_drain:has_valid_uri(Drain)])}];
         not_found -> not_found
     end.
 
@@ -647,11 +650,11 @@ token_info(api_v2, #token{name=Name, id=Token}) ->
      {token, Token}].
 
 drain_info(api_v1, Drain) ->
-    iolist_to_binary(logplex_drain:url(Drain));
-drain_info(api_v2, Drain = #drain{id = Id, token = Token}) ->
-    [{id, Id},
-     {token, Token},
-     {url, iolist_to_binary(logplex_drain:url(Drain))}].
+    uri:to_binary(logplex_drain:uri(Drain));
+drain_info(api_v2, Drain) ->
+    [{id, logplex_drain:id(Drain)},
+     {token, logplex_drain:token(Drain)},
+     {url, uri:to_binary(logplex_drain:uri(Drain))}].
 
 not_found_json() ->
     Json = {struct, [{error, <<"Not found">>}]},
