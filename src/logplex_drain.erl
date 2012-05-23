@@ -200,6 +200,8 @@ new_token(Retries) ->
         [] -> Token
     end.
 
+url(#drain{uri=Uri}) when is_tuple(Uri) ->
+    uri:format(Uri);
 url(#drain{host=Host, port=Port}) ->
     [<<"syslog://">>, Host, ":", integer_to_list(Port)].
 
