@@ -29,11 +29,13 @@
          ,stop/2
         ]).
 
--export([reserve_token/0, cache/3, create/5, create/4,
+-export([reserve_token/0, cache/3,
          delete/1, delete/3, lookup/1
          ,delete_by_channel/1
          ,lookup_by_channel/1
          ,count_by_channel/1
+         ,create/3
+         ,create/4
         ]).
 
 -export([new/5
@@ -138,59 +140,38 @@ cache(DrainId, Token, ChannelId)  when is_integer(DrainId),
                                         is_integer(ChannelId) ->
     true = ets:insert(drains, #drain{id=DrainId, channel_id=ChannelId, token=Token}).
 
--spec create(id(), token(), logplex_channel:id(), Host::binary(), inet:port_number()) ->
+-spec create(id(), logplex_channel:id(), uri:parsed_uri()) ->
                     {'drain', id(), token()} |
                     {'error', term()}.
-create(DrainId, Token, ChannelId, Host, Port) when is_integer(DrainId),
-                                                   is_binary(Token),
-                                                   is_integer(ChannelId),
-                                                   is_binary(Host),
-                                                   (is_integer(Port) orelse Port == undefined) ->
-    case ets:match_object(drains, #drain{channel_id=ChannelId, host=Host, port=Port, _='_'}) of
+create(DrainId, ChannelId, URI)
+  when is_integer(DrainId),
+       is_integer(ChannelId) ->
+    case lookup_token(DrainId) of
+        not_found ->
+            {error, invalid_drain};
+        Token ->
+            create(DrainId, Token, ChannelId, URI)
+    end.
+
+-spec create(id(), token(), logplex_channel:id(), uri:parsed_uri()) ->
+                    {'drain', id(), token()} |
+                    {'error', term()}.
+create(DrainId, Token, ChannelId, URI)
+  when is_integer(DrainId),
+       is_binary(Token),
+       is_integer(ChannelId) ->
+    case ets:match_object(drains, #drain{channel_id=ChannelId,
+                                         uri=URI, _='_'}) of
         [_] ->
             {error, already_exists};
         [] ->
-            case logplex_utils:resolve_host(Host) of
-                undefined ->
-                    ?INFO("at=create_drain result=invalid dest=~s",
-                          [logplex_logging:dest(Host, Port)]),
-                    {error, invalid_drain};
-                _Ip ->
-                    case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
-                        ok ->
-                            {drain, DrainId, Token};
-                        Err ->
-                            {error, Err}
-                    end
+            case redis_helper:create_url_drain(DrainId, ChannelId,
+                                               Token, uri:to_binary(URI)) of
+                ok ->
+                    {drain, DrainId, Token};
+                Err ->
+                    {error, Err}
             end
-    end.
-
--spec create(id(), logplex_channel:id(), Host::binary(), inet:port_number()) ->
-                    {'drain', id(), token()} |
-                    {'error', term()}.
-create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
-                                            is_integer(ChannelId),
-                                            is_binary(Host) ->
-    case ets:lookup(drains, DrainId) of
-        [#drain{channel_id=ChannelId, token=Token}] ->
-            case ets:match_object(drains, #drain{channel_id=ChannelId, host=Host, port=Port, _='_'}) of
-                [_] ->
-                    {error, already_exists};
-                [] ->
-                    case logplex_utils:resolve_host(Host) of
-                        undefined ->
-                            ?INFO("at=create_drain result=invalid dest=~s",
-                                  [logplex_logging:dest(Host, Port)]),
-                            {error, invalid_drain};
-                        _Ip ->
-                            case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
-                                ok -> {drain, DrainId, Token};
-                                Err -> {error, Err}
-                            end
-                    end
-            end;
-        _ ->
-            {error, not_found}
     end.
 
 delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
