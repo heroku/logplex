@@ -232,8 +232,8 @@ valid_uri({http, _, _, _, _, _} = Uri) ->
     {valid, http, Uri};
 valid_uri({https, _, _, _, _, _} = Uri) ->
     {valid, http, Uri};
-valid_uri({Type, _, _, _, _, _}) ->
-    {error, {unknown_type, Type}};
+valid_uri({Scheme, _, _, _, _, _}) ->
+    {error, {unknown_scheme, Scheme}};
 valid_uri({error, _} = Err) -> Err.
 
 
