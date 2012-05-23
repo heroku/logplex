@@ -120,6 +120,9 @@ cache(DrainId, Token, ChannelId)  when is_integer(DrainId),
                                         is_integer(ChannelId) ->
     true = ets:insert(drains, #drain{id=DrainId, channel_id=ChannelId, token=Token}).
 
+-spec create(id(), token(), logplex_channel:id(), Host::binary(), inet:port_number()) ->
+                    {'drain', id(), token()} |
+                    {'error', term()}.
 create(DrainId, Token, ChannelId, Host, Port) when is_integer(DrainId),
                                                    is_binary(Token),
                                                    is_integer(ChannelId),
@@ -137,13 +140,16 @@ create(DrainId, Token, ChannelId, Host, Port) when is_integer(DrainId),
                 _Ip ->
                     case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
                         ok ->
-                            #drain{id=DrainId, channel_id=ChannelId, token=Token, host=Host, port=Port};
+                            {drain, DrainId, Token};
                         Err ->
-                            Err
+                            {error, Err}
                     end
             end
     end.
 
+-spec create(id(), logplex_channel:id(), Host::binary(), inet:port_number()) ->
+                    {'drain', id(), token()} |
+                    {'error', term()}.
 create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
                                             is_integer(ChannelId),
                                             is_binary(Host) ->
@@ -160,8 +166,8 @@ create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
                             {error, invalid_drain};
                         _Ip ->
                             case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
-                                ok -> #drain{id=DrainId, channel_id=ChannelId, token=Token, host=Host, port=Port};
-                                Err -> Err
+                                ok -> {drain, DrainId, Token};
+                                Err -> {error, Err}
                             end
                     end
             end;

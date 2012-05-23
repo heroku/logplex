@@ -302,7 +302,7 @@ handlers() ->
         Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
 
         case logplex_drain:create(list_to_integer(DrainId), list_to_integer(ChannelId), Host, Port) of
-            #drain{id=Id} ->
+            {drain, Id, _Token} ->
                 Resp = [
                     {id, Id},
                     {msg, list_to_binary(io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port]))}
@@ -337,7 +337,7 @@ handlers() ->
             end,
 
         case logplex_drain:create(list_to_integer(DrainId), list_to_integer(ChannelId), Host, Port) of
-            #drain{token=Token} ->
+            {drain, _Id, Token} ->
                 Resp = [
                     {id, list_to_integer(DrainId)},
                     {token, Token},
@@ -367,7 +367,7 @@ handlers() ->
             _ ->
                 {ok, DrainId, Token} = logplex_drain:reserve_token(),
                 case logplex_drain:create(DrainId, Token, list_to_integer(ChannelId), Host, Port) of
-                    #drain{} ->
+                    {drain, _, _} ->
                         Resp = [
                             {id, DrainId},
                             {token, Token},
@@ -411,7 +411,7 @@ handlers() ->
             _ ->
                 {ok, DrainId, Token} = logplex_drain:reserve_token(),
                 case logplex_drain:create(DrainId, Token, list_to_integer(ChannelId), Host, Port) of
-                    #drain{} ->
+                    {drain, _, _} ->
                         Resp = [
                             {id, DrainId},
                             {token, Token},
