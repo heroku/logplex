@@ -46,7 +46,9 @@
 
 -export([start_link/5]).
 
--export([valid_uri/1]).
+-export([valid_uri/1
+         ,uri/2
+        ]).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
@@ -85,6 +87,8 @@ valid_uri({syslog, _, Host, Port, _, _} = Uri) ->
 valid_uri(_) ->
     {error, invalid_tcpsyslog_uri}.
 
+uri(Host, Port) ->
+    {syslog, [], Host, Port, [], []}.
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
