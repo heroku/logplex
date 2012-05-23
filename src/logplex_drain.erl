@@ -126,6 +126,13 @@ reserve_token() ->
             Err
     end.
 
+lookup_token(DrainId) when is_integer(DrainId) ->
+    case ets:lookup(drains, DrainId) of
+        [#drain{token=Token}] ->
+            Token;
+        [] -> not_found
+    end.
+
 cache(DrainId, Token, ChannelId)  when is_integer(DrainId),
                                         is_binary(Token),
                                         is_integer(ChannelId) ->
