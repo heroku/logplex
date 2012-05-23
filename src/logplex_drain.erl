@@ -226,7 +226,7 @@ valid_url(Url) ->
                        {valid, type(), uri:parsed_uri()} |
                        {error, term()}.
 valid_uri({syslog, _, _Host, _Port, _, _} = Uri) ->
-    {valid, tcpsyslog, Uri};
+    logplex_tcpsyslog_drain2:valid_uri(Uri);
 valid_uri({http, _, _, _, _, _} = Uri) ->
     {valid, http, Uri};
 valid_uri({https, _, _, _, _, _} = Uri) ->
