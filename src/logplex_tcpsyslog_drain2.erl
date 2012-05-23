@@ -46,6 +46,8 @@
 
 -export([start_link/5]).
 
+-export([valid_uri/1]).
+
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
 %% ------------------------------------------------------------------
@@ -70,6 +72,19 @@ start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
                                host=Host,
                                port=Port}],
                        []).
+
+valid_uri({syslog, _, Host, Port, _, _} = Uri) ->
+    if is_binary(Host),
+       0 < Port, Port =< 65535 ->
+            {valid, tcpsyslog, Uri};
+       is_binary(Host) ->
+            {error, {invalid_port, Port}};
+       true ->
+            {error, {invalid_host, Host}}
+    end;
+valid_uri(_) ->
+    {error, invalid_tcpsyslog_uri}.
+
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
