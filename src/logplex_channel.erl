@@ -27,7 +27,9 @@
         ]).
 
 -export([create/0, delete/1, lookup/1,
-         lookup_tokens/1, lookup_drains/1, logs/2, info/1]).
+         lookup_tokens/1, lookup_drains/1, logs/2, info/1
+         ,can_add_drain/1
+        ]).
 
 -compile({no_auto_import,[whereis/1]}).
 
@@ -108,4 +110,14 @@ info(ChannelId) when is_integer(ChannelId) ->
              lookup_tokens(ChannelId),
              lookup_drains(ChannelId)};
         _ -> not_found
+    end.
+
+can_add_drain(ChannelId)
+  when is_integer(ChannelId) ->
+    CurrentCount = logplex_drain:count_by_channel(ChannelId),
+    Max = logplex_app:config(max_drains_per_channel),
+    if CurrentCount < Max ->
+            can_add_drain;
+       true ->
+            cannot_add_drain
     end.
