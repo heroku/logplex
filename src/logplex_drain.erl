@@ -214,7 +214,7 @@ parse_url(Url) ->
 valid_url(Url) ->
     valid_uri(parse_url(Url)).
 
--spec valid_uri(uri:parse_uri() | {error, term()}) ->
+-spec valid_uri(uri:parsed_uri() | {error, term()}) ->
                        {valid, type(), uri:parsed_uri()} |
                        {error, term()}.
 valid_uri({syslog, _, _Host, _Port, _, _} = Uri) ->
