@@ -290,28 +290,9 @@ handlers() ->
         {201, iolist_to_binary(mochijson2:encode({struct, Resp}))}
     end},
 
-    {['POST', "^/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
+    {['POST', "^/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [_ChannelIdStr, _DrainIdStr]) ->
         authorize(Req),
-
-        {struct, Data} = mochijson2:decode(Req:recv_body()),
-        Host = proplists:get_value(<<"host">>, Data),
-        Port = proplists:get_value(<<"port">>, Data),
-        not is_binary(Host) andalso error_resp(400, <<"'host' param is missing">>),
-        Host == <<"localhost">> andalso error_resp(400, <<"Invalid drain">>),
-        Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
-
-        case logplex_drain:create(list_to_integer(DrainId), list_to_integer(ChannelId), Host, Port) of
-            {drain, Id, _Token} ->
-                Resp = [
-                    {id, Id},
-                    {msg, list_to_binary(io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port]))}
-                ],
-                {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
-            {error, not_found} ->
-                {404, <<"Failed to create drain">>};
-            {error, invalid_drain} ->
-                {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
-        end
+        {501, <<"V1 Drain Creation API deprecated">>}
     end},
 
     {['POST', "^/v2/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
@@ -350,35 +331,10 @@ handlers() ->
         end
     end},
 
-    {['POST', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    {['POST', "^/channels/(\\d+)/drains$"], fun(Req, [_ChannelId]) ->
         authorize(Req),
 
-        {struct, Data} = mochijson2:decode(Req:recv_body()),
-        Host = proplists:get_value(<<"host">>, Data),
-        Port = proplists:get_value(<<"port">>, Data),
-        not is_binary(Host) andalso error_resp(400, <<"'host' param is missing">>),
-        Host == <<"localhost">> andalso error_resp(400, <<"Invalid drain">>),
-        Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
-
-        case logplex_channel:lookup_drains(list_to_integer(ChannelId)) of
-            List when length(List) >= ?MAX_DRAINS ->
-                {400, "You have already added the maximum number of drains allowed"};
-            _ ->
-                {ok, DrainId, Token} = logplex_drain:reserve_token(),
-                case logplex_drain:create(DrainId, Token, list_to_integer(ChannelId), Host, Port) of
-                    {drain, _, _} ->
-                        Resp = [
-                            {id, DrainId},
-                            {token, Token},
-                            {msg, list_to_binary(io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port]))}
-                        ],
-                        {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
-                    {error, already_exists} ->
-                        {400, io_lib:format("Drain syslog://~s:~p already exists", [Host, Port])};
-                    {error, invalid_drain} ->
-                        {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
-                end
-        end
+        {501, <<"V1 Drain Creation API deprecated.">>}
     end},
 
     %% V2
