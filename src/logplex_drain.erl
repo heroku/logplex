@@ -40,6 +40,7 @@
          ,parse_url/1
          ,valid_url/1
          ,valid_uri/1
+         ,has_valid_uri/1
         ]).
 
 -include("logplex.hrl").
@@ -235,6 +236,12 @@ valid_uri({Type, _, _, _, _, _}) ->
     {error, {unknown_type, Type}};
 valid_uri({error, _} = Err) -> Err.
 
+
+has_valid_uri(#drain{uri=Uri}) ->
+    case valid_uri(Uri) of
+        {valid, _, _} -> true;
+        _ -> false
+    end.
 
 delete_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select_delete(drains,
