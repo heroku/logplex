@@ -335,7 +335,9 @@ handlers() ->
     end},
 
     %% V2
-    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(_Req, [_ChannelIdStr]) ->
+    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [_ChannelIdStr]) ->
+        authorize(Req),
+
         json_error(501, <<"v2 one-call drain creation API deprecated.">>)
     end},
 
