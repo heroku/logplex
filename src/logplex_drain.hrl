@@ -3,7 +3,4 @@
                 channel_id :: logplex_channel:id() | '_' | '$1',
                 token :: logplex_drain:token() | '_',
                 type = tcpsyslog :: logplex_drain:type() | '_',
-                uri :: uri:parsed_uri() | '_',
-                host,
-                port,
-                tcp}).
+                uri :: uri:parsed_uri() | '_'}).
