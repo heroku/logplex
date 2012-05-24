@@ -192,7 +192,9 @@ new_token(Retries) ->
         [] -> Token
     end.
 
-parse_url(Url) ->
+parse_url(UrlBin) when is_binary(UrlBin) ->
+    parse_url(binary_to_list(UrlBin));
+parse_url(Url) when is_list(Url) ->
     case uri:parse(Url) of
         {ok, Uri} ->
             Uri;
