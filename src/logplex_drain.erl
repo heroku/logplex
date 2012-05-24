@@ -29,8 +29,8 @@
          ,stop/2
         ]).
 
--export([reserve_token/0, cache/3,
-         delete/1, delete/3, lookup/1
+-export([reserve_token/0, cache/3
+         ,delete/1, lookup/1
          ,delete_by_channel/1
          ,lookup_by_channel/1
          ,count_by_channel/1
@@ -161,15 +161,6 @@ create(DrainId, Token, ChannelId, URI)
                 Err ->
                     {error, Err}
             end
-    end.
-
-delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
-    Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
-    case ets:match_object(drains, #drain{channel_id=ChannelId, host=Host, port=Port1, _='_'}) of
-        [#drain{id=DrainId}|_] ->
-            delete(DrainId);
-        _ ->
-            {error, not_found}
     end.
 
 delete(DrainId) when is_integer(DrainId) ->
