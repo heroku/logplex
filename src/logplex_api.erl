@@ -297,25 +297,33 @@ handlers() ->
 
         DrainId = list_to_integer(DrainIdStr),
         ChannelId = list_to_integer(ChannelIdStr),
-        URI = req_drain_uri(Req),
-
-        case logplex_channel:can_add_drain(ChannelId) of
-            cannot_add_drain ->
-                {422, mochijson2:encode({struct, [
-                       {error, <<"You have already added the maximum number of drains allowed">>}]})};
-            can_add_drain ->
-                case logplex_drain:create(DrainId, ChannelId, URI) of
-                    {drain, _Id, Token} ->
-                        Resp = [
-                                {id, DrainId},
-                                {token, Token},
-                                {url, uri:to_binary(URI)}
-                               ],
-                        {201, mochijson2:encode({struct, Resp})};
-                    {error, already_exists} ->
-                        {409, mochijson2:encode({struct, [{error, <<"Already exists">>}]})};
-                    {error, invalid_drain} ->
-                        {422, mochijson2:encode({struct, [{error, <<"Invalid drain">>}]})}
+        case logplex_drain:lookup_token(DrainId) of
+            not_found ->
+                json_error(404, <<"Unknown drain.">>);
+            Token ->
+                case logplex_drain:valid_uri(req_drain_uri(Req)) of
+                    {error, What} ->
+                        Err = io_lib:format("Invalid drain destination: ~p",
+                                            [What]),
+                        json_error(422, Err);
+                    {valid, _, URI} ->
+                        case logplex_channel:can_add_drain(ChannelId) of
+                            cannot_add_drain ->
+                                json_error(422, <<"You have already added the maximum number of drains allowed">>);
+                            can_add_drain ->
+                                case logplex_drain:create(DrainId, Token, ChannelId, URI) of
+                                    {error, already_exists} ->
+                                        json_error(409, <<"Already exists">>);
+                                    {drain, _Id, Token} ->
+                                        Resp = [
+                                                {id, DrainId},
+                                                {token, Token},
+                                                {url, uri:to_binary(URI)}
+                                               ],
+                                        {201,?JSON_CONTENT,
+                                         mochijson2:encode({struct, Resp})}
+                                end
+                        end
                 end
         end
     end},
