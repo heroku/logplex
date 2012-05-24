@@ -168,9 +168,8 @@ drain_uri(Dict) ->
                     Val2 -> list_to_integer(binary_to_list(Val2))
                 end,
             {syslog, "", Host, Port, "/", []};
-        url ->
+        URL when is_binary(URL) ->
             %% New style URI record
-            URL = dict_find(<<"url">>, Dict),
             logplex_drain:parse_url(URL)
     end.
 
