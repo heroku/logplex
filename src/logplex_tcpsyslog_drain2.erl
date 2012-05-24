@@ -44,7 +44,9 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/5]).
+-export([start_link/5
+         ,start_link/4
+        ]).
 
 -export([valid_uri/1
          ,uri/2
@@ -65,6 +67,10 @@
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
+
+start_link(ChannelID, DrainID, DrainTok,
+           {syslog, _, Host, Port, _, _}) ->
+    start_link(ChannelID, DrainID, DrainTok, Host, Port).
 
 start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
     gen_fsm:start_link(?MODULE,
