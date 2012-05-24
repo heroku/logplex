@@ -346,24 +346,9 @@ handlers() ->
         {501, <<"V1 Drain API Deprecated.">>}
     end},
 
-    {['DELETE', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    {['DELETE', "^/channels/(\\d+)/drains$"], fun(Req, [_ChannelId]) ->
         authorize(Req),
-
-        Data = Req:parse_qs(),
-        Host = proplists:get_value("host", Data),
-        Port = proplists:get_value("port", Data),
-        Host == "" andalso error_resp(400, <<"'host' param is empty">>),
-
-        case Host == undefined andalso Port == undefined of
-            true ->
-                logplex_drain:delete_by_channel(list_to_integer(ChannelId)),
-                {200, <<"Cleared all drains">>};
-            false ->
-                case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of
-                    ok -> {200, io_lib:format("Successfully removed drain syslog://~s:~s", [Host, Port])};
-                    {error, not_found} -> {404, io_lib:format("Drain syslog://~s:~s does not exist", [Host, Port])}
-                end
-        end
+       {501, <<"V1 Drain API Deprecated.">>}
     end},
 
     %% V2
