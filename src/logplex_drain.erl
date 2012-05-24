@@ -197,7 +197,7 @@ new_token(Retries) ->
 parse_url(UrlBin) when is_binary(UrlBin) ->
     parse_url(binary_to_list(UrlBin));
 parse_url(Url) when is_list(Url) ->
-    case uri:parse(Url) of
+    case uri:parse(Url, [{scheme_defaults, uri_schemes()}]) of
         {ok, Uri} ->
             Uri;
         {error, _} = Err ->
@@ -217,6 +217,12 @@ valid_uri({Scheme, _, _, _, _, _}) ->
     {error, {unknown_scheme, Scheme}};
 valid_uri({error, _} = Err) -> Err.
 
+uri_schemes() ->
+    [{http,  80}
+     ,{https, 443}
+     ,{syslog, 601}
+     ,{udpsyslog, 514}
+    ].
 
 has_valid_uri(#drain{uri=Uri}) ->
     case valid_uri(Uri) of
