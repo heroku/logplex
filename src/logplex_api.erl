@@ -136,7 +136,7 @@ handlers() ->
         case channel_info(api_v2, ChannelId) of
             not_found -> not_found_json();
             Info ->
-                {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
+                {200, ?JSON_CONTENT, mochijson2:encode({struct, Info})}
         end
     end},
 
@@ -155,9 +155,7 @@ handlers() ->
             ok ->
                 {200, <<>>};
             {error, not_found} ->
-                {404, iolist_to_binary(mochijson2:encode({struct, [
-                    {error, <<"Not found">>}
-                ]}))}
+                json_error(404, <<"Not Found">>)
         end
     end},
 
@@ -196,9 +194,8 @@ handlers() ->
         ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
             [Name, ChannelId, Time div 1000]),
 
-        {201, iolist_to_binary(mochijson2:encode({struct, [
-            {name, Name}, {token, Token}
-        ]}))}
+        {201, ?JSON_CONTENT,
+         mochijson2:encode({struct, [{name, Name}, {token, Token}]})}
     end},
 
     {['POST', "^/sessions$"], fun(Req, _Match) ->
@@ -215,9 +212,8 @@ handlers() ->
         Body = Req:recv_body(),
         Session = logplex_session:create(Body),
         not is_binary(Session) andalso exit({expected_binary, Session}),
-        {201, iolist_to_binary(mochijson2:encode({struct, [
-            {url, Session}
-        ]}))}
+        {201, ?JSON_CONTENT,
+         mochijson2:encode({struct, [{url, Session}]})}
     end},
 
     {['GET', "^/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
@@ -370,10 +366,7 @@ handlers() ->
             catch _:_ -> false end,
         case Deletable of
             false ->
-                {404,
-                 iolist_to_binary(mochijson2:encode({struct, [
-                    {error, <<"Not found">>}
-                ]}))};
+                json_error(404, <<"Not found">>);
             true ->
                 ok = logplex_drain:delete(list_to_integer(DrainId)),
                 {200, <<>>}
