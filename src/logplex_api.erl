@@ -330,31 +330,8 @@ handlers() ->
     end},
 
     %% V2
-    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [ChannelIdStr]) ->
-        authorize(Req),
-        ChannelId = list_to_integer(ChannelIdStr),
-        URI = req_drain_uri(Req),
-
-        case logplex_channel:can_add_drain(ChannelId) of
-            cannot_add_drain  ->
-                {422, mochijson2:encode({struct, [
-                    {error, <<"You have already added the maximum number of drains allowed">>}]})};
-            can_add_drain ->
-                {ok, DrainId, Token} = logplex_drain:reserve_token(),
-                case logplex_drain:create(DrainId, Token, ChannelId, URI) of
-                    {drain, _, _} ->
-                        Resp = [
-                            {id, DrainId},
-                            {token, Token},
-                            {url, uri:to_binary(URI)}
-                        ],
-                        {201, mochijson2:encode({struct, Resp})};
-                    {error, already_exists} ->
-                        {409, mochijson2:encode({struct, [{error, <<"Already exists">>}]})};
-                    {error, invalid_drain} ->
-                        {422, mochijson2:encode({struct, [{error, <<"Invalid drain">>}]})}
-                end
-        end
+    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(_Req, [_ChannelIdStr]) ->
+        json_error(501, <<"v2 one-call drain creation API deprecated.">>)
     end},
 
     {['GET', "^/channels/(\\d+)/drains$"], fun(Req, [_ChannelId]) ->
