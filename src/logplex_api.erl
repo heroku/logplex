@@ -27,6 +27,7 @@
 -include("logplex_logging.hrl").
 
 -define(HDR, [{"Content-Type", "text/html"}]).
+-define(JSON_CONTENT, [{"Content-Type", "application/json"}]).
 
 start_link() ->
     Port =
@@ -583,3 +584,7 @@ req_drain_uri(Req) ->
         UrlString ->
             logplex_drain:parse_url(UrlString)
     end.
+
+json_error(Code, Err) ->
+    {Code, ?JSON_CONTENT,
+     mochijson2:encode({struct, [{error, iolist_to_binary(Err)}]})}.
