@@ -76,10 +76,13 @@ start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
                        []).
 
 valid_uri({syslog, _, Host, Port, _, _} = Uri) ->
-    if is_binary(Host),
-       0 < Port, Port =< 65535 ->
+    HostValid = ((is_binary(Host) andalso Host =/= <<"">>)
+                 orelse
+                   (is_list(Host) andalso Host =/= "")),
+    PortValid = 0 < Port andalso Port =< 65535,
+    if HostValid, PortValid ->
             {valid, tcpsyslog, Uri};
-       is_binary(Host) ->
+       HostValid ->
             {error, {invalid_port, Port}};
        true ->
             {error, {invalid_host, Host}}
