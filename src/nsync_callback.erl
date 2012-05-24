@@ -150,7 +150,10 @@ create_drain(Id, Dict) ->
                                                       Type, Uri),
                             ets:insert(drains, Drain),
                             logplex_drain:start(Drain),
-                            Drain
+                            Drain;
+                        {error, Reason} ->
+                            ?ERR("create_drain invalid_uri ~p ~p ~p",
+                                 [Reason, Id, dict:to_list(Dict)])
                     end
             end
     end.
