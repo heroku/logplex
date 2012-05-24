@@ -59,7 +59,7 @@
 
 -type id() :: integer().
 -type token() :: binary().
--type type() :: 'tcpsyslog' | 'http'.
+-type type() :: 'tcpsyslog' | 'http' | 'udpsyslog'.
 -type deprecated_types() :: 'tcpsyslog2' | 'tcpsyslog_old'.
 
 -export_type([id/0
@@ -209,6 +209,8 @@ parse_url(Url) when is_list(Url) ->
                        {error, term()}.
 valid_uri({syslog, _, _Host, _Port, _, _} = Uri) ->
     logplex_tcpsyslog_drain2:valid_uri(Uri);
+valid_uri({udpsyslog, _, _Host, _Port, _, _} = Uri) ->
+    logplex_udpsyslog_drain:valid_uri(Uri);
 valid_uri({http, _, _, _, _, _} = Uri) ->
     {valid, http, Uri};
 valid_uri({https, _, _, _, _, _} = Uri) ->
