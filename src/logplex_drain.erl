@@ -34,7 +34,6 @@
          ,delete_by_channel/1
          ,lookup_by_channel/1
          ,count_by_channel/1
-         ,create/3
          ,create/4
         ]).
 
@@ -139,19 +138,6 @@ cache(DrainId, Token, ChannelId)  when is_integer(DrainId),
                                         is_binary(Token),
                                         is_integer(ChannelId) ->
     true = ets:insert(drains, #drain{id=DrainId, channel_id=ChannelId, token=Token}).
-
--spec create(id(), logplex_channel:id(), uri:parsed_uri()) ->
-                    {'drain', id(), token()} |
-                    {'error', term()}.
-create(DrainId, ChannelId, URI)
-  when is_integer(DrainId),
-       is_integer(ChannelId) ->
-    case lookup_token(DrainId) of
-        not_found ->
-            {error, invalid_drain};
-        Token ->
-            create(DrainId, Token, ChannelId, URI)
-    end.
 
 -spec create(id(), token(), logplex_channel:id(), uri:parsed_uri()) ->
                     {'drain', id(), token()} |
