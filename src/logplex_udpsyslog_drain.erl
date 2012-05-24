@@ -18,6 +18,12 @@
          ,shutdown/1
         ]).
 
+-export([valid_uri/1
+         ,uri/2
+         ,start_link/4
+        ]).
+
+
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -41,6 +47,10 @@
 %% API
 %%====================================================================
 
+start_link(ChannelID, DrainID, DrainTok,
+           {udpsyslog, _, Host, Port, _, _}) ->
+    start_link(ChannelID, DrainID, DrainTok, Host, Port).
+
 start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
     gen_server:start_link(?MODULE,
                           [#state{drain_id=DrainID,
@@ -53,6 +63,24 @@ start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
 shutdown(Pid) ->
     gen_server:cast(Pid, shutdown),
     ok.
+
+valid_uri({udpsyslog, _, Host, Port, _, _} = Uri) ->
+    HostValid = ((is_binary(Host) andalso Host =/= <<"">>)
+                 orelse
+                   (is_list(Host) andalso Host =/= "")),
+    PortValid = 0 < Port andalso Port =< 65535,
+    if HostValid, PortValid ->
+            {valid, udpsyslog, Uri};
+       HostValid ->
+            {error, {invalid_port, Port}};
+       true ->
+            {error, {invalid_host, Host}}
+    end;
+valid_uri(_) ->
+    {error, invalid_udpsyslog_uri}.
+
+uri(Host, Port) ->
+    {udpsyslog, [], Host, Port, [], []}.
 
 %%====================================================================
 %% gen_server callbacks
