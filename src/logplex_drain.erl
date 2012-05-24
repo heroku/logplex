@@ -75,8 +75,10 @@ token(#drain{token=Token}) -> Token.
 channel_id(#drain{channel_id=CID}) -> CID.
 uri(#drain{uri=Uri}) -> Uri.
 
-start(Drain = #drain{type=Type, id=Id}) ->
-    start(Type, Id, Drain).
+start(#drain{type=Type, id=Id,
+             channel_id=CID, token=Token,
+             uri=Uri}) ->
+    start(Type, Id, [CID, Id, Token, Uri]).
 
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
