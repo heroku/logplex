@@ -35,6 +35,7 @@
          ,lookup_by_channel/1
          ,count_by_channel/1
          ,create/4
+         ,lookup_token/1
         ]).
 
 -export([new/5
