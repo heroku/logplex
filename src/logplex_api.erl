@@ -381,10 +381,14 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
                     {Code, Body};
                 {'EXIT', Err} ->
                     exit(Err);
-                {Code, Body} when is_integer(Code), is_binary(Body) ->
+                {Code, Body}
+                  when is_integer(Code),
+                       is_binary(Body) orelse is_list(Body) ->
                     {Code, Body};
-                {Code, Body} when is_integer(Code), is_list(Body) ->
-                    {Code, Body};
+                {Code, Hdrs, Body}
+                  when is_integer(Code), is_list(Hdrs),
+                       is_binary(Body) orelse is_list(Body) ->
+                    {Code, Hdrs, Body};
                 Other ->
                     exit({unexpected, Other})
             end;
