@@ -60,12 +60,16 @@ loop(Req) ->
     Path = Req:get(path),
     ChannelId = header_value(Req, "Channel", ""),
     try
-        {Code, Body} = serve(handlers(), Method, Path, Req),
+        {Code, Hdr, Body} = case serve(handlers(), Method, Path, Req) of
+                                {C, B} ->
+                                    {C, ?HDR, B};
+                                {_C, _H, _B} = Resp -> Resp
+                            end,
         Time = timer:now_diff(os:timestamp(), Start) div 1000,
         ?INFO("at=request channel_id=~s method=~p path=~s"
               " resp_code=~w time=~w body=~s",
               [ChannelId, Method, Path, Code, Time, Body]),
-        Req:respond({Code, ?HDR, Body}),
+        Req:respond({Code, Hdr, Body}),
         exit(normal)
     catch
         exit:normal ->
