@@ -23,6 +23,7 @@
 -module(logplex_channel).
 
 -export([whereis/1
+         ,register/1
          ,post_msg/2
         ]).
 
@@ -38,6 +39,10 @@
 
 -type id() :: integer().
 -export_type([id/0]).
+
+register({channel, ChannelId} = C)
+  when is_integer(ChannelId) ->
+    gproc:add_local_property(C, true).
 
 whereis({channel, _ChannelId} = Name) ->
     [ Pid || {Pid, true} <- gproc:lookup_local_properties(Name) ].
