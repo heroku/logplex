@@ -99,11 +99,9 @@ start_mod({error, _} = Err, _Drain, _Args) ->
     Err.
 
 -spec mod(type() | deprecated_types()) -> atom() | {'error', term()}.
-mod(tcpsyslog) -> logplex_tcpsyslog_drain2;
+mod(tcpsyslog) -> logplex_tcpsyslog_drain;
 mod(udpsyslog) -> logplex_udpsyslog_drain;
 mod(http) -> logplex_http_drain;
-mod(tcpsyslog2) -> {error, deprecated};
-mod(tcpsyslog_old) -> {error, deprecated};
 mod(_) -> {error, unknown_drain_type}.
 
 stop(DrainId) ->
@@ -202,7 +200,7 @@ parse_url(Url) when is_list(Url) ->
                        {valid, type(), uri:parsed_uri()} |
                        {error, term()}.
 valid_uri({syslog, _, _Host, _Port, _, _} = Uri) ->
-    logplex_tcpsyslog_drain2:valid_uri(Uri);
+    logplex_tcpsyslog_drain:valid_uri(Uri);
 valid_uri({udpsyslog, _, _Host, _Port, _, _} = Uri) ->
     logplex_udpsyslog_drain:valid_uri(Uri);
 valid_uri({http, _, _, _, _, _} = Uri) ->

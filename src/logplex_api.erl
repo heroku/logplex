@@ -575,7 +575,7 @@ req_drain_uri(Req) ->
                 undefined ->
                     {error, missing_host_param};
                 Host ->
-                    logplex_tcpsyslog_drain2:uri(Host, Port)
+                    logplex_tcpsyslog_drain:uri(Host, Port)
             end;
         UrlString ->
             logplex_drain:parse_url(UrlString)

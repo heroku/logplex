@@ -6,7 +6,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(logplex_tcpsyslog_drain2).
+-module(logplex_tcpsyslog_drain).
 -behaviour(gen_fsm).
 -define(SERVER, ?MODULE).
 -define(RECONNECT_MSG, reconnect).
