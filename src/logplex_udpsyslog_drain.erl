@@ -91,11 +91,7 @@ init([State = #state{drain_id=DrainId, channel_id=ChannelId,
                      host=H, port=P}])
   when H =/= undefined, is_integer(P) ->
     try
-        gproc:add_local_name({drain, DrainId}),
-        %% This is ugly, but there's no other obvious way to do it.
-        gproc:add_local_property({channel, ChannelId}, true),
-        gproc:add_local_property(drain_dest, {H, P}),
-        gproc:add_local_property(drain_type, udpsyslog),
+        logplex_drain:register(DrainId, ChannelId, udpsyslog, {H,P}),
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, State, hibernate}

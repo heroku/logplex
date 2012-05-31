@@ -107,8 +107,8 @@ init([State0 = #state{sock = undefined, host=H, port=P,
                       drain_id=DrainId, channel_id=ChannelId}])
   when H =/= undefined, is_integer(P) ->
     try
-        logplex_drain:register_with_gproc(DrainId, ChannelId,
-                                          {H,P}),
+        logplex_drain:register(DrainId, ChannelId, tcpsyslog,
+                               {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_drain_buffer:new(DrainSize)},
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
