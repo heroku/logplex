@@ -51,6 +51,7 @@
         ]).
 
 -export([register/4
+         ,register/3
         ]).
 
 -include("logplex.hrl").
@@ -249,9 +250,12 @@ lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
 -spec register(id(), logplex_channel:id(), atom(), term()) -> ok.
 register(DrainId, ChannelId, Type, Dest)
   when is_integer(DrainId), is_integer(ChannelId) ->
-    gproc:reg({n, l, {drain, DrainId}}, undefined),
     logplex_channel:register({channel, ChannelId}),
-    %% This is ugly, but there's no other obvious way to do it.
+    register(DrainId, Type, Dest).
+
+-spec register(id(), atom(), term()) -> ok.
+register(DrainId, Type, Dest) ->
+    gproc:reg({n, l, {drain, DrainId}}, undefined),
     gproc:mreg(p, l, [{drain_dest, Dest},
                       {drain_type, Type}]),
     ok.
