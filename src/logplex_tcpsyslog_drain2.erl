@@ -103,11 +103,12 @@ uri(Host, Port) ->
 %% ------------------------------------------------------------------
 
 %% @private
-init([State0 = #state{sock = undefined,
-                      host=H, port=P}])
+init([State0 = #state{sock = undefined, host=H, port=P,
+                      drain_id=DrainId, channel_id=ChannelId}])
   when H =/= undefined, is_integer(P) ->
     try
-        register_with_gproc(State0),
+        logplex_drain:register_with_gproc(DrainId, ChannelId,
+                                          {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_drain_buffer:new(DrainSize)},
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
@@ -402,26 +403,6 @@ buffer(Msg, State = #state{buf = Buf}) ->
         insert -> ok
     end,
     State#state{buf=NewBuf}.
-
-%% @private
-register_with_gproc(#state{drain_id=DrainId,
-                           channel_id=ChannelId,
-                           host=H, port=P})
-  when H =/= undefined, is_integer(P) ->
-    gproc:reg({n, l, {drain, DrainId}}, undefined),
-    %% This is ugly, but there's no other obvious way to do it.
-    gproc:mreg(p, l, [{{channel, ChannelId}, true},
-                      {drain_dest, {H, P}},
-                      {drain_type, tcpsyslog}]),
-    ok.
-
-%% @private
-%% unregister_from_gproc(#state{drain_id=DrainId,
-%%                              channel_id=ChannelId}) ->
-%%     gproc:unreg({n, l, {drain, DrainId}}),
-%%     gproc:munreg(p, l, [{channel, ChannelId},
-%%                         drain_dest,
-%%                         drain_type]).
 
 %% @private
 %% @doc Send buffered messages.
