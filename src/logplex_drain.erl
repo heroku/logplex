@@ -50,6 +50,9 @@
          ,has_valid_uri/1
         ]).
 
+-export([register_with_gproc/3
+        ]).
+
 -include("logplex.hrl").
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
@@ -244,3 +247,13 @@ lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
                                 when C =:= ChannelId ->
                                   object()
                           end)).
+
+-spec register_with_gproc(id(), logplex_channel:id(), term()) -> ok.
+register_with_gproc(DrainId, ChannelId, Dest)
+  when is_integer(DrainId), is_integer(ChannelId) ->
+    gproc:reg({n, l, {drain, DrainId}}, undefined),
+    %% This is ugly, but there's no other obvious way to do it.
+    gproc:mreg(p, l, [{{channel, ChannelId}, true},
+                      {drain_dest, Dest},
+                      {drain_type, tcpsyslog}]),
+    ok.
