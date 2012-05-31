@@ -10,3 +10,4 @@ deps/
 *~
 ebin/logplex.app
 .eunit/
+.#*
