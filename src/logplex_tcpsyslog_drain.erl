@@ -25,7 +25,7 @@
                 port :: inet:port_number(),
                 sock = undefined :: 'undefined' | inet:socket(),
                 %% Buffer for messages while disconnected
-                buf = logplex_drain_buffer:new() :: logplex_drain_buffer:buf(),
+                buf = logplex_msg_buffer:new() :: logplex_msg_buffer:buf(),
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
                 %% TCP failures since last_good_time
@@ -110,7 +110,7 @@ init([State0 = #state{sock = undefined, host=H, port=P,
         logplex_drain:register(DrainId, ChannelId, tcpsyslog,
                                {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
-        State = State0#state{buf = logplex_drain_buffer:new(DrainSize)},
+        State = State0#state{buf = logplex_msg_buffer:new(DrainSize)},
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, disconnected,
@@ -387,7 +387,7 @@ duration(#state{connect_time=T0}) ->
 %% -spec buffer_status(#state{}) -> 'empty' | 'has_messages_to_send'.
 %% %% @private
 %% buffer_status(State = #state{buf = Buf}) ->
-%%     case logplex_drain_buffer:len(Buf) of
+%%     case logplex_msg_buffer:len(Buf) of
 %%         0 -> empty;
 %%         _ -> has_messages_to_send
 %%     end.
@@ -395,7 +395,7 @@ duration(#state{connect_time=T0}) ->
 -spec buffer(any(), #state{}) -> #state{}.
 %% @private
 buffer(Msg, State = #state{buf = Buf}) ->
-    {Result, NewBuf} = logplex_drain_buffer:push_ext(Msg, Buf),
+    {Result, NewBuf} = logplex_msg_buffer:push_ext(Msg, Buf),
     msg_stat(drain_buffered, 1, State),
     case Result of
         displace ->
@@ -409,7 +409,7 @@ buffer(Msg, State = #state{buf = Buf}) ->
 -spec send(#state{}) -> {next_state, 'sending' | 'ready_to_send', #state{}}.
 send(State = #state{buf = Buf, sock = Sock,
                     drain_tok = DrainTok}) ->
-    case logplex_drain_buffer:empty(Buf) of
+    case logplex_msg_buffer:empty(Buf) of
         empty ->
             {next_state, ready_to_send, State};
         not_empty ->
@@ -454,8 +454,8 @@ cancel_send_timeout(State = #state{send_tref = Ref})
     State#state{send_tref=undefined}.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
-    logplex_drain_buffer:to_pkts(Buf, BytesRemaining,
-                                 pkt_fmt(DrainTok)).
+    logplex_msg_buffer:to_pkts(Buf, BytesRemaining,
+                               pkt_fmt(DrainTok)).
 
 pkt_fmt(DrainTok) ->
     Frame = fun (Msg) ->

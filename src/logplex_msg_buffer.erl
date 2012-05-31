@@ -3,7 +3,7 @@
 %% @version {@vsn}, {@date} {@time}
 %% @doc Capped size log message buffer with loss recording.
 %% @end
--module(logplex_drain_buffer).
+-module(logplex_msg_buffer).
 
 -record(lpdb, {messages = queue:new(),
                max_size = 1024 :: pos_integer(),
