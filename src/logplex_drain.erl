@@ -250,9 +250,9 @@ lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
 register(DrainId, ChannelId, Type, Dest)
   when is_integer(DrainId), is_integer(ChannelId) ->
     gproc:reg({n, l, {drain, DrainId}}, undefined),
+    logplex_channel:register({channel, ChannelId}),
     %% This is ugly, but there's no other obvious way to do it.
-    gproc:mreg(p, l, [{{channel, ChannelId}, true},
-                      {drain_dest, Dest},
+    gproc:mreg(p, l, [{drain_dest, Dest},
                       {drain_type, Type}]),
     ok.
 
