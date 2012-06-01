@@ -20,6 +20,10 @@
                }).
 
 %-type pstates() :: 'passive' | 'active'.
+-type rx_msgs() :: {'post', Msg::term()}.
+-type tx_msgs() :: {'logplex_drain_data', pid(), Data::term()}.
+
+-export_type([rx_msgs/0, tx_msgs/0]).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
