@@ -19,7 +19,8 @@
                 active_fun :: 'undefined' | logplex_msg_buffer:framing_fun()
                }).
 
-%-type pstates() :: 'passive' | 'active'.
+-type mode() :: 'passive' | 'active'.
+
 -type rx_msgs() :: {'post', Msg::term()}.
 -type tx_msgs() :: {'logplex_drain_data', pid(), Data::term()}.
 
@@ -31,6 +32,7 @@
 
 -export([start_link/2
          ,start_link/1
+         ,start_link/4
          ,set_active/2
         ]).
 
@@ -53,8 +55,23 @@ start_link(ChannelId) ->
     start_link(ChannelId, self()).
 
 start_link(ChannelId, Owner) ->
-    gen_fsm:start_link(?MODULE, #state{channel_id = ChannelId,
-                                       owner = Owner}, []).
+    gen_fsm:start_link(?MODULE, {passive,
+                                 #state{channel_id = ChannelId,
+                                        owner = Owner}}, []).
+
+-spec start_link(logplex_channel:id(),
+                 pid(),
+                 mode(),
+                 logplex_msg_buffer:framing_fun()) ->
+                        {ok, pid()} | {error, term()} | ignore.
+start_link(ChannelId, Owner, Active, Fun)
+  when Active =:= active orelse Active =:= passive,
+       is_function(Fun),
+       is_pid(Owner) ->
+    gen_fsm:start_link(?MODULE, {Active,
+                                 #state{channel_id = ChannelId,
+                                        owner = Owner,
+                                        active_fun = Fun}}, []).
 
 -spec set_active(pid() | atom(), logplex_msg_buffer:framing_fun()) -> any().
 set_active(Buffer, Fun) when is_function(Fun, 1) ->
@@ -73,9 +90,12 @@ passive(Msg, S = #state{}) ->
     {next_state, passive, S}.
 
 %% @private
-init(S = #state{channel_id = ChannelId}) ->
+init({Mode, S = #state{channel_id = ChannelId,
+                       owner = Owner}})
+  when Mode =:= active orelse Mode =:= passive,
+       is_pid(Owner) ->
     logplex_channel:register({channel_id, ChannelId}),
-    {ok, passive, S}.
+    {ok, Mode, S}.
 
 %% @private
 handle_event(_Event, StateName, State) ->
