@@ -93,8 +93,8 @@ passive(Msg, S = #state{}) ->
 init({Mode, S = #state{channel_id = ChannelId,
                        owner = Owner}})
   when Mode =:= active orelse Mode =:= passive,
-       is_pid(Owner) ->
-    logplex_channel:register({channel_id, ChannelId}),
+       is_pid(Owner), is_integer(ChannelId) ->
+    logplex_channel:register({channel, ChannelId}),
     {ok, Mode, S}.
 
 %% @private
