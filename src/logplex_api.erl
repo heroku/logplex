@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -27,6 +27,7 @@
 -include("logplex_logging.hrl").
 
 -define(HDR, [{"Content-Type", "text/html"}]).
+-define(JSON_CONTENT, [{"Content-Type", "application/json"}]).
 
 start_link() ->
     Port =
@@ -59,12 +60,16 @@ loop(Req) ->
     Path = Req:get(path),
     ChannelId = header_value(Req, "Channel", ""),
     try
-        {Code, Body} = serve(handlers(), Method, Path, Req),
+        {Code, Hdr, Body} = case serve(handlers(), Method, Path, Req) of
+                                {C, B} ->
+                                    {C, ?HDR, B};
+                                {_C, _H, _B} = Resp -> Resp
+                            end,
         Time = timer:now_diff(os:timestamp(), Start) div 1000,
         ?INFO("at=request channel_id=~s method=~p path=~s"
               " resp_code=~w time=~w body=~s",
               [ChannelId, Method, Path, Code, Time, Body]),
-        Req:respond({Code, ?HDR, Body}),
+        Req:respond({Code, Hdr, Body}),
         exit(normal)
     catch
         exit:normal ->
@@ -135,7 +140,7 @@ handlers() ->
         case channel_info(api_v2, ChannelId) of
             not_found -> not_found_json();
             Info ->
-                {200, iolist_to_binary(mochijson2:encode({struct, Info}))}
+                {200, ?JSON_CONTENT, mochijson2:encode({struct, Info})}
         end
     end},
 
@@ -154,9 +159,7 @@ handlers() ->
             ok ->
                 {200, <<>>};
             {error, not_found} ->
-                {404, iolist_to_binary(mochijson2:encode({struct, [
-                    {error, <<"Not found">>}
-                ]}))}
+                json_error(404, <<"Not Found">>)
         end
     end},
 
@@ -195,9 +198,8 @@ handlers() ->
         ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
             [Name, ChannelId, Time div 1000]),
 
-        {201, iolist_to_binary(mochijson2:encode({struct, [
-            {name, Name}, {token, Token}
-        ]}))}
+        {201, ?JSON_CONTENT,
+         mochijson2:encode({struct, [{name, Name}, {token, Token}]})}
     end},
 
     {['POST', "^/sessions$"], fun(Req, _Match) ->
@@ -214,9 +216,8 @@ handlers() ->
         Body = Req:recv_body(),
         Session = logplex_session:create(Body),
         not is_binary(Session) andalso exit({expected_binary, Session}),
-        {201, iolist_to_binary(mochijson2:encode({struct, [
-            {url, Session}
-        ]}))}
+        {201, ?JSON_CONTENT,
+         mochijson2:encode({struct, [{url, Session}]})}
     end},
 
     {['GET', "^/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
@@ -290,183 +291,84 @@ handlers() ->
         {201, iolist_to_binary(mochijson2:encode({struct, Resp}))}
     end},
 
-    {['POST', "^/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
+    {['POST', "^/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [_ChannelIdStr, _DrainIdStr]) ->
         authorize(Req),
-
-        {struct, Data} = mochijson2:decode(Req:recv_body()),
-        Host = proplists:get_value(<<"host">>, Data),
-        Port = proplists:get_value(<<"port">>, Data),
-        not is_binary(Host) andalso error_resp(400, <<"'host' param is missing">>),
-        Host == <<"localhost">> andalso error_resp(400, <<"Invalid drain">>),
-        Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
-
-        case logplex_drain:create(list_to_integer(DrainId), list_to_integer(ChannelId), Host, Port) of
-            #drain{id=Id} ->
-                Resp = [
-                    {id, Id},
-                    {msg, list_to_binary(io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port]))}
-                ],
-                {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
-            {error, not_found} ->
-                {404, <<"Failed to create drain">>};
-            {error, invalid_drain} ->
-                {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
-        end  
+        {501, <<"V1 Drain Creation API deprecated">>}
     end},
 
-    {['POST', "^/v2/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
+    {['POST', "^/v2/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelIdStr, DrainIdStr]) ->
         authorize(Req),
 
-        {struct, Data} = mochijson2:decode(Req:recv_body()),
-
-        Url = proplists:get_value(<<"url">>, Data, <<>>),
-
-        {Host, Port} =
-            case Url of
-                <<>> -> {undefined, undefined};
-                _ ->
-                    case catch http_uri_r15b:parse(binary_to_list(Url)) of
-                        {ok, {_Proto, _Auth, Host0, Port0, _Path, _}} ->
-                            {list_to_binary(Host0), Port0};
-                        _ ->
-                            error_resp(422,
-                            iolist_to_binary(mochijson2:encode(
-                            {struct, [{error, <<"Invalid drain url">>}]})))
-                    end
-            end,
-
-        case logplex_drain:create(list_to_integer(DrainId), list_to_integer(ChannelId), Host, Port) of
-            #drain{token=Token} ->
-                Resp = [
-                    {id, list_to_integer(DrainId)},
-                    {token, Token},
-                    {url, Url}
-                ],
-                {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
-            {error, already_exists} ->
-                {409, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Already exists">>}]}))};
-            {error, invalid_drain} ->
-                {422, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Invalid drain">>}]}))}
-        end
-    end},
-
-    {['POST', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
-        authorize(Req),
-
-        {struct, Data} = mochijson2:decode(Req:recv_body()),
-        Host = proplists:get_value(<<"host">>, Data),
-        Port = proplists:get_value(<<"port">>, Data),
-        not is_binary(Host) andalso error_resp(400, <<"'host' param is missing">>),
-        Host == <<"localhost">> andalso error_resp(400, <<"Invalid drain">>),
-        Host == <<"127.0.0.1">> andalso error_resp(400, <<"Invalid drain">>),
-
-        case logplex_channel:lookup_drains(list_to_integer(ChannelId)) of
-            List when length(List) >= ?MAX_DRAINS ->
-                {400, "You have already added the maximum number of drains allowed"};
-            _ ->
-                {ok, DrainId, Token} = logplex_drain:reserve_token(),
-                case logplex_drain:create(DrainId, Token, list_to_integer(ChannelId), Host, Port) of
-                    #drain{} ->
-                        Resp = [
-                            {id, DrainId},
-                            {token, Token},
-                            {msg, list_to_binary(io_lib:format("Successfully added drain syslog://~s:~p", [Host, Port]))}
-                        ],
-                        {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
-                    {error, already_exists} ->
-                        {400, io_lib:format("Drain syslog://~s:~p already exists", [Host, Port])};
-                    {error, invalid_drain} ->
-                        {400, io_lib:format("Invalid drain syslog://~s:~p", [Host, Port])}
+        DrainId = list_to_integer(DrainIdStr),
+        ChannelId = list_to_integer(ChannelIdStr),
+        case logplex_drain:lookup_token(DrainId) of
+            not_found ->
+                json_error(404, <<"Unknown drain.">>);
+            Token ->
+                case logplex_drain:valid_uri(req_drain_uri(Req)) of
+                    {error, What} ->
+                        Err = io_lib:format("Invalid drain destination: ~p",
+                                            [What]),
+                        json_error(422, Err);
+                    {valid, _, URI} ->
+                        case logplex_channel:can_add_drain(ChannelId) of
+                            cannot_add_drain ->
+                                json_error(422, <<"You have already added the maximum number of drains allowed">>);
+                            can_add_drain ->
+                                case logplex_drain:create(DrainId, Token, ChannelId, URI) of
+                                    {error, already_exists} ->
+                                        json_error(409, <<"Already exists">>);
+                                    {drain, _Id, Token} ->
+                                        Resp = [
+                                                {id, DrainId},
+                                                {token, Token},
+                                                {url, uri:to_binary(URI)}
+                                               ],
+                                        {201,?JSON_CONTENT,
+                                         mochijson2:encode({struct, Resp})}
+                                end
+                        end
                 end
         end
+    end},
+
+    {['POST', "^/channels/(\\d+)/drains$"], fun(Req, [_ChannelId]) ->
+        authorize(Req),
+
+        {501, <<"V1 Drain Creation API deprecated.">>}
     end},
 
     %% V2
-    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [_ChannelIdStr]) ->
         authorize(Req),
 
-        {struct, Data} = mochijson2:decode(Req:recv_body()),
-
-        Url = proplists:get_value(<<"url">>, Data, <<>>),
-
-        {Host, Port} =
-            case Url of
-                <<>> -> {undefined, undefined};
-                _ ->
-                    case catch http_uri_r15b:parse(binary_to_list(Url)) of
-                        {ok, {_Proto, _Auth, Host0, Port0, _Path, _}} ->
-                            {list_to_binary(Host0), Port0};
-                        _ ->
-                            error_resp(422,
-                            iolist_to_binary(mochijson2:encode(
-                            {struct, [{error, <<"Invalid drain url">>}]})))
-                    end
-            end,
-
-        case logplex_channel:lookup_drains(list_to_integer(ChannelId)) of
-            List when length(List) >= ?MAX_DRAINS ->
-                {422, iolist_to_binary(mochijson2:encode({struct, [
-                    {error, <<"You have already added the maximum number of drains allowed">>}]}))};
-            _ ->
-                {ok, DrainId, Token} = logplex_drain:reserve_token(),
-                case logplex_drain:create(DrainId, Token, list_to_integer(ChannelId), Host, Port) of
-                    #drain{} ->
-                        Resp = [
-                            {id, DrainId},
-                            {token, Token},
-                            {url, Url}
-                        ],
-                        {201, iolist_to_binary(mochijson2:encode({struct, Resp}))};
-                    {error, already_exists} ->
-                        {409, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Already exists">>}]}))};
-                    {error, invalid_drain} ->
-                        {422, iolist_to_binary(mochijson2:encode({struct, [{error, <<"Invalid drain">>}]}))}
-                end
-        end
+        json_error(501, <<"v2 one-call drain creation API deprecated.">>)
     end},
 
-    {['GET', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    {['GET', "^/channels/(\\d+)/drains$"], fun(Req, [_ChannelId]) ->
         authorize(Req),
-        Drains = logplex_channel:lookup_drains(list_to_integer(ChannelId)),
-        not is_list(Drains) andalso exit({expected_list, Drains}),
-        
-        Drains1 = [{struct, [{token, Token}, {host, Host}, {port, Port}]} || #drain{token=Token, host=Host, port=Port} <- Drains, Host =/= undefined],
-        {200, iolist_to_binary(mochijson2:encode(Drains1))}
+        {501, <<"V1 Drain API Deprecated.">>}
     end},
 
-    {['DELETE', "^/channels/(\\d+)/drains$"], fun(Req, [ChannelId]) ->
+    {['DELETE', "^/channels/(\\d+)/drains$"], fun(Req, [_ChannelId]) ->
         authorize(Req),
-
-        Data = Req:parse_qs(),
-        Host = proplists:get_value("host", Data),
-        Port = proplists:get_value("port", Data),
-        Host == "" andalso error_resp(400, <<"'host' param is empty">>),
-
-        case Host == undefined andalso Port == undefined of
-            true ->
-                logplex_drain:clear_all(list_to_integer(ChannelId)),
-                {200, <<"Cleared all drains">>};
-            false ->
-                case logplex_drain:delete(list_to_integer(ChannelId), list_to_binary(Host), Port) of
-                    ok -> {200, io_lib:format("Successfully removed drain syslog://~s:~s", [Host, Port])};
-                    {error, not_found} -> {404, io_lib:format("Drain syslog://~s:~s does not exist", [Host, Port])}
-                end
-        end
+       {501, <<"V1 Drain API Deprecated.">>}
     end},
 
     %% V2
     {['DELETE', "^/v2/channels/(\\d+)/drains/(\\S+)$"], fun(Req, [ChannelId, DrainId]) ->
         authorize(Req),
-
-        ChannelIdInt = list_to_integer(ChannelId),
-        case logplex_drain:lookup(list_to_integer(DrainId)) of
-            #drain{channel_id = Ch} when Ch == ChannelIdInt ->
+        Deletable = try
+            ChannelIdInt = list_to_integer(ChannelId),
+            Drain = logplex_drain:lookup(list_to_integer(DrainId)),
+            ChannelIdInt =:= logplex_drain:channel_id(Drain)
+            catch _:_ -> false end,
+        case Deletable of
+            false ->
+                json_error(404, <<"Not found">>);
+            true ->
                 ok = logplex_drain:delete(list_to_integer(DrainId)),
-                {200, <<>>};
-            _ ->
-                {404, iolist_to_binary(mochijson2:encode({struct, [
-                    {error, <<"Not found">>}
-                ]}))}
+                {200, <<>>}
         end
     end}].
 
@@ -483,10 +385,14 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
                     {Code, Body};
                 {'EXIT', Err} ->
                     exit(Err);
-                {Code, Body} when is_integer(Code), is_binary(Body) ->
+                {Code, Body}
+                  when is_integer(Code),
+                       is_binary(Body) orelse is_list(Body) ->
                     {Code, Body};
-                {Code, Body} when is_integer(Code), is_list(Body) ->
-                    {Code, Body};
+                {Code, Hdrs, Body}
+                  when is_integer(Code), is_list(Hdrs),
+                       is_binary(Body) orelse is_list(Body) ->
+                    {Code, Hdrs, Body};
                 Other ->
                     exit({unexpected, Other})
             end;
@@ -638,8 +544,8 @@ channel_info(ApiVsn, ChannelId) when is_integer(ChannelId) ->
                                    || Token = #token{} <- Tokens])},
 
              {drains, lists:sort([drain_info(ApiVsn, Drain)
-                                  || Drain = #drain{host = Host, port = Port} <- Drains,
-                                     Host =/= undefined, Port =/= 0])}];
+                                  || Drain <- Drains,
+                                     logplex_drain:has_valid_uri(Drain)])}];
         not_found -> not_found
     end.
 
@@ -650,12 +556,31 @@ token_info(api_v2, #token{name=Name, id=Token}) ->
      {token, Token}].
 
 drain_info(api_v1, Drain) ->
-    iolist_to_binary(logplex_drain:url(Drain));
-drain_info(api_v2, Drain = #drain{id = Id, token = Token}) ->
-    [{id, Id},
-     {token, Token},
-     {url, iolist_to_binary(logplex_drain:url(Drain))}].
+    uri:to_binary(logplex_drain:uri(Drain));
+drain_info(api_v2, Drain) ->
+    [{id, logplex_drain:id(Drain)},
+     {token, logplex_drain:token(Drain)},
+     {url, uri:to_binary(logplex_drain:uri(Drain))}].
 
 not_found_json() ->
     Json = {struct, [{error, <<"Not found">>}]},
     {404, iolist_to_binary(mochijson2:encode(Json))}.
+
+req_drain_uri(Req) ->
+    {struct, Data} = mochijson2:decode(Req:recv_body()),
+    case proplists:get_value(<<"url">>, Data) of
+        undefined ->
+            Port = proplists:get_value(<<"port">>, Data),
+            case proplists:get_value(<<"host">>, Data) of
+                undefined ->
+                    {error, missing_host_param};
+                Host ->
+                    logplex_tcpsyslog_drain:uri(Host, Port)
+            end;
+        UrlString ->
+            logplex_drain:parse_url(UrlString)
+    end.
+
+json_error(Code, Err) ->
+    {Code, ?JSON_CONTENT,
+     mochijson2:encode({struct, [{error, iolist_to_binary(Err)}]})}.

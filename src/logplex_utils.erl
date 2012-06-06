@@ -91,7 +91,7 @@ format(Msg) when is_record(Msg, msg) ->
 format(_Msg) ->
     "".
 
--spec nl(Msg::iolist()) -> iolist().
+-spec nl(iolist() | binary()) -> iolist().
 nl(<<>>) -> <<"\n">>;
 nl(Msg) when is_binary(Msg) ->
     case binary:at(Msg, byte_size(Msg)-1) of

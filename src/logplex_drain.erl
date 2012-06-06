@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -24,53 +24,86 @@
 
 -export([whereis/1
          ,start/3
+         ,start/1
          ,stop/1
          ,stop/2
         ]).
 
--export([reserve_token/0, cache/3, create/5, create/4,
-         delete/1, delete/3, clear_all/1, lookup/1]).
+-export([reserve_token/0, cache/3
+         ,delete/1, lookup/1
+         ,delete_by_channel/1
+         ,lookup_by_channel/1
+         ,count_by_channel/1
+         ,create/4
+         ,lookup_token/1
+        ]).
 
--export([url/1
+-export([new/5
+         ,id/1
+         ,token/1
+         ,channel_id/1
+         ,uri/1
+        ]).
+
+-export([parse_url/1
+         ,valid_uri/1
+         ,has_valid_uri/1
+        ]).
+
+-export([register/4
+         ,register/3
         ]).
 
 -include("logplex.hrl").
+-include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
+-include_lib("stdlib/include/ms_transform.hrl").
 
 -compile({no_auto_import,[whereis/1]}).
 
 -type id() :: integer().
 -type token() :: binary().
+-type type() :: 'tcpsyslog' | 'http' | 'udpsyslog'.
+-type deprecated_types() :: 'tcpsyslog2' | 'tcpsyslog_old'.
+
 -export_type([id/0
               ,token/0
+              ,type/0
              ]).
+
+new(Id, ChannelId, Token, Type, Uri) ->
+    #drain{id=Id, channel_id=ChannelId, token=Token, type=Type, uri=Uri}.
+
+id(#drain{id=Id}) -> Id.
+token(#drain{token=Token}) -> Token.
+channel_id(#drain{channel_id=CID}) -> CID.
+uri(#drain{uri=Uri}) -> Uri.
+
+start(#drain{type=Type, id=Id,
+             channel_id=CID, token=Token,
+             uri=Uri}) ->
+    start(Type, Id, [CID, Id, Token, Uri]).
 
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
--spec start('tcpsyslog_old' | 'tcpsyslog' | 'tcpsyslog2' | 'udpsyslog',
-            id(), list()) -> any().
-start(tcpsyslog_old, DrainId, Args) ->
-    supervisor:start_child(logplex_drain_sup,
-                           {DrainId,
-                            {logplex_tcpsyslog_drain, start_link, Args},
-                            transient, brutal_kill, worker,
-                            [logplex_tcpsyslog_drain]});
-start(Type, DrainId, Args)
-  when Type =:= tcpsyslog;
-       Type =:= tcpsyslog2 ->
-    supervisor:start_child(logplex_drain_sup,
-                           {DrainId,
-                            {logplex_tcpsyslog_drain2, start_link, Args},
-                            transient, brutal_kill, worker,
-                            [logplex_tcpsyslog_drain]});
-start(udpsyslog, DrainId, Args) ->
-    supervisor:start_child(logplex_drain_sup,
-                           {DrainId,
-                            {logplex_udpsyslog_drain, start_link, Args},
-                            transient, brutal_kill, worker,
-                            [logplex_tcpsyslog_drain]}).
+start(Type, DrainId, Args) ->
+    start_mod(mod(Type), DrainId, Args).
 
+start_mod(Mod, DrainId, Args) when is_atom(Mod) ->
+    supervisor:start_child(logplex_drain_sup,
+                           {DrainId,
+                            {Mod, start_link, Args},
+                            transient, brutal_kill, worker,
+                            [Mod]});
+start_mod({error, _} = Err, _Drain, _Args) ->
+    Err.
+
+-spec mod(type() | deprecated_types()) -> atom() | {'error', term()}.
+mod(tcpsyslog) -> logplex_tcpsyslog_drain;
+mod(udpsyslog) -> logplex_udpsyslog_drain;
+mod(http) -> logplex_http_drain;
+mod(_) -> {error, unknown_drain_type}.
 
 stop(DrainId) ->
     stop(DrainId, timer:seconds(5)).
@@ -99,76 +132,41 @@ reserve_token() ->
             Err
     end.
 
+lookup_token(DrainId) when is_integer(DrainId) ->
+    case ets:lookup(drains, DrainId) of
+        [#drain{token=Token}] ->
+            Token;
+        [] -> not_found
+    end.
+
 cache(DrainId, Token, ChannelId)  when is_integer(DrainId),
                                         is_binary(Token),
                                         is_integer(ChannelId) ->
     true = ets:insert(drains, #drain{id=DrainId, channel_id=ChannelId, token=Token}).
 
-create(DrainId, Token, ChannelId, Host, Port) when is_integer(DrainId),
-                                                   is_binary(Token),
-                                                   is_integer(ChannelId),
-                                                   is_binary(Host),
-                                                   (is_integer(Port) orelse Port == undefined) ->
-    case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port, tcp='_'}) of
+-spec create(id(), token(), logplex_channel:id(), uri:parsed_uri()) ->
+                    {'drain', id(), token()} |
+                    {'error', term()}.
+create(DrainId, Token, ChannelId, URI)
+  when is_integer(DrainId),
+       is_binary(Token),
+       is_integer(ChannelId) ->
+    case ets:match_object(drains, #drain{channel_id=ChannelId,
+                                         uri=URI, _='_'}) of
         [_] ->
             {error, already_exists};
         [] ->
-            case logplex_utils:resolve_host(Host) of
-                undefined ->
-                    ?INFO("at=create_drain result=invalid dest=~s",
-                          [logplex_logging:dest(Host, Port)]),
-                    {error, invalid_drain};
-                _Ip ->
-                    case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
-                        ok ->
-                            #drain{id=DrainId, channel_id=ChannelId, token=Token, host=Host, port=Port};
-                        Err ->
-                            Err
-                    end
+            case redis_helper:create_url_drain(DrainId, ChannelId,
+                                               Token, uri:to_binary(URI)) of
+                ok ->
+                    {drain, DrainId, Token};
+                Err ->
+                    {error, Err}
             end
-    end.
-
-create(DrainId, ChannelId, Host, Port) when is_integer(DrainId),
-                                            is_integer(ChannelId),
-                                            is_binary(Host) ->
-    case ets:lookup(drains, DrainId) of
-        [#drain{channel_id=ChannelId, token=Token}] ->
-            case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port, tcp='_'}) of
-                [_] ->
-                    {error, already_exists};
-                [] ->
-                    case logplex_utils:resolve_host(Host) of
-                        undefined ->
-                            ?INFO("at=create_drain result=invalid dest=~s",
-                                  [logplex_logging:dest(Host, Port)]),
-                            {error, invalid_drain};
-                        _Ip ->
-                            case redis_helper:create_drain(DrainId, ChannelId, Token, Host, Port) of
-                                ok -> #drain{id=DrainId, channel_id=ChannelId, token=Token, host=Host, port=Port};
-                                Err -> Err
-                            end
-                    end
-            end;
-        _ ->
-            {error, not_found}
-    end.        
-
-delete(ChannelId, Host, Port) when is_integer(ChannelId), is_binary(Host) ->
-    Port1 = if Port == "" -> undefined; true -> list_to_integer(Port) end,
-    case ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host=Host, port=Port1, tcp='_'}) of
-        [#drain{id=DrainId}|_] ->
-            delete(DrainId);
-        _ ->
-            {error, not_found}
     end.
 
 delete(DrainId) when is_integer(DrainId) ->
     redis_helper:delete_drain(DrainId).
-
-clear_all(ChannelId) when is_integer(ChannelId) ->
-    List = ets:match_object(drains, #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host='_', port='_', tcp='_'}),
-    [delete(DrainId) || #drain{id=DrainId} <- List],
-    ok.
 
 lookup(DrainId) when is_integer(DrainId) ->
     case ets:lookup(drains, DrainId) of
@@ -184,10 +182,87 @@ new_token(0) ->
 
 new_token(Retries) ->
     Token = list_to_binary("d." ++ uuid:to_string(uuid:v4())),
-    case ets:match_object(drains, #drain{id='_', channel_id='_', token=Token, resolved_host='_', host='_', port='_', tcp='_'}) of
+    case ets:match_object(drains, #drain{token=Token, _='_'}) of
         [#drain{}] -> new_token(Retries-1);
         [] -> Token
     end.
 
-url(#drain{host=Host, port=Port}) ->
-    [<<"syslog://">>, Host, ":", integer_to_list(Port)].
+parse_url(UrlBin) when is_binary(UrlBin) ->
+    parse_url(binary_to_list(UrlBin));
+parse_url(Url) when is_list(Url) ->
+    case uri:parse(Url, [{scheme_defaults, uri_schemes()}]) of
+        {ok, Uri} ->
+            Uri;
+        {error, _} = Err ->
+            Err
+    end.
+
+-spec valid_uri(uri:parsed_uri() | {error, term()}) ->
+                       {valid, type(), uri:parsed_uri()} |
+                       {error, term()}.
+valid_uri({syslog, _, _Host, _Port, _, _} = Uri) ->
+    logplex_tcpsyslog_drain:valid_uri(Uri);
+valid_uri({udpsyslog, _, _Host, _Port, _, _} = Uri) ->
+    logplex_udpsyslog_drain:valid_uri(Uri);
+valid_uri({http, _, _, _, _, _} = Uri) ->
+    {valid, http, Uri};
+valid_uri({https, _, _, _, _, _} = Uri) ->
+    {valid, http, Uri};
+valid_uri({Scheme, _, _, _, _, _}) ->
+    {error, {unknown_scheme, Scheme}};
+valid_uri({error, _} = Err) -> Err.
+
+uri_schemes() ->
+    [{http,  80}
+     ,{https, 443}
+     ,{syslog, 601}
+     ,{udpsyslog, 514}
+    ].
+
+has_valid_uri(#drain{uri=Uri}) ->
+    case valid_uri(Uri) of
+        {valid, _, _} -> true;
+        _ -> false
+    end.
+
+delete_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select_delete(drains,
+                      ets:fun2ms(fun (#drain{channel_id=C})
+                                     when C =:= ChannelId ->
+                                         true
+                                 end)).
+
+count_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select_count(drains,
+                      ets:fun2ms(fun (#drain{channel_id=C})
+                                     when C =:= ChannelId ->
+                                         true
+                                 end)).
+
+
+lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select(drains,
+               ets:fun2ms(fun (#drain{channel_id=C})
+                                when C =:= ChannelId ->
+                                  object()
+                          end)).
+
+-spec register(id(), logplex_channel:id(), atom(), term()) -> ok.
+register(DrainId, ChannelId, Type, Dest)
+  when is_integer(DrainId), is_integer(ChannelId) ->
+    logplex_channel:register({channel, ChannelId}),
+    register(DrainId, Type, Dest).
+
+-spec register(id(), atom(), term()) -> ok.
+register(DrainId, Type, Dest) ->
+    gproc:reg({n, l, {drain, DrainId}}, undefined),
+    gproc:mreg(p, l, [{drain_dest, Dest},
+                      {drain_type, Type}]),
+    ok.
+
+%% unregister_from_gproc(#state{drain_id=DrainId,
+%%                              channel_id=ChannelId}) ->
+%%     gproc:unreg({n, l, {drain, DrainId}}),
+%%     gproc:munreg(p, l, [{channel, ChannelId},
+%%                         drain_dest,
+%%                         drain_type]).

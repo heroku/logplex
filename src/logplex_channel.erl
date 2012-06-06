@@ -23,11 +23,14 @@
 -module(logplex_channel).
 
 -export([whereis/1
+         ,register/1
          ,post_msg/2
         ]).
 
 -export([create/0, delete/1, lookup/1,
-         lookup_tokens/1, lookup_drains/1, logs/2, info/1]).
+         lookup_tokens/1, lookup_drains/1, logs/2, info/1
+         ,can_add_drain/1
+        ]).
 
 -compile({no_auto_import,[whereis/1]}).
 
@@ -36,6 +39,10 @@
 
 -type id() :: integer().
 -export_type([id/0]).
+
+register({channel, ChannelId} = C)
+  when is_integer(ChannelId) ->
+    gproc:add_local_property(C, true).
 
 whereis({channel, _ChannelId} = Name) ->
     [ Pid || {Pid, true} <- gproc:lookup_local_properties(Name) ].
@@ -70,7 +77,7 @@ delete(ChannelId) when is_integer(ChannelId) ->
             {error, not_found};
         _ ->
             [logplex_token:delete(TokenId) || #token{id=TokenId} <- lookup_tokens(ChannelId)],
-            [logplex_drain:delete(DrainId) || #drain{id=DrainId} <- lookup_drains(ChannelId)], 
+            logplex_drain:delete_by_channel(ChannelId),
             redis_helper:delete_channel(ChannelId)
     end.
 
@@ -81,17 +88,10 @@ lookup(ChannelId) when is_integer(ChannelId) ->
     end.
 
 lookup_tokens(ChannelId) when is_integer(ChannelId) ->
-    ets:match_object(tokens, token_match_expr(ChannelId)).
+    logplex_token:lookup_by_channel(ChannelId).
 
 lookup_drains(ChannelId) when is_integer(ChannelId) ->
-    ets:match_object(drains, drain_match_expr(ChannelId)).
-
-token_match_expr(ChannelId) ->
-    T = logplex_utils:empty_token(),
-    T#token{channel_id=ChannelId}.
-
-drain_match_expr(ChannelId) ->
-    #drain{id='_', channel_id=ChannelId, token='_', resolved_host='_', host='_', port='_', tcp='_'}.
+    logplex_drain:lookup_by_channel(ChannelId).
 
 logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
 
@@ -115,4 +115,14 @@ info(ChannelId) when is_integer(ChannelId) ->
              lookup_tokens(ChannelId),
              lookup_drains(ChannelId)};
         _ -> not_found
+    end.
+
+can_add_drain(ChannelId)
+  when is_integer(ChannelId) ->
+    CurrentCount = logplex_drain:count_by_channel(ChannelId),
+    Max = logplex_app:config(max_drains_per_channel),
+    if CurrentCount < Max ->
+            can_add_drain;
+       true ->
+            cannot_add_drain
     end.

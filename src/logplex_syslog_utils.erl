@@ -103,7 +103,7 @@ datetime({_,_,_} = Now) ->
     datetime(DT);
 datetime({{Y,M,D},{H,MM,S}}) ->
     io_lib:format("~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0B"
-                  "Z+00:00",
+                  "-00:00",
                   [Y,M,D, H,MM,S]).
 
 fmt(Facility, Severity, Time, Source, Process, Fmt, Args) ->

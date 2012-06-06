@@ -13,10 +13,10 @@
 -include("logplex_logging.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {buf = logplex_drain_buffer:new() :: logplex_drain_buffer:buf(),
+-record(state, {buf = logplex_msg_buffer:new() :: logplex_msg_buffer:buf(),
                 channel_id :: logplex_channel:id(),
                 owner :: pid(),
-                active_fun :: 'undefined' | logplex_drain_buffer:framing_fun()
+                active_fun :: 'undefined' | logplex_msg_buffer:framing_fun()
                }).
 
 %-type pstates() :: 'passive' | 'active'.
@@ -48,7 +48,7 @@ start_link(ChannelId, Owner) ->
     gen_fsm:start_link(?MODULE, #state{channel_id = ChannelId,
                                        owner = Owner}, []).
 
--spec set_active(pid() | atom(), logplex_drain_buffer:framing_fun()) -> any().
+-spec set_active(pid() | atom(), logplex_msg_buffer:framing_fun()) -> any().
 set_active(Buffer, Fun) when is_function(Fun, 1) ->
     Buffer ! {active, Fun}.
 
@@ -82,7 +82,7 @@ handle_sync_event(Event, _From, StateName, State) ->
 %% @private
 handle_info({log, Msg}, StateName, S = #state{buf = OldBuf}) ->
     NewState =
-        S#state{buf = logplex_drain_buffer:push(Msg, OldBuf)},
+        S#state{buf = logplex_msg_buffer:push(Msg, OldBuf)},
     case StateName of
         passive ->
             {next_state, passive, NewState};
@@ -115,7 +115,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 become_active(S = #state{buf = Buf}) ->
-    case logplex_drain_buffer:empty(Buf) of
+    case logplex_msg_buffer:empty(Buf) of
         empty ->
             {next_state, active, S};
         not_empty ->
@@ -124,7 +124,7 @@ become_active(S = #state{buf = Buf}) ->
 
 send(S = #state{owner = Owner, buf = Buf,
                 active_fun = Fun}) ->
-    {Data, _Count, NewBuf} = logplex_drain_buffer:to_pkts(Buf, 4096, Fun),
+    {Data, _Count, NewBuf} = logplex_msg_buffer:to_pkts(Buf, 4096, Fun),
     Owner ! {logplex_tail_data, self(), Data},
     {next_state, passive,
      S#state{buf=NewBuf}}.

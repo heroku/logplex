@@ -1,200 +1,158 @@
+%%%-------------------------------------------------------------------
 %% @copyright Geoff Cant
 %% @author Geoff Cant <nem@erlang.geek.nz>
 %% @version {@vsn}, {@date} {@time}
-%% @doc Capped size log message buffer with loss recording.
+%% @doc Buffer process for logplex messages.
 %% @end
+%%%-------------------------------------------------------------------
+
 -module(logplex_drain_buffer).
+-behaviour(gen_fsm).
 
--record(lpdb, {messages = queue:new(),
-               max_size = 1024 :: pos_integer(),
-               loss_start = undefined :: 'undefined' | erlang:timestamp(),
-               loss_count = 0 :: non_neg_integer()
-              }).
+-include("logplex.hrl").
+-include("logplex_logging.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
--type msg() :: binary() | tuple().
--type loss_indication() :: {loss_indication,
-                            N::non_neg_integer(),
-                            When::erlang:timestamp()}.
--type framing_fun()::fun (({msg, msg()} | loss_indication()) ->
-                                 {frame, iolist()} | skip).
--opaque buf() :: #lpdb{}.
--export_type([buf/0, framing_fun/0]).
+-record(state, {buf = logplex_msg_buffer:new() :: logplex_msg_buffer:buf(),
+                channel_id :: logplex_channel:id(),
+                owner :: pid(),
+                active_fun :: 'undefined' | logplex_msg_buffer:framing_fun()
+               }).
 
--export([new/0
-         ,new/1
-         ,push/2
-         ,push_ext/2
-         ,len/1
-         ,empty/1
-         ,pop/1
-         ,to_list/1
-         ,to_pkts/3
-         ]).
+-type mode() :: 'passive' | 'active'.
 
--ifdef(TEST).
--include_lib("proper/include/proper.hrl").
--endif.
+-type rx_msgs() :: {'post', Msg::term()}.
+-type tx_msgs() :: {'logplex_drain_data', pid(), Data::term()}.
 
--spec new() -> buf().
-new() ->
-    #lpdb{}.
+-export_type([rx_msgs/0, tx_msgs/0]).
 
--spec new(pos_integer()) -> buf().
-new(Max) when is_integer(Max), Max > 0 ->
-    #lpdb{max_size=Max}.
+%% ------------------------------------------------------------------
+%% API Function Exports
+%% ------------------------------------------------------------------
 
--spec push(msg(), buf()) -> buf().
-push(Msg, Buf = #lpdb{}) ->
-    {_, NewBuf} = push_ext(Msg, Buf),
-    NewBuf.
+-export([start_link/2
+         ,start_link/1
+         ,start_link/4
+         ,set_active/2
+        ]).
 
--spec push_ext(msg(), buf()) -> {'displace' | 'insert', buf()}.
-push_ext(Msg, Buf = #lpdb{}) ->
-    case full(Buf) of
-        full ->
-            {displace, displace(Msg, Buf)};
-        have_space ->
-            {insert, insert(Msg, Buf)}
-    end.
+-export([active/2,
+         passive/2]).
 
--spec pop(buf()) -> {empty, buf()} |
-                    {{msg, msg()}, buf()} |
-                    {loss_indication(), buf()}.
-pop(Buf = #lpdb{loss_count = 0,
-                messages = Q}) ->
-    case queue:out(Q) of
-        {empty, Q1} ->
-            {empty, Buf#lpdb{messages = Q1}};
-        {{value, Item}, Q2} ->
-            {{msg, Item}, Buf#lpdb{messages = Q2}}
+%% ------------------------------------------------------------------
+%% gen_fsm Function Exports
+%% ------------------------------------------------------------------
+
+-export([init/1, handle_event/3,
+         handle_sync_event/4, handle_info/3, terminate/3,
+         code_change/4]).
+
+%% ------------------------------------------------------------------
+%% API Function Definitions
+%% ------------------------------------------------------------------
+
+start_link(ChannelId) ->
+    start_link(ChannelId, self()).
+
+start_link(ChannelId, Owner) ->
+    gen_fsm:start_link(?MODULE, {passive,
+                                 #state{channel_id = ChannelId,
+                                        owner = Owner}}, []).
+
+-spec start_link(logplex_channel:id(),
+                 pid(),
+                 mode(),
+                 logplex_msg_buffer:framing_fun()) ->
+                        {ok, pid()} | {error, term()} | ignore.
+start_link(ChannelId, Owner, Active, Fun)
+  when Active =:= active orelse Active =:= passive,
+       is_function(Fun),
+       is_pid(Owner) ->
+    gen_fsm:start_link(?MODULE, {Active,
+                                 #state{channel_id = ChannelId,
+                                        owner = Owner,
+                                        active_fun = Fun}}, []).
+
+-spec set_active(pid() | atom(), logplex_msg_buffer:framing_fun()) -> any().
+set_active(Buffer, Fun) when is_function(Fun, 1) ->
+    Buffer ! {active, Fun}.
+
+%% ------------------------------------------------------------------
+%% gen_fsm Function Definitions
+%% ------------------------------------------------------------------
+
+active(Msg, S = #state{}) ->
+    ?WARN("state=~p Unexpected msg ~p", [active, Msg]),
+    {next_state, active, S}.
+
+passive(Msg, S = #state{}) ->
+    ?WARN("state=~p Unexpected msg ~p", [passive, Msg]),
+    {next_state, passive, S}.
+
+%% @private
+init({Mode, S = #state{channel_id = ChannelId,
+                       owner = Owner}})
+  when Mode =:= active orelse Mode =:= passive,
+       is_pid(Owner) ->
+    logplex_channel:register({channel_id, ChannelId}),
+    {ok, Mode, S}.
+
+%% @private
+handle_event(_Event, StateName, State) ->
+    {next_state, StateName, State}.
+
+%% @private
+handle_sync_event(Event, _From, StateName, State) ->
+    ?WARN("[state ~p] Unexpected event ~p",
+          [StateName, Event]),
+    {next_state, StateName, State}.
+
+%% @private
+handle_info({post, Msg}, StateName, S = #state{buf = OldBuf}) ->
+    NewState =
+        S#state{buf = logplex_msg_buffer:push(Msg, OldBuf)},
+    case StateName of
+        passive ->
+            {next_state, passive, NewState};
+        active ->
+            send(NewState)
     end;
-pop(Buf = #lpdb{loss_count = N,
-                loss_start = When})
-  when N > 0 ->
-    {{loss_indication, N, When},
-     Buf#lpdb{loss_count = 0,
-              loss_start = undefined}}.
 
-full(Buf = #lpdb{max_size = Max}) ->
-    case len(Buf) of
-        N when N >= Max ->
-            full;
-        N when N < Max ->
-            have_space
+handle_info({active, _}, active, S = #state{}) ->
+    %% XXX - duplicate active once - is ignoring this the right thing
+    %% to do? Otherwise report an error to parent?
+    {next_state, active, S};
+
+handle_info({active, Fun}, passive, S = #state{}) ->
+    become_active(S#state{active_fun=Fun});
+
+handle_info(Info, StateName, State) ->
+    ?WARN("state=~p Unexpected info ~p", [StateName, Info]),
+    {next_state, StateName, State}.
+
+%% @private
+terminate(_Reason, _StateName, _State) ->
+    ok.
+
+%% @private
+code_change(_OldVsn, StateName, State, _Extra) ->
+    {ok, StateName, State}.
+
+%% ------------------------------------------------------------------
+%% Internal Function Definitions
+%% ------------------------------------------------------------------
+
+become_active(S = #state{buf = Buf}) ->
+    case logplex_msg_buffer:empty(Buf) of
+        empty ->
+            {next_state, active, S};
+        not_empty ->
+            send(S)
     end.
 
-empty(Buf = #lpdb{}) ->
-    case len(Buf) of
-        0 -> empty;
-        _ -> not_empty
-    end.
-
-len(#lpdb{messages=Q}) ->
-    queue:len(Q).
-
--spec to_list(buf()) -> [msg()].
-to_list(#lpdb{messages = Q,
-              loss_count = 0}) ->
-    queue:to_list(Q);
-to_list(#lpdb{messages = Q,
-              loss_count = N,
-              loss_start = When})
-  when N > 0 ->
-    [{loss_indication, N, When} |
-     queue:to_list(Q)].
-
-insert(Msg, Buf = #lpdb{messages = Q}) ->
-    Buf#lpdb{messages = queue:in(Msg, Q)}.
-
-displace(Msg, Buf = #lpdb{messages = Q,
-                          loss_count = 0}) ->
-    {_Drop, Q1} = queue:out(Q),
-    NewQueue = queue:in(Msg, Q1),
-    Buf#lpdb{messages = NewQueue,
-             loss_count = 1,
-             loss_start = os:timestamp()};
-displace(Msg, Buf = #lpdb{messages = Q,
-                          loss_count = N}) when N > 0 ->
-    {_Drop, Q1} = queue:out(Q),
-    NewQueue = queue:in(Msg, Q1),
-    Buf#lpdb{messages = NewQueue,
-             loss_count = N + 1}.
-
--spec to_pkts(buf(), IdealBytes::pos_integer(),
-              framing_fun()) ->
-                     {iolist(), Count::non_neg_integer(), buf()}.
-to_pkts(Buf = #lpdb{},
-        Bytes, Fun) when is_integer(Bytes),
-                         is_function(Fun, 1) ->
-    to_pkts(Buf, Bytes, Bytes, Fun).
-
-to_pkts(Buf, BytesTotal, BytesRemaining, Fun)
-  when BytesRemaining > 0 ->
-    {Item, NewBuf} = pop(Buf),
-    Msg = case Item of
-              empty ->
-                  finished;
-              {loss_indication, _N, _When} ->
-                  Fun(Item);
-              {msg, _M} ->
-                  Fun(Item)
-          end,
-    case Msg of
-        finished ->
-            {[], 0, NewBuf};
-        skip ->
-            to_pkts(NewBuf, BytesTotal, BytesRemaining, Fun);
-        {frame, Data} ->
-            DataSize = iolist_size(Data),
-            case BytesRemaining - DataSize of
-                Remaining when Remaining > 0 ->
-                    {Rest, Count, FinalBuf} = to_pkts(NewBuf,
-                                                      BytesTotal,
-                                                      Remaining,
-                                                      Fun),
-                    {[Data, Rest], Count + 1, FinalBuf};
-                _ when DataSize > BytesTotal ->
-                    %% We will exceed bytes remaining, but this
-                    %% message is a pig, so send it anyway.
-                    {Data, 1, NewBuf};
-                _ ->
-                    %% Would have exceeded BytesRemaining, pretend we
-                    %% didn't pop it.
-                    {[], 0, Buf}
-            end
-    end.
-
--ifdef(TEST).
-
-prop_push_msgs() ->
-    ?FORALL(MsgList, list(g_log_msg()),
-            begin
-                Buf = lists:foldl(fun push/2,
-                                  new(),
-                                  MsgList),
-                lists:foldl(fun (Msg, B) ->
-                                    {{msg, Msg}, B1} =  pop(B),
-                                    B1
-                            end,
-                            Buf,
-                            MsgList),
-                true
-            end).
-
-g_log_msg() ->
-    ?LET({F, S, D, M},
-         {integer(0, 23), % Facility
-          integer(0, 7), % severity
-          integer(-86400, 86400),
-          binary()},
-         iolist_to_binary(io_lib:format("<~p>~p ~s ~s",
-                                        [F, S, g_date(D), M]))).
-
-g_date(Offset) ->
-    Date = calendar:datetime_to_gregorian_seconds(calendar:now_to_datetime(os:timestamp())),
-    {{Y,M,D},{H,MM,S}} = calendar:gregorian_seconds_to_datetime(Date + Offset),
-    io_lib:format("~4.10.0B-~2.10.0B-~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B"
-                  "Z+00:00",
-                  [Y,M,D, H,MM,S]).
-
--endif.
+send(S = #state{owner = Owner, buf = Buf,
+                active_fun = Fun}) ->
+    {Data, _Count, NewBuf} = logplex_msg_buffer:to_pkts(Buf, 4096, Fun),
+    Owner ! {logplex_drain_data, self(), Data},
+    {next_state, passive,
+     S#state{buf=NewBuf}}.

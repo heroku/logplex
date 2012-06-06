@@ -23,8 +23,17 @@
 -module(logplex_token).
 
 -export([create/2, lookup/1, delete/1]).
+-export([lookup_by_channel/1]).
 
--include_lib("logplex.hrl").
+-type id() :: binary().
+-type name() :: binary().
+
+-export_type([id/0
+              ,name/0
+             ]).
+
+-include("logplex.hrl").
+-include_lib("stdlib/include/ms_transform.hrl").
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_token(),
@@ -57,10 +66,17 @@ new_token() ->
 new_token(0) ->
     exit({error, failed_to_provision_token});
 
-new_token(Retries) ->
+new_token(Retries) when is_integer(Retries), Retries > 0 ->
     Token = list_to_binary("t." ++ uuid:to_string(uuid:v4())),
     T = logplex_utils:empty_token(),
     case ets:match_object(tokens, T#token{id=Token}) of
         [#token{}] -> new_token(Retries-1);
         [] -> Token
     end.
+
+lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select(tokens,
+               ets:fun2ms(fun (#token{channel_id=C})
+                                when C =:= ChannelId ->
+                                  object()
+                          end)).

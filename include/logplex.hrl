@@ -1,9 +1,11 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(msg, {time, source, ps, content}).
--record(channel, {id}).
--record(token, {id, channel_id, name}).
--record(drain, {id, channel_id, token, resolved_host, host, port, tcp=true}).
+-record(channel, {id :: logplex_channel:id()}).
+-record(token, {id :: logplex_token:id() | '_',
+                channel_id :: logplex_channel:id() | '$1',
+                name :: logplex_token:name() | '_'
+               }).
 -record(session, {id, body}).
 -record(channel_stat, {channel_id :: logplex_channel:id(),
                        key :: atom()}).
@@ -16,7 +18,6 @@
 -define(HTTP_PORT, 8001).
 -define(UDP_PORT, 9999).
 
--define(MAX_DRAINS, 5).
 -define(LOG_HISTORY, <<"1500">>).
 -define(MAX_SPOOL_POOL_SIZE, 1000).
 
