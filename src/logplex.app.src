@@ -24,6 +24,7 @@
     ,{tcp_syslog_send_loss_msg, send} % send | dont_send
     ,{syslog_port, 6001} % tcp port
     ,{max_drains_per_channel, 5} % #channels
+    ,{drain_buffer_size, 1024} % #messages
    ]}
  ]}.
  

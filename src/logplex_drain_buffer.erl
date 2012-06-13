@@ -14,6 +14,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {buf = logplex_msg_buffer:new() :: logplex_msg_buffer:buf(),
+                buf_size = 1024 :: logplex_msg_buffer:size(),
                 channel_id :: logplex_channel:id(),
                 owner :: pid(),
                 on_activation :: 'undefined' |
@@ -36,7 +37,7 @@
 
 -export([start_link/2
          ,start_link/1
-         ,start_link/3
+         ,start_link/4
          ,set_active/3
          ,notify/1
         ]).
@@ -65,25 +66,34 @@ start_link(ChannelId) ->
     start_link(ChannelId, self()).
 
 start_link(ChannelId, Owner) ->
-    start_link(ChannelId, Owner, notify).
+    start_link(ChannelId, Owner, notify,
+              logplex_app:config(drain_buffer_size, 1024)).
 
 -spec start_link(ChannelId::logplex_channel:id(),
                  Owner::pid(),
                  {active, TargBytes::pos_integer(),
                   Fun::logplex_msg_buffer:framing_fun()} |
-                 'passive' | 'notify') -> any().
-start_link(ChannelId, Owner, {active, TargBytes, Fun})
-  when is_integer(TargBytes), TargBytes > 0,
-       is_function(Fun, 1) ->
+                 'passive' | 'notify', Size::pos_integer()) -> any().
+start_link(ChannelId, Owner, {active, TargBytes, Fun}, Size)
+  when is_integer(ChannelId),
+       is_pid(Owner),
+       is_integer(TargBytes), TargBytes > 0,
+       is_function(Fun, 1),
+       is_integer(Size), Size > 0 ->
     gen_fsm:start_link(?MODULE, {active,
                                  #state{channel_id = ChannelId,
                                         owner = Owner,
+                                        buf_size = Size,
                                         on_activation = {TargBytes, Fun}}}, []);
-start_link(ChannelId, Owner, Mode)
-  when Mode =:= passive; Mode =:= notify ->
+start_link(ChannelId, Owner, Mode, Size)
+  when is_integer(ChannelId),
+       is_pid(Owner),
+       Mode =:= passive orelse Mode =:= notify,
+       is_integer(Size), Size > 0 ->
     gen_fsm:start_link(?MODULE, {Mode,
                                  #state{channel_id = ChannelId,
                                         owner = Owner,
+                                        buf_size = Size,
                                         on_activation = undefined}}, []).
 
 
@@ -109,11 +119,12 @@ post(Buffer, Msg) ->
 
 %% @private
 init({Mode, S = #state{channel_id = ChannelId,
-                       owner = Owner}})
+                       owner = Owner,
+                       buf_size = Size}})
   when Mode =:= notify orelse Mode =:= passive,
        is_pid(Owner), is_integer(ChannelId) ->
     logplex_channel:register({channel, ChannelId}),
-    {ok, Mode, S}.
+    {ok, Mode, S#state{buf = logplex_msg_buffer:new(Size)}}.
 
 
 %% @private
