@@ -109,9 +109,15 @@ init(State0 = #state{uri=URI,
 disconnected({logplex_drain_buffer, Buf, new_data},
              State = #state{buf = Buf}) ->
     try_connect(State);
-disconnected(timeout, State = #state{buf = Buf}) ->
-    logplex_drain_buffer:notify(Buf),
-    {next_state, disconnected, State};
+disconnected(timeout, State = #state{buf = Buf,
+                                     out_q = Q}) ->
+    case queue:is_empty(Q) of
+        true ->
+            logplex_drain_buffer:notify(Buf),
+            {next_state, disconnected, State};
+        false ->
+            try_connect(State)
+    end;
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=disconnected",
@@ -269,10 +275,15 @@ request_to_iolist(#frame{frame = Body,
                   #state{uri = URI = {_Scheme, AuthInfo,
                                       _Host, _Port, Path, QueryInfo}}) ->
     AuthHeader = cowboy_client:auth_header(AuthInfo),
-    Headers = [{<<"Content-type">>, ?CONTENT_TYPE},
-               {<<"x-logplex-msg-count">>, integer_to_list(Count)},
-               {<<"x-logplex-frame-id">>, frame_id_to_iolist(Id)}
-               | AuthHeader],
+    MD5Header = case logplex_app:config(http_body_checksum, none) of
+                    md5 -> [{<<"Content-MD5">>,
+                             base64:encode(crypto:md5(Body))}];
+                    none -> []
+                end,
+    Headers = MD5Header ++ AuthHeader ++
+        [{<<"Content-type">>, ?CONTENT_TYPE},
+         {<<"x-logplex-msg-count">>, integer_to_list(Count)},
+         {<<"x-logplex-frame-id">>, frame_id_to_iolist(Id)}],
     cowboy_client:request_to_iolist(<<"PUT">>,
                                     Headers,
                                     Body,
