@@ -17,13 +17,13 @@
   {mod, {logplex_app, []}},
   {env,
    [
-    {tcp_syslog_send_timeout_secs, 4} % 4 seconds
-    ,{tcp_syslog_backoff_max, 300} % 5 minutes
-    ,{tcp_syslog_reconnect_min, 30} % 0.5 minutes
-    ,{tcp_drain_buffer_size, 1024}
-    ,{tcp_syslog_send_loss_msg, send}
-    ,{syslog_port, 6001}
-    ,{max_drains_per_channel, 5}
+    {tcp_syslog_send_timeout_secs, 4} % seconds
+    ,{tcp_syslog_backoff_max, 300} % seconds
+    ,{tcp_syslog_reconnect_min, 30} % seconds
+    ,{tcp_drain_buffer_size, 1024} % #messages
+    ,{tcp_syslog_send_loss_msg, send} % send | dont_send
+    ,{syslog_port, 6001} % tcp port
+    ,{max_drains_per_channel, 5} % #channels
    ]}
  ]}.
  
