@@ -52,6 +52,9 @@
          ,start_link/4
         ]).
 
+-export([user_agent/0
+        ]).
+
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
 %% ------------------------------------------------------------------
@@ -81,6 +84,9 @@ valid_uri({Scheme, _, _, _, _, _} = Uri)
     {valid, http, Uri};
 valid_uri(_) ->
     {error, invalid_http_uri}.
+
+user_agent() ->
+    [<<"Logplex">>, $/, logplex_app:config(git_branch)].
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
