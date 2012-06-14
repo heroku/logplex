@@ -289,7 +289,9 @@ request_to_iolist(#frame{frame = Body,
     Headers = MD5Header ++ AuthHeader ++
         [{<<"Content-type">>, ?CONTENT_TYPE},
          {<<"x-logplex-msg-count">>, integer_to_list(Count)},
-         {<<"x-logplex-frame-id">>, frame_id_to_iolist(Id)}],
+         {<<"x-logplex-frame-id">>, frame_id_to_iolist(Id)},
+         {<<"User-Agent">>, user_agent()}
+        ],
     cowboy_client:request_to_iolist(<<"PUT">>,
                                     Headers,
                                     Body,
