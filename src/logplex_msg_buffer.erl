@@ -6,19 +6,20 @@
 -module(logplex_msg_buffer).
 
 -record(lpdb, {messages = queue:new(),
-               max_size = 1024 :: pos_integer(),
+               max_size = 1024 :: size(),
                loss_start = undefined :: 'undefined' | erlang:timestamp(),
                loss_count = 0 :: non_neg_integer()
               }).
 
 -type msg() :: binary() | tuple().
+-type size() :: pos_integer().
 -type loss_indication() :: {loss_indication,
                             N::non_neg_integer(),
                             When::erlang:timestamp()}.
 -type framing_fun()::fun (({msg, msg()} | loss_indication()) ->
                                  {frame, iolist()} | skip).
 -opaque buf() :: #lpdb{}.
--export_type([buf/0, framing_fun/0]).
+-export_type([buf/0, framing_fun/0, size/0, loss_indication/0]).
 
 -export([new/0
          ,new/1

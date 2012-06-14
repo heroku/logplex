@@ -11,3 +11,7 @@ deps/
 ebin/logplex.app
 .eunit/
 .#*
+doc/*.html
+doc/erlang.png
+doc/stylesheet.css
+doc/edoc-info
