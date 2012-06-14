@@ -279,7 +279,8 @@ request_to_iolist(#frame{frame = Body,
                          msg_count = Count,
                          id = Id},
                   #state{uri = URI = {_Scheme, AuthInfo,
-                                      _Host, _Port, Path, QueryInfo}}) ->
+                                      _Host, _Port, Path, QueryInfo},
+                         drain_tok = Token}) ->
     AuthHeader = cowboy_client:auth_header(AuthInfo),
     MD5Header = case logplex_app:config(http_body_checksum, none) of
                     md5 -> [{<<"Content-MD5">>,
@@ -290,6 +291,7 @@ request_to_iolist(#frame{frame = Body,
         [{<<"Content-type">>, ?CONTENT_TYPE},
          {<<"x-logplex-msg-count">>, integer_to_list(Count)},
          {<<"x-logplex-frame-id">>, frame_id_to_iolist(Id)},
+         {<<"x-logplex-drain-token">>, Token},
          {<<"User-Agent">>, user_agent()}
         ],
     cowboy_client:request_to_iolist(<<"PUT">>,
