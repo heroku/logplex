@@ -1,3 +1,7 @@
+% Copyright (c) 2012, Heroku <nem@erlang.geek.nz>
+% Rewritten to use crypto instead of random
+%
+% Original Source, API:
 % Copyright (c) 2008, Travis Vachon
 % All rights reserved.
 %
@@ -29,32 +33,56 @@
 % SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 %
 -module(uuid).
--export([v4/0, to_string/1, get_parts/1, to_binary/1]).
--import(random).
+-export([v4/0, to_string/1, to_binary/1, to_iolist/1]).
+
+-ifdef(TEST).
+-include_lib("proper/include/proper.hrl").
+-opaque binary_uuid() :: <<_:16>>.
+-type binary_string_uuid() :: <<_:36>>.
+-else.
+-opaque binary_uuid() :: <<_:128>>.
+-type binary_string_uuid() :: <<_:288>>.
+-endif.
+
+-type tuple_uuid() :: {TL::non_neg_integer(),
+                       TM::non_neg_integer(),
+                       THV::non_neg_integer(),
+                       CSR::non_neg_integer(),
+                       CSL::non_neg_integer(),
+                       N::non_neg_integer()}.
+
+-type string_uuid() :: string().
+-type iolist_uuid() :: iolist().
 
 % Generates a random binary UUID.
+-spec v4() -> binary_uuid().
 v4() ->
-  random:seed(now()),
-  v4(random:uniform(round(math:pow(2, 48))) - 1, random:uniform(round(math:pow(2, 12))) - 1, random:uniform(round(math:pow(2, 32))) - 1, random:uniform(round(math:pow(2, 30))) - 1).
-v4(R1, R2, R3, R4) ->
-    <<R1:48, 4:4, R2:12, 2:2, R3:32, R4: 30>>.
+    <<R1:48,R2:12,R3:32,R4:30,_:6>> = crypto:rand_bytes(16),
+    v4(R1,R2,R3,R4).
 
+-spec v4(R1::non_neg_integer(), R2::non_neg_integer(),
+         R3::non_neg_integer(), R4::non_neg_integer()) ->
+                binary_uuid().
+v4(R1, R2, R3, R4)
+  when is_integer(R1), is_integer(R2),
+       is_integer(R3), is_integer(R4) ->
+    <<R1:48, 4:4, R2:12, 2:2, R3:32, R4:30>>.
+
+-spec to_string(binary_uuid()) -> string_uuid().
 % Returns a string representation of a binary UUID.
 to_string(U) ->
-    lists:flatten(io_lib:format("~8.16.0b-~4.16.0b-~4.16.0b-~2.16.0b~2.16.0b-~12.16.0b", get_parts(U))).
+    lists:flatten(to_iolist(U)).
 
+-spec to_binary(binary_uuid()) -> binary_string_uuid().
+to_binary(U) ->
+    iolist_to_binary(to_iolist(U)).
+
+-spec to_iolist(binary_uuid()) -> iolist_uuid().
+to_iolist(U) ->
+    io_lib:format("~8.16.0b-~4.16.0b-~4.16.0b-~2.16.0b~2.16.0b-~12.16.0b",
+                  tuple_to_list(get_parts(U))).
+
+-spec get_parts(binary_uuid()) -> tuple_uuid().
 % Returns the 32, 16, 16, 8, 8, 48 parts of a binary UUID.
 get_parts(<<TL:32, TM:16, THV:16, CSR:8, CSL:8, N:48>>) ->
-    [TL, TM, THV, CSR, CSL, N].
-
-% Converts a UUID string in the format of 550e8400-e29b-41d4-a716-446655440000
-% (with or without the dashes) to binary.
-to_binary(U)->
-    convert(lists:filter(fun(Elem) -> Elem /= $- end, U), []).
-
-% Converts a list of pairs of hex characters (00-ff) to bytes.
-convert([], Acc)->
-    list_to_binary(lists:reverse(Acc));
-convert([X, Y | Tail], Acc)->
-    {ok, [Byte], _} = io_lib:fread("~16u", [X, Y]),
-    convert(Tail, [Byte | Acc]).
+    {TL, TM, THV, CSR, CSL, N}.
