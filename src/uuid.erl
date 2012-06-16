@@ -34,6 +34,8 @@
 %
 -module(uuid).
 -export([v4/0, to_string/1, to_binary/1, to_iolist/1]).
+-export([binary_uuid_type/1
+        ]).
 
 -ifdef(TEST).
 -include_lib("proper/include/proper.hrl").
@@ -85,6 +87,19 @@ to_binary(U) ->
 to_iolist(U) ->
     io_lib:format("~8.16.0b-~4.16.0b-~4.16.0b-~2.16.0b~2.16.0b-~12.16.0b",
                   tuple_to_list(get_parts(U))).
+
+-spec binary_uuid_type(binary()) -> binary_uuid | binary_string_uuid | invalid.
+binary_uuid_type(<<_TL:32, _TM:16, _THV:16, _CSR:8, _CSL:8, _N:48>>) ->
+    binary_uuid;
+%% "a532a9e0-5263-42d8-8a32-87dccc3b1cd0"
+binary_uuid_type(<<_TL:8/binary, $-,
+                   _TM:4/binary, $-,
+                   _THV:4/binary, $-,
+                   _CSR:2/binary, _CSL:2/binary,
+                   _N:12/binary>>) ->
+    binary_string_uuid;
+binary_uuid_type(_) ->
+    invalid.
 
 -spec get_parts(binary_uuid()) -> tuple_uuid().
 % Returns the 32, 16, 16, 8, 8, 48 parts of a binary UUID.
