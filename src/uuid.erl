@@ -54,6 +54,10 @@
 -type string_uuid() :: string().
 -type iolist_uuid() :: iolist().
 
+-export_type([binary_string_uuid/0
+              ,binary_uuid/0
+             ]).
+
 % Generates a random binary UUID.
 -spec v4() -> binary_uuid().
 v4() ->
