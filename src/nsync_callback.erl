@@ -66,8 +66,14 @@ handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    _Drain = create_drain(Id, Dict),
+    create_drain(Id, Dict),
     ?INFO("at=set type=drain id=~p", [Id]);
+
+handle({cmd, "set", [<<"session:", UUID/binary>> | Args]})
+  when byte_size(UUID) =:= 36 ->
+    Dict = dict_from_list(Args),
+    create_session(UUID, Dict),
+    ?INFO("at=set type=session id=~p", [UUID]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
@@ -85,6 +91,11 @@ handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     logplex_drain:stop(Id),
     ets:delete(drains, Id);
 
+handle({cmd, "del", [<<"session:", UUID/binary>> | _Args]})
+  when byte_size(UUID) =:= 36 ->
+    drop_session(UUID),
+    ?INFO("at=delete type=session id=~p", [UUID]);
+
 handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
     ok;
 
@@ -97,7 +108,9 @@ handle({cmd, _Cmd, [<<"heroku.com:stats", _/binary>>|_]}) ->
 handle({cmd, _Cmd, [<<"staging.herokudev.com:stats", _/binary>>|_]}) ->
     ok;
 
-handle({cmd, _Cmd, _Args}) ->
+handle({cmd, Cmd, Args}) ->
+    ?INFO("at=unknown_command cmd=~p args=~1000p",
+          [Cmd, Args]),
     ok;
 
 handle({error, closed}) ->
@@ -199,3 +212,10 @@ dict_find(Key, Dict) ->
         {ok, Val} -> Val;
         _ -> undefined
     end.
+
+create_session(UUID, Dict) ->
+    Body = dict_find(<<"body">>, Dict),
+    logplex_session:store(UUID, Body).
+
+drop_session(UUID) ->
+    logplex_session:delete(UUID).

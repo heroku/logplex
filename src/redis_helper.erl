@@ -28,11 +28,21 @@
 %%====================================================================
 %% SESSION
 %%====================================================================
-create_session(Session, Body) when is_binary(Session), is_binary(Body) ->
-    redo:cmd(config, [<<"SETEX">>, Session, <<"360">>, Body]).
 
-lookup_session(Session) when is_binary(Session) ->
-    case redo:cmd(config, [<<"GET">>, Session]) of
+-spec session_key(uuid:binary_string_uuid()) -> binary().
+session_key(UUID) when is_binary(UUID) ->
+    iolist_to_binary([<<"session:">>, UUID]).
+
+-spec create_session(uuid:binary_string_uuid(), Body::binary()) -> any().
+create_session(UUID, Body) when is_binary(UUID), is_binary(Body) ->
+    Key = session_key(UUID),
+    SessionExpiry = logplex_session:expiry(),
+    redo:cmd(config, [<<"SETEX">>, Key, SessionExpiry, Body]).
+
+-spec lookup_session(uuid:binary_string_uuid()) -> {error, any()} |
+                                                   binary().
+lookup_session(UUID) when is_binary(UUID) ->
+    case redo:cmd(config, [<<"GET">>, session_key(UUID)]) of
         {error, Err} -> {error, Err};
         Data when is_binary(Data) -> Data
     end.
