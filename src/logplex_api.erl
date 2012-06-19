@@ -223,7 +223,10 @@ handlers() ->
     {['GET', "^/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
         proplists:get_value("srv", Req:parse_qs()) == undefined
             andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version. If this error message persists then uninstall the Heroku client gem completely and re-install.\n">>),
-        Body = logplex_session:lookup(list_to_binary(Session)),
+        Timeout = timer:seconds(logplex_app:config(session_lookup_timeout_s,
+                                                   5)),
+        Body = logplex_session:poll(list_to_binary(Session),
+                                    Timeout),
         not is_binary(Body) andalso error_resp(404, <<"Not found">>),
 
         {struct, Data} = mochijson2:decode(Body),
