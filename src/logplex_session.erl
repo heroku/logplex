@@ -28,6 +28,7 @@
          ,expiry/0
          ,publish/1
          ,store/2
+         ,poll/2
         ]).
 
 -include("logplex_session.hrl").
@@ -52,6 +53,35 @@ store(UUID, Body)
 store(Session = #session{id=SessionId, body=Body})
   when is_binary(SessionId), is_binary(Body) ->
     ets:insert(sessions, Session), SessionId.
+
+poll(UUID, Timeout) when is_binary(UUID),
+                         byte_size(UUID) =:= 36,
+                         is_integer(Timeout) ->
+    Ref = erlang:start_timer(Timeout, self(), poll_limit),
+    poll_loop(UUID, Ref).
+
+poll_loop(UUID, Ref) ->
+    case lookup(UUID) of
+        undefined ->
+            receive
+                {timeout, Ref, poll_limit} ->
+                    timeout
+            after 100 ->
+                    poll_loop(UUID, Ref)
+            end;
+        Body ->
+            %% Cancel timer and flush message queue of timeout messages
+            case erlang:cancel_timer(Ref) of
+                false ->
+                    %% Only flush if timer had expired
+                    receive
+                        {timeout, Ref, poll_limit} -> ok
+                    after 0 -> ok
+                    end;
+                _ -> ok
+            end,
+            Body
+    end.
 
 lookup(UUID) when is_binary(UUID),
                   byte_size(UUID) =:= 36 ->
