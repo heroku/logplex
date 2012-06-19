@@ -72,7 +72,7 @@ handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
 handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
   when byte_size(UUID) =:= 36 ->
     catch logplex_session:store(UUID, Body),
-    ?INFO("at=set type=session id=~p", [UUID]);
+    ?INFO("at=setex type=session id=~p", [UUID]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
