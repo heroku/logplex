@@ -101,10 +101,9 @@ handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
 handle({cmd, _Cmd, [<<"stats", _/binary>>|_]}) ->
     ok;
 
-handle({cmd, _Cmd, [<<"heroku.com:stats", _/binary>>|_]}) ->
-    ok;
-
-handle({cmd, _Cmd, [<<"staging.herokudev.com:stats", _/binary>>|_]}) ->
+handle({cmd, "publish", _Args}) ->
+    %% XXX - ignore publish commands like:
+    %% <<"geoff.herokudev.com:stats">>,JSONBinary
     ok;
 
 handle({cmd, Cmd, Args}) ->
