@@ -69,10 +69,9 @@ handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     create_drain(Id, Dict),
     ?INFO("at=set type=drain id=~p", [Id]);
 
-handle({cmd, "set", [<<"session:", UUID/binary>> | Args]})
+handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
   when byte_size(UUID) =:= 36 ->
-    Dict = dict_from_list(Args),
-    create_session(UUID, Dict),
+    catch logplex_session:store(UUID, Body),
     ?INFO("at=set type=session id=~p", [UUID]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
@@ -93,7 +92,7 @@ handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
 
 handle({cmd, "del", [<<"session:", UUID/binary>> | _Args]})
   when byte_size(UUID) =:= 36 ->
-    drop_session(UUID),
+    catch logplex_session:delete(UUID),
     ?INFO("at=delete type=session id=~p", [UUID]);
 
 handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
@@ -212,10 +211,3 @@ dict_find(Key, Dict) ->
         {ok, Val} -> Val;
         _ -> undefined
     end.
-
-create_session(UUID, Dict) ->
-    Body = dict_find(<<"body">>, Dict),
-    logplex_session:store(UUID, Body).
-
-drop_session(UUID) ->
-    logplex_session:delete(UUID).
