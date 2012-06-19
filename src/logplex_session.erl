@@ -27,6 +27,7 @@
          ,delete/1
          ,expiry/0
          ,publish/1
+         ,store/2
         ]).
 
 -include("logplex_session.hrl").
@@ -43,17 +44,24 @@ publish(Body) when is_binary(Body) ->
     redis_helper:create_session(UUID, Body),
     store(Session).
 
+store(UUID, Body)
+  when is_binary(UUID), is_binary(Body),
+       byte_size(UUID) =:= 36 ->
+    store(#session{id=UUID, body=Body}).
+
 store(Session = #session{id=SessionId, body=Body})
   when is_binary(SessionId), is_binary(Body) ->
     ets:insert(sessions, Session), SessionId.
 
-lookup(SessionId) when is_binary(SessionId) ->
-    case ets:lookup(sessions, SessionId) of
+lookup(UUID) when is_binary(UUID),
+                  byte_size(UUID) =:= 36 ->
+    case ets:lookup(sessions, UUID) of
         [#session{body=Body}] -> Body;
         _ -> undefined
     end.
 
-delete(UUID) ->
+delete(UUID) when is_binary(UUID),
+                  byte_size(UUID) =:= 36 ->
     ets:delete(sessions, UUID).
 
 -spec expiry() -> binary().
