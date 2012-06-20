@@ -292,7 +292,7 @@ request_to_iolist(#frame{frame = Body,
          {<<"x-logplex-drain-token">>, Token},
          {<<"User-Agent">>, user_agent()}
         ],
-    cowboy_client:request_to_iolist(<<"PUT">>,
+    cowboy_client:request_to_iolist(<<"POST">>,
                                     Headers,
                                     Body,
                                     ?HTTP_VERSION,
