@@ -208,8 +208,6 @@ connected(Msg, State) ->
 %% code. Back of the napkin algorithm - 2xx is success, 4xx (client
 %% errors) are perm failures, so drop the frame and anything else is a
 %% temp failure, so retry the frame.
-status_action(201) -> success;
-status_action(204) -> success;
 status_action(N) when 200 =< N, N < 300 -> success;
 status_action(N) when 400 =< N, N < 500 -> perm_fail;
 status_action(_) -> temp_fail.
