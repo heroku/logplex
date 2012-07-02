@@ -65,7 +65,7 @@ poll_loop(Fun, Ref) ->
             end;
         {found, Value} ->
             %% Cancel timer and flush message queue of timeout messages
-            poll_cancel(Ref)
+            poll_cancel(Ref),
             Value;
         Else ->
             poll_cancel(Ref),
