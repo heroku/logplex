@@ -36,6 +36,7 @@
          ,count_by_channel/1
          ,create/4
          ,lookup_token/1
+         ,poll_token/1
         ]).
 
 -export([new/5
@@ -131,6 +132,15 @@ reserve_token() ->
         Err ->
             Err
     end.
+
+poll_token(DrainId) ->
+    logplex_db:poll(fun () ->
+                            case lookup_token(DrainId) of
+                                not_found -> not_found;
+                                T -> {found, T}
+                            end
+                    end,
+                    logplex_app:config(default_redis_poll_ms, 2000)).
 
 lookup_token(DrainId) when is_integer(DrainId) ->
     case ets:lookup(drains, DrainId) of
