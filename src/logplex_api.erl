@@ -304,7 +304,7 @@ handlers() ->
 
         DrainId = list_to_integer(DrainIdStr),
         ChannelId = list_to_integer(ChannelIdStr),
-        case logplex_drain:lookup_token(DrainId) of
+        case logplex_drain:poll_token(DrainId) of
             not_found ->
                 json_error(404, <<"Unknown drain.">>);
             Token ->
