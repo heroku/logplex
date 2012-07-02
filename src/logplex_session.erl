@@ -57,31 +57,13 @@ store(Session = #session{id=SessionId, body=Body})
 poll(UUID, Timeout) when is_binary(UUID),
                          byte_size(UUID) =:= 36,
                          is_integer(Timeout) ->
-    Ref = erlang:start_timer(Timeout, self(), poll_limit),
-    poll_loop(UUID, Ref).
-
-poll_loop(UUID, Ref) ->
-    case lookup(UUID) of
-        undefined ->
-            receive
-                {timeout, Ref, poll_limit} ->
-                    timeout
-            after 100 ->
-                    poll_loop(UUID, Ref)
-            end;
-        Body ->
-            %% Cancel timer and flush message queue of timeout messages
-            case erlang:cancel_timer(Ref) of
-                false ->
-                    %% Only flush if timer had expired
-                    receive
-                        {timeout, Ref, poll_limit} -> ok
-                    after 0 -> ok
-                    end;
-                _ -> ok
-            end,
-            Body
-    end.
+    logplex_db:poll(fun () ->
+                            case lookup(UUID) of
+                                undefined -> not_found;
+                                Body -> {value, Body}
+                            end
+                    end,
+                    Timeout).
 
 lookup(UUID) when is_binary(UUID),
                   byte_size(UUID) =:= 36 ->
