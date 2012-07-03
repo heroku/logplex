@@ -46,7 +46,7 @@ redo_opts() ->
     end.
 
 -spec poll(fun ( () -> 'not_found' | {'found', T} | {'error', E} ),
-           pos_integer) ->
+           pos_integer()) ->
                   {error, timeout} | {error, E} | T.
 
 poll(Fun, Timeout) when is_function(Fun, 0),
