@@ -113,14 +113,14 @@ drain_index() ->
         DrainId when is_integer(DrainId) -> DrainId
     end.
 
-create_drain(DrainId, ChannelId, Token, Host, Port) when is_integer(DrainId), is_integer(ChannelId), is_binary(Token), is_binary(Host) ->
+reserve_drain(DrainId, Token, ChannelId)
+  when is_integer(DrainId),
+       is_binary(Token),
+       is_integer(ChannelId) ->
     Key = drain_redis_key(DrainId),
     Res = redo:cmd(config, [<<"HMSET">>, Key,
-        <<"ch">>, integer_to_list(ChannelId),
-        <<"token">>, Token,
-        <<"host">>, Host] ++
-        [<<"port">> || is_integer(Port)] ++
-        [integer_to_list(Port) || is_integer(Port)]),
+                            <<"ch">>, integer_to_list(ChannelId),
+                            <<"token">>, Token]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
