@@ -133,7 +133,8 @@ create_url_drain(DrainId, ChannelId, Token, URL)
     Res = redo:cmd(config, [<<"HMSET">>, Key,
                             <<"ch">>, integer_to_list(ChannelId),
                             <<"token">>, Token,
-                            <<"url">>, URL]),
+                            <<"url">>, URL,
+                            <<"state">>,<<"provisioned">>]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
