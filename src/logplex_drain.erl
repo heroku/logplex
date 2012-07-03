@@ -154,8 +154,8 @@ lookup_token(DrainId) when is_integer(DrainId) ->
     end.
 
 store_token(DrainId, Token, ChannelId) when is_integer(DrainId),
-                                      is_binary(Token),
-                                      is_integer(ChannelId) ->
+                                            is_binary(Token),
+                                            is_integer(ChannelId) ->
     true = ets:insert(drains, #drain{id=DrainId, token=Token,
                                      channel_id=ChannelId}),
     ok.
