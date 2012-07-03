@@ -78,17 +78,20 @@ stop(DrainId) ->
 %% Attempt a graceful shutdown of a drain process, followed by a
 %% forceful supervisor based shutdown if that fails.
 stop(DrainId, Timeout) ->
-    DrainPid = whereis({drain, DrainId}),
-    Ref = erlang:monitor(process, DrainPid),
-    DrainPid ! shutdown,
-    receive
-        {'DOWN', Ref, process, DrainPid, _} ->
-            ok
-    after Timeout ->
-            erlang:demonitor(Ref, [flush]),
-            supervisor:terminate_child(logplex_drain_sup, DrainId)
-    end,
-    supervisor:delete_child(logplex_drain_sup, DrainId).
+    case whereis({drain, DrainId}) of
+        DrainPid when is_pid(DrainPid) ->
+            Ref = erlang:monitor(process, DrainPid),
+            DrainPid ! shutdown,
+            receive
+                {'DOWN', Ref, process, DrainPid, _} ->
+                    ok
+            after Timeout ->
+                    erlang:demonitor(Ref, [flush]),
+                    supervisor:terminate_child(logplex_drain_sup, DrainId)
+            end,
+            supervisor:delete_child(logplex_drain_sup, DrainId);
+        _ -> ok
+    end.
 
 reserve_token() ->
     Token = new_token(),
