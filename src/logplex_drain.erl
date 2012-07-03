@@ -154,7 +154,7 @@ store_token(DrainId, Token, ChannelId) when is_integer(DrainId),
                                       is_binary(Token),
                                       is_integer(ChannelId) ->
     true = ets:insert(drains, #drain{id=DrainId, token=Token,
-                                     channel_if=ChannelId}),
+                                     channel_id=ChannelId}),
     ok.
 
 cache(DrainId, Token, ChannelId) when is_integer(DrainId),
