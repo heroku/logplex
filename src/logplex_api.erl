@@ -304,9 +304,9 @@ handlers() ->
         DrainId = list_to_integer(DrainIdStr),
         ChannelId = list_to_integer(ChannelIdStr),
         case logplex_drain:poll_token(DrainId) of
-            not_found ->
+            {error, timeout} ->
                 json_error(404, <<"Unknown drain.">>);
-            Token ->
+            Token when is_binary(Token) ->
                 case logplex_drain:valid_uri(req_drain_uri(Req)) of
                     {error, What} ->
                         Err = io_lib:format("Invalid drain destination: ~p",
