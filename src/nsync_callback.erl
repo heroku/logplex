@@ -145,31 +145,31 @@ create_drain(Id, Dict) ->
                     ?ERR("~p ~p ~p ~p",
                          [create_drain, missing_token, Id, dict:to_list(Dict)]);
                 Token ->
-                    Host = dict_find(<<"host">>, Dict),
-                    Port =
-                        case dict_find(<<"port">>, Dict) of
-                            undefined -> undefined;
-                            Val2 -> list_to_integer(binary_to_list(Val2))
-                        end,
-                    Tcp = (dict_find(<<"tcp">>, Dict) =/= <<"false">>),
-                    case Tcp of
-                        true ->
-                            logplex_drain:start(tcpsyslog, Id,
-                                                [Ch, Id, Token, Host, Port]);
+                    case {dict_find(<<"host">>, Dict),
+                          dict_find(<<"port">>, Dict)} of
+                        {Host, Port} when is_binary(Host), is_binary(Port) ->
+                            PortNo = list_to_integer(binary_to_list(Port)),
+                            Tcp = (dict_find(<<"tcp">>, Dict) =/= <<"false">>),
+                            Type = case Tcp of
+                                       true -> tcpsyslog;
+                                       false -> udpsyslog
+                                   end,
+                            logplex_drain:start(Type, Id,
+                                                [Ch, Id, Token, Host, PortNo]),
+                            Drain = #drain{
+                              id=Id,
+                              channel_id=Ch,
+                              token=Token,
+                              host=Host,
+                              port=Port,
+                              tcp=Tcp
+                             },
+                            ets:insert(drains, Drain),
+                            Drain;
                         _ ->
-                            logplex_drain:start(udpsyslog, Id,
-                                                [Ch, Id, Token, Host, Port])
-                    end,
-                    Drain = #drain{
-                        id=Id,
-                        channel_id=Ch,
-                        token=Token,
-                        host=Host,
-                        port=Port,
-                        tcp=Tcp
-                    },
-                    ets:insert(drains, Drain),
-                    Drain
+                            ?INFO("at=unknown_drain_type channel=~p id=~p",
+                                  [Ch, Id])
+                    end
             end
     end.
 
