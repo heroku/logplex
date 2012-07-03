@@ -239,6 +239,7 @@ uri_schemes() ->
      ,{udpsyslog, 514}
     ].
 
+has_valid_uri(#drain{uri=undefined}) -> false;
 has_valid_uri(#drain{uri=Uri}) ->
     case valid_uri(Uri) of
         {valid, _, _} -> true;
