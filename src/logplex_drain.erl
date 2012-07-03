@@ -32,6 +32,7 @@
 -export([reserve_token/0, cache/3
          ,delete/1, lookup/1
          ,delete_by_channel/1
+         ,delete_partial_drain/2
          ,lookup_by_channel/1
          ,count_by_channel/1
          ,create/4
@@ -287,3 +288,13 @@ register(DrainId, Type, Dest) ->
 %%     gproc:munreg(p, l, [{channel, ChannelId},
 %%                         drain_dest,
 %%                         drain_type]).
+
+delete_partial_drain(DrainId, Token) when is_integer(DrainId),
+                                          is_binary(Token) ->
+    case lookup(DrainId) of
+        #drain{token = Token,
+               uri = undefined} ->
+            delete(DrainId),
+            deleted;
+        _ -> not_deleted
+    end.
