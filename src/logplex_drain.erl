@@ -37,6 +37,7 @@
          ,create/4
          ,lookup_token/1
          ,poll_token/1
+         ,store_token/3
         ]).
 
 -export([new/5
@@ -149,10 +150,17 @@ lookup_token(DrainId) when is_integer(DrainId) ->
         [] -> not_found
     end.
 
-cache(DrainId, Token, ChannelId)  when is_integer(DrainId),
-                                        is_binary(Token),
-                                        is_integer(ChannelId) ->
-    true = ets:insert(drains, #drain{id=DrainId, channel_id=ChannelId, token=Token}).
+store_token(DrainId, Token, ChannelId) when is_integer(DrainId),
+                                      is_binary(Token),
+                                      is_integer(ChannelId) ->
+    true = ets:insert(drains, #drain{id=DrainId, token=Token,
+                                     channel_if=ChannelId}),
+    ok.
+
+cache(DrainId, Token, ChannelId) when is_integer(DrainId),
+                                      is_binary(Token),
+                                      is_integer(ChannelId) ->
+    redis_helper:reserve_drain(DrainId, Token, ChannelId).
 
 -spec create(id(), token(), logplex_channel:id(), uri:parsed_uri()) ->
                     {'drain', id(), token()} |
