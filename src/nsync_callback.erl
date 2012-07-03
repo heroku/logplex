@@ -87,7 +87,7 @@ handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     ?INFO("at=delete type=drain id=~p", [Id]),
-    logplex_drain:stop(Id),
+    catch logplex_drain:stop(Id),
     ets:delete(drains, Id);
 
 handle({cmd, "del", [<<"session:", UUID/binary>> | _Args]})
