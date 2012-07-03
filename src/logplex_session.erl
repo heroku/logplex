@@ -60,7 +60,7 @@ poll(UUID, Timeout) when is_binary(UUID),
     logplex_db:poll(fun () ->
                             case lookup(UUID) of
                                 undefined -> not_found;
-                                Body -> {value, Body}
+                                Body -> {found, Body}
                             end
                     end,
                     Timeout).
