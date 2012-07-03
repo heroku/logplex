@@ -134,6 +134,8 @@ reserve_token() ->
             Err
     end.
 
+-spec poll_token(id()) -> token() | {'error', 'timeout'} |
+                          {'error', any()}.
 poll_token(DrainId) ->
     logplex_db:poll(fun () ->
                             case lookup_token(DrainId) of
