@@ -309,12 +309,14 @@ handlers() ->
             Token when is_binary(Token) ->
                 case logplex_drain:valid_uri(req_drain_uri(Req)) of
                     {error, What} ->
+                        logplex_drain:delete_partial_drain(DrainId, Token),
                         Err = io_lib:format("Invalid drain destination: ~p",
                                             [What]),
                         json_error(422, Err);
                     {valid, _, URI} ->
                         case logplex_channel:can_add_drain(ChannelId) of
                             cannot_add_drain ->
+                                logplex_drain:delete_partial_drain(DrainId, Token),
                                 json_error(422, <<"You have already added the maximum number of drains allowed">>);
                             can_add_drain ->
                                 case logplex_drain:create(DrainId, Token, ChannelId, URI) of
