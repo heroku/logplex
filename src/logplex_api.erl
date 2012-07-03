@@ -287,10 +287,9 @@ handlers() ->
 
         {ok, DrainId, Token} = logplex_drain:reserve_token(),
         logplex_drain:cache(DrainId, Token, list_to_integer(ChannelId)),
-        Resp = [
-            {id, DrainId},
-            {token, Token},
-            {msg, <<"Successfully reserved drain token">>}],
+        Resp = [{id, DrainId},
+                {token, Token},
+                {msg, <<"Successfully reserved drain token">>}],
         {201, iolist_to_binary(mochijson2:encode({struct, Resp}))}
     end},
 
