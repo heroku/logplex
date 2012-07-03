@@ -154,17 +154,25 @@ create_drain(Id, Dict) ->
                 undefined ->
                     ?ERR("~p ~p ~p ~p",
                          [create_drain, missing_token, Id, dict:to_list(Dict)]);
-                Token ->
-                    case logplex_drain:valid_uri(drain_uri(Dict)) of
-                        {valid, Type, Uri} ->
-                            Drain = logplex_drain:new(Id, Ch, Token,
-                                                      Type, Uri),
-                            ets:insert(drains, Drain),
-                            logplex_drain:start(Drain),
-                            Drain;
-                        {error, Reason} ->
-                            ?ERR("create_drain invalid_uri ~p ~p ~p",
-                                 [Reason, Id, dict:to_list(Dict)])
+                Token when is_binary(Token) ->
+                    case drain_uri(Dict) of
+                        partial_drain_record ->
+                            ?INFO("at=partial_drain_record drain_id=~p "
+                                  "token=~p channel=~p",
+                                  [Id, Token, Ch]),
+                            logplex_drain:store_token(Id, Token, Ch);
+                        Uri ->
+                            case logplex_drain:valid_uri(Uri) of
+                                {valid, Type, Uri} ->
+                                    Drain = logplex_drain:new(Id, Ch, Token,
+                                                              Type, Uri),
+                                    ets:insert(drains, Drain),
+                                    logplex_drain:start(Drain),
+                                    Drain;
+                                {error, Reason} ->
+                                    ?ERR("create_drain invalid_uri ~p ~p ~p",
+                                         [Reason, Id, dict:to_list(Dict)])
+                            end
                     end
             end
     end.
