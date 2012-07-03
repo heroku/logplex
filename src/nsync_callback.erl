@@ -173,18 +173,22 @@ create_drain(Id, Dict) ->
 %% this shim to convert old tcpsyslog drains.
 drain_uri(Dict) ->
     case dict_find(<<"url">>, Dict) of
-        undefined ->
-            %% Old style Host/Port record
-            Host = dict_find(<<"host">>, Dict),
-            Port =
-                case dict_find(<<"port">>, Dict) of
-                    undefined -> undefined;
-                    Val2 -> list_to_integer(binary_to_list(Val2))
-                end,
-            {syslog, "", Host, Port, "/", []};
         URL when is_binary(URL) ->
             %% New style URI record
-            logplex_drain:parse_url(URL)
+            logplex_drain:parse_url(URL);
+        undefined ->
+            case {dict_find(<<"host">>, Dict),
+                  dict_find(<<"port">>, Dict)} of
+                {undefined,_} ->
+                    partial_drain_record;
+                {_, undefined} ->
+                    partial_drain_record;
+                %% Old style Host/Port record
+                {Host, Port} when is_binary(Host),
+                                  is_binary(Port) ->
+                    PortNo = list_to_integer(binary_to_list(Port)),
+                    {syslog, "", Host, PortNo, "/", []}
+            end
     end.
 
 parse_id(Bin) ->
