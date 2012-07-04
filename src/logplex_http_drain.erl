@@ -41,7 +41,7 @@
                 id :: binary()
                }).
 
--define(CONTENT_TYPE, <<"application/x-logplex-1">>).
+-define(CONTENT_TYPE, <<"application/logplex-1">>).
 -define(HTTP_VERSION, {1,1}).
 
 %% ------------------------------------------------------------------
