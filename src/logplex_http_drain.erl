@@ -221,7 +221,7 @@ status_action(_) -> temp_fail.
 
 wait_response(Frame = #frame{},
               State = #state{client = Client}) ->
-    case cowboy_client:response(Client) of
+    try cowboy_client:response(Client) of
         {ok, Status, _Headers, Client2} ->
             Result = status_action(Status),
             ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
@@ -244,6 +244,13 @@ wait_response(Frame = #frame{},
                   " result=error tcp_err=~10000p",
                   log_info(State, [Why])),
             http_fail(retry_frame(Frame, State))
+    catch
+        Class:Err ->
+            Report = {Class, Err, erlang:get_stacktrace()},
+            ?WARN("drain_id=~p channel_id=~p dest=~s at=wait_response "
+                  "attempt=fail err=exception data=~p next_state=disconnected",
+                  log_info(State, [Report])),
+            http_fail(retry_frame(Frame,State))
     end.
 
 %% @private
