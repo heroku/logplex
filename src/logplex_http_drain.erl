@@ -179,7 +179,7 @@ try_send(Frame = #frame{tries = Tries},
          State = #state{client = Client})
   when Tries > 0 ->
     Req = request_to_iolist(Frame, State),
-    case cowboy_client:raw_request(Req, Client) of
+    try cowboy_client:raw_request(Req, Client) of
         {ok, Client2} ->
             wait_response(Frame, State#state{client=Client2});
         {error, Why} ->
@@ -187,6 +187,13 @@ try_send(Frame = #frame{tries = Tries},
                   " tcp_err=~1000p",
                   log_info(State, [Why])),
             http_fail(retry_frame(Frame, State))
+    catch
+        Class:Err ->
+            Report = {Class, Err, erlang:get_stacktrace()},
+            ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
+                  "attempt=fail err=exception data=~p next_state=disconnected",
+                  log_info(State, [Report])),
+            http_fail(retry_frame(Frame,State))
     end;
 try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s at=try_send result=tries_exceeded "
