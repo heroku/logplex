@@ -66,8 +66,13 @@ handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    _Drain = create_drain(Id, Dict),
+    create_drain(Id, Dict),
     ?INFO("at=set type=drain id=~p", [Id]);
+
+handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
+  when byte_size(UUID) =:= 36 ->
+    catch logplex_session:store(UUID, Body),
+    ?INFO("at=setex type=session id=~p", [UUID]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
@@ -82,8 +87,13 @@ handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = list_to_integer(parse_id(Rest)),
     ?INFO("at=delete type=drain id=~p", [Id]),
-    logplex_drain:stop(Id),
+    catch logplex_drain:stop(Id),
     ets:delete(drains, Id);
+
+handle({cmd, "del", [<<"session:", UUID/binary>> | _Args]})
+  when byte_size(UUID) =:= 36 ->
+    catch logplex_session:delete(UUID),
+    ?INFO("at=delete type=session id=~p", [UUID]);
 
 handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
     ok;
@@ -91,13 +101,21 @@ handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
 handle({cmd, _Cmd, [<<"stats", _/binary>>|_]}) ->
     ok;
 
-handle({cmd, _Cmd, [<<"heroku.com:stats", _/binary>>|_]}) ->
+handle({cmd, "incr", [<<"channel_index", _/binary>> | _]}) ->
+    %% ignore the channel_index traffic
+    ok;
+handle({cmd, "incr", [<<"healthcheck", _/binary>> | _]}) ->
+    %% ignore the redis healthcheck traffic
     ok;
 
-handle({cmd, _Cmd, [<<"staging.herokudev.com:stats", _/binary>>|_]}) ->
+handle({cmd, "publish", _Args}) ->
+    %% XXX - ignore publish commands like:
+    %% <<"geoff.herokudev.com:stats">>,JSONBinary
     ok;
 
-handle({cmd, _Cmd, _Args}) ->
+handle({cmd, Cmd, Args}) ->
+    ?INFO("at=unknown_command cmd=~p args=~1000p",
+          [Cmd, Args]),
     ok;
 
 handle({error, closed}) ->
@@ -143,17 +161,25 @@ create_drain(Id, Dict) ->
                 undefined ->
                     ?ERR("~p ~p ~p ~p",
                          [create_drain, missing_token, Id, dict:to_list(Dict)]);
-                Token ->
-                    case logplex_drain:valid_uri(drain_uri(Dict)) of
-                        {valid, Type, Uri} ->
-                            Drain = logplex_drain:new(Id, Ch, Token,
-                                                      Type, Uri),
-                            ets:insert(drains, Drain),
-                            logplex_drain:start(Drain),
-                            Drain;
-                        {error, Reason} ->
-                            ?ERR("create_drain invalid_uri ~p ~p ~p",
-                                 [Reason, Id, dict:to_list(Dict)])
+                Token when is_binary(Token) ->
+                    case drain_uri(Dict) of
+                        partial_drain_record ->
+                            ?INFO("at=partial_drain_record drain_id=~p "
+                                  "token=~p channel=~p",
+                                  [Id, Token, Ch]),
+                            logplex_drain:store_token(Id, Token, Ch);
+                        Uri ->
+                            case logplex_drain:valid_uri(Uri) of
+                                {valid, Type, Uri} ->
+                                    Drain = logplex_drain:new(Id, Ch, Token,
+                                                              Type, Uri),
+                                    ets:insert(drains, Drain),
+                                    logplex_drain:start(Drain),
+                                    Drain;
+                                {error, Reason} ->
+                                    ?ERR("create_drain invalid_uri ~p ~p ~p",
+                                         [Reason, Id, dict:to_list(Dict)])
+                            end
                     end
             end
     end.
@@ -162,18 +188,22 @@ create_drain(Id, Dict) ->
 %% this shim to convert old tcpsyslog drains.
 drain_uri(Dict) ->
     case dict_find(<<"url">>, Dict) of
-        undefined ->
-            %% Old style Host/Port record
-            Host = dict_find(<<"host">>, Dict),
-            Port =
-                case dict_find(<<"port">>, Dict) of
-                    undefined -> undefined;
-                    Val2 -> list_to_integer(binary_to_list(Val2))
-                end,
-            {syslog, "", Host, Port, "/", []};
         URL when is_binary(URL) ->
             %% New style URI record
-            logplex_drain:parse_url(URL)
+            logplex_drain:parse_url(URL);
+        undefined ->
+            case {dict_find(<<"host">>, Dict),
+                  dict_find(<<"port">>, Dict)} of
+                {undefined,_} ->
+                    partial_drain_record;
+                {_, undefined} ->
+                    partial_drain_record;
+                %% Old style Host/Port record
+                {Host, Port} when is_binary(Host),
+                                  is_binary(Port) ->
+                    PortNo = list_to_integer(binary_to_list(Port)),
+                    {syslog, "", Host, PortNo, "/", []}
+            end
     end.
 
 parse_id(Bin) ->

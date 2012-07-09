@@ -205,25 +205,28 @@ handlers() ->
     {['POST', "^/sessions$"], fun(Req, _Match) ->
         authorize(Req),
         Body = Req:recv_body(),
-        Session = logplex_session:create(Body),
-        not is_binary(Session) andalso exit({expected_binary, Session}),
-        {201, Session}
+        UUID = logplex_session:publish(Body),
+        not is_binary(UUID) andalso exit({expected_binary, UUID}),
+        {201, api_relative_url(api_v1, UUID)}
     end},
 
     %% V2
     {['POST', "^/v2/sessions$"], fun(Req, _Match) ->
         authorize(Req),
         Body = Req:recv_body(),
-        Session = logplex_session:create(Body),
-        not is_binary(Session) andalso exit({expected_binary, Session}),
+        UUID = logplex_session:publish(Body),
+        not is_binary(UUID) andalso exit({expected_binary, UUID}),
         {201, ?JSON_CONTENT,
-         mochijson2:encode({struct, [{url, Session}]})}
+         mochijson2:encode({struct, [{url, api_relative_url(api_v2, UUID)}]})}
     end},
 
     {['GET', "^/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
         proplists:get_value("srv", Req:parse_qs()) == undefined
             andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version. If this error message persists then uninstall the Heroku client gem completely and re-install.\n">>),
-        Body = logplex_session:lookup(list_to_binary("/sessions/" ++ Session)),
+        Timeout = timer:seconds(logplex_app:config(session_lookup_timeout_s,
+                                                   5)),
+        Body = logplex_session:poll(list_to_binary(Session),
+                                    Timeout),
         not is_binary(Body) andalso error_resp(404, <<"Not found">>),
 
         {struct, Data} = mochijson2:decode(Body),
@@ -246,6 +249,9 @@ handlers() ->
         Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
         not is_list(Logs) andalso exit({expected_list, Logs}),
 
+        ?INFO("at=tail_start channel_id=~p filters=~100p",
+              [ChannelId, Filters]),
+
         Socket = Req:get(socket),
         Req:start_response({200, ?HDR}),
 
@@ -263,6 +269,8 @@ handlers() ->
                 try
                     tail_init(Socket, Buffer, Filters)
                 after
+                    ?INFO("at=tail_end channel_id=~p",
+                          [ChannelId]),
                     exit(Buffer, shutdown)
                 end
         end,
@@ -284,10 +292,9 @@ handlers() ->
 
         {ok, DrainId, Token} = logplex_drain:reserve_token(),
         logplex_drain:cache(DrainId, Token, list_to_integer(ChannelId)),
-        Resp = [
-            {id, DrainId},
-            {token, Token},
-            {msg, <<"Successfully reserved drain token">>}],
+        Resp = [{id, DrainId},
+                {token, Token},
+                {msg, <<"Successfully reserved drain token">>}],
         {201, iolist_to_binary(mochijson2:encode({struct, Resp}))}
     end},
 
@@ -301,18 +308,20 @@ handlers() ->
 
         DrainId = list_to_integer(DrainIdStr),
         ChannelId = list_to_integer(ChannelIdStr),
-        case logplex_drain:lookup_token(DrainId) of
-            not_found ->
+        case logplex_drain:poll_token(DrainId) of
+            {error, timeout} ->
                 json_error(404, <<"Unknown drain.">>);
-            Token ->
+            Token when is_binary(Token) ->
                 case logplex_drain:valid_uri(req_drain_uri(Req)) of
                     {error, What} ->
+                        logplex_drain:delete_partial_drain(DrainId, Token),
                         Err = io_lib:format("Invalid drain destination: ~p",
                                             [What]),
                         json_error(422, Err);
                     {valid, _, URI} ->
                         case logplex_channel:can_add_drain(ChannelId) of
                             cannot_add_drain ->
+                                logplex_drain:delete_partial_drain(DrainId, Token),
                                 json_error(422, <<"You have already added the maximum number of drains allowed">>);
                             can_add_drain ->
                                 case logplex_drain:create(DrainId, Token, ChannelId, URI) of
@@ -339,10 +348,33 @@ handlers() ->
     end},
 
     %% V2
-    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [_ChannelIdStr]) ->
-        authorize(Req),
-
-        json_error(501, <<"v2 one-call drain creation API deprecated.">>)
+    {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [ChannelIdStr]) ->
+        ChannelId = list_to_integer(ChannelIdStr),
+        case logplex_drain:valid_uri(req_drain_uri(Req)) of
+            {error, What} ->
+                Err = io_lib:format("Invalid drain destination: ~p",
+                                    [What]),
+                json_error(422, Err);
+            {valid, _, URI} ->
+                case logplex_channel:can_add_drain(ChannelId) of
+                    cannot_add_drain ->
+                        json_error(422, <<"You have already added the maximum number of drains allowed">>);
+                    can_add_drain ->
+                        {ok, DrainId, Token} = logplex_drain:reserve_token(),
+                        case logplex_drain:create(DrainId, Token, ChannelId, URI) of
+                            {error, already_exists} ->
+                                json_error(409, <<"Already exists">>);
+                            {drain, _Id, Token} ->
+                                Resp = [
+                                        {id, DrainId},
+                                        {token, Token},
+                                        {url, uri:to_binary(URI)}
+                                       ],
+                                {201,?JSON_CONTENT,
+                                 mochijson2:encode({struct, Resp})}
+                        end
+                end
+        end
     end},
 
     {['GET', "^/channels/(\\d+)/drains$"], fun(Req, [_ChannelId]) ->
@@ -584,3 +616,6 @@ req_drain_uri(Req) ->
 json_error(Code, Err) ->
     {Code, ?JSON_CONTENT,
      mochijson2:encode({struct, [{error, iolist_to_binary(Err)}]})}.
+
+api_relative_url(_APIVSN, UUID) when is_binary(UUID) ->
+    iolist_to_binary([<<"/sessions/">>, UUID]).

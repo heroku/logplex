@@ -66,6 +66,7 @@ passive(Msg, S = #state{}) ->
 
 %% @private
 init(S = #state{channel_id = ChannelId}) ->
+    put(channel_id, ChannelId),
     logplex_tail:register(ChannelId),
     {ok, passive, S}.
 
@@ -81,6 +82,7 @@ handle_sync_event(Event, _From, StateName, State) ->
 
 %% @private
 handle_info({log, Msg}, StateName, S = #state{buf = OldBuf}) ->
+    check_overload(S),
     NewState =
         S#state{buf = logplex_msg_buffer:push(Msg, OldBuf)},
     case StateName of
@@ -128,3 +130,11 @@ send(S = #state{owner = Owner, buf = Buf,
     Owner ! {logplex_tail_data, self(), Data},
     {next_state, passive,
      S#state{buf=NewBuf}}.
+
+check_overload(#state{channel_id=Id}) ->
+    case process_info(self(), message_queue_len) of
+        {message_queue_len, N} when N > 500000 ->
+            erlang:exit({tail_buffer, Id, too_many_messages, N});
+        _ ->
+            ok
+    end.

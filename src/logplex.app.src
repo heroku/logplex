@@ -31,6 +31,9 @@
     ,{http_reconnect_time_s, 1} % seconds
     ,{http_frame_retries, 1} % #extra attempts after first
     ,{http_body_checksum, none} % none | md5
+    ,{session_expiry_s, 360} % #seconds
+    ,{session_lookup_timeout_s, 5} % #seconds
+    ,{default_redis_poll_ms, 2000} % #ms
    ]}
  ]}.
  

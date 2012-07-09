@@ -32,10 +32,13 @@
 -export([reserve_token/0, cache/3
          ,delete/1, lookup/1
          ,delete_by_channel/1
+         ,delete_partial_drain/2
          ,lookup_by_channel/1
          ,count_by_channel/1
          ,create/4
          ,lookup_token/1
+         ,poll_token/1
+         ,store_token/3
         ]).
 
 -export([new/5
@@ -111,17 +114,20 @@ stop(DrainId) ->
 %% Attempt a graceful shutdown of a drain process, followed by a
 %% forceful supervisor based shutdown if that fails.
 stop(DrainId, Timeout) ->
-    DrainPid = whereis({drain, DrainId}),
-    Ref = erlang:monitor(process, DrainPid),
-    DrainPid ! shutdown,
-    receive
-        {'DOWN', Ref, process, DrainPid, _} ->
-            ok
-    after Timeout ->
-            erlang:demonitor(Ref, [flush]),
-            supervisor:terminate_child(logplex_drain_sup, DrainId)
-    end,
-    supervisor:delete_child(logplex_drain_sup, DrainId).
+    case whereis({drain, DrainId}) of
+        DrainPid when is_pid(DrainPid) ->
+            Ref = erlang:monitor(process, DrainPid),
+            DrainPid ! shutdown,
+            receive
+                {'DOWN', Ref, process, DrainPid, _} ->
+                    ok
+            after Timeout ->
+                    erlang:demonitor(Ref, [flush]),
+                    supervisor:terminate_child(logplex_drain_sup, DrainId)
+            end,
+            supervisor:delete_child(logplex_drain_sup, DrainId);
+        _ -> ok
+    end.
 
 reserve_token() ->
     Token = new_token(),
@@ -132,6 +138,17 @@ reserve_token() ->
             Err
     end.
 
+-spec poll_token(id()) -> token() | {'error', 'timeout'} |
+                          {'error', any()}.
+poll_token(DrainId) ->
+    logplex_db:poll(fun () ->
+                            case lookup_token(DrainId) of
+                                not_found -> not_found;
+                                T -> {found, T}
+                            end
+                    end,
+                    logplex_app:config(default_redis_poll_ms, 2000)).
+
 lookup_token(DrainId) when is_integer(DrainId) ->
     case ets:lookup(drains, DrainId) of
         [#drain{token=Token}] ->
@@ -139,10 +156,17 @@ lookup_token(DrainId) when is_integer(DrainId) ->
         [] -> not_found
     end.
 
-cache(DrainId, Token, ChannelId)  when is_integer(DrainId),
-                                        is_binary(Token),
-                                        is_integer(ChannelId) ->
-    true = ets:insert(drains, #drain{id=DrainId, channel_id=ChannelId, token=Token}).
+store_token(DrainId, Token, ChannelId) when is_integer(DrainId),
+                                            is_binary(Token),
+                                            is_integer(ChannelId) ->
+    true = ets:insert(drains, #drain{id=DrainId, token=Token,
+                                     channel_id=ChannelId}),
+    ok.
+
+cache(DrainId, Token, ChannelId) when is_integer(DrainId),
+                                      is_binary(Token),
+                                      is_integer(ChannelId) ->
+    redis_helper:reserve_drain(DrainId, Token, ChannelId).
 
 -spec create(id(), token(), logplex_channel:id(), uri:parsed_uri()) ->
                     {'drain', id(), token()} |
@@ -219,6 +243,7 @@ uri_schemes() ->
      ,{udpsyslog, 514}
     ].
 
+has_valid_uri(#drain{uri=undefined}) -> false;
 has_valid_uri(#drain{uri=Uri}) ->
     case valid_uri(Uri) of
         {valid, _, _} -> true;
@@ -266,3 +291,13 @@ register(DrainId, Type, Dest) ->
 %%     gproc:munreg(p, l, [{channel, ChannelId},
 %%                         drain_dest,
 %%                         drain_type]).
+
+delete_partial_drain(DrainId, Token) when is_integer(DrainId),
+                                          is_binary(Token) ->
+    case lookup(DrainId) of
+        #drain{token = Token,
+               uri = undefined} ->
+            delete(DrainId),
+            deleted;
+        _ -> not_deleted
+    end.

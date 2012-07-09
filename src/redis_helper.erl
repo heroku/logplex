@@ -28,11 +28,21 @@
 %%====================================================================
 %% SESSION
 %%====================================================================
-create_session(Session, Body) when is_binary(Session), is_binary(Body) ->
-    redo:cmd(config, [<<"SETEX">>, Session, <<"360">>, Body]).
 
-lookup_session(Session) when is_binary(Session) ->
-    case redo:cmd(config, [<<"GET">>, Session]) of
+-spec session_key(uuid:binary_string_uuid()) -> binary().
+session_key(UUID) when is_binary(UUID) ->
+    iolist_to_binary([<<"session:">>, UUID]).
+
+-spec create_session(uuid:binary_string_uuid(), Body::binary()) -> any().
+create_session(UUID, Body) when is_binary(UUID), is_binary(Body) ->
+    Key = session_key(UUID),
+    SessionExpiry = logplex_session:expiry(),
+    redo:cmd(config, [<<"SETEX">>, Key, SessionExpiry, Body]).
+
+-spec lookup_session(uuid:binary_string_uuid()) -> {error, any()} |
+                                                   binary().
+lookup_session(UUID) when is_binary(UUID) ->
+    case redo:cmd(config, [<<"GET">>, session_key(UUID)]) of
         {error, Err} -> {error, Err};
         Data when is_binary(Data) -> Data
     end.
@@ -103,14 +113,14 @@ drain_index() ->
         DrainId when is_integer(DrainId) -> DrainId
     end.
 
-create_drain(DrainId, ChannelId, Token, Host, Port) when is_integer(DrainId), is_integer(ChannelId), is_binary(Token), is_binary(Host) ->
+reserve_drain(DrainId, Token, ChannelId)
+  when is_integer(DrainId),
+       is_binary(Token),
+       is_integer(ChannelId) ->
     Key = drain_redis_key(DrainId),
     Res = redo:cmd(config, [<<"HMSET">>, Key,
-        <<"ch">>, integer_to_list(ChannelId),
-        <<"token">>, Token,
-        <<"host">>, Host] ++
-        [<<"port">> || is_integer(Port)] ++
-        [integer_to_list(Port) || is_integer(Port)]),
+                            <<"ch">>, integer_to_list(ChannelId),
+                            <<"token">>, Token]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
@@ -123,7 +133,8 @@ create_url_drain(DrainId, ChannelId, Token, URL)
     Res = redo:cmd(config, [<<"HMSET">>, Key,
                             <<"ch">>, integer_to_list(ChannelId),
                             <<"token">>, Token,
-                            <<"url">>, URL]),
+                            <<"url">>, URL,
+                            <<"state">>,<<"provisioned">>]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err

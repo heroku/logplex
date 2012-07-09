@@ -41,7 +41,7 @@
                 id :: binary()
                }).
 
--define(CONTENT_TYPE, <<"application/x-logplex-1">>).
+-define(CONTENT_TYPE, <<"application/logplex-1">>).
 -define(HTTP_VERSION, {1,1}).
 
 %% ------------------------------------------------------------------
@@ -179,7 +179,7 @@ try_send(Frame = #frame{tries = Tries},
          State = #state{client = Client})
   when Tries > 0 ->
     Req = request_to_iolist(Frame, State),
-    case cowboy_client:raw_request(Req, Client) of
+    try cowboy_client:raw_request(Req, Client) of
         {ok, Client2} ->
             wait_response(Frame, State#state{client=Client2});
         {error, Why} ->
@@ -187,6 +187,13 @@ try_send(Frame = #frame{tries = Tries},
                   " tcp_err=~1000p",
                   log_info(State, [Why])),
             http_fail(retry_frame(Frame, State))
+    catch
+        Class:Err ->
+            Report = {Class, Err, erlang:get_stacktrace()},
+            ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
+                  "attempt=fail err=exception data=~p next_state=disconnected",
+                  log_info(State, [Report])),
+            http_fail(retry_frame(Frame,State))
     end;
 try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s at=try_send result=tries_exceeded "
@@ -208,15 +215,13 @@ connected(Msg, State) ->
 %% code. Back of the napkin algorithm - 2xx is success, 4xx (client
 %% errors) are perm failures, so drop the frame and anything else is a
 %% temp failure, so retry the frame.
-status_action(201) -> success;
-status_action(204) -> success;
 status_action(N) when 200 =< N, N < 300 -> success;
 status_action(N) when 400 =< N, N < 500 -> perm_fail;
 status_action(_) -> temp_fail.
 
 wait_response(Frame = #frame{},
               State = #state{client = Client}) ->
-    case cowboy_client:response(Client) of
+    try cowboy_client:response(Client) of
         {ok, Status, _Headers, Client2} ->
             Result = status_action(Status),
             ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
@@ -239,6 +244,13 @@ wait_response(Frame = #frame{},
                   " result=error tcp_err=~10000p",
                   log_info(State, [Why])),
             http_fail(retry_frame(Frame, State))
+    catch
+        Class:Err ->
+            Report = {Class, Err, erlang:get_stacktrace()},
+            ?WARN("drain_id=~p channel_id=~p dest=~s at=wait_response "
+                  "attempt=fail err=exception data=~p next_state=disconnected",
+                  log_info(State, [Report])),
+            http_fail(retry_frame(Frame,State))
     end.
 
 %% @private
@@ -294,7 +306,7 @@ request_to_iolist(#frame{frame = Body,
          {<<"x-logplex-drain-token">>, Token},
          {<<"User-Agent">>, user_agent()}
         ],
-    cowboy_client:request_to_iolist(<<"PUT">>,
+    cowboy_client:request_to_iolist(<<"POST">>,
                                     Headers,
                                     Body,
                                     ?HTTP_VERSION,
