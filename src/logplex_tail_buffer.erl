@@ -66,6 +66,7 @@ passive(Msg, S = #state{}) ->
 
 %% @private
 init(S = #state{channel_id = ChannelId}) ->
+    put(channel_id, ChannelId),
     logplex_tail:register(ChannelId),
     {ok, passive, S}.
 
