@@ -388,7 +388,7 @@ handlers() ->
     end},
 
     %% V2
-    {['DELETE', "^/v2/channels/(\\d+)/drains/(\\S+)$"], fun(Req, [ChannelId, DrainId]) ->
+    {['DELETE', "^/v2/channels/(\\d+)/drains/(\\d+)$"], fun(Req, [ChannelId, DrainId]) ->
         authorize(Req),
         Deletable = try
             ChannelIdInt = list_to_integer(ChannelId),
