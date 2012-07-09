@@ -101,6 +101,13 @@ handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
 handle({cmd, _Cmd, [<<"stats", _/binary>>|_]}) ->
     ok;
 
+handle({cmd, "incr", [<<"channel_index", _/binary>> | _]}) ->
+    %% ignore the channel_index traffic
+    ok;
+handle({cmd, "incr", [<<"healthcheck", _/binary>> | _]}) ->
+    %% ignore the redis healthcheck traffic
+    ok;
+
 handle({cmd, "publish", _Args}) ->
     %% XXX - ignore publish commands like:
     %% <<"geoff.herokudev.com:stats">>,JSONBinary
