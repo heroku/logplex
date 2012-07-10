@@ -16,6 +16,7 @@
 -export([start_link/0
          ,channel/1
          ,quarantine_channel/1
+         ,unquarantine_channel/1
         ]).
 
 %% gen_server callbacks
@@ -51,6 +52,9 @@ quarantine_channel(ChannelId) when is_integer(ChannelId) ->
             gen_server:call(Pid, {quarantine_channel, ChannelId})
     end.
 
+unquarantine_channel(ChannelId) when is_integer(ChannelId) ->
+    gen_server:call(?MODULE, {unquarantine_channel, ChannelId}).
+
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -66,6 +70,9 @@ handle_call({quarantine_channel, ChannelId}, _From, State)
     Result = ets:insert(?TABLE, {{channel, ChannelId},
                                  os:timestamp()}),
     {reply, Result, State};
+handle_call({unquarantine_channel, ChannelId}, _From, State)
+  when is_integer(ChannelId) ->
+    Result = ets:delete(?TABLE, {channel, ChannelId}),
     {reply, Result, State};
 handle_call(Call, _From, State) ->
     ?WARN("Unexpected call ~p.", [Call]),
