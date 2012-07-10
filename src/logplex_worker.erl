@@ -88,13 +88,10 @@ route(Token, State = #state{}, RawMsg)
   when is_binary(Token), is_binary(RawMsg) ->
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName} ->
-            {Map, Interval} = map_interval(State),
-            BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
-                                             Map, Interval),
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
             process_drains(ChannelId, CookedMsg),
             process_tails(ChannelId, CookedMsg),
-            process_msg(ChannelId, BufferPid, CookedMsg);
+            process_msg(ChannelId, State, CookedMsg);
         _ ->
             K = #logplex_stat{module=?MODULE,
                               key=msg_drop_unknown_token},
@@ -109,7 +106,15 @@ process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg),
     ok.
 
-process_msg(ChannelId, BufferPid, Msg) ->
-    logplex_queue:in(BufferPid,
-                     redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg)),
+process_msg(ChannelId, State, Msg) ->
+    case logplex_redis_quarantine:channel(ChannelId) of
+        not_quarantined ->
+            {Map, Interval} = map_interval(State),
+            BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
+                                             Map, Interval),
+            Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg),
+            logplex_queue:in(BufferPid, Cmd);
+        _ ->
+            ok
+    end,
     ok.
