@@ -38,6 +38,8 @@ init([]) ->
      {{one_for_one, 5, 10},
       [{logplex_db, {logplex_db, start_link, []},
         permanent, 2000, worker, [logplex_db]}
+       ,{logplex_redis_quarantine, {logplex_redis_quarantine, start_link, []},
+         permanent, 2000, worker, [logplex_redis_quarantine]}
        ,{logplex_drain_sup,
          {logplex_drain_sup, start_link, []},
          permanent, 2000, supervisor, [logplex_drain_sup]}
