@@ -63,7 +63,9 @@ init([]) ->
 %% @private
 handle_call({quarantine_channel, ChannelId}, _From, State)
   when is_integer(ChannelId) ->
-    Result = ets:insert(?TABLE, {channel, ChannelId}),
+    Result = ets:insert(?TABLE, {{channel, ChannelId},
+                                 os:timestamp()}),
+    {reply, Result, State};
     {reply, Result, State};
 handle_call(Call, _From, State) ->
     ?WARN("Unexpected call ~p.", [Call]),
