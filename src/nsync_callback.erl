@@ -41,6 +41,9 @@ handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = list_to_integer(parse_id(Rest)),
     create_drain(Id, Dict);
 
+handle({load, <<"quarantine:channels">>, Channels}) when is_list(Channels) ->
+    quarantine_channels(Channels);
+
 handle({load, _Key, _Val}) ->
     ok;
 
@@ -94,6 +97,12 @@ handle({cmd, "del", [<<"session:", UUID/binary>> | _Args]})
   when byte_size(UUID) =:= 36 ->
     catch logplex_session:delete(UUID),
     ?INFO("at=delete type=session id=~p", [UUID]);
+
+handle({cmd, "sadd", [<<"quarantine:channels">> | Members]}) ->
+    quarantine_channels(Members);
+
+handle({cmd, "srem", [<<"quarantine:channels">> | Members]}) ->
+    unquarantine_channels(Members);
 
 handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
     ok;
@@ -229,3 +238,21 @@ dict_find(Key, Dict) ->
         {ok, Val} -> Val;
         _ -> undefined
     end.
+
+quarantine_channels(Channels) ->
+    [ try
+          ID = list_to_integer(Channel),
+          logplex_redis_quarantine:quarantine_channel(ID)
+      catch
+          _:_ -> ok
+      end
+      || Channel <- Channels].
+
+unquarantine_channels(Channels) ->
+    [ try
+          ID = list_to_integer(Channel),
+          logplex_redis_quarantine:unquarantine_channel(ID)
+      catch
+          _:_ -> ok
+      end
+      || Channel <- Channels].
