@@ -241,7 +241,7 @@ dict_find(Key, Dict) ->
 
 quarantine_channels(Channels) ->
     [ try
-          ID = list_to_integer(Channel),
+          ID = channel_id(Channel),
           logplex_redis_quarantine:quarantine_channel(ID),
           ?INFO("at=quarantine_channel channel_id=~p",
                 [ID])
@@ -252,7 +252,7 @@ quarantine_channels(Channels) ->
 
 unquarantine_channels(Channels) ->
     [ try
-          ID = list_to_integer(Channel),
+          ID = channel_id(Channel),
           logplex_redis_quarantine:unquarantine_channel(ID),
           ?INFO("at=unquarantine_channel channel_id=~p",
                 [ID])
@@ -260,3 +260,8 @@ unquarantine_channels(Channels) ->
           _:_ -> ok
       end
       || Channel <- Channels].
+
+channel_id(Channel) when is_binary(Channel) ->
+    list_to_integer(binary_to_list(Channel));
+channel_id(Channel) when is_list(Channel) ->
+    list_to_integer(Channel).
