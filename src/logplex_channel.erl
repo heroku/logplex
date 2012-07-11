@@ -32,13 +32,47 @@
          ,can_add_drain/1
         ]).
 
+-export([new/1
+         ,new/2
+         ,new/3
+         ,id/1
+         ,name/1
+         ,flags/1
+        ]).
+
+-export([lookup_flag/2
+         ,lookup_flags/1
+         ,store/1
+         ,cache/3
+         ,binary_to_flags/1
+        ]).
+
 -compile({no_auto_import,[whereis/1]}).
 
 -include("logplex.hrl").
+-include("logplex_channel.hrl").
 -include("logplex_logging.hrl").
 
 -type id() :: integer().
--export_type([id/0]).
+-type name() :: binary().
+-type flag() :: 'no_tail' | 'no_redis'.
+-type flags() :: [flag()].
+-type channel() :: #channel{}.
+-export_type([id/0, name/0, flags/0]).
+
+new(Id) when is_integer(Id) ->
+    #channel{id=Id}.
+new(Id, Name) when is_integer(Id),
+                   is_binary(Name) ->
+    #channel{id=Id, name=Name}.
+new(Id, Name, Flags) when is_integer(Id),
+                          is_binary(Name),
+                          is_list(Flags) ->
+    #channel{id=Id, name=Name, flags=Flags}.
+
+id(#channel{id=Id}) -> Id.
+name(#channel{id=Name}) -> Name.
+flags(#channel{flags=Flags}) -> Flags.
 
 register({channel, ChannelId} = C)
   when is_integer(ChannelId) ->
@@ -71,6 +105,34 @@ create() ->
             Err
     end.
 
+-spec store(channel()) -> any().
+store(#channel{id=ChannelId, flags=Flags, name=Name}) ->
+    redis_helper:store_channel(ChannelId, Name, flags_to_binary(Flags)).
+
+-spec cache(id(), name(), flags()) -> channel().
+cache(ChannelId, Name, Flags)
+  when is_integer(ChannelId),
+       is_binary(Name),
+       is_list(Flags) ->
+    Chan = #channel{id=ChannelId,
+                    name=Name,
+                    flags=Flags},
+    true = ets:insert(channels, Chan),
+    Chan.
+
+-spec flags_to_binary(flags()) -> binary().
+flags_to_binary(Flags) when is_list(Flags) ->
+    Str = string:join([ atom_to_list(Flag) || Flag <- lists:usort(Flags) ],
+                      ":"),
+    iolist_to_binary(Str).
+
+-spec binary_to_flags(binary()) -> flags().
+binary_to_flags(Str) when is_binary(Str) ->
+    [ case Flag of
+          <<"no_tail">> -> no_tail;
+          <<"no_redis">> -> no_redis
+      end || Flag <- binary:split(Str, <<":">>) ].
+
 delete(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
         undefined ->
@@ -83,8 +145,25 @@ delete(ChannelId) when is_integer(ChannelId) ->
 
 lookup(ChannelId) when is_integer(ChannelId) ->
     case ets:lookup(channels, ChannelId) of
-        [Channel] -> Channel;
+        [Channel = #channel{}] -> Channel;
         _ -> undefined
+    end.
+
+lookup_flag(ChannelId, Flag) when Flag =:= no_tail;
+                                  Flag =:= no_redis ->
+    try
+        Flags =ets:lookup_element(channels, ChannelId, #channel.flags),
+        lists:member(Flag, Flags)
+    catch
+        error:badarg ->
+            not_found
+    end.
+
+lookup_flags(ChannelId) when is_integer(ChannelId) ->
+    try ets:lookup_element(channels, ChannelId, #channel.flags)
+    catch
+        error:badarg ->
+            not_found
     end.
 
 lookup_tokens(ChannelId) when is_integer(ChannelId) ->
