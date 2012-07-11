@@ -189,3 +189,15 @@ register_stat_instance() ->
     InstanceName = logplex_utils:instance_name(),
     Domain = logplex_utils:heroku_domain(),
     redo:cmd(config, [<<"SETEX">>, iolist_to_binary([Domain, <<":stats:logplex:">>, InstanceName]), <<"60">>, <<"1">>]).
+
+%%====================================================================
+%% QUARANTINES
+%%====================================================================
+
+quarantine_channel(ChannelId) when is_integer(ChannelId) ->
+    redo:cmd(config, [<<"SADD">>, <<"quarantine:channels">>,
+                      integer_to_list(ChannelId)]).
+
+unquarantine_channel(ChannelId) when is_integer(ChannelId) ->
+    redo:cmd(config, [<<"SREM">>, <<"quarantine:channels">>,
+                      integer_to_list(ChannelId)]).
