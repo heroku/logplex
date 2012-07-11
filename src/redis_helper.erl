@@ -67,6 +67,22 @@ create_channel(ChannelId) when is_integer(ChannelId) ->
             {error, Err}
     end.
 
+-spec store_channel(logplex_channel:id(),
+                     logplex_channel:name(),
+                     binary()) -> 'ok' | {'error', Reason::term()}.
+store_channel(ChannelId, Name, FlagStr)
+  when is_integer(ChannelId),
+       is_binary(Name),
+       is_binary(FlagStr) ->
+    Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
+    Cmd = [<<"HMSET">>, Key, <<"name">>, Name, <<"flags">>, FlagStr],
+    case redo:cmd(config, Cmd) of
+        <<"OK">> ->
+            ok;
+        {error, Err} ->
+            {error, Err}
+    end.
+
 delete_channel(ChannelId) when is_integer(ChannelId) ->
     case redo:cmd(config, [<<"DEL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
         1 -> ok;
