@@ -128,10 +128,11 @@ handle(_Other) ->
     ok.
 
 %% Helper functions
-create_channel(Id, _Dict) ->
-    Channel = #channel{id=Id},
-    ets:insert(channels, Channel),
-    Channel.
+create_channel(ChannelId, Dict) ->
+    Name = dict_find(<<"name">>, Dict, <<"">>),
+    Flags = dict_find(<<"flags">>, Dict, <<"">>),
+    logplex_channel:cache(ChannelId, Name,
+                          logplex_channel:binary_to_flags(Flags)).
 
 create_token(Id, Dict) ->
     case dict_find(<<"ch">>, Dict) of
@@ -225,6 +226,11 @@ dict_find(Key, Dict) ->
         _ -> undefined
     end.
 
+dict_find(Key, Dict, Default) ->
+    case dict:find(Key, Dict) of
+        {ok, Val} -> Val;
+        _ -> Default
+    end.
 
 channel_id(Bin) when is_binary(Bin) ->
     list_to_integer(binary_to_list(Bin)).
