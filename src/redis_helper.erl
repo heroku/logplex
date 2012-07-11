@@ -83,7 +83,7 @@ build_push_msg(ChannelId, Length, Msg) when is_integer(ChannelId), is_binary(Len
 lookup_channel(ChannelId) when is_integer(ChannelId) ->
     case redo:cmd(config, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
-            #channel{id = ChannelId};
+            logplex_channel:new(ChannelId);
         _ ->
             undefined
     end.
