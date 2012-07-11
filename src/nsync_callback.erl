@@ -30,15 +30,15 @@
 
 %% LOAD
 handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
-    Id = list_to_integer(parse_id(Rest)),
+    Id = channel_id(parse_id(Rest)),
     create_channel(Id, Dict);
 
 handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
-    Id = list_to_binary(parse_id(Rest)),
+    Id = parse_id(Rest),
     create_token(Id, Dict);
 
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
-    Id = list_to_integer(parse_id(Rest)),
+    Id = drain_id(parse_id(Rest)),
     create_drain(Id, Dict);
 
 handle({load, <<"quarantine:channels">>, Channels}) when is_list(Channels) ->
@@ -55,19 +55,19 @@ handle({load, eof}) ->
 
 %% STREAM
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
-    Id = list_to_integer(parse_id(Rest)),
+    Id = channel_id(parse_id(Rest)),
     Dict = dict_from_list(Args),
     ?INFO("at=set type=channel id=~p", [Id]),
     create_channel(Id, Dict);
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
-    Id = list_to_binary(parse_id(Rest)),
+    Id = parse_id(Rest),
     Dict = dict_from_list(Args),
     create_token(Id, Dict),
     ?INFO("at=set type=token id=~p", [Id]);
 
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
-    Id = list_to_integer(parse_id(Rest)),
+    Id = drain_id(parse_id(Rest)),
     Dict = dict_from_list(Args),
     create_drain(Id, Dict),
     ?INFO("at=set type=drain id=~p", [Id]);
@@ -78,17 +78,17 @@ handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
     ?INFO("at=setex type=session id=~p", [UUID]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
-    Id = list_to_integer(parse_id(Rest)),
+    Id = channel_id(parse_id(Rest)),
     ?INFO("at=delete type=channel id=~p", [Id]),
     ets:delete(channels, Id);
 
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
-    Id = list_to_binary(parse_id(Rest)),
+    Id = parse_id(Rest),
     ?INFO("at=delete type=token id=~p", [Id]),
     ets:delete(tokens, Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
-    Id = list_to_integer(parse_id(Rest)),
+    Id = drain_id(parse_id(Rest)),
     ?INFO("at=delete type=drain id=~p", [Id]),
     catch logplex_drain:stop(Id),
     ets:delete(drains, Id);
@@ -256,7 +256,8 @@ unquarantine_channels(Channels) ->
       end
       || Channel <- Channels].
 
-channel_id(Channel) when is_binary(Channel) ->
-    list_to_integer(binary_to_list(Channel));
-channel_id(Channel) when is_list(Channel) ->
-    list_to_integer(Channel).
+channel_id(Bin) when is_binary(Bin) ->
+    list_to_integer(binary_to_list(Bin)).
+
+drain_id(Bin) when is_binary(Bin) ->
+    list_to_integer(binary_to_list(Bin)).
