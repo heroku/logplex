@@ -216,13 +216,8 @@ drain_uri(Dict) ->
     end.
 
 parse_id(Bin) ->
-    parse_id(Bin, []).
-
-parse_id(<<":", _/binary>>, Acc) ->
-    lists:reverse(Acc);
-
-parse_id(<<C, Rest/binary>>, Acc) ->
-    parse_id(Rest, [C|Acc]).
+    [Id | _] = binary:split(Bin, <<":">>),
+    Id.
 
 dict_from_list(List) ->
     dict_from_list(List, dict:new()).
