@@ -32,6 +32,7 @@ start_link() ->
 
 create_ets_tables() ->
     ets:new(channels, [named_table, public, set, {keypos, 2}]),
+    logplex_redis_quarantine:create_ets_table(),
     ets:new(tokens,   [named_table, public, set, {keypos, 2}]),
     ets:new(drains,   [named_table, public, set, {keypos, 2}]),
     logplex_session:create_ets_table(),
