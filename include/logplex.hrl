@@ -1,7 +1,6 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(msg, {time, source, ps, content}).
--record(channel, {id :: logplex_channel:id()}).
 -record(token, {id :: logplex_token:id() | '_',
                 channel_id :: logplex_channel:id() | '$1',
                 name :: logplex_token:name() | '_'
