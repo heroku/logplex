@@ -237,13 +237,8 @@ handlers() ->
         logplex_stats:incr(session_accessed),
 
         Filters = filters(Data),
-
-        Num0 =
-            case proplists:get_value(<<"num">>, Data) of
-                undefined -> 100;
-                BinNum -> list_to_integer(binary_to_list(BinNum))
-            end,
-        Num = ternary(Filters == [], Num0 - 1, -1),
+        NumBin = proplists:get_value(<<"num">>, Data, <<"100">>),
+        Num = list_to_integer(binary_to_list(NumBin)),
 
         Logs = logplex_channel:logs(ChannelId, Num),
         Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
@@ -257,7 +252,7 @@ handlers() ->
 
         inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
 
-        filter_and_send_logs(Socket, Logs, Filters, Num0),
+        filter_and_send_logs(Socket, Logs, Filters, Num),
 
         case proplists:get_value(<<"tail">>, Data) of
             undefined ->
