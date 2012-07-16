@@ -52,7 +52,8 @@ store(UUID, Body)
 
 store(Session = #session{id=SessionId, body=Body})
   when is_binary(SessionId), is_binary(Body) ->
-    ets:insert(sessions, Session), SessionId.
+    ets:insert(sessions, Session),
+    SessionId.
 
 poll(UUID, Timeout) when is_binary(UUID),
                          byte_size(UUID) =:= 36,
