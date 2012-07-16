@@ -244,9 +244,6 @@ handlers() ->
         Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
         not is_list(Logs) andalso exit({expected_list, Logs}),
 
-        ?INFO("at=tail_start channel_id=~p filters=~100p",
-              [ChannelId, Filters]),
-
         Socket = Req:get(socket),
         Req:start_response({200, ?HDR}),
 
@@ -258,6 +255,9 @@ handlers() ->
             undefined ->
                 gen_tcp:close(Socket);
             _ ->
+                ?INFO("at=tail_start channel_id=~p filters=~100p",
+                      [ChannelId, Filters]),
+                check_no_tail(ChannelId),
                 logplex_stats:incr(session_tailed),
                 {ok, Buffer} =
                     logplex_tail_buffer:start_link(ChannelId, self()),
