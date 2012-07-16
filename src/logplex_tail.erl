@@ -28,6 +28,7 @@
          handle_info/2, terminate/2, code_change/3]).
 
 -export([register/1, route/2]).
+-export([shutdown/1]).
 
 -include_lib("logplex.hrl").
 
@@ -42,6 +43,13 @@ register(ChannelId) when is_integer(ChannelId) ->
 
 route(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
     [Pid ! {log, Msg} || {_ChannelId, Pid} <- ets:lookup(?MODULE, ChannelId)],
+    ok.
+
+%% @doc Shut down a running tail - intended for use when no_tail is
+%% added to a channel.
+shutdown(ChannelId) when is_integer(ChannelId) ->
+    [exit(Pid, shutdown)
+     || {_ChannelId, Pid} <- ets:lookup(?MODULE, ChannelId)],
     ok.
 
 %%====================================================================
