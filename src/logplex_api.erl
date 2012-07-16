@@ -544,9 +544,6 @@ filters([{<<"source">>, Source}|Tail], Filters) ->
 filters([_|Tail], Filters) ->
     filters(Tail, Filters).
 
-ternary(true, A, _B) -> A;
-ternary(_, _A, B) -> B.
-
 header_value(Req, Key, Default) ->
     case Req:get_header_value(Key) of
         undefined -> Default;
