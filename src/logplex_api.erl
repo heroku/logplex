@@ -615,6 +615,5 @@ api_relative_url(_APIVSN, UUID) when is_binary(UUID) ->
     iolist_to_binary([<<"/sessions/">>, UUID]).
 
 end_chunked_response(Socket) ->
-    gen_tcp:send(Socket, <<"0\r\n\r\n">>),
     gen_tcp:close(Socket),
     ok.
