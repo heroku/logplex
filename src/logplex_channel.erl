@@ -164,6 +164,7 @@ lookup_flag(Flag, ChannelId) when Flag =:= no_tail;
             not_found
     end.
 
+-spec lookup_flags(id()) -> flags() | 'not_found'.
 lookup_flags(ChannelId) when is_integer(ChannelId) ->
     try ets:lookup_element(channels, ChannelId, #channel.flags)
     catch
