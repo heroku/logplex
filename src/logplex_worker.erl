@@ -107,7 +107,7 @@ process_tails(ChannelId, Msg) ->
     ok.
 
 process_msg(ChannelId, State, Msg) ->
-    case logplex_channel:has_flag(no_redis, ChannelId) of
+    case logplex_channel:lookup_flag(no_redis, ChannelId) of
         no_redis ->
             {Map, Interval} = map_interval(State),
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
