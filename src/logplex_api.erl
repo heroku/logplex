@@ -251,13 +251,15 @@ handlers() ->
 
         filter_and_send_logs(Socket, Logs, Filters, Num),
 
-        case proplists:get_value(<<"tail">>, Data) of
-            undefined ->
-                gen_tcp:close(Socket);
+        case {proplists:get_value(<<"tail">>, Data, tail_not_requested),
+              logplex_channel:lookup_flag(no_tail, ChannelId)} of
+            {tail_not_requested, _} ->
+                end_chunked_response(Socket);
+            {_, no_tail} ->
+                end_chunked_response(Socket);
             _ ->
                 ?INFO("at=tail_start channel_id=~p filters=~100p",
                       [ChannelId, Filters]),
-                check_no_tail(ChannelId),
                 logplex_stats:incr(session_tailed),
                 {ok, Buffer} =
                     logplex_tail_buffer:start_link(ChannelId, self()),
