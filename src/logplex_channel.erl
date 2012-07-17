@@ -149,9 +149,9 @@ lookup(ChannelId) when is_integer(ChannelId) ->
         _ -> undefined
     end.
 
--spec lookup_flag(id(), F) -> F | 'no_such_flag' | 'not_found'
+-spec lookup_flag(F, id()) -> F | 'no_such_flag' | 'not_found'
                                   when is_subtype(F, flag()).
-lookup_flag(ChannelId, Flag) when Flag =:= no_tail;
+lookup_flag(Flag, ChannelId) when Flag =:= no_tail;
                                   Flag =:= no_redis ->
     try
         Flags =ets:lookup_element(channels, ChannelId, #channel.flags),
