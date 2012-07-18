@@ -131,7 +131,8 @@ binary_to_flags(Str) when is_binary(Str) ->
     [ case Flag of
           <<"no_tail">> -> no_tail;
           <<"no_redis">> -> no_redis
-      end || Flag <- binary:split(Str, <<":">>) ].
+      end || Flag <- binary:split(Str, <<":">>),
+             Flag =/= <<>> ].
 
 delete(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
