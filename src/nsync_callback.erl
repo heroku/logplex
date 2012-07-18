@@ -129,10 +129,17 @@ handle(_Other) ->
 
 %% Helper functions
 create_channel(ChannelId, Dict) ->
-    Name = dict_find(<<"name">>, Dict, <<"">>),
-    Flags = dict_find(<<"flags">>, Dict, <<"">>),
-    logplex_channel:cache(ChannelId, Name,
-                          logplex_channel:binary_to_flags(Flags)).
+    try
+        Name = dict_find(<<"name">>, Dict, <<"">>),
+        Flags = dict_find(<<"flags">>, Dict, <<"">>),
+        logplex_channel:cache(ChannelId, Name,
+                              logplex_channel:binary_to_flags(Flags))
+    catch
+        C:E ->
+            ?WARN("at=create_channel class=~p exception=e stack=~100p",
+                  [C, E, erlang:get_stacktrace()]),
+            {error, {C, E}}
+    end.
 
 create_token(Id, Dict) ->
     case dict_find(<<"ch">>, Dict) of
