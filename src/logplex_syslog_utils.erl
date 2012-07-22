@@ -6,6 +6,7 @@
 -module(logplex_syslog_utils).
 
 -export([to_msg/2
+         ,to_msg_rfc5424/2
          ,from_msg/1
          ,frame/1
          ,datetime/1
