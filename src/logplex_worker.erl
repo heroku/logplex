@@ -108,13 +108,12 @@ process_tails(ChannelId, Msg) ->
 
 process_msg(ChannelId, State, Msg) ->
     case logplex_channel:lookup_flag(no_redis, ChannelId) of
-        no_redis ->
+        no_redis -> ok;
+        _ ->
             {Map, Interval} = map_interval(State),
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
                                              Map, Interval),
             Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg),
-            logplex_queue:in(BufferPid, Cmd);
-        _ ->
-            ok
+            logplex_queue:in(BufferPid, Cmd)
     end,
     ok.
