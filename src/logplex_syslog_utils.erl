@@ -26,14 +26,25 @@
 -export_type([ syslog_msg/0, datetime/0 ]).
 
 -spec to_msg(syslog_msg(), iolist() | binary()) -> iolist().
-to_msg({Facility, Severity, Time, Source, Process, Msg}, Token) ->
+to_msg({Facility, Severity, Time, Source, Process, Msg}, Token)
+  when is_binary(Token); is_list(Token) ->
     [ <<"<">>, pri(Facility, Severity), <<">1 ">>,
       Time, $\s, Token, $\s, Source, $\s, Process, <<" - - ">>,
-      logplex_utils:nl(Msg) ].
+      logplex_utils:nl(Msg) ];
+to_msg({Facility, Severity, Time, _Host,
+        Source, Process, <<"-">>, <<"- ", Msg/binary>>}, Token)
+  when is_binary(Token); is_list(Token) ->
+    to_msg({Facility, Severity, Time, Source, Process, Msg}, Token).
+
+to_msg_rfc5424({Facility, Severity, Time, _Host, AppName, ProcID, MsgID, Msg},
+               Token) ->
+    rfc5424({Facility, Severity, Time, Token, AppName, ProcID, MsgID, Msg}).
 
 rfc5424({Facility, Severity, Time, Source, Process, Msg}) ->
     rfc5424(Facility, Severity, Time, Source,
-            Process, undefined, undefined, Msg).
+            Process, undefined, undefined, Msg);
+rfc5424({Facility, Severity, Time, Host, AppName, ProcID, MsgID, Msg}) ->
+    rfc5424(Facility, Severity, Time, Host, AppName, ProcID, MsgID, Msg).
 
 rfc5424(Facility, Severity, Time, Host, AppName, ProcID, MsgID, Msg) ->
     [ <<"<">>, pri(Facility, Severity), <<">1">>,
