@@ -17,9 +17,16 @@
          ,overflow_msg/2
         ]).
 
--type syslog_msg() :: {facility(), severity(),
-                       Time::iolist(), Source::iolist(),
-                       Process::iolist(), Msg::iolist()}.
+-type old_syslog_msg() :: {facility(), severity(),
+                           Time::iolist(), Source::iolist(),
+                           Process::iolist(), Msg::iolist()}.
+
+-type new_syslog_msg() :: {facility(), severity(),
+                           Time::iolist(), Host::iolist(), AppName::iolist(),
+                           ProcessID::iolist(), MsgID::iolist(),
+                           Body::iolist()}.
+
+-type syslog_msg() :: old_syslog_msg() | new_syslog_msg().
 
 -type datetime() :: 'now' | erlang:timestamp() | calendar:datetime1970().
 
