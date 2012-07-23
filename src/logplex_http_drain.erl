@@ -300,10 +300,10 @@ request_to_iolist(#frame{frame = Body,
                     none -> []
                 end,
     Headers = MD5Header ++ AuthHeader ++
-        [{<<"Content-type">>, ?CONTENT_TYPE},
-         {<<"logplex-msg-count">>, integer_to_list(Count)},
-         {<<"logplex-frame-id">>, frame_id_to_iolist(Id)},
-         {<<"logplex-drain-token">>, Token},
+        [{<<"Content-Type">>, ?CONTENT_TYPE},
+         {<<"Logplex-Msg-Count">>, integer_to_list(Count)},
+         {<<"Logplex-Frame-Id">>, frame_id_to_iolist(Id)},
+         {<<"Logplex-Drain-Token">>, Token},
          {<<"User-Agent">>, user_agent()}
         ],
     cowboy_client:request_to_iolist(<<"POST">>,

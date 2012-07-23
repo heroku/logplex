@@ -10,10 +10,10 @@ This is an example HTTP request that logplex might make if it had ten log messag
 
     POST /logs HTTP/1.1
     Host: example.com
-    Content-type: application/logplex-1
-    logplex-msg-count: 10
-    logplex-frame-id: 09C557EAFCFB6CF2740EE62F62971098
-    logplex-drain-token: d.fc6b856b-3332-4546-93de-7d0ee272c3bd
+    Content-Type: application/logplex-1
+    Logplex-Msg-Count: 10
+    Logplex-Frame-Id: 09C557EAFCFB6CF2740EE62F62971098
+    Logplex-Drain-Token: d.fc6b856b-3332-4546-93de-7d0ee272c3bd
     User-Agent: Logplex/v49
     Content-Length: 771
     
@@ -31,11 +31,11 @@ This is an example HTTP request that logplex might make if it had ten log messag
     
 ### HTTP Headers
 
-* logplex-msg-count: The number of messages encoded in the body of this request. 10 in the example above. You can use this field as a sanity check to detect if you have not parsed the body correctly.
-* logplex-frame-id: The unique identifier for this request. If this request is retried for some reason (non-2xx response code, network connection failure, etc.) this identifier will allow you to spot duplicate requests.
-* logplex-drain-token: This is the unique identifier for the logplex drain. It will be the same identifier you see if you run `heroku drains -x` for your app.
+* Logplex-Msg-Count: The number of messages encoded in the body of this request. 10 in the example above. You can use this field as a sanity check to detect if you have not parsed the body correctly.
+* Logplex-Frame-Id: The unique identifier for this request. If this request is retried for some reason (non-2xx response code, network connection failure, etc.) this identifier will allow you to spot duplicate requests.
+* Logplex-Drain-Token: This is the unique identifier for the logplex drain. It will be the same identifier you see if you run `heroku drains -x` for your app.
 * User-Agent: This describes the version of logplex, and is changed from time to time. 
-* Content-type: This field describes the encoding of the body for the request. The only current version of this is "application/logplex-1" which is described below.
+* Content-Type: This field describes the encoding of the body for the request. The only current version of this is "application/logplex-1" which is described below.
 
 ## Logplex Frame Format
 
