@@ -39,6 +39,7 @@
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
+-include_lib("ex_uri/include/ex_uri.hrl").
 
 -define(NEW_READ_MAP, new_logplex_read_pool_map).
 -define(CURRENT_READ_MAP, logplex_read_pool_map).
@@ -217,7 +218,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 lookup_urls() ->
-    case lists:sort([binary_to_list(Url) || Url <- redis_helper:shard_urls()]) of
+    case redis_sort([binary_to_list(Url)
+                     || Url <- redis_helper:shard_urls()]) of
         [] ->
             case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
                 false -> ["redis://127.0.0.1:6379/"];
@@ -229,23 +231,23 @@ lookup_urls() ->
 
 populate_info_table(Urls) ->
     %% Populate Read pool
-    ReadPools = [ {Url, add_pool(Url)} || Url <- Urls],
+    ReadPools = [ {Url, add_pool(Url)} || Url <- redis_sort(Urls)],
     {ok, Map1, Interval1} =
-        redis_shard:generate_map_and_interval(lists:sort(ReadPools)),
+        redis_shard:generate_map_and_interval(redis_sort(ReadPools)),
     logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
 
     %% Populate write pool
     WritePools = [ {Url, add_buffer(Url)}
-                   || Url <- Urls],
+                   || Url <- redis_sort(Urls)],
     {ok, Map2, Interval2} =
-        redis_shard:generate_map_and_interval(lists:sort(WritePools)),
+        redis_shard:generate_map_and_interval(WritePools),
 
     logplex_shard_info:save(logplex_redis_buffer_map, Map2, Interval2),
 
     ok.
 
 add_pool(Url) ->
-    Opts = redo_uri:parse(Url),
+    Opts = parse_redis_uri(Url),
     {ok, Pool} = redo:start_link(undefined, Opts),
     Pool.
 
@@ -386,20 +388,9 @@ prepare_new_urls(NewIps) ->
                           || Url <- redis_helper:shard_urls()]),
     length(OldUrls) =:= length(NewIpsSorted)
         orelse erlang:error({invalid_ip_list, different_length_to_existing}),
-    NewUrls = [ begin
-                    OldInfo = redo_uri:parse(OldUrl),
-                    NewInfo = lists:keyreplace(host, 1, OldInfo, {host, NewIp}),
-                    to_redis_url(NewInfo)
-                end
+    NewUrls = [ update_redis_host(OldUrl, NewIp)
                 || {OldUrl, NewIp} <- lists:zip(OldUrls, NewIpsSorted)],
     lists:zip(OldUrls, NewUrls).
-
-to_redis_url(Info) ->
-    Host = proplists:get_value(host, Info),
-    Port = proplists:get_value(port, Info),
-    Pass = proplists:get_value(pass, Info),
-    lists:flatten(["redis://", Pass, "@", Host,
-                   ":", integer_to_list(Port), "/"]).
 
 prepare_url_update(Nodes, OldNewMap) ->
     lists:foldl(fun (Node, {good, Acc}) ->
@@ -451,3 +442,65 @@ stop_pool(Pid) ->
 
 stop_buffer(Pid) ->
     logplex_queue:stop(Pid).
+
+parse_redis_uri(Url) when is_list(Url) ->
+    case ex_uri:decode(Url) of
+        {ok, Uri = #ex_uri{scheme="redis",
+                           authority=#ex_uri_authority{host=Host,
+                                                       port=Port}},
+         _} ->
+            lists:append([ [{url, Url},
+                            {host, Host},
+                            {port, case Port of
+                                       undefined -> 6379;
+                                       _ -> Port
+                                   end} ],
+                           parse_redis_uri_fragkey(Uri),
+                           parse_redis_uri_pass(Uri),
+                           parse_redis_uri_db(Uri) ]);
+        _ ->
+            {error, bad_uri}
+    end.
+
+parse_redis_uri_fragkey(#ex_uri{fragment = Frag}) when Frag =/= undefined ->
+    [{sortkey, Frag}];
+parse_redis_uri_fragkey(_) -> [].
+
+parse_redis_uri_pass(#ex_uri{authority=Auth}) when Auth =/= undefined ->
+    case Auth of
+        #ex_uri_authority{userinfo=Pass} when Pass =/= undefined ->
+            [{pass, Pass}];
+        _ -> []
+    end;
+parse_redis_uri_pass(_) -> [].
+
+parse_redis_uri_db(#ex_uri{path=Path}) when Path =/= undefined ->
+    case iolist_to_binary(Path) of
+        <<"/", DB/binary>> ->
+            [{db, binary_to_list(DB)}];
+        _ ->
+            []
+    end;
+parse_redis_uri_db(_) -> [].
+
+update_redis_host(OldUrl, NewHost) ->
+    {ok, OldUri = #ex_uri{authority = #ex_uri_authority{} = Authority}, _}
+        = ex_uri:decode(OldUrl),
+    New = OldUri#ex_uri{authority =
+                            Authority#ex_uri_authority{host=NewHost}},
+    ex_uri:encode(New).
+
+redis_sort(Urls) ->
+    Parsed = lists:map(fun parse_redis_uri/1, Urls),
+    [ proplists:get_value(url, Server)
+      || Server <- lists:sort(fun sortfun/2, Parsed) ].
+
+sortfun(A, B) ->
+    sortkey(A) =< sortkey(B).
+
+sortkey(Info) ->
+    case proplists:get_value(sortkey, Info) of
+        undefined ->
+            proplists:get_value(url, Info);
+        Key -> Key
+    end.
