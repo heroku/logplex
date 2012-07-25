@@ -476,7 +476,7 @@ parse_redis_uri_pass(_) -> [].
 
 parse_redis_uri_db(#ex_uri{path=Path}) when Path =/= undefined ->
     case iolist_to_binary(Path) of
-        <<"/", DB/binary>> ->
+        <<"/", DB/binary>> when DB =/= <<"">> ->
             [{db, binary_to_list(DB)}];
         _ ->
             []
