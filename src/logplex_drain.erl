@@ -261,10 +261,12 @@ delete_by_channel(ChannelId) when is_integer(ChannelId) ->
 
 count_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select_count(drains,
-                      ets:fun2ms(fun (#drain{channel_id=C})
-                                     when C =:= ChannelId ->
-                                         true
-                                 end)).
+                     ets:fun2ms(fun (#drain{channel_id=C,
+                                            uri = Uri})
+                                     when C =:= ChannelId,
+                                          Uri =/= undefined ->
+                                        true
+                                end)).
 
 
 lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
