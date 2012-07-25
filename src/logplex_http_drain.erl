@@ -25,11 +25,12 @@
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ex_uri/include/ex_uri.hrl").
 
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
                 channel_id :: logplex_channel:id(),
-                uri :: uri:parsed_uri(),
+                uri :: #ex_uri{},
                 buf :: pid(),
                 client :: cowboy_client:client(),
                 out_q = queue:new() :: queue()
@@ -97,7 +98,7 @@ init(State0 = #state{uri=URI,
                      drain_id=DrainId,
                      channel_id=ChannelId}) ->
     try
-        Dest = uri:to_binary(URI, [{hide_user_info, true}]),
+        Dest = uri_to_string(URI),
         Size = logplex_app:config(http_drain_buffer_size, 1024),
         {ok, Buf} = logplex_drain_buffer:start_link(ChannelId, self(),
                                                     notify, Size),
@@ -131,9 +132,10 @@ disconnected(Msg, State) ->
     {next_state, disconnected, State}.
 
 %% @private
-try_connect(State = #state{uri={Scheme, _Auth, Host, Port, _, _},
+try_connect(State = #state{uri=Uri,
                            client=undefined}) ->
     {ok, Client0} = cowboy_client:init([]),
+    {Scheme, Host, Port} = connection_info(Uri),
     try cowboy_client:connect(scheme_to_transport(Scheme),
                               Host, Port,Client0) of
         {ok, Client} ->
@@ -280,20 +282,19 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% @private
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=URI}, Rest)
   when is_list(Rest) ->
-    [DrainId, ChannelId, uri:to_binary(URI, [{hide_user_info, true}]) | Rest].
+    [DrainId, ChannelId, uri_to_string(URI) | Rest].
 
 %% @private
-scheme_to_transport(https) -> cowboy_ssl_transport;
-scheme_to_transport(http) -> cowboy_tcp_transport.
+scheme_to_transport("https") -> cowboy_ssl_transport;
+scheme_to_transport("http") -> cowboy_tcp_transport.
 
 %% @private
 request_to_iolist(#frame{frame = Body,
                          msg_count = Count,
                          id = Id},
-                  #state{uri = URI = {_Scheme, AuthInfo,
-                                      _Host, _Port, Path, QueryInfo},
+                  #state{uri = URI = #ex_uri{},
                          drain_tok = Token}) ->
-    AuthHeader = cowboy_client:auth_header(AuthInfo),
+    AuthHeader = auth_header(URI),
     MD5Header = case logplex_app:config(http_body_checksum, none) of
                     md5 -> [{<<"Content-MD5">>,
                              base64:encode(crypto:md5(Body))}];
@@ -310,11 +311,8 @@ request_to_iolist(#frame{frame = Body,
                                     Headers,
                                     Body,
                                     ?HTTP_VERSION,
-                                    uri:full_host_iolist(URI, []),
-                                    case Path of
-                                        "" -> "/";
-                                        _ -> Path
-                                    end ++ QueryInfo).
+                                    full_host_iolist(URI),
+                                    uri_ref(URI)).
 
 framing_fun(Token) ->
     Frame = fun ({Facility, Severity, Time, Source, Ps, Content}) ->
@@ -392,3 +390,32 @@ retry_frame(Frame = #frame{tries = N},
     State#state{out_q = NewQ};
 retry_frame(Frame = #frame{tries = N}, State) when N < 2 ->
     drop_frame(Frame, State).
+
+uri_to_string(Uri) ->
+    ex_uri:encode(ex_uri:hide_userinfo(Uri)).
+
+auth_header(#ex_uri{authority=#ex_uri_authority{userinfo=Info}})
+  when Info =/= undefined ->
+    cowboy_client:auth_header(Info);
+auth_header(_) ->
+    [].
+
+full_host_iolist(#ex_uri{authority=#ex_uri_authority{host=Host,
+                                                     port=Port}})
+  when is_integer(Port), Host =/= undefined ->
+    [Host, ":", integer_to_list(Port)];
+full_host_iolist(#ex_uri{authority=#ex_uri_authority{host=Host}})
+  when Host =/= undefined ->
+    Host.
+
+uri_ref(#ex_uri{path=Path, q=Q}) ->
+    Ref = #ex_uri_ref{path = case Path of
+                                 "" -> "/";
+                                 _ -> Path
+                             end, q=Q},
+    ex_uri:encode(Ref).
+
+connection_info(#ex_uri{scheme = Scheme,
+                        authority=#ex_uri_authority{host=Host,
+                                                    port=Port}}) ->
+    {Scheme, Host, Port}.

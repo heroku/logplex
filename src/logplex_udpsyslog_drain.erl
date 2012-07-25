@@ -12,6 +12,7 @@
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ex_uri/include/ex_uri.hrl").
 
 %% API
 -export([start_link/5
@@ -64,10 +65,9 @@ shutdown(Pid) ->
     gen_server:cast(Pid, shutdown),
     ok.
 
-valid_uri({udpsyslog, _, Host, Port, _, _} = Uri) ->
-    HostValid = ((is_binary(Host) andalso Host =/= <<"">>)
-                 orelse
-                   (is_list(Host) andalso Host =/= "")),
+valid_uri(#ex_uri{scheme="udpsyslog",
+                  authority=#ex_uri_authority{host=Host, port=Port}} = Uri) ->
+    HostValid = (Host =/= undefined andalso iolist_to_binary(Host) =/= <<"">>),
     PortValid = 0 < Port andalso Port =< 65535,
     if HostValid, PortValid ->
             {valid, udpsyslog, Uri};
@@ -79,8 +79,11 @@ valid_uri({udpsyslog, _, Host, Port, _, _} = Uri) ->
 valid_uri(_) ->
     {error, invalid_udpsyslog_uri}.
 
-uri(Host, Port) ->
-    {udpsyslog, [], Host, Port, [], []}.
+uri(Host, Port) when is_binary(Host), is_integer(Port) ->
+    uri(binary_to_list(Host), Port);
+uri(Host, Port) when is_list(Host), is_integer(Port) ->
+    #ex_uri{scheme="udpsyslog",
+            authority=#ex_uri_authority{host=Host, port=Port}}.
 
 %%====================================================================
 %% gen_server callbacks

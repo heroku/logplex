@@ -51,6 +51,7 @@
 -export([parse_url/1
          ,valid_uri/1
          ,has_valid_uri/1
+         ,uri_schemes/0
         ]).
 
 -export([register/4
@@ -58,6 +59,7 @@
         ]).
 
 -include("logplex.hrl").
+-include_lib("ex_uri/include/ex_uri.hrl").
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
@@ -168,7 +170,7 @@ cache(DrainId, Token, ChannelId) when is_integer(DrainId),
                                       is_integer(ChannelId) ->
     redis_helper:reserve_drain(DrainId, Token, ChannelId).
 
--spec create(id(), token(), logplex_channel:id(), uri:parsed_uri()) ->
+-spec create(id(), token(), logplex_channel:id(), #ex_uri{}) ->
                     {'drain', id(), token()} |
                     {'error', term()}.
 create(DrainId, Token, ChannelId, URI)
@@ -181,7 +183,7 @@ create(DrainId, Token, ChannelId, URI)
             {error, already_exists};
         [] ->
             case redis_helper:create_url_drain(DrainId, ChannelId,
-                                               Token, uri:to_binary(URI)) of
+                                               Token, uri_to_binary(URI)) of
                 ok ->
                     {drain, DrainId, Token};
                 Err ->
@@ -214,25 +216,25 @@ new_token(Retries) ->
 parse_url(UrlBin) when is_binary(UrlBin) ->
     parse_url(binary_to_list(UrlBin));
 parse_url(Url) when is_list(Url) ->
-    case uri:parse(Url, [{scheme_defaults, uri_schemes()}]) of
-        {ok, Uri} ->
+    case ex_uri:decode(Url) of
+        {ok, Uri, _} ->
             Uri;
         {error, _} = Err ->
             Err
     end.
 
--spec valid_uri(uri:parsed_uri() | {error, term()}) ->
-                       {valid, type(), uri:parsed_uri()} |
+-spec valid_uri(#ex_uri{} | {error, term()}) ->
+                       {valid, type(), #ex_uri{}} |
                        {error, term()}.
-valid_uri({syslog, _, _Host, _Port, _, _} = Uri) ->
+valid_uri(#ex_uri{scheme=Syslog} = Uri) when Syslog =:= "syslog";
+                                             Syslog =:= "tcpsyslog" ->
     logplex_tcpsyslog_drain:valid_uri(Uri);
-valid_uri({udpsyslog, _, _Host, _Port, _, _} = Uri) ->
+valid_uri(#ex_uri{scheme="udpsyslog"} = Uri) ->
     logplex_udpsyslog_drain:valid_uri(Uri);
-valid_uri({http, _, _, _, _, _} = Uri) ->
+valid_uri(#ex_uri{scheme=Http} = Uri)
+  when Http =:= "http"; Http =:= "https"  ->
     {valid, http, Uri};
-valid_uri({https, _, _, _, _, _} = Uri) ->
-    {valid, http, Uri};
-valid_uri({Scheme, _, _, _, _, _}) ->
+valid_uri(#ex_uri{scheme=Scheme}) ->
     {error, {unknown_scheme, Scheme}};
 valid_uri({error, _} = Err) -> Err.
 
@@ -301,3 +303,6 @@ delete_partial_drain(DrainId, Token) when is_integer(DrainId),
             deleted;
         _ -> not_deleted
     end.
+
+uri_to_binary(#ex_uri{} = Uri) ->
+    iolist_to_binary(ex_uri:encode(Uri)).

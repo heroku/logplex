@@ -328,7 +328,7 @@ handlers() ->
                                         Resp = [
                                                 {id, DrainId},
                                                 {token, Token},
-                                                {url, uri:to_binary(URI)}
+                                                {url, uri_to_binary(URI)}
                                                ],
                                         {201,?JSON_CONTENT,
                                          mochijson2:encode({struct, Resp})}
@@ -365,7 +365,7 @@ handlers() ->
                                 Resp = [
                                         {id, DrainId},
                                         {token, Token},
-                                        {url, uri:to_binary(URI)}
+                                        {url, uri_to_binary(URI)}
                                        ],
                                 {201,?JSON_CONTENT,
                                  mochijson2:encode({struct, Resp})}
@@ -582,11 +582,11 @@ token_info(api_v2, #token{name=Name, id=Token}) ->
      {token, Token}].
 
 drain_info(api_v1, Drain) ->
-    uri:to_binary(logplex_drain:uri(Drain));
+    uri_to_binary(logplex_drain:uri(Drain));
 drain_info(api_v2, Drain) ->
     [{id, logplex_drain:id(Drain)},
      {token, logplex_drain:token(Drain)},
-     {url, uri:to_binary(logplex_drain:uri(Drain))}].
+     {url, uri_to_binary(logplex_drain:uri(Drain))}].
 
 not_found_json() ->
     Json = {struct, [{error, <<"Not found">>}]},
@@ -617,3 +617,6 @@ api_relative_url(_APIVSN, UUID) when is_binary(UUID) ->
 end_chunked_response(Socket) ->
     gen_tcp:close(Socket),
     ok.
+
+uri_to_binary(Uri) ->
+    iolist_to_binary(ex_uri:encode(Uri)).
