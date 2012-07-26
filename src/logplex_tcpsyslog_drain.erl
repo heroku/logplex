@@ -92,7 +92,7 @@ valid_uri(#ex_uri{scheme="syslog",
                                                 port=undefined}} = Uri)
   when is_list(Host) ->
     {valid, tcpsyslog,
-     Uri#ex_uri{authority=A#ex_uri_authority{port=514}}};
+     Uri#ex_uri{authority=A#ex_uri_authority{port=601}}};
 valid_uri(_) ->
     {error, invalid_tcpsyslog_uri}.
 
