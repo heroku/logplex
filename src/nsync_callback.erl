@@ -210,7 +210,7 @@ drain_uri(Dict) ->
                 {Host, Port} when is_binary(Host),
                                   is_binary(Port) ->
                     PortNo = list_to_integer(binary_to_list(Port)),
-                    {syslog, "", Host, PortNo, "/", []}
+                    logplex_tcpsyslog_drain:uri(binary_to_list(Host), PortNo)
             end
     end.
 
