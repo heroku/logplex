@@ -12,7 +12,7 @@
                   ,ssl
                   ,gproc
                   ,ehmon
-                  ,uri
+                  ,ex_uri
                  ]},
   {mod, {logplex_app, []}},
   {env,
