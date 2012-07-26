@@ -133,6 +133,15 @@ disconnected(Msg, State) ->
     {next_state, disconnected, State}.
 
 %% @private
+connected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount}},
+          State = #state{buf = Buf}) ->
+    ready_to_send(push_frame(Frame, MsgCount, State));
+connected(Msg, State) ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+          "data=~p state=connected",
+          log_info(State, [Msg])),
+    {next_state, connected, State}.
+
 try_connect(State = #state{uri=Uri,
                            client=undefined}) ->
     {ok, Client0} = cowboy_client:init([]),
@@ -203,16 +212,6 @@ try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
           "frame_tries=0 dropped_msgs=~p",
           log_info(State, [C])),
     ready_to_send(drop_frame(Frame, State)).
-
-%% @private
-connected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount}},
-          State = #state{buf = Buf}) ->
-    ready_to_send(push_frame(Frame, MsgCount, State));
-connected(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
-          "data=~p state=connected",
-          log_info(State, [Msg])),
-    {next_state, connected, State}.
 
 %% @private Decide what happened to the frame based on the http status
 %% code. Back of the napkin algorithm - 2xx is success, 4xx (client
