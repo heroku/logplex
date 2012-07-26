@@ -33,7 +33,8 @@
                 uri :: #ex_uri{},
                 buf :: pid(),
                 client :: cowboy_client:client(),
-                out_q = queue:new() :: queue()
+                out_q = queue:new() :: queue(),
+                reconnect_tref :: reference() | 'undefined'
                }).
 
 -record(frame, {frame :: iolist(),
@@ -276,6 +277,10 @@ terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
+code_change("v49", StateName, State, _Extra) when tuple_size(State) =:= 8 ->
+    %% Adds new field, reconnect_tref - default value: undefined.
+    NewState = list_to_tuple(tuple_to_list(State) ++ [undefined]),
+    {ok, StateName, NewState};
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
@@ -424,3 +429,30 @@ connection_info(#ex_uri{scheme = Scheme,
          undefined when Scheme =:= "http" -> 80;
          undefined when Scheme =:= "https" -> 443
      end}.
+
+set_reconnect_timer(State = #state{reconnect_tref=undefined}) ->
+    Time = timer:seconds(logplex_app:config(http_reconnect_time_s,1)),
+    reconnect_in(Time, State);
+set_reconnect_timer(State = #state{}) -> State.
+
+
+reconnect_in(MS, State = #state{}) ->
+    Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=reconnect_delay delay=~p "
+          "ref=~p",
+          log_info(State, [MS, Ref])),
+    State#state{reconnect_tref = Ref}.
+
+cancel_reconnect(State = #state{reconnect_tref=Ref}) when is_reference(Ref) ->
+    case erlang:cancel_timer(Ref) of
+        false ->
+            %% Flush msg q.
+            receive
+                {timeout, Ref, _} -> ok
+            after 0 -> ok
+            end;
+         _Time -> ok
+    end,
+    State#state{reconnect_tref=undefined};
+cancel_reconnect(State = #state{reconnect_tref=undefined}) ->
+    State.
