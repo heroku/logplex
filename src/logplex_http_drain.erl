@@ -45,6 +45,7 @@
 
 -define(CONTENT_TYPE, <<"application/logplex-1">>).
 -define(HTTP_VERSION, {1,1}).
+-define(RECONNECT_MSG, reconnect).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -116,16 +117,10 @@ init(State0 = #state{uri=URI,
 %% @private
 disconnected({logplex_drain_buffer, Buf, new_data},
              State = #state{buf = Buf}) ->
-    try_connect(State);
-disconnected(timeout, State = #state{buf = Buf,
-                                     out_q = Q}) ->
-    case queue:is_empty(Q) of
-        true ->
-            logplex_drain_buffer:notify(Buf),
-            {next_state, disconnected, State};
-        false ->
-            try_connect(State)
-    end;
+    try_connect(cancel_reconnect(State));
+disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount}},
+             State = #state{buf = Buf}) ->
+    try_connect(cancel_reconnect(push_frame(Frame, MsgCount, State)));
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=disconnected",
@@ -214,10 +209,8 @@ try_connect(State = #state{uri=Uri,
 %% @private
 http_fail(State = #state{}) ->
     %% XXX - forcibly shutdown client if necessary.
-    %% XXX - set a timer to re-enable buffer notifications
     {next_state, disconnected,
-     State#state{client=undefined},
-     timer:seconds(logplex_app:config(http_reconnect_time_s,1))}.
+     set_reconnect_timer(State#state{client=undefined})}.
 
 %% @private
 ready_to_send(State = #state{buf = Buf, drain_tok=Token,
