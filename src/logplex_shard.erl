@@ -233,7 +233,7 @@ populate_info_table(Urls) ->
     %% Populate Read pool
     ReadPools = [ {Url, add_pool(Url)} || Url <- redis_sort(Urls)],
     {ok, Map1, Interval1} =
-        redis_shard:generate_map_and_interval(redis_sort(ReadPools)),
+        redis_shard:generate_map_and_interval(ReadPools),
     logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
 
     %% Populate write pool
