@@ -83,16 +83,16 @@ start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
                        []).
 
 valid_uri(#ex_uri{scheme="syslog",
-                  authority=#ex_uri_authority{host=Host, port=Port}} = Uri) ->
-    HostValid = (Host =/= undefined andalso iolist_to_binary(Host) =/= <<"">>),
-    PortValid = 0 < Port andalso Port =< 65535,
-    if HostValid, PortValid ->
-            {valid, tcpsyslog, Uri};
-       HostValid ->
-            {error, {invalid_port, Port}};
-       true ->
-            {error, {invalid_host, Host}}
-    end;
+                  authority=#ex_uri_authority{host=Host, port=Port}} = Uri)
+  when is_list(Host), is_integer(Port),
+       0 < Port andalso Port =< 65535 ->
+    {valid, tcpsyslog, Uri};
+valid_uri(#ex_uri{scheme="syslog",
+                  authority=A=#ex_uri_authority{host=Host,
+                                                port=undefined}} = Uri)
+  when is_list(Host) ->
+    {valid, tcpsyslog,
+     Uri#ex_uri{authority=A#ex_uri_authority{port=514}}};
 valid_uri(_) ->
     {error, invalid_tcpsyslog_uri}.
 

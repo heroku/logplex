@@ -418,4 +418,9 @@ uri_ref(#ex_uri{path=Path, q=Q}) ->
 connection_info(#ex_uri{scheme = Scheme,
                         authority=#ex_uri_authority{host=Host,
                                                     port=Port}}) ->
-    {Scheme, Host, Port}.
+    {Scheme, Host,
+     case Port of
+         Int when is_integer(Int) -> Int;
+         undefined when Scheme =:= "http" -> 80;
+         undefined when Scheme =:= "https" -> 443
+     end}.

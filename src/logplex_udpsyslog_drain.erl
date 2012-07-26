@@ -66,16 +66,16 @@ shutdown(Pid) ->
     ok.
 
 valid_uri(#ex_uri{scheme="udpsyslog",
-                  authority=#ex_uri_authority{host=Host, port=Port}} = Uri) ->
-    HostValid = (Host =/= undefined andalso iolist_to_binary(Host) =/= <<"">>),
-    PortValid = 0 < Port andalso Port =< 65535,
-    if HostValid, PortValid ->
-            {valid, udpsyslog, Uri};
-       HostValid ->
-            {error, {invalid_port, Port}};
-       true ->
-            {error, {invalid_host, Host}}
-    end;
+                  authority=#ex_uri_authority{host=Host, port=Port}} = Uri)
+  when is_list(Host), is_integer(Port),
+       0 < Port andalso Port =< 65535 ->
+    {valid, udpsyslog, Uri};
+valid_uri(#ex_uri{scheme="udpsyslog",
+                  authority=A=#ex_uri_authority{host=Host,
+                                                port=undefined}} = Uri)
+  when is_list(Host) ->
+    {valid, udpsyslog,
+     Uri#ex_uri{authority=A#ex_uri_authority{port=514}}};
 valid_uri(_) ->
     {error, invalid_udpsyslog_uri}.
 

@@ -178,9 +178,9 @@ create_drain(Id, Dict) ->
                             logplex_drain:store_token(Id, Token, Ch);
                         Uri ->
                             case logplex_drain:valid_uri(Uri) of
-                                {valid, Type, Uri} ->
+                                {valid, Type, NewUri} ->
                                     Drain = logplex_drain:new(Id, Ch, Token,
-                                                              Type, Uri),
+                                                              Type, NewUri),
                                     ets:insert(drains, Drain),
                                     logplex_drain:start(Drain),
                                     Drain;
