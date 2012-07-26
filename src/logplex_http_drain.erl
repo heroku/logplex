@@ -142,6 +142,50 @@ connected(Msg, State) ->
           log_info(State, [Msg])),
     {next_state, connected, State}.
 
+%% @private
+handle_event(_Event, StateName, State) ->
+    {next_state, StateName, State}.
+
+%% @private
+handle_sync_event(notify, _From, StateName, State = #state{buf = Buf}) ->
+    logplex_drain_buffer:notify(Buf),
+    {reply, ok, StateName, State};
+handle_sync_event(Event, _From, StateName, State) ->
+    ?WARN("[state ~p] Unexpected event ~p",
+          [StateName, Event]),
+    {next_state, StateName, State}.
+
+%% @private
+handle_info({timeout, Ref, ?RECONNECT_MSG}, disconnected,
+            State = #state{reconnect_tref = Ref,
+                           buf = Buf,
+                           out_q = Q}) ->
+    NewState = State#state{reconnect_tref=undefined},
+    case queue:is_empty(Q) of
+        true ->
+            logplex_drain_buffer:notify(Buf),
+            {next_state, disconnected, NewState};
+        false ->
+            try_connect(NewState)
+    end;
+handle_info({timeout, Ref, ?RECONNECT_MSG}, StateName,
+            State = #state{reconnect_tref = Ref}) ->
+    {next_state, StateName, State#state{reconnect_tref=undefined}};
+handle_info({timeout, _Ref, ?RECONNECT_MSG}, StateName,
+            State = #state{}) ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s at=reconnect_timeout "
+          "err=invalid_timeout state=~p",
+          log_info(State, [StateName])),
+    {next_state, StateName, State};
+
+handle_info(shutdown, _StateName, State) ->
+    {stop, shutdown, State};
+handle_info(Info, StateName, State) ->
+    ?MODULE:StateName(Info, State).
+
+
+
+%% @private
 try_connect(State = #state{uri=Uri,
                            client=undefined}) ->
     {ok, Client0} = cowboy_client:init([]),
@@ -254,22 +298,6 @@ wait_response(Frame = #frame{},
                   log_info(State, [Report])),
             http_fail(retry_frame(Frame,State))
     end.
-
-%% @private
-handle_event(_Event, StateName, State) ->
-    {next_state, StateName, State}.
-
-%% @private
-handle_sync_event(Event, _From, StateName, State) ->
-    ?WARN("[state ~p] Unexpected event ~p",
-          [StateName, Event]),
-    {next_state, StateName, State}.
-
-%% @private
-handle_info(shutdown, _StateName, State) ->
-    {stop, shutdown, State};
-handle_info(Info, StateName, State) ->
-    ?MODULE:StateName(Info, State).
 
 %% @private
 terminate(_Reason, _StateName, _State) ->
