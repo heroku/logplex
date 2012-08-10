@@ -58,7 +58,6 @@ start(_StartType, _StartArgs) ->
     read_git_branch(),
     read_availability_zone(),
     boot_pagerduty(),
-    application:start(redis),
     setup_redgrid_vals(),
     application:start(nsync),
     logplex_sup:start_link().
