@@ -61,7 +61,6 @@ start(_StartType, _StartArgs) ->
     application:start(redis),
     setup_redgrid_vals(),
     application:start(nsync),
-    application:start(cowboy),
     logplex_sup:start_link().
 
 stop(_State) ->

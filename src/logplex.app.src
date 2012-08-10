@@ -13,6 +13,7 @@
                   ,gproc
                   ,ehmon
                   ,ex_uri
+                  ,cowboy
                  ]},
   {mod, {logplex_app, []}},
   {env,
