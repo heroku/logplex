@@ -1,6 +1,5 @@
 {application, logplex,
- [
-  {description, "Log multiplexer"},
+ [{description, "Log Router"},
   {vsn, "1.0"},
   {registered, []},
   {applications, [kernel
