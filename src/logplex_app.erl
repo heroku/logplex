@@ -71,6 +71,8 @@ start_phase(listen, normal, _Args) ->
                                      logplex_api:child_spec()),
     {ok, _} = supervisor:start_child(logplex_sup,
                                      logplex_syslog_sup:child_spec()),
+    {ok, _} = supervisor:start_child(logplex_sup,
+                                     logplex_logs_rest:child_spec()),
     ok.
 
 set_cookie() ->
