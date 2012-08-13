@@ -35,6 +35,8 @@
     ,{session_expiry_s, 360} % #seconds
     ,{session_lookup_timeout_s, 5} % #seconds
     ,{default_redis_poll_ms, 2000} % #ms
+    ,{http_log_input_port, 8601} % syslog/http tcp listen port
+   ]}
    ]}
  ]}.
  
