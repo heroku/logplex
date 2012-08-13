@@ -34,7 +34,7 @@
                             {keepalive, true}, {nodelay, true},
                             {backlog, 1000}, {active, false}]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
 
 -record(state, {listener, acceptor, accept = true}).
 
