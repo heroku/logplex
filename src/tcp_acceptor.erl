@@ -24,7 +24,8 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1]).
+-export([start_link/0
+         ,child_spec/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -41,13 +42,19 @@
 %%====================================================================
 %% API functions
 %%====================================================================
-start_link(Port) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Port], []).
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+child_spec() ->
+    {?MODULE,
+     {?MODULE, start_link, []},
+     permanent, 2000, worker, [?MODULE]}.
 
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init([Port]) ->
+init([]) ->
+    Port = logplex_app:config(syslog_port),
     process_flag(trap_exit, true),
     case gen_tcp:listen(Port, ?SOCK_OPTS) of
         {ok, LSock} ->
