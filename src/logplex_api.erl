@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_api).
--export([loop/1, start_link/0, stop/0]).
+-export([loop/1, start_link/0, child_spec/0, stop/0]).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -47,6 +47,10 @@ start_link() ->
     wait_for_nsync(),
     ?INFO("at=start", []),
     mochiweb_http:start(Opts).
+
+child_spec() ->
+    {?MODULE, {?MODULE, start_link, []},
+     permanent, 2000, worker, [?MODULE]}.
 
 stop() ->
     LSock = mochiweb_socket_server:get(?MODULE, listen),
