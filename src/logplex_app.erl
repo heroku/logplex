@@ -27,7 +27,7 @@
 
 
 %% Application callbacks
--export([start/2, stop/1]).
+-export([start/2, start_phase/3, stop/1]).
 
 -export([logplex_work_queue_args/0
          ,nsync_opts/0
@@ -64,6 +64,13 @@ start(_StartType, _StartArgs) ->
 
 stop(_State) ->
     ?INFO("at=stop", []),
+    ok.
+
+start_phase(listen, normal, _Args) ->
+    {ok, _} = supervisor:start_child(logplex_sup,
+                                     logplex_api:child_spec()),
+    {ok, _} = supervisor:start_child(logplex_sup,
+                                     logplex_syslog_sup:child_spec()),
     ok.
 
 set_cookie() ->
