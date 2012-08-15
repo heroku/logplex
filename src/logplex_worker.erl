@@ -23,7 +23,7 @@
 -module(logplex_worker).
 -export([start_link/1, init/1, loop/1]).
 
--export([init_state/0, handle_message/2]).
+-export([init_state/0, handle_message/2, route/3]).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
