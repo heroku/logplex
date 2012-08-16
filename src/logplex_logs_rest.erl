@@ -10,6 +10,7 @@
 -export([init/3
          ,rest_init/2
          ,allowed_methods/2
+         ,is_authorized/2
          ,known_content_type/2
          ,malformed_request/2
          ,process_post/2
@@ -18,6 +19,8 @@
         ]).
 
 -record(state, {token :: logpex_token:id(),
+                name :: logplex_token:name(),
+                channel_id :: logplex_channel:id(),
                 msgs :: list()}).
 
 child_spec() ->
@@ -25,7 +28,8 @@ child_spec() ->
                       cowboy_tcp_transport,
                       [{port, logplex_app:config(http_log_input_port)}],
                       cowboy_http_protocol,
-                      [{dispatch, [{'_', [{[<<"logs">>], ?MODULE, []}]}]}]).
+                      [{dispatch,
+                        [{'_', [{[<<"logs">>, token], ?MODULE, []}]}]}]).
 
 init(_Transport, _Req, _Opts) ->
     {upgrade, protocol, cowboy_http_rest}.
@@ -35,6 +39,27 @@ rest_init(Req, _Opts) ->
 
 allowed_methods(Req, State) ->
     {['POST'], Req, State}.
+
+is_authorized(Req, State) ->
+    case cowboy_http_req:header(<<"Authorization">>, Req) of
+        {<<"Basic ", Base64/binary>>, Req2} ->
+            case binary:split(base64:decode(Base64), <<":">>) of
+                [_User, TokenId = <<"t.", _/binary>>] ->
+                    case logplex_token:lookup(TokenId) of
+                        undefined ->
+                            {{false, <<"Basic realm=Logplex">>}, Req2, State};
+                        Token ->
+                            Name = logplex_token:name(Token),
+                            ChanId = logplex_token:channel_id(Token),
+                            {true, Req2, State#state{name=Name,
+                                                     channel_id=ChanId}}
+                    end;
+                _ ->
+                    {{false, <<"Basic realm=Logplex">>}, Req2, State}
+            end;
+        {_, Req2} ->
+            {{false, <<"Basic realm=Logplex">>}, Req2, State}
+    end.
 
 known_content_type(Req, State) ->
     case cowboy_http_req:header(<<"Content-Type">>, Req) of
@@ -73,7 +98,9 @@ has_chan_token(Req, State) ->
 %%             {false, Req2, State2}
 %%     end.
 
-process_post(Req, State = #state{token = Token})
+process_post(Req, State = #state{token = Token,
+                                 channel_id = ChannelId,
+                                 name = Name})
              when is_binary(Token) ->
     case parse_logplex_body(Req, State) of
         {parsed, Req2, State2 = #state{msgs = Msgs}} when is_list(Msgs)->
