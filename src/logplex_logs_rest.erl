@@ -77,18 +77,12 @@ process_post(Req, State = #state{token = Token})
              when is_binary(Token) ->
     case parse_logplex_body(Req, State) of
         {parsed, Req2, State2 = #state{msgs = Msgs}} when is_list(Msgs)->
-            route_msgs(Token, Msgs),
+            logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
             {true, Req2, State2#state{msgs = []}};
         {_, Req2, State2} ->
             %% XXX - Log parse failure
             {false, Req2, State2}
     end.
-
-route_msgs(Token, Msgs) ->
-    WorkerState = logplex_worker:init_state(),
-    [ logplex_worker:route(Token, Msg, WorkerState)
-      || Msg <- Msgs ],
-    ok.
 
 parse_logplex_body(Req, State) ->
     {ok, Body, Req2} = cowboy_http_req:body(Req),
