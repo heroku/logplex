@@ -91,7 +91,7 @@ route_msgs(Token, Msgs) ->
     ok.
 
 parse_logplex_body(Req, State) ->
-    {Body, Req2} = cowboy_http_req:body(Req),
+    {ok, Body, Req2} = cowboy_http_req:body(Req),
     case syslog_parser:parse(Body) of
         {ok, Msgs, _} ->
             case logplex_http_req:header(<<"Logplex-Msg-Count">>, Req2) of
