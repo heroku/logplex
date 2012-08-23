@@ -37,6 +37,7 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 register(ChannelId) when is_integer(ChannelId) ->
+    put(logplex_tail, {channel_id, ChannelId}), %% post mortem debug info
     Self = self(),
     gen_server:abcast([node()|nodes()], ?MODULE, {register, ChannelId, Self}),
     ok.
