@@ -81,7 +81,7 @@ urls() ->
 init([]) ->
     ?INFO("at=init", []),
     Urls = lookup_urls(),
-
+        
     erlang:process_flag(trap_exit, true),
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
@@ -218,15 +218,14 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 lookup_urls() ->
-    case redis_sort([binary_to_list(Url)
-                     || Url <- redis_helper:shard_urls()]) of
+    case os:getenv("LOGPLEX_SHARD_URLS") of
         [] ->
             case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
                 false -> ["redis://127.0.0.1:6379/"];
                 Url -> [Url]
             end;
         Urls ->
-            Urls
+            redis_sort(string:tokens(Urls, ","))
     end.
 
 populate_info_table(Urls) ->
