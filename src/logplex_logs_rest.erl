@@ -18,6 +18,10 @@
          ,to_response/2
         ]).
 
+%% Healthcheck exports.
+-export([handle/2
+         ,terminate/2]).
+
 -record(state, {token :: logpex_token:id(),
                 name :: logplex_token:name(),
                 channel_id :: logplex_channel:id(),
@@ -29,11 +33,23 @@ child_spec() ->
                       [{port, logplex_app:config(http_log_input_port)}],
                       cowboy_http_protocol,
                       [{dispatch,
-                        [{'_', [{[<<"logs">>, token], ?MODULE, []}]}]}]).
+                        [{'_', [{[<<"healthcheck">>], ?MODULE, [healthcheck]},
+                                {[<<"logs">>, token], ?MODULE, [logs]}]}]}]).
 
-init(_Transport, _Req, _Opts) ->
+
+init(_Transport, Req, [healthcheck]) ->
+    {ok, Req, undefined};
+init(_Transport, _Req, [logs]) ->
     {upgrade, protocol, cowboy_http_rest}.
 
+%% Healthcheck implementation
+handle(Req, State) ->
+    {ok, Req2} = cowboy_http_req:reply(200, [], <<"OK">>, Req),
+    {ok, Req2, State}.
+
+terminate(_, _) -> ok.
+
+%% Logs cowboy_rest implementation
 rest_init(Req, _Opts) ->
     {ok, Req, undefined}.
 
