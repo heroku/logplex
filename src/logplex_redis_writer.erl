@@ -50,7 +50,7 @@ loop(BufferPid, Socket, RedisOpts) ->
         {ok, _} -> ok;
         {error, timeout} -> ok;
         {error, closed} ->
-            error_logger:error_msg("~p event=recv result=closed", [?MODULE]),
+            ?INFO("event=recv result=closed", []),
             exit({error, closed})
     end,
     case catch logplex_queue:out(BufferPid, 100) of
@@ -63,11 +63,11 @@ loop(BufferPid, Socket, RedisOpts) ->
                     logplex_stats:incr(message_processed, NumItems),
                     logplex_realtime:incr(message_processed, NumItems);
                 {error, closed} ->
-                    error_logger:error_msg("~p event=send result=closed", [?MODULE]),
+                    ?INFO("event=send result=closed", []),
                     timer:sleep(500),
                     exit(normal);
                 Err ->
-                    error_logger:error_msg("~p event=send result=~p", [?MODULE, Err]),
+                    ?INFO("event=send result=~p", [Err]),
                     exit(normal)
             end
     end,
