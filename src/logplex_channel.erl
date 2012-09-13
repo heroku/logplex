@@ -76,6 +76,7 @@ flags(#channel{flags=Flags}) -> Flags.
 
 register({channel, ChannelId} = C)
   when is_integer(ChannelId) ->
+    put(logplex_channel_id, ChannelId), %% post mortem debug info
     gproc:add_local_property(C, true).
 
 whereis({channel, _ChannelId} = Name) ->

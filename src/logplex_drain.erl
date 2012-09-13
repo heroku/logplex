@@ -284,6 +284,10 @@ register(DrainId, ChannelId, Type, Dest)
 
 -spec register(id(), atom(), term()) -> ok.
 register(DrainId, Type, Dest) ->
+    put(logplex_drain_id, DrainId), %% post mortem debug info
+    put(logplex_drain_dest, Dest), %% post mortem debug info
+    put(logplex_drain_type, Type), %% post mortem debug info
+
     gproc:reg({n, l, {drain, DrainId}}, undefined),
     gproc:mreg(p, l, [{drain_dest, Dest},
                       {drain_type, Type}]),
