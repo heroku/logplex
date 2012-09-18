@@ -27,7 +27,8 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
--export([lookup/3, lookup_urls/0, urls/0]).
+-export([lookup/3, lookup_urls/0, urls/0
+         ,redis_sort/1]).
 
 %% Redis Migration API
 -export([prepare_new_urls/1,
