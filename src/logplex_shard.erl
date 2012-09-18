@@ -219,15 +219,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 lookup_urls() ->
-    case os:getenv("LOGPLEX_SHARD_URLS") of
-        [] ->
-            case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
-                false -> ["redis://127.0.0.1:6379/"];
-                Url -> [Url]
-            end;
-        Urls ->
-            redis_sort(string:tokens(Urls, ","))
-    end.
+    URLs = case os:getenv("LOGPLEX_SHARD_URLS") of
+               [] ->
+                   case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
+                       false -> ["redis://127.0.0.1:6379/"];
+                       Url -> [Url]
+                   end;
+               UrlString ->
+                   string:tokens(UrlString, ",")
+           end,
+    redis_sort(URLs).
 
 populate_info_table(Urls) ->
     %% Populate Read pool
