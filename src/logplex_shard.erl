@@ -82,7 +82,7 @@ urls() ->
 init([]) ->
     ?INFO("at=init", []),
     Urls = lookup_urls(),
-        
+
     erlang:process_flag(trap_exit, true),
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
