@@ -1,17 +1,17 @@
 f(NodeVersions).
 NodeVersions = fun () ->
-                       F = fun () ->
-                                   {node(), logplex_app:config(git_branch),
-                                    os:getenv("INSTANCE_NAME")}
-                           end,
-                       {Good, _} = rpc:multicall(erlang, apply, [F, [] ]),
-                       lists:keysort(2, Good)
+                       lists:keysort(3,
+                           [ {N,
+                              element(2, rpc:call(N, application, get_env, [logplex, git_branch])),
+                              rpc:call(N, os, getenv, ["INSTANCE_NAME"])}
+                             || N <- erlang:nodes() ])
                end.
 
 f(NodesAt).
 NodesAt = fun (Vsn) ->
                   [ N || {N, V, _} <- NodeVersions(), V =:= Vsn ]
           end.
+
 
 f(RollingUpgrade).
 RollingUpgrade = fun (Nodes) ->
