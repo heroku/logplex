@@ -27,7 +27,8 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
--export([lookup/3, lookup_urls/0, urls/0]).
+-export([lookup/3, lookup_urls/0, urls/0
+         ,redis_sort/1]).
 
 %% Redis Migration API
 -export([prepare_new_urls/1,
@@ -218,16 +219,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 lookup_urls() ->
-    case redis_sort([binary_to_list(Url)
-                     || Url <- redis_helper:shard_urls()]) of
-        [] ->
-            case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
-                false -> ["redis://127.0.0.1:6379/"];
-                Url -> [Url]
-            end;
-        Urls ->
-            Urls
-    end.
+    URLs = case os:getenv("LOGPLEX_SHARD_URLS") of
+               [] ->
+                   case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
+                       false -> ["redis://127.0.0.1:6379/"];
+                       Url -> [Url]
+                   end;
+               UrlString ->
+                   string:tokens(UrlString, ",")
+           end,
+    redis_sort(URLs).
 
 populate_info_table(Urls) ->
     %% Populate Read pool

@@ -289,6 +289,7 @@ wait_response(Frame = #frame{},
     catch
         Class:Err ->
             Report = {Class, Err, erlang:get_stacktrace()},
+            catch cowboy_client:close(Client),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=wait_response "
                   "attempt=fail err=exception data=~p next_state=disconnected",
                   log_info(State, [Report])),

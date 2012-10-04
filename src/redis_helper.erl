@@ -183,9 +183,6 @@ get_nodes(Domain) when is_binary(Domain) ->
 get_node(Node) when is_binary(Node) ->
     redo:cmd(config, [<<"GET">>, Node]).
 
-shard_urls() ->
-    redo:cmd(config, [<<"SMEMBERS">>, <<"redis:shard:urls">>], 30000).
-
 %%====================================================================
 %% HEALTHCHECK
 %%====================================================================
