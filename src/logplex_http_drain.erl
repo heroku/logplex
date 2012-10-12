@@ -210,10 +210,16 @@ try_connect(State = #state{uri=Uri,
     end.
 
 %% @private
-http_fail(State = #state{}) ->
-    %% XXX - forcibly shutdown client if necessary.
+http_fail(State = #state{client = Client}) ->
+    %% Close any existing client connection.
+    NewState = if Client =/= undefined ->
+                       catch cowboy_client:close(Client),
+                       State#state{client = undefined};
+                  true ->
+                       State
+               end,
     {next_state, disconnected,
-     set_reconnect_timer(State#state{client=undefined})}.
+     set_reconnect_timer(NewState)}.
 
 %% @private
 ready_to_send(State = #state{buf = Buf, drain_tok=Token,
@@ -289,7 +295,6 @@ wait_response(Frame = #frame{},
     catch
         Class:Err ->
             Report = {Class, Err, erlang:get_stacktrace()},
-            catch cowboy_client:close(Client),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=wait_response "
                   "attempt=fail err=exception data=~p next_state=disconnected",
                   log_info(State, [Report])),
