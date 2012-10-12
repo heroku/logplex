@@ -190,24 +190,29 @@ try_connect(State = #state{uri=Uri,
                            client=undefined}) ->
     {ok, Client0} = cowboy_client:init([]),
     {Scheme, Host, Port} = connection_info(Uri),
+    ConnectStart = os:timestamp(),
     try cowboy_client:connect(scheme_to_transport(Scheme),
                               Host, Port, Client0) of
         {ok, Client} ->
+            ConnectEnd = os:timestamp(),
             ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
-                  "attempt=success",
-                  log_info(State, [])),
+                  "attempt=success connect_time=~p",
+                  log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
             ready_to_send(State#state{client=Client});
         {error, Why} ->
+            ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
-                  "attempt=fail tcp_err=~p",
-                  log_info(State, [Why])),
+                  "attempt=fail tcp_err=~p connect_time=~p",
+                  log_info(State, [Why, ltcy(ConnectStart, ConnectEnd)])),
             http_fail(State)
     catch
         Class:Err ->
             Report = {Class, Err, erlang:get_stacktrace()},
+            ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=connect "
-                  "attempt=fail err=exception data=~p next_state=disconnected",
-                  log_info(State, [Report])),
+                  "attempt=fail err=exception data=~p next_state=disconnected "
+                  "connect_time=~p",
+                  log_info(State, [Report, ltcy(ConnectStart, ConnectEnd)])),
             http_fail(State)
     end.
 
