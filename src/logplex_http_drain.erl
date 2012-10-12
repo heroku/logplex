@@ -372,7 +372,7 @@ framing_fun(Token) ->
 %% @private
 target_bytes() ->
     logplex_app:config(http_drain_target_bytes,
-                       4096).
+                       102400).
 
 %% @private
 %% @doc Called on frames we've decided to drop. Records count of
