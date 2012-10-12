@@ -244,9 +244,10 @@ try_send(Frame = #frame{tries = Tries},
          State = #state{client = Client})
   when Tries > 0 ->
     Req = request_to_iolist(Frame, State),
+    ReqStart = os:timestamp(),
     try cowboy_client:raw_request(Req, Client) of
         {ok, Client2} ->
-            wait_response(Frame, State#state{client=Client2});
+            wait_response(Frame, ReqStart, State#state{client=Client2});
         {error, Why} ->
             ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request"
                   " tcp_err=~1000p",
@@ -274,14 +275,16 @@ status_action(N) when 200 =< N, N < 300 -> success;
 status_action(N) when 400 =< N, N < 500 -> perm_fail;
 status_action(_) -> temp_fail.
 
-wait_response(Frame = #frame{},
+wait_response(Frame = #frame{}, ReqStart,
               State = #state{client = Client}) ->
     try cowboy_client:response(Client) of
         {ok, Status, _Headers, Client2} ->
+            ReqEnd = os:timestamp(),
             Result = status_action(Status),
             ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
-                  "result=~p status=~p msg_count=~p",
-                  log_info(State, [Result, Status, Frame#frame.msg_count])),
+                  "result=~p status=~p msg_count=~p req_time=~p",
+                  log_info(State, [Result, Status, Frame#frame.msg_count,
+                                   ltcy(ReqStart, ReqEnd)])),
             case Result of
                 success ->
                     ready_to_send(sent_frame(Frame,
@@ -295,16 +298,19 @@ wait_response(Frame = #frame{},
                                              State#state{client = Client2}))
             end;
         {error, Why} ->
+            ReqEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=wait_response"
-                  " result=error tcp_err=~10000p",
-                  log_info(State, [Why])),
+                  " result=error req_time=~p tcp_err=\"~1000p\"",
+                  log_info(State, [ltcy(ReqStart, ReqEnd), Why])),
             http_fail(retry_frame(Frame, State))
     catch
         Class:Err ->
+            ReqEnd = os:timestamp(),
             Report = {Class, Err, erlang:get_stacktrace()},
             ?WARN("drain_id=~p channel_id=~p dest=~s at=wait_response "
-                  "attempt=fail err=exception data=~p next_state=disconnected",
-                  log_info(State, [Report])),
+                  "attempt=fail err=exception data=\"~1000p\" "
+                  "next_state=disconnected req_start=~p",
+                  log_info(State, [Report, ltcy(ReqStart, ReqEnd)])),
             http_fail(retry_frame(Frame,State))
     end.
 
@@ -492,3 +498,6 @@ cancel_reconnect(State = #state{reconnect_tref=Ref}) when is_reference(Ref) ->
     State#state{reconnect_tref=undefined};
 cancel_reconnect(State = #state{reconnect_tref=undefined}) ->
     State.
+
+ltcy(Start, End) ->
+    timer:now_diff(End, Start).
