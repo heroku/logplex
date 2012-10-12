@@ -189,7 +189,7 @@ try_connect(State = #state{uri=Uri,
     {ok, Client0} = cowboy_client:init([]),
     {Scheme, Host, Port} = connection_info(Uri),
     try cowboy_client:connect(scheme_to_transport(Scheme),
-                              Host, Port,Client0) of
+                              Host, Port, Client0) of
         {ok, Client} ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
                   "attempt=success",
