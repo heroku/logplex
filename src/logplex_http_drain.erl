@@ -188,8 +188,8 @@ handle_info(Info, StateName, State) ->
 %% @private
 try_connect(State = #state{uri=Uri,
                            client=undefined}) ->
-    {ok, Client0} = cowboy_client:init([]),
     {Scheme, Host, Port} = connection_info(Uri),
+    {ok, Client0} = client_init(Scheme),
     ConnectStart = os:timestamp(),
     try cowboy_client:connect(scheme_to_transport(Scheme),
                               Host, Port, Client0) of
@@ -498,6 +498,11 @@ cancel_reconnect(State = #state{reconnect_tref=Ref}) when is_reference(Ref) ->
     State#state{reconnect_tref=undefined};
 cancel_reconnect(State = #state{reconnect_tref=undefined}) ->
     State.
+
+client_init("http") ->
+    cowboy_client:init([]);
+client_init("https") ->
+    cowboy_client:init([{reuse_sessions, false}]).
 
 ltcy(Start, End) ->
     timer:now_diff(End, Start).
