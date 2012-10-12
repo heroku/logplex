@@ -123,7 +123,7 @@ disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount}},
     try_connect(cancel_reconnect(push_frame(Frame, MsgCount, State)));
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
-          "data=~p state=disconnected",
+          "data=~1000p state=disconnected",
           log_info(State, [Msg])),
     {next_state, disconnected, State}.
 
@@ -136,12 +136,14 @@ connected({logplex_drain_buffer, Buf, new_data},
     ready_to_send(State);
 connected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
-          "data=~p state=connected",
+          "data=~10000p state=connected",
           log_info(State, [Msg])),
     {next_state, connected, State}.
 
 %% @private
-handle_event(_Event, StateName, State) ->
+handle_event(Event, StateName, State) ->
+    ?WARN("state=~p at=unexpected_event event=~10000p",
+          [StateName, Event]),
     {next_state, StateName, State}.
 
 %% @private
@@ -149,7 +151,7 @@ handle_sync_event(notify, _From, StateName, State = #state{buf = Buf}) ->
     logplex_drain_buffer:notify(Buf),
     {reply, ok, StateName, State};
 handle_sync_event(Event, _From, StateName, State) ->
-    ?WARN("[state ~p] Unexpected event ~p",
+    ?WARN("state=~p at=unexpected_sync_event event=~10000p",
           [StateName, Event]),
     {next_state, StateName, State}.
 
