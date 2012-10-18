@@ -27,7 +27,7 @@
     ,{max_drains_per_channel, 5} % #channels
     ,{drain_buffer_size, 1024} % #messages
     ,{http_send_loss_msg, send} % send | dont_send
-    ,{http_drain_target_bytes, 4096} % bytes
+    ,{http_drain_target_bytes, 102400} % bytes
     ,{http_drain_buffer_size, 1024} % messages
     ,{http_reconnect_time_s, 1} % seconds
     ,{http_frame_retries, 1} % #extra attempts after first
