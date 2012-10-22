@@ -34,7 +34,7 @@ child_spec() ->
                       cowboy_http_protocol,
                       [{dispatch,
                         [{'_', [{[<<"healthcheck">>], ?MODULE, [healthcheck]},
-                                {[<<"logs">>, token], ?MODULE, [logs]}]}]}]).
+                                {[<<"logs">>], ?MODULE, [logs]}]}]}]).
 
 
 init(_Transport, Req, [healthcheck]) ->
