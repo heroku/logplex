@@ -86,20 +86,7 @@ known_content_type(Req, State) ->
     end.
 
 malformed_request(Req, State) ->
-    case has_chan_token(Req, State) of
-        {true, Req2, State2} ->
-            {false, Req2, State2};
-        {false, Req2, State2} ->
-            {true, Req2, State2}
-    end.
-
-has_chan_token(Req, State) ->
-    case cowboy_http_req:header(<<"Logplex-Channel-Token">>, Req) of
-        {undefined, Req2} ->
-            {false, Req2, State};
-        {Token, Req2} when is_binary(Token) ->
-            {true, Req2, State#state{token=Token}}
-    end.
+    {false, Req, State}.
 
 %% XXX - Doesn't get used in current cowboy rest code. #fail
 %% content_types_accepted(Req, State) ->
