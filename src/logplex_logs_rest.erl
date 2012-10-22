@@ -51,7 +51,7 @@ terminate(_, _) -> ok.
 
 %% Logs cowboy_rest implementation
 rest_init(Req, _Opts) ->
-    {ok, Req, undefined}.
+    {ok, Req, #state{}}.
 
 allowed_methods(Req, State) ->
     {['POST'], Req, State}.
