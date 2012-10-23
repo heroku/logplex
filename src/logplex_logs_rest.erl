@@ -14,6 +14,7 @@
          ,allowed_methods/2
          ,is_authorized/2
          ,known_content_type/2
+         ,valid_entity_length/2
          ,malformed_request/2
          ,process_post/2
          ,content_types_provided/2
@@ -89,6 +90,9 @@ known_content_type(Req, State) ->
         {_, Req2} ->
             {false, Req2, State}
     end.
+
+valid_entity_length(Req, State) ->
+    {true, Req, State}.
 
 malformed_request(Req, State) ->
     {false, Req, State}.
