@@ -116,7 +116,8 @@ process_post(Req, State = #state{token = Token,
         {parsed, Req2, State2 = #state{msgs = Msgs}} when is_list(Msgs)->
             logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
             {true, Req2, State2#state{msgs = []}};
-        {_, Req2, State2} ->
+        {{error, Reason}, Req2, State2} ->
+            ?WARN("at=parse_logplex_body error=~p", [Reason]),
             %% XXX - Log parse failure
             {false, Req2, State2}
     end.
@@ -139,6 +140,8 @@ parse_logplex_body(Req, State) ->
                     end
             end;
         {{error, Reason}, _, _} ->
+            ?WARN("at=parse_syslog reason=~p body=~1000p",
+                  [Reason, Body]),
             {{error, Reason}, Req2, State}
     end.
 
