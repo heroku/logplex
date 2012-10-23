@@ -72,7 +72,7 @@ is_authorized(Req, State) ->
                             ChanId = logplex_token:channel_id(Token),
                             {true, Req2,
                              State#state{name=Name,
-                                         channel_id=ChanId
+                                         channel_id=ChanId,
                                          token=logplex_token:id(Token)}}
                     end;
                 _Else ->
