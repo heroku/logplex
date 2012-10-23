@@ -59,7 +59,7 @@ allowed_methods(Req, State) ->
     {['POST'], Req, State}.
 
 is_authorized(Req, State) ->
-    case cowboy_http_req:header(<<"Authorization">>, Req) of
+    case cowboy_http_req:header('Authorization', Req) of
         {<<"Basic ", Base64/binary>>, Req2} ->
             case binary:split(base64:decode(Base64), <<":">>) of
                 [_User, TokenId = <<"t.", _/binary>>] ->
