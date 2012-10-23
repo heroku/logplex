@@ -5,6 +5,8 @@
 %% @end
 -module(logplex_logs_rest).
 
+-include("logplex_logging.hrl").
+
 -export([child_spec/0]).
 
 -export([init/3
@@ -63,6 +65,7 @@ is_authorized(Req, State) ->
                 [_User, TokenId = <<"t.", _/binary>>] ->
                     case logplex_token:lookup(TokenId) of
                         undefined ->
+                            ?INFO("at=authorization err=unknown_token token=~p", [TokenId]),
                             {{false, <<"Basic realm=Logplex">>}, Req2, State};
                         Token ->
                             Name = logplex_token:name(Token),
@@ -70,10 +73,12 @@ is_authorized(Req, State) ->
                             {true, Req2, State#state{name=Name,
                                                      channel_id=ChanId}}
                     end;
-                _ ->
+                _Else ->
+                    ?INFO("at=authorization err=incorrect_auth_header hdr=~p", [_Else]),
                     {{false, <<"Basic realm=Logplex">>}, Req2, State}
             end;
         {_, Req2} ->
+            ?INFO("at=authorization err=missing_auth_header", []),
             {{false, <<"Basic realm=Logplex">>}, Req2, State}
     end.
 
