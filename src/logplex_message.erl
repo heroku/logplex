@@ -26,7 +26,11 @@ process_msg(RawMsg, ChannelId, Token, TokenName) ->
     process_msg(RawMsg, ChannelId, Token, TokenName,
                 shard_info()).
 
-process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo) ->
+process_msg({msg, RawMsg}, ChannelId, Token, TokenName, ShardInfo)
+  when is_binary(RawMsg) ->
+    process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo);
+process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
+  when is_binary(RawMsg) ->
     CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
     process_drains(ChannelId, CookedMsg),
     process_tails(ChannelId, CookedMsg),
