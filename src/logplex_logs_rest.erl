@@ -71,8 +71,10 @@ is_authorized(Req, State) ->
                         Token ->
                             Name = logplex_token:name(Token),
                             ChanId = logplex_token:channel_id(Token),
-                            {true, Req2, State#state{name=Name,
-                                                     channel_id=ChanId}}
+                            {true, Req2,
+                             State#state{name=Name,
+                                         channel_id=ChanId
+                                         token=logplex_token:id(Token)}}
                     end;
                 _Else ->
                     ?INFO("at=authorization err=incorrect_auth_header hdr=~p", [_Else]),
