@@ -84,7 +84,7 @@ is_authorized(Req, State) ->
     end.
 
 known_content_type(Req, State) ->
-    case cowboy_http_req:header(<<"Content-Type">>, Req) of
+    case cowboy_http_req:header('Content-Type', Req) of
         {<<"application/logplex-1">>, Req2} ->
             {true, Req2, State};
         {_, Req2} ->
