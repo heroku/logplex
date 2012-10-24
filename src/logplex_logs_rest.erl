@@ -112,7 +112,7 @@ process_post(Req, State = #state{token = Token,
                                  channel_id = ChannelId,
                                  name = Name})
              when is_binary(Token) ->
-    case parse_logplex_body(Req, State) of
+    try parse_logplex_body(Req, State) of
         {parsed, Req2, State2 = #state{msgs = Msgs}} when is_list(Msgs)->
             logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
             {true, Req2, State2#state{msgs = []}};
@@ -120,6 +120,12 @@ process_post(Req, State = #state{token = Token,
             ?WARN("at=parse_logplex_body error=~p", [Reason]),
             %% XXX - Log parse failure
             {false, Req2, State2}
+    catch
+        Class:Error ->
+            Stack = erlang:get_stacktrace(),
+            ?WARN("at=process_post exception=~p:~p stack=~1000p",
+                  [Class, Error, Stack]),
+            {false, Req, State}
     end.
 
 parse_logplex_body(Req, State) ->
