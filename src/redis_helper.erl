@@ -93,11 +93,9 @@ build_push_msg(ChannelId, Length, Msg, Expiry)
   when is_integer(ChannelId), is_binary(Length), is_binary(Msg),
        is_binary(Expiry) ->
     Key = iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]),
-    Cmds = [ [<<"MULTI">>]
-            ,[<<"LPUSH">>, Key, Msg]
+    Cmds = [ [<<"LPUSH">>, Key, Msg]
             ,[<<"LTRIM">>, Key, <<"0">>, Length]
-            ,[<<"EXPIRE">>, Key, Expiry]
-            ,[<<"EXEC">>] ],
+            ,[<<"EXPIRE">>, Key, Expiry] ],
     iolist_to_binary([ redis_proto:build(Cmd)
                        || Cmd <- Cmds ]).
 
