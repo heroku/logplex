@@ -49,9 +49,11 @@ process_redis(ChannelId, ShardInfo, Msg) ->
     case logplex_channel:lookup_flag(no_redis, ChannelId) of
         no_redis -> ok;
         _ ->
+            Expiry = logplex_app:config(redis_buffer_expiry),
             {Map, Interval} = logplex_shard_info:map_interval(ShardInfo),
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
                                              Map, Interval),
-            Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg),
+            Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY,
+                                              Msg, Expiry),
             logplex_queue:in(BufferPid, Cmd)
     end.

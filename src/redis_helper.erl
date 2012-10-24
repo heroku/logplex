@@ -89,12 +89,17 @@ delete_channel(ChannelId) when is_integer(ChannelId) ->
         Err -> Err
     end.
 
-build_push_msg(ChannelId, Length, Msg) when is_integer(ChannelId), is_binary(Length), is_binary(Msg) ->
+build_push_msg(ChannelId, Length, Msg, Expiry)
+  when is_integer(ChannelId), is_binary(Length), is_binary(Msg),
+       is_binary(Expiry) ->
     Key = iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]),
-    iolist_to_binary([
-        redis_proto:build([<<"LPUSH">>, Key, Msg]),
-        redis_proto:build([<<"LTRIM">>, Key, <<"0">>, Length])
-    ]).
+    Cmds = [ [<<"MULTI">>]
+            ,[<<"LPUSH">>, Key, Msg]
+            ,[<<"LTRIM">>, Key, <<"0">>, Length]
+            ,[<<"EXPIRE">>, Key, Expiry]
+            ,[<<"EXEC">>] ],
+    iolist_to_binary([ redis_proto:build(Cmd)
+                       || Cmd <- Cmds ]).
 
 lookup_channel(ChannelId) when is_integer(ChannelId) ->
     case redo:cmd(config, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
