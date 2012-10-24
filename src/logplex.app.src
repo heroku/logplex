@@ -36,6 +36,7 @@
     ,{session_lookup_timeout_s, 5} % #seconds
     ,{default_redis_poll_ms, 2000} % #ms
     ,{http_log_input_port, 8601} % syslog/http tcp listen port
+    ,{redis_buffer_expiry, <<"604800">>} % s -- one week
    ]}
  ,{start_phases,
    [{listen, []}
