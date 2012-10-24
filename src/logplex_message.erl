@@ -16,13 +16,13 @@
 shard_info() ->
     logplex_shard_info:read(?SI_KEY).
 
-process_msgs(Msgs, ChannelId, Token, TokenName) ->
+process_msgs(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
     ShardInfo = shard_info(),
     [ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
       || RawMsg <- Msgs ],
     ok.
 
-process_msg(RawMsg, ChannelId, Token, TokenName) ->
+process_msg(RawMsg, ChannelId, Token, TokenName) when not is_list(RawMsg) ->
     process_msg(RawMsg, ChannelId, Token, TokenName,
                 shard_info()).
 
@@ -30,7 +30,10 @@ process_msg({msg, RawMsg}, ChannelId, Token, TokenName, ShardInfo)
   when is_binary(RawMsg) ->
     process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo);
 process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
-  when is_binary(RawMsg) ->
+  when is_binary(RawMsg),
+       is_integer(ChannelId),
+       is_binary(Token),
+       is_binary(TokenName) ->
     CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
     process_drains(ChannelId, CookedMsg),
     process_tails(ChannelId, CookedMsg),
