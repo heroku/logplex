@@ -25,6 +25,11 @@
 -export([create/2, lookup/1, delete/1]).
 -export([lookup_by_channel/1]).
 
+-export([id/1
+         ,channel_id/1
+         ,name/1
+        ]).
+
 -type id() :: binary().
 -type name() :: binary().
 
@@ -34,6 +39,11 @@
 
 -include("logplex.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
+
+id(#token{id=Id}) -> Id.
+channel_id(#token{channel_id=ChannelId}) -> ChannelId.
+name(#token{name=Name}) -> Name.
+
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_token(),
