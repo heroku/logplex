@@ -94,7 +94,7 @@ route(Token, State = #state{}, RawMsg)
             process_msg(ChannelId, State, CookedMsg);
         _ ->
             K = #logplex_stat{module=?MODULE,
-                              key=msg_drop_unknown_token},
+                              key={msg_drop_unknown_token, Token}},
             logplex_stats:incr(K),
             ok
     end.
