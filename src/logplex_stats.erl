@@ -160,7 +160,7 @@ log_stat(UnixTS, #channel_stat{channel_id=ChannelId, key=Key}, Val) ->
         [UnixTS, ChannelId, Key, Val]);
 
 log_stat(UnixTS, #logplex_stat{module=Mod, key=K}, Val) ->
-    io:format("logplex_stats ts=~p system module=~p ~p=~p~n",
+    io:format("logplex_stats ts=~p system module=~p ~200p=~p~n",
         [UnixTS, Mod, K, Val]);
 
 log_stat(UnixTS, {Class, Key}, Val) ->
