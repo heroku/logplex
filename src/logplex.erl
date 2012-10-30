@@ -5,9 +5,18 @@
 %% @end
 -module(logplex).
 
+-export([serialize_from_token/1]).
 -export([serialize_channel/1
          ,deserialize_channel/1
         ]).
+
+serialize_from_token(TokenId) when is_binary(TokenId) ->
+    case logplex_token:lookup(TokenId) of
+        undefined ->
+            {error, no_such_token};
+        Token ->
+            serialize_channel(logplex_token:channel_id(Token))
+    end.
 
 serialize_channel(ChannelId) when is_integer(ChannelId) ->
     {logplex_channel:lookup(ChannelId),
