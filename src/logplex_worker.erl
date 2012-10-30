@@ -110,7 +110,7 @@ process_msg(ChannelId, State, Msg) ->
     case logplex_channel:lookup_flag(no_redis, ChannelId) of
         no_redis -> ok;
         _ ->
-            Expiry = logplex:config(redis_buffer_expiry),
+            Expiry = logplex_app:config(redis_buffer_expiry),
             {Map, Interval} = map_interval(State),
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
                                              Map, Interval),
