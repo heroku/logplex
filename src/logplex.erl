@@ -5,8 +5,6 @@
 %% @end
 -module(logplex).
 
--include("logplex_channel.hrl").
-
 -export([serialize_channel/1
          ,deserialize_channel/1
         ]).
