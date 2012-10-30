@@ -110,7 +110,10 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
 %%====================================================================
 %% TOKEN
 %%====================================================================
-create_token(ChannelId, TokenId, TokenName) when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
+-spec create_token(logplex_channel:id(), logplex_token:id(),
+                   logplex_token:name()) -> any().
+create_token(ChannelId, TokenId, TokenName)
+  when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
     Res = redo:cmd(config, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName]),
     case Res of
         <<"OK">> -> ok;
