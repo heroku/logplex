@@ -36,6 +36,7 @@
          ,lookup_by_channel/1
          ,count_by_channel/1
          ,create/4
+         ,store/1
          ,lookup_token/1
          ,poll_token/1
          ,store_token/3
@@ -190,6 +191,10 @@ create(DrainId, Token, ChannelId, URI)
                     {error, Err}
             end
     end.
+
+store(#drain{id=DrainId, token=Token,
+             channel_id=ChannelId, uri=URI}) ->
+    create(DrainId, Token, ChannelId, URI).
 
 delete(DrainId) when is_integer(DrainId) ->
     redis_helper:delete_drain(DrainId).
