@@ -24,7 +24,7 @@
 -export([handle/2
          ,terminate/2]).
 
--record(state, {token :: logpex_token:id(),
+-record(state, {token :: logplex_token:id(),
                 name :: logplex_token:name(),
                 channel_id :: logplex_channel:id(),
                 msgs :: list()}).
