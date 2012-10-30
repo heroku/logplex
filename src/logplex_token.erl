@@ -30,6 +30,8 @@
          ,name/1
         ]).
 
+-export([store/1]).
+
 -type id() :: binary().
 -type name() :: binary().
 
@@ -90,3 +92,8 @@ lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
                                 when C =:= ChannelId ->
                                   object()
                           end)).
+
+store(#token{id=Token,
+             channel_id=ChannelId,
+             name=Name}) ->
+    redis_helper:create_token(ChannelId, Token, Name).
