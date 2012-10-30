@@ -222,12 +222,15 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 logs_redis_urls() ->
     URLs = case os:getenv("LOGPLEX_SHARD_URLS") of
+               false ->
+                   erlang:error({fatal_config_error,
+                                 missing_logplex_shard_urls});
                [] ->
                    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
                        false -> ["redis://127.0.0.1:6379/"];
                        Url -> [Url]
                    end;
-               UrlString ->
+               UrlString when is_list(UrlString) ->
                    string:tokens(UrlString, ",")
            end,
     redis_sort(URLs).
