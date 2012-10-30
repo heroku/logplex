@@ -27,7 +27,9 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
--export([lookup/3, lookup_urls/0, urls/0
+-export([lookup/3
+         ,logs_redis_urls/0
+         ,urls/0
          ,redis_sort/1]).
 
 %% Redis Migration API
@@ -81,7 +83,7 @@ urls() ->
 %%--------------------------------------------------------------------
 init([]) ->
     ?INFO("at=init", []),
-    Urls = lookup_urls(),
+    Urls = logs_redis_urls(),
 
     erlang:process_flag(trap_exit, true),
 
@@ -218,7 +220,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-lookup_urls() ->
+logs_redis_urls() ->
     URLs = case os:getenv("LOGPLEX_SHARD_URLS") of
                [] ->
                    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
@@ -386,7 +388,7 @@ new_shard_info(OldNewMap) ->
 prepare_new_urls(NewIps) ->
     NewIpsSorted = lists:sort(NewIps),
     OldUrls = lists:sort([binary_to_list(Url)
-                          || Url <- redis_helper:shard_urls()]),
+                          || Url <- urls()]),
     length(OldUrls) =:= length(NewIpsSorted)
         orelse erlang:error({invalid_ip_list, different_length_to_existing}),
     NewUrls = [ update_redis_host(OldUrl, NewIp)
