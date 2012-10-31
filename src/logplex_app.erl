@@ -59,6 +59,7 @@ start(_StartType, _StartArgs) ->
     read_availability_zone(),
     boot_pagerduty(),
     setup_redgrid_vals(),
+    setup_redis_shards(),
     application:start(nsync),
     logplex_sup:start_link().
 
@@ -119,6 +120,22 @@ setup_redgrid_vals() ->
     application:set_env(redgrid, redis_url, os:getenv("LOGPLEX_STATS_REDIS_URL")),
     application:set_env(redgrid, domain, os:getenv("HEROKU_DOMAIN")),
     ok.
+
+setup_redis_shards() ->
+    URLs = case os:getenv("LOGPLEX_SHARD_URLS") of
+               false ->
+                   erlang:error({fatal_config_error,
+                                 missing_logplex_shard_urls});
+               [] ->
+                   case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
+                       false -> ["redis://127.0.0.1:6379/"];
+                       Url -> [Url]
+                   end;
+               UrlString when is_list(UrlString) ->
+                   string:tokens(UrlString, ",")
+           end,
+    application:set_env(logplex, logplex_shard_urls,
+                        logplex_shard:redis_sort(URLs)).
 
 logplex_work_queue_args() ->
     MaxLength =
