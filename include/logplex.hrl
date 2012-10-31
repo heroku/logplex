@@ -11,7 +11,7 @@
                      channel_id :: logplex_channel:id(),
                      key :: atom()}).
 -record(logplex_stat, {module :: atom(),
-                       key :: atom()}).
+                       key :: any()}).
 
 -define(HTTP_PORT, 8001).
 -define(UDP_PORT, 9999).
