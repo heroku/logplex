@@ -63,17 +63,18 @@ init([State = #state{},
         {error, Why} ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
-                  "attempt=fail tcp_err=~p connect_time=~p",
-                  log_info(State, [Why, ltcy(ConnectStart, ConnectEnd)])),
+                  "attempt=fail connect_time=~p tcp_err=~1000p",
+                  log_info(State, [ltcy(ConnectStart, ConnectEnd), Why])),
             {stop, Why}
     catch
         Class:Err ->
             Report = {Class, Err, erlang:get_stacktrace()},
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=connect "
-                  "attempt=fail err=exception data=~p next_state=disconnected "
-                  "connect_time=~p",
-                  log_info(State, [Report, ltcy(ConnectStart, ConnectEnd)])),
+                  "attempt=fail err=exception connect_time=~p "
+                  "next_state=disconnected "
+                  "data=~1000p",
+                  log_info(State, [ltcy(ConnectStart, ConnectEnd), Report])),
             {stop, exception}
     end.
 
