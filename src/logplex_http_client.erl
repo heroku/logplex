@@ -134,7 +134,6 @@ client_init("http") ->
     cowboy_client:init([]);
 client_init("https") ->
     cowboy_client:init([{reuse_sessions, false}
-                        ,{verify, verify_none} % XXX DELETE ME
                        ]).
 
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, dest=Dest}, Rest)
