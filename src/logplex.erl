@@ -41,4 +41,4 @@ drain_dests() ->
 post_to_drain(DrainId, Fmt, Args) when is_integer(DrainId) ->
     logplex_drain:whereis({drain, DrainId})
         ! {post, logplex_syslog_utils:fmt('user', 'debug', now,
-                                          "erlang_shell", Fmt, Args)}.
+                                          "erlang", "shell", Fmt, Args)}.
