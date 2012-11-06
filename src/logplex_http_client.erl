@@ -40,7 +40,7 @@ raw_request(Pid, Req, Timeout) ->
 
 close(Pid) ->
     gen_server:cast(Pid, close),
-    timer:kill_after(timer:seconds(1), Pid), % XXX - necessary
+    timer:kill_after(timer:seconds(1), Pid), % XXX - necessary?
     ok.
 
 %%====================================================================
