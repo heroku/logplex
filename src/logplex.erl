@@ -11,7 +11,10 @@
         ]).
 
 -export([drain_dests/0
-         ,post_to_drain/3]).
+        ]).
+
+-export([post_to_channel/3
+        ]).
 
 serialize_from_token(TokenId) when is_binary(TokenId) ->
     case logplex_token:lookup(TokenId) of
@@ -38,7 +41,8 @@ deserialize_channel({Chan,
 drain_dests() ->
     logplex_drain:by_dest().
 
-post_to_drain(DrainId, Fmt, Args) when is_integer(DrainId) ->
-    logplex_drain:whereis({drain, DrainId})
-        ! {post, logplex_syslog_utils:fmt('user', 'debug', now,
-                                          "erlang", "shell", Fmt, Args)}.
+post_to_channel(ChannelId, Fmt, Args) when is_integer(ChannelId) ->
+    logplex_channel:post({channel, ChannelId},
+                         logplex_syslog_utils:fmt('user', 'debug', now,
+                                                  "erlang", "shell",
+                                                  Fmt, Args)).
