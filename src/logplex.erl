@@ -42,7 +42,7 @@ drain_dests() ->
     logplex_drain:by_dest().
 
 post_to_channel(ChannelId, Fmt, Args) when is_integer(ChannelId) ->
-    logplex_channel:post({channel, ChannelId},
-                         logplex_syslog_utils:fmt('user', 'debug', now,
-                                                  "erlang", "shell",
-                                                  Fmt, Args)).
+    logplex_channel:post_msg({channel, ChannelId},
+                             logplex_syslog_utils:fmt('user', 'debug', now,
+                                                      "erlang", "shell",
+                                                      Fmt, Args)).
