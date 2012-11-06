@@ -59,6 +59,9 @@
          ,register/3
         ]).
 
+-export([by_dest/0
+        ]).
+
 -include("logplex.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
 -include("logplex_drain.hrl").
@@ -317,3 +320,6 @@ delete_partial_drain(DrainId, Token) when is_integer(DrainId),
 
 uri_to_binary(#ex_uri{} = Uri) ->
     iolist_to_binary(ex_uri:encode(Uri)).
+
+by_dest() ->
+    gproc:lookup_local_properties(drain_dest).
