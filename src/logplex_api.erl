@@ -30,11 +30,7 @@
 -define(JSON_CONTENT, [{"Content-Type", "application/json"}]).
 
 start_link() ->
-    Port =
-        case os:getenv("HTTP_PORT") of
-            false -> ?HTTP_PORT;
-            Val -> list_to_integer(Val)
-        end,
+    Port = logplex_utils:to_int(logplex_app:config(http_port)),
     Opts = [
         {ip, "0.0.0.0"},
         {port, Port},
@@ -435,7 +431,7 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
 
 authorize(Req) ->
     try
-        AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
+        AuthKey = logplex_app:config(auth_key),
         "Basic " ++ Encoded = Req:get_header_value("Authorization"),
         case Encoded of
             AuthKey -> true;

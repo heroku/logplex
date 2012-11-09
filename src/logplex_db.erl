@@ -41,10 +41,7 @@ create_ets_tables() ->
     ok.
 
 redo_opts() ->
-    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
-        false -> [];
-        Url -> redo_uri:parse(Url)
-    end.
+    redo_uri:parse(logplex_app:config(config_redis_url)).
 
 -spec poll(fun ( () -> 'not_found' | {'found', T} | {'error', E} ),
            pos_integer()) ->

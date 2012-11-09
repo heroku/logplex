@@ -13,17 +13,5 @@
 -record(logplex_stat, {module :: atom(),
                        key :: any()}).
 
--define(HTTP_PORT, 8001).
--define(UDP_PORT, 9999).
-
 -define(LOG_HISTORY, <<"1500">>).
 -define(MAX_SPOOL_POOL_SIZE, 1000).
-
--define(DEFAULT_LOGPLEX_QUEUE_LENGTH, 2000).
--define(DEFAULT_LOGPLEX_DRAIN_BUFFER_LENGTH, 2000).
--define(DEFAULT_LOGPLEX_REDIS_BUFFER_LENGTH, 2000).
--define(DEFAULT_LOGPLEX_READ_QUEUE_LENGTH, 2000).
--define(DEFAULT_LOGPLEX_WORKERS, 10).
--define(DEFAULT_LOGPLEX_DRAIN_WRITERS, 10).
--define(DEFAULT_LOGPLEX_REDIS_WRITERS, 10).
--define(DEFAULT_LOGPLEX_READERS, 10).

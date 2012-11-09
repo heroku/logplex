@@ -96,4 +96,4 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%----------------------------------------------------------------------
 instance_name() ->
-    os:getenv("INSTANCE_NAME").
+    logplex_app:config(instance_name).

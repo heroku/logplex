@@ -54,6 +54,7 @@ start() ->
 
 start(_StartType, _StartArgs) ->
     ?INFO("at=start", []),
+    cache_os_envvars(),
     set_cookie(),
     read_git_branch(),
     read_availability_zone(),
@@ -78,9 +79,68 @@ start_phase(listen, normal, _Args) ->
                                      logplex_logs_rest:child_spec()),
     ok.
 
+cache_os_envvars() ->
+    cache_os_envvars([
+                      {cookie, "LOGPLEX_COOKIE", optional}
+                     ,{http_port, "PORT", required}
+                     ,{auth_key, "LOGPLEX_AUTH_KEY", required}
+                     ,{core_userpass, "LOGPLEX_CORE_USERPASS", optional}
+                     ,{ion_userpass, "LOGPLEX_ION_USERPASS", optional}
+                     ,{heroku_domain, "HEROKU_DOMAIN", required}
+                     ,{instance_name, "INSTANCE_NAME", required}
+                     ,{local_ip, "LOCAL_IP", required}
+                     ,{config_redis_url, "LOGPLEX_CONFIG_REDIS_URL", required}
+                     ,{redis_stats_url, "LOGPLEX_STATS_REDIS_URL", optional}
+                     ,{shard_urls, "LOGPLEX_SHARD_URLS", optional}
+                     ,{pagerduty, "PAGERDUTY", optional}
+                     ,{pagerduty_key, "ROUTING_PAGERDUTY_SERVICE_KEY", optional}
+                     ,{queue_length, "LOGPLEX_QUEUE_LENGTH", optional}
+                     ,{drain_buffer_length, "LOGPLEX_DRAIN_BUFFER_LENGTH", optional}
+                     ,{redis_buffer_length, "LOGPLEX_REDIS_BUFFER_LENGTH", optional}
+                     ,{read_queue_length, "LOGPLEX_READ_QUEUE_LENGTH", optional}
+                     ,{workers, "LOGPLEX_WORKERS", optional}
+                     ,{drain_writers, "LOGPLEX_DRAIN_WRITERS", optional}
+                     ,{redis_writers, "LOGPLEX_REDIS_WRITERS", optional}
+                     ,{readers, "LOGPLEX_READERS", optional}
+                     ]),
+    ok.
+
+cache_os_envvars([]) ->
+    ok;
+cache_os_envvars([{Key, OsKey, Required}|Tail]) when is_atom(Key) ->
+    case os:getenv(OsKey) of
+        false when Required == true ->
+            config(Key);
+        false ->
+            ok;    
+        OsVal ->
+            set_config(Key, OsVal)
+    end,
+    cache_os_envvars(Tail).
+
+set_config(KeyS, Value) when is_list(KeyS) ->
+    set_config(list_to_atom(KeyS), Value);
+set_config(Key, Value) when is_atom(Key) ->
+    application:set_env(?APP, Key, Value).
+
+config() ->
+    application:get_all_env(logplex).
+
+config(Key) when is_atom(Key) ->
+    case application:get_env(?APP, Key) of
+        undefined -> erlang:error({missing_config, Key});
+        {ok, Val} -> Val
+    end.
+
+config(Key, Default) ->
+    case application:get_env(?APP, Key) of
+        undefined -> Default;
+        {ok, Val} -> Val
+    end.
+
 set_cookie() ->
-    case os:getenv("LOGPLEX_COOKIE") of
-        false -> ok;
+    case config(cookie) of
+        "" -> ok;
         Cookie -> erlang:set_cookie(node(), list_to_atom(Cookie))
     end.
 
@@ -94,7 +154,8 @@ read_git_branch() ->
     end.
 
 read_availability_zone() ->
-    case httpc:request("http://169.254.169.254/latest/meta-data/placement/availability-zone") of
+    Url = "http://169.254.169.254/latest/meta-data/placement/availability-zone",
+    case httpc:request(get, {Url, []}, [{timeout, 2000}, {connect_timeout, 1000}], []) of
         {ok,{{_,200,_}, _Headers, Zone}} ->
             application:set_env(logplex, availability_zone, Zone);
         _ ->
@@ -110,13 +171,13 @@ read_environment() ->
      || {K, SK} <- [ {instance_name, "INSTANCE_NAME"} ]].
 
 boot_pagerduty() ->
-    case os:getenv("HEROKU_DOMAIN") of
+    case config(heroku_domain) of
         "heroku.com" ->
-            case os:getenv("PAGERDUTY") of
+            case config(pagerduty) of
                 "0" -> ok;
                 _ ->
                     ok = application:load(pagerduty),
-                    application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
+                    application:set_env(pagerduty, service_key, config(pagerduty_key)),
                     a_start(pagerduty, temporary),
                     ok = error_logger:add_report_handler(logplex_report_handler)
             end;
@@ -126,9 +187,9 @@ boot_pagerduty() ->
 
 setup_redgrid_vals() ->
     application:load(redgrid),
-    application:set_env(redgrid, local_ip, os:getenv("LOCAL_IP")),
-    application:set_env(redgrid, redis_url, os:getenv("LOGPLEX_STATS_REDIS_URL")),
-    application:set_env(redgrid, domain, os:getenv("HEROKU_DOMAIN")),
+    application:set_env(redgrid, local_ip, config(local_ip)),
+    application:set_env(redgrid, redis_url, config(redis_stats_url)),
+    application:set_env(redgrid, domain, config(heroku_domain)),
     ok.
 
 setup_redis_shards() ->
@@ -173,16 +234,8 @@ dumpdir() ->
     end.
 
 logplex_work_queue_args() ->
-    MaxLength =
-        case os:getenv("LOGPLEX_QUEUE_LENGTH") of
-            false -> ?DEFAULT_LOGPLEX_QUEUE_LENGTH;
-            StrNum1 -> list_to_integer(StrNum1)
-        end,
-    NumWorkers =
-        case os:getenv("LOGPLEX_WORKERS") of
-            false -> ?DEFAULT_LOGPLEX_WORKERS;
-            StrNum2 -> list_to_integer(StrNum2)
-        end,
+    MaxLength = logplex_utils:to_int(config(queue_length)),
+    NumWorkers = logplex_utils:to_int(config(workers)),
     [{name, "logplex_work_queue"},
      {max_length, MaxLength},
      {num_workers, NumWorkers},
@@ -190,7 +243,8 @@ logplex_work_queue_args() ->
      {worker_args, []}].
 
 nsync_opts() ->
-    RedisOpts = logplex_utils:redis_opts("LOGPLEX_CONFIG_REDIS_URL"),
+    RedisUrl = config(config_redis_url),
+    RedisOpts = logplex_utils:parse_redis_url(RedisUrl),
     Ip = case proplists:get_value(ip, RedisOpts) of
         {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
         Other -> Other
@@ -198,24 +252,6 @@ nsync_opts() ->
     RedisOpts1 = proplists:delete(ip, RedisOpts),
     RedisOpts2 = [{host, Ip} | RedisOpts1],
     [{callback, {nsync_callback, handle, []}} | RedisOpts2].
-
-
-config(Key, Default) ->
-    case application:get_env(logplex, Key) of
-        undefined -> Default;
-        {ok, Val} -> Val
-    end.
-
-config(redis_stats_uri) ->
-    redo_uri:parse(os:getenv("LOGPLEX_STATS_REDIS_URL"));
-config(Key) ->
-    case application:get_env(logplex, Key) of
-        undefined -> erlang:error({missing_config, Key});
-        {ok, Val} -> Val
-    end.
-
-config() ->
-    application:get_all_env(logplex).
 
 a_start(App, Type) ->
     start_ok(App, Type, application:start(App, Type)).

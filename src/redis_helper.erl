@@ -205,8 +205,8 @@ publish_stats(InstanceName, Json) when is_list(InstanceName), is_binary(Json) ->
     redo:cmd(config, [<<"PUBLISH">>, iolist_to_binary([<<"stats.">>, InstanceName]), Json]).
 
 register_stat_instance() ->
-    InstanceName = logplex_utils:instance_name(),
-    Domain = logplex_utils:heroku_domain(),
+    InstanceName = logplex_app:config(instance_name),
+    Domain = logplex_app:config(heroku_domain),
     redo:cmd(config, [<<"SETEX">>, iolist_to_binary([Domain, <<":stats:logplex:">>, InstanceName]), <<"60">>, <<"1">>]).
 
 %%====================================================================

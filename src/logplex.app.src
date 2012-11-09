@@ -18,11 +18,13 @@
   {mod, {logplex_app, []}},
   {env,
    [
-    {tcp_syslog_send_timeout_secs, 4} % seconds
+     {tcp_syslog_send_timeout_secs, 4} % seconds
     ,{tcp_syslog_backoff_max, 300} % seconds
     ,{tcp_syslog_reconnect_min, 30} % seconds
     ,{tcp_drain_buffer_size, 1024} % #messages
     ,{tcp_syslog_send_loss_msg, send} % send | dont_send
+    ,{http_port, 8001}
+    ,{udp_port, 9999}
     ,{syslog_port, 6001} % syslog tcp listen port
     ,{max_drains_per_channel, 5} % #channels
     ,{drain_buffer_size, 1024} % #messages
@@ -38,6 +40,14 @@
     ,{http_log_input_port, 8601} % syslog/http tcp listen port
     ,{redis_buffer_expiry, <<"604800">>} % s -- one week
     ,{log_unknown_tokens, false} % bool
+    ,{queue_length, 2000}
+    ,{drain_buffer_length, 2000}
+    ,{redis_buffer_length, 2000}
+    ,{read_queue_length, 2000}
+    ,{workers, 10}
+    ,{drain_writers, 10}
+    ,{redis_writers, 10}
+    ,{readers, 10}
    ]}
  ,{start_phases,
    [{listen, []}

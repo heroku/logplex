@@ -46,7 +46,7 @@ init([]) ->
        ,{redgrid, {redgrid, start_link, []},
          permanent, 2000, worker, [redgrid]}
        ,{logplex_realtime, {logplex_realtime, start_link,
-                            [logplex_app:config(redis_stats_uri)]},
+                            [redo_uri:parse(logplex_app:config(redis_stats_url))]},
          permanent, 2000, worker, [logplex_realtime]}
        ,{logplex_stats, {logplex_stats, start_link, []},
          permanent, 2000, worker, [logplex_stats]}

@@ -23,8 +23,7 @@
 -module(logplex_utils).
 -export([rpc/4, set_weight/1, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
-         empty_token/0, redis_opts/1, parse_redis_url/1, instance_name/0, heroku_domain/0
-         ,nl/1]).
+         empty_token/0, parse_redis_url/1, nl/1, to_int/1]).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -113,16 +112,15 @@ field_val(Key, [_, _ | Tail], Default) ->
 field_val(_Key, _, Default) ->
     Default.
 
+to_int(List) when is_list(List) ->
+    list_to_integer(List);
+to_int(Bin) when is_binary(Bin) ->
+    to_int(binary_to_list(Bin));
+to_int(Int) when is_integer(Int) ->
+    Int.
+
 empty_token() ->
     setelement(1, erlang:make_tuple(length(record_info(fields, token))+1, '_'), token).
-
-redis_opts(ConfigVar) when is_list(ConfigVar) ->
-    case os:getenv(ConfigVar) of
-        false ->
-            [{ip, "127.0.0.1"}, {port, 6379}];
-        Url ->
-            logplex_utils:parse_redis_url(Url)
-    end.
 
 parse_redis_url(Url) ->
     case redis_uri:parse(Url) of
@@ -131,26 +129,4 @@ parse_redis_url(Url) ->
             [{ip, Ip}, {port, Port}, {pass, list_to_binary(Pass)}];
         _ ->
             [{ip, "127.0.0.1"}, {port, 6379}]
-    end.
-
-instance_name() ->
-    case get(instance_name) of
-        undefined ->
-            InstanceName = os:getenv("INSTANCE_NAME"),
-            put(instance_name, InstanceName),
-            InstanceName;
-        InstanceName -> InstanceName
-    end.
-
-heroku_domain() ->
-    case get(heroku_domain) of
-        undefined ->
-            Domain = 
-                case os:getenv("HEROKU_DOMAIN") of
-                    false -> <<"">>;
-                    Val -> list_to_binary(Val)
-                end,
-            put(heroku_domain, Domain),
-            Domain;
-        Domain -> Domain
     end.

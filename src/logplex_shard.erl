@@ -251,16 +251,8 @@ add_buffer(Url) ->
     Buffer.
 
 redis_buffer_opts(Url) ->
-    MaxLength =
-        case os:getenv("LOGPLEX_REDIS_BUFFER_LENGTH") of
-            false -> ?DEFAULT_LOGPLEX_REDIS_BUFFER_LENGTH;
-            StrNum1 -> list_to_integer(StrNum1)
-        end,
-    NumWorkers =
-        case os:getenv("LOGPLEX_REDIS_WRITERS") of
-            false -> ?DEFAULT_LOGPLEX_REDIS_WRITERS;
-            StrNum2 -> list_to_integer(StrNum2)
-        end,
+    MaxLength = logplex_utils:to_int(logplex_app:config(redis_buffer_length)),
+    NumWorkers = logplex_utils:to_int(logplex_app:config(redis_writers)),
     RedisOpts = logplex_utils:parse_redis_url(Url),
     [{name, "logplex_redis_buffer"},
      {max_length, MaxLength},

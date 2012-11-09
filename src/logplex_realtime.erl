@@ -83,7 +83,7 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 handle_info(flush, #state{instance_name=undefined}=State) ->
-    InstanceName = logplex_utils:instance_name(),
+    InstanceName = logplex_app:config(instance_name),
     handle_info(flush, State#state{instance_name=InstanceName});
 
 handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
@@ -91,7 +91,7 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
     [ets:update_counter(?MODULE, Key, -1 * Val)
      || {Key, Val} <- Stats,
         lists:member(Key, keys())],
-    HerokuDomain = heroku_domain(),
+    HerokuDomain = logplex_app:config(heroku_domain),
     spawn(fun() ->
         Stats1 = [{instance_name, list_to_binary(InstanceName)},
                   {branch, git_branch()},
@@ -112,19 +112,6 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-heroku_domain() ->
-    case get(heroku_domain) of
-        undefined ->
-            Domain = 
-                case os:getenv("HEROKU_DOMAIN") of
-                    false -> <<"">>;
-                    Val -> list_to_binary(Val)
-                end,
-            put(heroku_domain, Domain),
-            Domain;
-        Domain -> Domain
-    end.
 
 git_branch() ->
     case application:get_env(logplex, git_branch) of
