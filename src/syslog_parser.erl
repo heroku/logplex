@@ -19,6 +19,8 @@
 -type syslog_message() :: {msg, binary()} | {malformed, binary()}.
 -type syslog_messages() :: [syslog_message()].
 
+-export_type([parse_buffer/0]).
+
 %% Syslog frames
 %% a) <Length as ascii integer><space><msg:Length>"
 %% b) <msg>\n.
