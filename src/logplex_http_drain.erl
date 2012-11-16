@@ -213,10 +213,10 @@ try_connect(State = #state{uri=Uri,
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
             ready_to_send(State#state{client=Pid});
-        {error, Why} ->
+        Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
-                  "attempt=fail tcp_err=~p connect_time=~p",
+                  "attempt=fail reason=~100p connect_time=~p",
                   log_info(State, [Why, ltcy(ConnectStart, ConnectEnd)])),
             http_fail(State)
     end.

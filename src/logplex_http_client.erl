@@ -65,7 +65,7 @@ init([State = #state{},
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
                   "attempt=fail connect_time=~p tcp_err=~1000p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd), Why])),
-            {stop, Why}
+            ignore
     catch
         Class:Err ->
             Report = {Class, Err, erlang:get_stacktrace()},
@@ -75,7 +75,7 @@ init([State = #state{},
                   "next_state=disconnected "
                   "data=~1000p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd), Report])),
-            {stop, exception}
+            ignore
     end.
 
 %% @private
