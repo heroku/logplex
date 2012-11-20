@@ -274,6 +274,13 @@ try_send(Frame = #frame{tries = Tries},
                   log_info(State, [Why])),
             http_fail(retry_frame(Frame, State))
     catch
+        exit:{timeout, _} ->
+            ReqEnd = os:timestamp(),
+            ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
+                  "attempt=fail err=timeout req_time=~p "
+                  "next_state=disconnected",
+                  log_info(State, [ltcy(ReqStart, ReqEnd)])),
+            http_fail(retry_frame(Frame,State));
         Class:Err ->
             Report = {Class, Err, erlang:get_stacktrace()},
             ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
