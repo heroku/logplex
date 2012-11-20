@@ -282,10 +282,12 @@ try_send(Frame = #frame{tries = Tries},
                   log_info(State, [ltcy(ReqStart, ReqEnd)])),
             http_fail(retry_frame(Frame,State));
         Class:Err ->
+            ReqEnd = os:timestamp(),
             Report = {Class, Err, erlang:get_stacktrace()},
             ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
-                  "attempt=fail err=exception data=~p next_state=disconnected",
-                  log_info(State, [Report])),
+                  "attempt=fail err=exception req_time=~p "
+                  "next_state=disconnected data=~1000p",
+                  log_info(State, [ltcy(ReqStart, ReqEnd), Report])),
             http_fail(retry_frame(Frame,State))
     end;
 try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
