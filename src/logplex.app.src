@@ -37,6 +37,7 @@
     ,{default_redis_poll_ms, 2000} % #ms
     ,{http_log_input_port, 8601} % syslog/http tcp listen port
     ,{redis_buffer_expiry, <<"604800">>} % s -- one week
+    ,{log_unknown_tokens, false} % bool
    ]}
  ,{start_phases,
    [{listen, []}
