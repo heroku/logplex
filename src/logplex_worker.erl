@@ -23,7 +23,7 @@
 -module(logplex_worker).
 -export([start_link/1, init/1, loop/1]).
 
--export([init_state/0, handle_message/2]).
+-export([init_state/0, handle_message/2, route/3]).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -93,8 +93,11 @@ route(Token, State = #state{}, RawMsg)
             process_tails(ChannelId, CookedMsg),
             process_msg(ChannelId, State, CookedMsg);
         _ ->
-            K = #logplex_stat{module=?MODULE,
-                              key=msg_drop_unknown_token},
+            Key = case logplex_app:config(log_unknown_tokens, false) of
+                      false -> msg_drop_unknown_token;
+                      _ -> {msg_drop_unknown_token, Token}
+                  end,
+            K = #logplex_stat{module=?MODULE, key=Key},
             logplex_stats:incr(K),
             ok
     end.
@@ -110,10 +113,12 @@ process_msg(ChannelId, State, Msg) ->
     case logplex_channel:lookup_flag(no_redis, ChannelId) of
         no_redis -> ok;
         _ ->
+            Expiry = logplex_app:config(redis_buffer_expiry),
             {Map, Interval} = map_interval(State),
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
                                              Map, Interval),
-            Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY, Msg),
+            Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY,
+                                              Msg, Expiry),
             logplex_queue:in(BufferPid, Cmd)
     end,
     ok.

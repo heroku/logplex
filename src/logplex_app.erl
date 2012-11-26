@@ -27,7 +27,7 @@
 
 
 %% Application callbacks
--export([start/2, stop/1]).
+-export([start/2, start_phase/3, stop/1]).
 
 -export([logplex_work_queue_args/0
          ,nsync_opts/0
@@ -58,14 +58,22 @@ start(_StartType, _StartArgs) ->
     read_git_branch(),
     read_availability_zone(),
     boot_pagerduty(),
-    application:start(redis),
     setup_redgrid_vals(),
+    setup_redis_shards(),
     application:start(nsync),
-    application:start(cowboy),
     logplex_sup:start_link().
 
 stop(_State) ->
     ?INFO("at=stop", []),
+    ok.
+
+start_phase(listen, normal, _Args) ->
+    {ok, _} = supervisor:start_child(logplex_sup,
+                                     logplex_api:child_spec()),
+    {ok, _} = supervisor:start_child(logplex_sup,
+                                     logplex_syslog_sup:child_spec()),
+    {ok, _} = supervisor:start_child(logplex_sup,
+                                     logplex_logs_rest:child_spec()),
     ok.
 
 set_cookie() ->
@@ -112,6 +120,22 @@ setup_redgrid_vals() ->
     application:set_env(redgrid, redis_url, os:getenv("LOGPLEX_STATS_REDIS_URL")),
     application:set_env(redgrid, domain, os:getenv("HEROKU_DOMAIN")),
     ok.
+
+setup_redis_shards() ->
+    URLs = case os:getenv("LOGPLEX_SHARD_URLS") of
+               false ->
+                   erlang:error({fatal_config_error,
+                                 missing_logplex_shard_urls});
+               [] ->
+                   case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
+                       false -> ["redis://127.0.0.1:6379/"];
+                       Url -> [Url]
+                   end;
+               UrlString when is_list(UrlString) ->
+                   string:tokens(UrlString, ",")
+           end,
+    application:set_env(logplex, logplex_shard_urls,
+                        logplex_shard:redis_sort(URLs)).
 
 logplex_work_queue_args() ->
     MaxLength =

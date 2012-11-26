@@ -36,6 +36,7 @@
          ,lookup_by_channel/1
          ,count_by_channel/1
          ,create/4
+         ,store/1
          ,lookup_token/1
          ,poll_token/1
          ,store_token/3
@@ -56,6 +57,9 @@
 
 -export([register/4
          ,register/3
+        ]).
+
+-export([by_dest/0
         ]).
 
 -include("logplex.hrl").
@@ -191,6 +195,10 @@ create(DrainId, Token, ChannelId, URI)
             end
     end.
 
+store(#drain{id=DrainId, token=Token,
+             channel_id=ChannelId, uri=URI}) ->
+    create(DrainId, Token, ChannelId, URI).
+
 delete(DrainId) when is_integer(DrainId) ->
     redis_helper:delete_drain(DrainId).
 
@@ -231,9 +239,8 @@ valid_uri(#ex_uri{scheme=Syslog} = Uri) when Syslog =:= "syslog";
     logplex_tcpsyslog_drain:valid_uri(Uri);
 valid_uri(#ex_uri{scheme="udpsyslog"} = Uri) ->
     logplex_udpsyslog_drain:valid_uri(Uri);
-valid_uri(#ex_uri{scheme=Http} = Uri)
-  when Http =:= "http"; Http =:= "https"  ->
-    {valid, http, Uri};
+valid_uri(#ex_uri{scheme="http" ++ _} = Uri) ->
+    logplex_http_drain:valid_uri(Uri);
 valid_uri(#ex_uri{scheme=Scheme}) ->
     {error, {unknown_scheme, Scheme}};
 valid_uri({error, _} = Err) -> Err.
@@ -312,3 +319,6 @@ delete_partial_drain(DrainId, Token) when is_integer(DrainId),
 
 uri_to_binary(#ex_uri{} = Uri) ->
     iolist_to_binary(ex_uri:encode(Uri)).
+
+by_dest() ->
+    gproc:lookup_local_properties(drain_dest).

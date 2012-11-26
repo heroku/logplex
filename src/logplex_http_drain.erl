@@ -32,7 +32,7 @@
                 channel_id :: logplex_channel:id(),
                 uri :: #ex_uri{},
                 buf :: pid(),
-                client :: cowboy_client:client(),
+                client :: pid(),
                 out_q = queue:new() :: queue(),
                 reconnect_tref :: reference() | 'undefined'
                }).
@@ -46,6 +46,8 @@
 -define(CONTENT_TYPE, <<"application/logplex-1">>).
 -define(HTTP_VERSION, {1,1}).
 -define(RECONNECT_MSG, reconnect).
+-define(CONNECT_TIMEOUT, 1000).
+-define(REQUEST_TIMEOUT, 1000).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -82,8 +84,8 @@ start_link(ChannelID, DrainID, DrainTok,
                               uri = Uri},
                        []).
 
-valid_uri({Scheme, _, _, _, _, _} = Uri)
-  when Scheme =:= http orelse Scheme =:= https ->
+valid_uri(#ex_uri{scheme=Http} = Uri)
+  when Http =:= "http"; Http =:= "https" ->
     {valid, http, Uri};
 valid_uri(_) ->
     {error, invalid_http_uri}.
@@ -99,6 +101,7 @@ user_agent() ->
 init(State0 = #state{uri=URI,
                      drain_id=DrainId,
                      channel_id=ChannelId}) ->
+    process_flag(trap_exit, true),
     try
         Dest = uri_to_string(URI),
         Size = logplex_app:config(http_drain_buffer_size, 1024),
@@ -180,6 +183,14 @@ handle_info({timeout, _Ref, ?RECONNECT_MSG}, StateName,
 
 handle_info(shutdown, _StateName, State) ->
     {stop, shutdown, State};
+
+handle_info({'EXIT', ClientPid, Reason}, StateName,
+            State = #state{client = ClientPid}) ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s at=http_client_exit "
+          "state=~p client_pid=~p err=~1000p",
+          log_info(State, [StateName, ClientPid, Reason])),
+    {next_state, StateName, State};
+
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
@@ -187,42 +198,37 @@ handle_info(Info, StateName, State) ->
 
 %% @private
 try_connect(State = #state{uri=Uri,
+                           drain_id=DrainId,
+                           channel_id=ChannelId,
                            client=undefined}) ->
     {Scheme, Host, Port} = connection_info(Uri),
-    {ok, Client0} = client_init(Scheme),
     ConnectStart = os:timestamp(),
-    try cowboy_client:connect(scheme_to_transport(Scheme),
-                              Host, Port, Client0) of
-        {ok, Client} ->
+    case logplex_http_client:start_link(DrainId, ChannelId,
+                                        uri_to_string(Uri),
+                                        Scheme, Host,
+                                        Port, ?CONNECT_TIMEOUT) of
+        {ok, Pid} ->
             ConnectEnd = os:timestamp(),
             ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
-            ready_to_send(State#state{client=Client});
-        {error, Why} ->
+            ready_to_send(State#state{client=Pid});
+        Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
-                  "attempt=fail tcp_err=~p connect_time=~p",
+                  "attempt=fail reason=~100p connect_time=~p",
                   log_info(State, [Why, ltcy(ConnectStart, ConnectEnd)])),
-            http_fail(State)
-    catch
-        Class:Err ->
-            Report = {Class, Err, erlang:get_stacktrace()},
-            ConnectEnd = os:timestamp(),
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=connect "
-                  "attempt=fail err=exception data=~p next_state=disconnected "
-                  "connect_time=~p",
-                  log_info(State, [Report, ltcy(ConnectStart, ConnectEnd)])),
             http_fail(State)
     end.
 
 %% @private
 http_fail(State = #state{client = Client}) ->
     %% Close any existing client connection.
-    NewState = if Client =/= undefined ->
-                       catch cowboy_client:close(Client),
+    NewState = case Client of
+                   Pid when is_pid(Pid) ->
+                       logplex_http_client:close(Pid),
                        State#state{client = undefined};
-                  true ->
+                   undefined ->
                        State
                end,
     {next_state, disconnected,
@@ -241,24 +247,47 @@ ready_to_send(State = #state{buf = Buf, drain_tok=Token,
     end.
 
 try_send(Frame = #frame{tries = Tries},
-         State = #state{client = Client})
+         State = #state{client = Pid})
   when Tries > 0 ->
     Req = request_to_iolist(Frame, State),
     ReqStart = os:timestamp(),
-    try cowboy_client:raw_request(Req, Client) of
-        {ok, Client2} ->
-            wait_response(Frame, ReqStart, State#state{client=Client2});
+    try logplex_http_client:raw_request(Pid, Req, ?REQUEST_TIMEOUT) of
+        {ok, Status, _Headers} ->
+            ReqEnd = os:timestamp(),
+            Result = status_action(Status),
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
+                  "result=~p status=~p msg_count=~p req_time=~p",
+                  log_info(State, [Result, Status, Frame#frame.msg_count,
+                                   ltcy(ReqStart, ReqEnd)])),
+            case Result of
+                success ->
+                    ready_to_send(sent_frame(Frame, State));
+                temp_fail ->
+                    logplex_http_client:close(Pid),
+                    http_fail(retry_frame(Frame, State));
+                perm_fail ->
+                    ready_to_send(drop_frame(Frame, State))
+            end;
         {error, Why} ->
             ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request"
                   " tcp_err=~1000p",
                   log_info(State, [Why])),
             http_fail(retry_frame(Frame, State))
     catch
+        exit:{timeout, _} ->
+            ReqEnd = os:timestamp(),
+            ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
+                  "attempt=fail err=timeout req_time=~p "
+                  "next_state=disconnected",
+                  log_info(State, [ltcy(ReqStart, ReqEnd)])),
+            http_fail(retry_frame(Frame,State));
         Class:Err ->
+            ReqEnd = os:timestamp(),
             Report = {Class, Err, erlang:get_stacktrace()},
             ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
-                  "attempt=fail err=exception data=~p next_state=disconnected",
-                  log_info(State, [Report])),
+                  "attempt=fail err=exception req_time=~p "
+                  "next_state=disconnected data=~1000p",
+                  log_info(State, [ltcy(ReqStart, ReqEnd), Report])),
             http_fail(retry_frame(Frame,State))
     end;
 try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
@@ -275,54 +304,11 @@ status_action(N) when 200 =< N, N < 300 -> success;
 status_action(N) when 400 =< N, N < 500 -> perm_fail;
 status_action(_) -> temp_fail.
 
-wait_response(Frame = #frame{}, ReqStart,
-              State = #state{client = Client}) ->
-    try cowboy_client:response(Client) of
-        {ok, Status, _Headers, Client2} ->
-            ReqEnd = os:timestamp(),
-            Result = status_action(Status),
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
-                  "result=~p status=~p msg_count=~p req_time=~p",
-                  log_info(State, [Result, Status, Frame#frame.msg_count,
-                                   ltcy(ReqStart, ReqEnd)])),
-            case Result of
-                success ->
-                    ready_to_send(sent_frame(Frame,
-                                             State#state{client = Client2}));
-                temp_fail ->
-                    cowboy_client:close(Client2),
-                    http_fail(retry_frame(Frame,
-                                          State#state{client = Client2}));
-                perm_fail ->
-                    ready_to_send(drop_frame(Frame,
-                                             State#state{client = Client2}))
-            end;
-        {error, Why} ->
-            ReqEnd = os:timestamp(),
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=wait_response"
-                  " result=error req_time=~p tcp_err=\"~1000p\"",
-                  log_info(State, [ltcy(ReqStart, ReqEnd), Why])),
-            http_fail(retry_frame(Frame, State))
-    catch
-        Class:Err ->
-            ReqEnd = os:timestamp(),
-            Report = {Class, Err, erlang:get_stacktrace()},
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=wait_response "
-                  "attempt=fail err=exception data=\"~1000p\" "
-                  "next_state=disconnected req_start=~p",
-                  log_info(State, [Report, ltcy(ReqStart, ReqEnd)])),
-            http_fail(retry_frame(Frame,State))
-    end.
-
 %% @private
 terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
-code_change("v49", StateName, State, _Extra) when tuple_size(State) =:= 8 ->
-    %% Adds new field, reconnect_tref - default value: undefined.
-    NewState = list_to_tuple(tuple_to_list(State) ++ [undefined]),
-    {ok, StateName, NewState};
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
@@ -332,8 +318,6 @@ log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=URI}, Rest)
     [DrainId, ChannelId, uri_to_string(URI) | Rest].
 
 %% @private
-scheme_to_transport("https") -> cowboy_ssl_transport;
-scheme_to_transport("http") -> cowboy_tcp_transport.
 
 %% @private
 request_to_iolist(#frame{frame = Body,
@@ -498,11 +482,6 @@ cancel_reconnect(State = #state{reconnect_tref=Ref}) when is_reference(Ref) ->
     State#state{reconnect_tref=undefined};
 cancel_reconnect(State = #state{reconnect_tref=undefined}) ->
     State.
-
-client_init("http") ->
-    cowboy_client:init([]);
-client_init("https") ->
-    cowboy_client:init([{reuse_sessions, false}]).
 
 ltcy(Start, End) ->
     timer:now_diff(End, Start).
