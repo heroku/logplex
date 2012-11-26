@@ -239,9 +239,8 @@ valid_uri(#ex_uri{scheme=Syslog} = Uri) when Syslog =:= "syslog";
     logplex_tcpsyslog_drain:valid_uri(Uri);
 valid_uri(#ex_uri{scheme="udpsyslog"} = Uri) ->
     logplex_udpsyslog_drain:valid_uri(Uri);
-valid_uri(#ex_uri{scheme=Http} = Uri)
-  when Http =:= "http"; Http =:= "https"  ->
-    {valid, http, Uri};
+valid_uri(#ex_uri{scheme="http" ++ _} = Uri) ->
+    logplex_http_drain:valid_uri(Uri);
 valid_uri(#ex_uri{scheme=Scheme}) ->
     {error, {unknown_scheme, Scheme}};
 valid_uri({error, _} = Err) -> Err.
