@@ -41,6 +41,10 @@ handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = drain_id(parse_id(Rest)),
     create_drain(Id, Dict);
 
+handle({load, <<"cred:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
+    Id = logplex_cred:binary_to_id(parse_id(Rest)),
+    create_cred(Id, Dict);
+
 handle({load, _Key, _Val}) ->
     ok;
 
@@ -69,6 +73,12 @@ handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     create_drain(Id, Dict),
     ?INFO("at=set type=drain id=~p", [Id]);
 
+handle({cmd, "hmset", [<<"cred:", Rest/binary>> | Args]}) ->
+    Id = logplex_cred:binary_to_id(parse_id(Rest)),
+    Dict = dict_from_list(Args),
+    create_cred(Id, Dict),
+    ?INFO("at=set type=cred id=~p", [Id]);
+
 handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
   when byte_size(UUID) =:= 36 ->
     catch logplex_session:store(UUID, Body),
@@ -89,6 +99,11 @@ handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     ?INFO("at=delete type=drain id=~p", [Id]),
     catch logplex_drain:stop(Id),
     ets:delete(drains, Id);
+
+handle({cmd, "del", [<<"cred:", Rest/binary>> | _Args]}) ->
+    Id = logplex_cred:binary_to_id(parse_id(Rest)),
+    ?INFO("at=delete type=cred id=~p", [Id]),
+    logplex_cred:delete(Id);
 
 handle({cmd, "del", [<<"session:", UUID/binary>> | _Args]})
   when byte_size(UUID) =:= 36 ->
@@ -190,6 +205,15 @@ create_drain(Id, Dict) ->
                             end
                     end
             end
+    end.
+
+create_cred(Id, Dict) ->
+    try logplex_cred:from_dict(Id, Dict) of
+        Cred ->
+            logplex_cred:cache(Cred)
+    catch
+        error:Why ->
+            ?ERR("at=create_cred error=~1000p", [Why])
     end.
 
 %% Until we can rely on every record containing a 'url' value, we need

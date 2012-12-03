@@ -220,3 +220,33 @@ quarantine_channel(ChannelId) when is_integer(ChannelId) ->
 unquarantine_channel(ChannelId) when is_integer(ChannelId) ->
     redo:cmd(config, [<<"SREM">>, <<"quarantine:channels">>,
                       integer_to_list(ChannelId)]).
+
+%%====================================================================
+%% CREDS
+%%====================================================================
+
+-spec store_cred(ID::binary(),
+                 Pass::binary(),
+                 Perms::[{binary(), binary()}]) ->
+                        'ok' | {'error', Reason::term()}.
+store_cred(Id, Pass, Perms)
+  when is_binary(Id),
+       is_binary(Pass),
+       is_list(Perms) ->
+    Key = iolist_to_binary([<<"cred:">>, Id]),
+    Cmd = [<<"HMSET">>, Key,
+           <<"pass">>, Pass
+           | lists:append([ [Perm, Value] || {Perm, Value} <- Perms]) ],
+    case redo:cmd(config, Cmd) of
+        <<"OK">> ->
+            ok;
+        {error, Err} ->
+            {error, Err}
+    end.
+
+delete_cred(Id) when is_binary(Id) ->
+    Key = iolist_to_binary([<<"cred:">>, Id]),
+    case redo:cmd(config, [<<"DEL">>, Key ]) of
+        1 -> ok;
+        Err -> Err
+    end.
