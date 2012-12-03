@@ -36,6 +36,8 @@
          ,new/2
          ,new/3
          ,id/1
+         ,binary_to_id/1
+         ,id_to_binary/1
          ,name/1
          ,flags/1
         ]).
@@ -213,3 +215,9 @@ can_add_drain(ChannelId)
        true ->
             cannot_add_drain
     end.
+
+binary_to_id(Bin) when is_binary(Bin) ->
+    list_to_integer(binary_to_list(Bin)).
+
+id_to_binary(Id) when is_integer(Id) ->
+    iolist_to_binary(integer_to_list(Id)).
