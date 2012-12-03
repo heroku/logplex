@@ -434,31 +434,23 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
     end.
 
 authorize(Req) ->
-    AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
-    case Req:get_header_value("Authorization") of
-        [$B, $a, $s, $i, $c, $  | Encoded] ->
-            TrustedValues = [os:getenv("LOGPLEX_CORE_USERPASS"),
-                             os:getenv("LOGPLEX_ION_USERPASS")],
-            case basic_auth_is_valid(binary_to_list(base64:decode(list_to_binary(Encoded))), TrustedValues) of
-                true ->
-                    true;
-                _ ->
-                    throw({401, <<"Not Authorized">>})
-            end;
-        AuthKey ->
-            true;
-        _ ->
-            throw({401, <<"Not Authorized">>})
+    try
+        AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
+        "Basic " ++ Encoded = Req:get_header_value("Authorization"),
+        case Encoded of
+            AuthKey -> true;
+            _ ->
+                {ok, Cred} = logplex_cred:verify_basic(Encoded),
+                permitted = logplex_cred:has_perm(full_api, Cred),
+                true
+        end
+    catch
+        Class:Ex ->
+            Stack = erlang:get_stacktrace(),
+            ?WARN("at=authorize exception=~1000p",
+                  [{Class, Ex, Stack}]),
+            error_resp(401, <<"Not Authorized">>)
     end.
-
-basic_auth_is_valid(Val, [Val|_]) when is_list(Val), length(Val) > 0 ->
-    true;
-
-basic_auth_is_valid(Val, [_|Tail]) ->
-    basic_auth_is_valid(Val, Tail);
-
-basic_auth_is_valid(_, []) ->
-    false.
 
 error_resp(RespCode, Body) ->
     throw({RespCode, Body}).
