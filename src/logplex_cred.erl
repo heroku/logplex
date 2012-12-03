@@ -26,7 +26,7 @@
          ,grant/2
         ]).
 
--type perm() :: 'any_channel' | 'core' | 'ion' |
+-type perm() :: 'any_channel' | 'full_api' |
                 {'channel', logplex_channel:id()}.
 
 -record(cred, {id :: binary(),
@@ -118,7 +118,7 @@ cred_from_dict(Key, Value, Cred) ->
 
 perms_to_dict(Perms) ->
     [ case Perm of
-          core -> {<<"full_api">>, <<"1">>};
+          full_api -> {<<"full_api">>, <<"1">>};
           any_channel -> {<<"channel">>, <<"any">>};
           {channel, Id} -> {<<"channel">>, logplex_channel:id_to_binary(Id)}
       end
