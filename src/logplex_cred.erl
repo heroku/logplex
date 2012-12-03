@@ -21,6 +21,8 @@
          ,new/1
          ,id/0
          ,id/1
+         ,pass/1
+         ,perms/1
          ,id_to_binary/1
          ,binary_to_id/1
          ,grant/2
@@ -50,6 +52,8 @@ new() ->
           pass = pass()}.
 
 id(#cred{id = Id}) -> Id.
+perms(#cred{perms = Perms}) -> Perms.
+pass(#cred{pass = Pass}) -> Pass.
 
 id() ->
     bytes_to_iolist(crypto:rand_bytes(16)).
