@@ -104,7 +104,10 @@ valid_perm({channel, Id}) when is_integer(Id) -> valid;
 valid_perm(_) -> invalid.
 
 has_perm(Perm, Cred = #cred{}) ->
-    ordsets:is_element(Perm, perms(Cred)).
+    case ordsets:is_element(Perm, perms(Cred)) of
+        true -> permitted;
+        false -> not_permitted
+    end.
 
 verify_basic(BasicAuthStr) ->
     try binary:split(base64:decode(BasicAuthStr), <<":">>) of
