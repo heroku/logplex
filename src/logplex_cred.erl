@@ -28,6 +28,9 @@
          ,grant/2
         ]).
 
+-export([verify_basic/1
+         ,has_perm/2]).
+
 -type perm() :: 'any_channel' | 'full_api' |
                 {'channel', logplex_channel:id()}.
 
@@ -99,6 +102,31 @@ valid_perm(full_api) -> valid;
 valid_perm(any_channel) -> valid;
 valid_perm({channel, Id}) when is_integer(Id) -> valid;
 valid_perm(_) -> invalid.
+
+has_perm(Perm, Cred = #cred{}) ->
+    ordsets:is_element(Perm, perms(Cred)).
+
+verify_basic(BasicAuthStr) ->
+    try binary:split(base64:decode(BasicAuthStr), <<":">>) of
+        [Id, Pass] ->
+            case lookup(Id) of
+                no_such_cred -> {error, invalid_credentials};
+                Cred ->
+                    case pass(Cred) of
+                        Pass ->
+                            {ok, Cred};
+                        _WrongPass ->
+                            {error, {incorrect_pass, Pass}}
+                    end
+            end;
+        [_] ->
+            {error, not_basic_auth}
+    catch
+        _Class:_Ex ->
+            {error, invalid_encoding}
+    end.
+
+
 
 %%====================================================================
 %% Internal functions
