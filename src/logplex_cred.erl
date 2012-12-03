@@ -23,6 +23,7 @@
          ,id/1
          ,id_to_binary/1
          ,binary_to_id/1
+         ,grant/2
         ]).
 
 -type perm() :: 'any_channel' | 'core' | 'ion' |
@@ -84,6 +85,16 @@ destroy(#cred{id = Id}) ->
 
 id_to_binary(Bin) when is_binary(Bin) -> Bin.
 binary_to_id(Bin) -> Bin.
+
+grant(Perm, Cred = #cred{perms = Perms}) ->
+    valid = valid_perm(Perm),
+    NewPerms = ordsets:add_element(Perm, Perms),
+    Cred#cred{perms = NewPerms}.
+
+valid_perm(full_api) -> valid;
+valid_perm(any_channel) -> valid;
+valid_perm({channel, Id}) when is_integer(Id) -> valid;
+valid_perm(_) -> invalid.
 
 %%====================================================================
 %% Internal functions
