@@ -30,7 +30,7 @@
 
 %% LOAD
 handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
-    Id = channel_id(parse_id(Rest)),
+    Id = logplex_channel:binary_to_id(parse_id(Rest)),
     create_channel(Id, Dict);
 
 handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
@@ -52,7 +52,7 @@ handle({load, eof}) ->
 
 %% STREAM
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
-    Id = channel_id(parse_id(Rest)),
+    Id = logplex_channel:binary_to_id(parse_id(Rest)),
     Dict = dict_from_list(Args),
     ?INFO("at=set type=channel id=~p", [Id]),
     create_channel(Id, Dict);
@@ -75,7 +75,7 @@ handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
     ?INFO("at=setex type=session id=~p", [UUID]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
-    Id = channel_id(parse_id(Rest)),
+    Id = logplex_channel:id_from_binary(parse_id(Rest)),
     ?INFO("at=delete type=channel id=~p", [Id]),
     ets:delete(channels, Id);
 
@@ -238,9 +238,6 @@ dict_find(Key, Dict, Default) ->
         {ok, Val} -> Val;
         _ -> Default
     end.
-
-channel_id(Bin) when is_binary(Bin) ->
-    list_to_integer(binary_to_list(Bin)).
 
 drain_id(Bin) when is_binary(Bin) ->
     list_to_integer(binary_to_list(Bin)).
