@@ -33,11 +33,14 @@
          ,has_perm/2
         ]).
 
--type perm() :: 'any_channel' | 'full_api' |
+-type id() :: binary().
+-type pass() :: binary().
+-type reportable_perm() :: 'any_channel' | 'full_api'.
+-type perm() :: reportable_perm() |
                 {'channel', logplex_channel:id()}.
 
--record(cred, {id :: binary(),
-               pass :: binary(),
+-record(cred, {id :: id(),
+               pass :: pass(),
                perms = ordsets:new() :: ordsets:ordset(perm())
               }).
 
@@ -69,6 +72,7 @@ pass() ->
 bytes_to_iolist(Bytes) ->
     << <<(hd(integer_to_list(Nib, 16))):8>> || <<Nib:4>> <= Bytes >>.
 
+-spec from_dict(id(), dict()) -> #cred{}.
 from_dict(Id, Dict) ->
     dict:fold(fun cred_from_dict/3, new(Id), Dict).
 
@@ -78,6 +82,7 @@ cache(#cred{} = Cred) ->
 delete(Id) ->
     ets:delete(?CRED_TAB, Id).
 
+-spec lookup(id()) -> #cred{}.
 lookup(Id) ->
     case ets:lookup(?CRED_TAB, Id) of
         [Cred = #cred{}] -> Cred;
@@ -95,22 +100,29 @@ destroy(#cred{id = Id}) ->
 id_to_binary(Bin) when is_binary(Bin) -> Bin.
 binary_to_id(Bin) -> Bin.
 
+-spec grant(perm(), #cred{}) -> #cred{}.
 grant(Perm, Cred = #cred{perms = Perms}) ->
     valid = valid_perm(Perm),
     NewPerms = ordsets:add_element(Perm, Perms),
     Cred#cred{perms = NewPerms}.
 
+-spec valid_perm(any()) -> 'valid' | 'invalid'.
 valid_perm(full_api) -> valid;
 valid_perm(any_channel) -> valid;
 valid_perm({channel, Id}) when is_integer(Id) -> valid;
 valid_perm(_) -> invalid.
 
+-spec has_perm(perm(), #cred{}) -> 'permitted' | 'not_permitted'.
 has_perm(Perm, Cred = #cred{}) ->
     case ordsets:is_element(Perm, perms(Cred)) of
         true -> permitted;
         false -> not_permitted
     end.
 
+
+-spec verify_basic(string() | binary()) ->
+                          {'authorized', #cred{}} |
+                          {'error', term()}.
 verify_basic(BasicAuthStr) ->
     try binary:split(base64:decode(BasicAuthStr), <<":">>) of
         [Id, Pass] ->
@@ -122,6 +134,9 @@ verify_basic(BasicAuthStr) ->
             {error, invalid_encoding}
     end.
 
+-spec auth(id(), pass()) ->
+                  {'authorized', #cred{}} |
+                  {'error', term()}.
 auth(Id, Pass) when is_binary(Id), is_binary(Pass) ->
     case lookup(Id) of
         no_such_cred ->
