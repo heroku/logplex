@@ -92,6 +92,7 @@ lookup(Id) ->
 store(#cred{id = Id,
             pass = Pass,
             perms = Perms}) ->
+    maybe_report_perms(Id, Perms),
     redis_helper:store_cred(Id, Pass, perms_to_dict(Perms)).
 
 destroy(#cred{id = Id}) ->
@@ -179,3 +180,15 @@ perms_to_dict(Perms) ->
           {channel, Id} -> {<<"channel">>, logplex_channel:id_to_binary(Id)}
       end
       || Perm <- ordsets:to_list(Perms) ].
+
+-spec reportable_perms() -> ordsets:ordset(reportable_perm()).
+reportable_perms() ->
+    ordsets:from_list([any_channel, full_api]).
+
+maybe_report_perms(Id, Perms) ->
+    case ordsets:is_disjoint(reportable_perms(), Perms) of
+        true -> ok;
+        false ->
+            ?WARN("at=reportable_perm cred_id=~p perms=~p",
+                  [Id, ordsets:to_list(Perms)])
+    end.
