@@ -72,7 +72,8 @@ is_authorized(Req, State) ->
             end;
         {_, Req2} ->
             ?INFO("at=authorization err=missing_auth_header", []),
-            {{false, <<"Basic realm=Logplex">>}, Req2, State}
+            {{false, ?BASIC_AUTH}, Req2, State}
+    end.
 
 token_auth(State, Req2, TokenId) ->
     case logplex_token:lookup(TokenId) of
