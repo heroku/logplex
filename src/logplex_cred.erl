@@ -29,7 +29,9 @@
         ]).
 
 -export([verify_basic/1
-         ,has_perm/2]).
+         ,auth/2
+         ,has_perm/2
+        ]).
 
 -type perm() :: 'any_channel' | 'full_api' |
                 {'channel', logplex_channel:id()}.
@@ -112,21 +114,25 @@ has_perm(Perm, Cred = #cred{}) ->
 verify_basic(BasicAuthStr) ->
     try binary:split(base64:decode(BasicAuthStr), <<":">>) of
         [Id, Pass] ->
-            case lookup(Id) of
-                no_such_cred -> {error, invalid_credentials};
-                Cred ->
-                    case pass(Cred) of
-                        Pass ->
-                            {ok, Cred};
-                        _WrongPass ->
-                            {error, {incorrect_pass, Pass}}
-                    end
-            end;
+            auth(Id, Pass);
         [_] ->
             {error, not_basic_auth}
     catch
         _Class:_Ex ->
             {error, invalid_encoding}
+    end.
+
+auth(Id, Pass) when is_binary(Id), is_binary(Pass) ->
+    case lookup(Id) of
+        no_such_cred ->
+            {error, invalid_credentials};
+        Cred ->
+            case pass(Cred) of
+                Pass ->
+                    {authorized, Cred};
+                _WrongPass ->
+                    {error, {incorrect_pass, Pass}}
+            end
     end.
 
 
