@@ -75,9 +75,9 @@ is_authorized(Req, State) ->
                                          channel_id=ChanId,
                                          token=logplex_token:id(Token)}}
                     end;
-                _Else ->
-                    ?INFO("at=authorization err=incorrect_auth_header hdr=~p", [_Else]),
-                    {{false, <<"Basic realm=Logplex">>}, Req2, State}
+                Else ->
+                    ?INFO("at=authorization err=incorrect_auth_header hdr=~p", [Else]),
+                    {{false, ?BASIC_AUTH}, Req2, State}
             end;
         {_, Req2} ->
             ?INFO("at=authorization err=missing_auth_header", []),
