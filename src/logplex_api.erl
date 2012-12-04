@@ -440,7 +440,7 @@ authorize(Req) ->
         case Encoded of
             AuthKey -> true;
             _ ->
-                {ok, Cred} = logplex_cred:verify_basic(Encoded),
+                {authorized, Cred} = logplex_cred:verify_basic(Encoded),
                 permitted = logplex_cred:has_perm(full_api, Cred),
                 true
         end
