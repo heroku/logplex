@@ -455,6 +455,7 @@ authorize(Req) ->
 error_resp(RespCode, Body) ->
     throw({RespCode, Body}).
 
+
 filter_and_send_logs(Socket, Logs, [], _Num) ->
     [gen_tcp:send(Socket, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
 
@@ -472,6 +473,7 @@ filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
         false ->
             filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
     end.
+
 
 tail_init(Socket, Buffer, Filters) ->
     inet:setopts(Socket, [{active, once}]),
