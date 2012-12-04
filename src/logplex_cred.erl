@@ -82,7 +82,7 @@ cache(#cred{} = Cred) ->
 delete(Id) ->
     ets:delete(?CRED_TAB, Id).
 
--spec lookup(id()) -> #cred{}.
+-spec lookup(id()) -> #cred{} | 'no_such_cred'.
 lookup(Id) ->
     case ets:lookup(?CRED_TAB, Id) of
         [Cred = #cred{}] -> Cred;
