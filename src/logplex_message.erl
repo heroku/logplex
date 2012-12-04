@@ -8,6 +8,7 @@
 -export([process_msg/4
          ,process_msg/5
          ,process_msgs/4
+         ,process_msgs/1
          ,parse_msg/1
         ]).
 
@@ -22,6 +23,23 @@ process_msgs(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
     [ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
       || RawMsg <- Msgs ],
     ok.
+
+process_msgs(Msgs) ->
+    ShardInfo = shard_info(),
+    [ case parse_msg(RawMsg) of
+          {ok, TokenId} ->
+              case logplex_token:lookup(TokenId) of
+                  undefined -> {error, invalid_token};
+                  Token ->
+                      ChannelId = logplex_token:channel_id(Token),
+                      TokenName = logplex_token:name(Token),
+                      process_msg(RawMsg, ChannelId, TokenId,
+                                  TokenName, ShardInfo)
+              end;
+          _ ->
+              {error, malformed_msg}
+      end
+      || {msg, RawMsg} <- Msgs ].
 
 process_msg(RawMsg, ChannelId, Token, TokenName) when not is_list(RawMsg) ->
     process_msg(RawMsg, ChannelId, Token, TokenName,
