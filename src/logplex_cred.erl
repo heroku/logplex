@@ -92,7 +92,7 @@ lookup(Id) ->
 store(#cred{id = Id,
             pass = Pass,
             perms = Perms}) ->
-    maybe_report_perms(Id, Perms),
+    maybe_report_operation(Id, Perms, store),
     redis_helper:store_cred(Id, Pass, perms_to_dict(Perms)).
 
 destroy(#cred{id = Id}) ->
@@ -185,10 +185,10 @@ perms_to_dict(Perms) ->
 reportable_perms() ->
     ordsets:from_list([any_channel, full_api]).
 
-maybe_report_perms(Id, Perms) ->
+maybe_report_operation(Id, Perms, Op) ->
     case ordsets:is_disjoint(reportable_perms(), Perms) of
         true -> ok;
         false ->
-            ?WARN("at=reportable_perm cred_id=~p perms=~p",
-                  [Id, ordsets:to_list(Perms)])
+            ?WARN("at=reportable_perms op=~p cred_id=~p perms=~p",
+                  [Op, Id, ordsets:to_list(Perms)])
     end.
