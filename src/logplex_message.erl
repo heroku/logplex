@@ -8,6 +8,7 @@
 -export([process_msg/4
          ,process_msg/5
          ,process_msgs/4
+         ,parse_msg/1
         ]).
 
 -include("logplex.hrl").
@@ -58,4 +59,13 @@ process_redis(ChannelId, ShardInfo, Msg) ->
             Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY,
                                               Msg, Expiry),
             logplex_queue:in(BufferPid, Cmd)
+    end.
+
+parse_msg(Msg) ->
+    case re:match(Msg, <<" +">>,
+                  [{parts, 5}]) of
+        [_PriVal, _Timestamp, _Host, Token = <<"t.", _/binary>>, _Rest] ->
+            {ok, Token};
+        _ ->
+            {error, token_not_found}
     end.
