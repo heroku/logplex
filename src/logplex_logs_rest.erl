@@ -29,6 +29,8 @@
                 channel_id :: logplex_channel:id(),
                 msgs :: list()}).
 
+-define(BASIC_AUTH, <<"Basic realm=Logplex">>).
+
 child_spec() ->
     cowboy:child_spec(?MODULE, 100,
                       cowboy_tcp_transport,
@@ -62,19 +64,8 @@ is_authorized(Req, State) ->
     case cowboy_http_req:header('Authorization', Req) of
         {<<"Basic ", Base64/binary>>, Req2} ->
             case binary:split(base64:decode(Base64), <<":">>) of
-                [_User, TokenId = <<"t.", _/binary>>] ->
-                    case logplex_token:lookup(TokenId) of
-                        undefined ->
-                            ?INFO("at=authorization err=unknown_token token=~p", [TokenId]),
-                            {{false, <<"Basic realm=Logplex">>}, Req2, State};
-                        Token ->
-                            Name = logplex_token:name(Token),
-                            ChanId = logplex_token:channel_id(Token),
-                            {true, Req2,
-                             State#state{name=Name,
-                                         channel_id=ChanId,
-                                         token=logplex_token:id(Token)}}
-                    end;
+                [<<"token">>, TokenId = <<"t.", _/binary>>] ->
+                    token_auth(State, Req2, TokenId);
                 Else ->
                     ?INFO("at=authorization err=incorrect_auth_header hdr=~p", [Else]),
                     {{false, ?BASIC_AUTH}, Req2, State}
@@ -82,6 +73,20 @@ is_authorized(Req, State) ->
         {_, Req2} ->
             ?INFO("at=authorization err=missing_auth_header", []),
             {{false, <<"Basic realm=Logplex">>}, Req2, State}
+
+token_auth(State, Req2, TokenId) ->
+    case logplex_token:lookup(TokenId) of
+        undefined ->
+            ?INFO("at=authorization err=unknown_token token=~p", [TokenId]),
+            {{false, ?BASIC_AUTH}, Req2, State};
+        Token ->
+            Name = logplex_token:name(Token),
+            ChanId = logplex_token:channel_id(Token),
+            {true, Req2,
+             State#state{name=Name,
+                         channel_id=ChanId,
+                         token=logplex_token:id(Token)}}
+    end.
     end.
 
 known_content_type(Req, State) ->
