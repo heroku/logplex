@@ -24,9 +24,9 @@
 -export([handle/2
          ,terminate/2]).
 
--record(state, {token :: logplex_token:id(),
+-record(state, {token :: logplex_token:id() | 'any',
                 name :: logplex_token:name(),
-                channel_id :: logplex_channel:id(),
+                channel_id :: logplex_channel:id() | 'any',
                 msgs :: list()}).
 
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
