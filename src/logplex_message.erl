@@ -62,7 +62,7 @@ process_redis(ChannelId, ShardInfo, Msg) ->
     end.
 
 parse_msg(Msg) ->
-    case re:match(Msg, <<" +">>,
+    case re:split(Msg, <<" +">>,
                   [{parts, 5}]) of
         [_PriVal, _Timestamp, _Host, Token = <<"t.", _/binary>>, _Rest] ->
             {ok, Token};
