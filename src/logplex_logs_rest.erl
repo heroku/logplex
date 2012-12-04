@@ -137,11 +137,16 @@ malformed_request(Req, State) ->
 
 process_post(Req, State = #state{token = Token,
                                  channel_id = ChannelId,
-                                 name = Name})
-             when is_binary(Token) ->
+                                 name = Name}) ->
     try parse_logplex_body(Req, State) of
-        {parsed, Req2, State2 = #state{msgs = Msgs}} when is_list(Msgs)->
+        {parsed, Req2, State2 = #state{msgs = Msgs}}
+          when is_list(Msgs), is_binary(Token),
+               is_integer(ChannelId), is_binary(Name) ->
             logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
+            {true, Req2, State2#state{msgs = []}};
+        {parsed, Req2, State2 = #state{msgs = Msgs}}
+          when Token =:= any, ChannelId =:= any ->
+            logplex_message:process_msgs(Msgs),
             {true, Req2, State2#state{msgs = []}};
         {{error, Reason}, Req2, State2} ->
             ?WARN("at=parse_logplex_body error=~p", [Reason]),
