@@ -66,6 +66,8 @@ is_authorized(Req, State) ->
             case binary:split(base64:decode(Base64), <<":">>) of
                 [<<"token">>, TokenId = <<"t.", _/binary>>] ->
                     token_auth(State, Req2, TokenId);
+                [CredId, Pass] ->
+                    cred_auth(State, Req2, CredId, Pass);
                 Else ->
                     ?INFO("at=authorization err=incorrect_auth_header hdr=~p", [Else]),
                     {{false, ?BASIC_AUTH}, Req2, State}
@@ -88,6 +90,25 @@ token_auth(State, Req2, TokenId) ->
                          channel_id=ChanId,
                          token=logplex_token:id(Token)}}
     end.
+
+cred_auth(State, Req2, CredId, Pass) ->
+    case logplex_cred:auth(CredId, Pass) of
+        {authorized, Cred} ->
+            case logplex_cred:has_perm(any_channel, Cred) of
+                permitted ->
+                    {true, Req2, State#state{name = CredId,
+                                             channel_id = any,
+                                             token = any}};
+                not_permitted ->
+                    ?INFO("at=authorization err=any_channel_not_permitted"
+                          " credid=~p", [CredId]),
+                    respond(403, <<"Credential not permitted "
+                                   "to write to any channel.">>,
+                            Req2, State)
+            end;
+        {error, invalid_credentials} ->
+            ?INFO("at=authorization err=invalid_credentials credid=~p", [CredId]),
+            {{false, ?BASIC_AUTH}, Req2, State}
     end.
 
 known_content_type(Req, State) ->
@@ -165,3 +186,11 @@ content_types_provided(Req, State) ->
 
 to_response(Req, State) ->
     {"OK", Req, State}.
+
+
+respond(Code, Text, Req, State) ->
+    {ok, Req2} = cowboy_http_req:set_resp_header(
+                   <<"Www-Authenticate">>, ?BASIC_AUTH, Req),
+    {ok, Req3} = cowboy_http_req:set_resp_body(Text, Req2),
+    {ok, Req4} = cowboy_http_req:reply(Code, Req3),
+    {halt, Req4, State}.
