@@ -85,7 +85,7 @@ handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
     ?INFO("at=setex type=session id=~p", [UUID]);
 
 handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
-    Id = logplex_channel:id_from_binary(parse_id(Rest)),
+    Id = logplex_channel:binary_to_id(parse_id(Rest)),
     ?INFO("at=delete type=channel id=~p", [Id]),
     ets:delete(channels, Id);
 
