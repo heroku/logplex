@@ -445,6 +445,10 @@ authorize(Req) ->
                 true
         end
     catch
+        error:{badmatch, What} ->
+            ?INFO("at=authorize incorrect_cred error=~p",
+                  [What]),
+            error_resp(401, <<"Not Authorized">>);
         Class:Ex ->
             Stack = erlang:get_stacktrace(),
             ?WARN("at=authorize exception=~1000p",
