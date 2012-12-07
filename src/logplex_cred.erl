@@ -54,7 +54,8 @@
 create_ets_table() ->
     ets:new(?CRED_TAB, [named_table, public, set, {keypos, 2}]).
 
-new(Id) when is_binary(Id) -> #cred{id = Id}.
+new(Id) when is_binary(Id) -> #cred{id = Id,
+                                    pass = pass()}.
 new(Id, Pass) when is_binary(Id), is_binary(Pass) ->
     #cred{id = Id,
           pass = Pass}.
