@@ -153,7 +153,7 @@ auth(Id, Pass) when is_binary(Id), is_binary(Pass) ->
                 Pass ->
                     {authorized, Cred};
                 _WrongPass ->
-                    {error, {incorrect_pass, Pass}}
+                    {error, {incorrect_pass, Id}}
             end
     end.
 
