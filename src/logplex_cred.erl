@@ -22,6 +22,7 @@
          ,new/2
          ,id/0
          ,id/1
+         ,pass/0
          ,pass/1
          ,perms/1
          ,id_to_binary/1
