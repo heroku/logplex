@@ -57,10 +57,21 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     read_git_branch(),
     read_availability_zone(),
-    boot_pagerduty(),
     setup_redgrid_vals(),
     setup_redis_shards(),
     application:start(nsync),
+
+    application:set_env(lager, handlers, {handlers, [
+                                                    {lager_console_backend, [info, warning]},
+                                                    {lager_email_backend, [
+                                                                          {level, error}, 
+                                                                          {from, os:getenv("LAGER_EMAIL_FROM")},
+                                                                          {to, [os:getenv("LAGER_EMAIL_TO")]},
+                                                                          {smtp_server, "localhost"},
+                                                                          {emails_per_min, 10}
+                                                                          ]}
+                                                    ]}),    
+    lager:start(),
     logplex_sup:start_link().
 
 stop(_State) ->
@@ -95,21 +106,6 @@ read_availability_zone() ->
     case httpc:request("http://169.254.169.254/latest/meta-data/placement/availability-zone") of
         {ok,{{_,200,_}, _Headers, Zone}} ->
             application:set_env(logplex, availability_zone, Zone);
-        _ ->
-            ok
-    end.
-
-boot_pagerduty() ->
-    case os:getenv("HEROKU_DOMAIN") of
-        "heroku.com" ->
-            case os:getenv("PAGERDUTY") of
-                "0" -> ok;
-                _ ->
-                    ok = application:load(pagerduty),
-                    application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
-                    ok = application:start(pagerduty, temporary),
-                    ok = error_logger:add_report_handler(logplex_report_handler)
-            end;
         _ ->
             ok
     end.
