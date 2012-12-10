@@ -57,6 +57,7 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     read_git_branch(),
     read_availability_zone(),
+    read_environment(),
     boot_pagerduty(),
     setup_redgrid_vals(),
     setup_redis_shards(),
@@ -98,6 +99,14 @@ read_availability_zone() ->
         _ ->
             ok
     end.
+
+read_environment() ->
+    [case os:getenv(SK) of
+         false -> ok;
+         Val ->
+             application:set_env(?APP, K, Val)
+     end
+     || {K, SK} <- [ {instance_name, "INSTANCE_NAME"} ]].
 
 boot_pagerduty() ->
     case os:getenv("HEROKU_DOMAIN") of
