@@ -58,6 +58,7 @@ start(_StartType, _StartArgs) ->
     read_git_branch(),
     read_availability_zone(),
     read_environment(),
+    setup_crashdumps(),
     boot_pagerduty(),
     setup_redgrid_vals(),
     setup_redis_shards(),
@@ -145,6 +146,31 @@ setup_redis_shards() ->
            end,
     application:set_env(logplex, logplex_shard_urls,
                         logplex_shard:redis_sort(URLs)).
+
+setup_crashdumps() ->
+    case dumpdir() of
+        undefined -> ok;
+        Dir ->
+            File = string:join([config(instance_name),
+                                "boot",
+                                logplex_syslog_utils:datetime(now)], "_"),
+            DumpFile = filename:join(Dir, File),
+            ?INFO("at=setup_crashdumps dumpfile=~p",
+                  [DumpFile]),
+            os:putenv("ERL_CRASH_DUMP", DumpFile)
+    end.
+
+dumpdir() ->
+    case config(crashdump_dir, undefined) of
+        undefined ->
+            case os:getenv("ERL_CRASH_DUMP") of
+                false ->
+                    undefined;
+                File ->
+                    filename:dirname(File)
+            end;
+        Dir -> Dir
+    end.
 
 logplex_work_queue_args() ->
     MaxLength =
