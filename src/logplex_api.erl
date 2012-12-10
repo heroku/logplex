@@ -447,7 +447,7 @@ authorize(Req) ->
     catch
         error:{badmatch, {incorrect_pass, CredId}} ->
             ?INFO("at=authorize cred_id=~p error=incorrect_pass",
-                  [CredId, What]),
+                  [CredId]),
             error_resp(401, <<"Not Authorized">>);
         Class:Ex ->
             Stack = erlang:get_stacktrace(),
