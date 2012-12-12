@@ -117,7 +117,7 @@ boot_pagerduty() ->
                 _ ->
                     ok = application:load(pagerduty),
                     application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
-                    ok = application:start(pagerduty, temporary),
+                    a_start(pagerduty, temporary),
                     ok = error_logger:add_report_handler(logplex_report_handler)
             end;
         _ ->
