@@ -154,7 +154,7 @@ to_pkts(Buf, BytesTotal, BytesRemaining, Fun)
                                                       Remaining,
                                                       Fun),
                     {[Data, Rest], Count + 1, FinalBuf};
-                _ when DataSize > BytesTotal ->
+                _ when DataSize >= BytesTotal ->
                     %% We will exceed bytes remaining, but this
                     %% message is a pig, so send it anyway.
                     {Data, 1, NewBuf};
