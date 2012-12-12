@@ -101,15 +101,16 @@ delete(Id) ->
 -spec lookup(id()) -> #cred{} | 'no_such_cred'.
 lookup(Id) ->
     case ets:lookup(?CRED_TAB, Id) of
-        [Cred = #cred{}] ->
-            %% Check to see whether we need to upgrade a cred.
-            case upgrade_record(Cred) of
-                Cred -> Cred;
+        [Cred = #cred{}] -> Cred;
+        [OldCred] ->
+            %% We need to upgrade a cred.
+            case upgrade_record(OldCred) of
+                OldCred -> OldCred;
                 NewCred ->
                     cache(NewCred),
                     NewCred
             end;
-        _ -> no_such_cred
+        [] -> no_such_cred
     end.
 
 store(#cred{id = Id,
