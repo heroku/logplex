@@ -25,6 +25,8 @@
          ,pass/0
          ,pass/1
          ,perms/1
+         ,name/1
+         ,rename/2
          ,id_to_binary/1
          ,binary_to_id/1
          ,grant/2
@@ -35,15 +37,19 @@
          ,has_perm/2
         ]).
 
+-export([upgrade_record/1]).
+
 -type id() :: binary().
 -type pass() :: binary().
 -type reportable_perm() :: 'any_channel' | 'full_api'.
 -type perm() :: reportable_perm() |
                 {'channel', logplex_channel:id()}.
+-type name() :: binary().
 
 -record(cred, {id :: id(),
                pass :: pass(),
-               perms = ordsets:new() :: ordsets:ordset(perm())
+               perms = ordsets:new() :: ordsets:ordset(perm()),
+               name :: name()
               }).
 
 -define(CRED_TAB, creds).
@@ -68,6 +74,10 @@ new() ->
 id(#cred{id = Id}) -> Id.
 perms(#cred{perms = Perms}) -> Perms.
 pass(#cred{pass = Pass}) -> Pass.
+name(#cred{name = Name}) -> Name.
+
+rename(NewName, Cred = #cred{}) ->
+    Cred#cred{name = NewName}.
 
 id() ->
     bytes_to_iolist(crypto:rand_bytes(16)).
@@ -91,7 +101,14 @@ delete(Id) ->
 -spec lookup(id()) -> #cred{} | 'no_such_cred'.
 lookup(Id) ->
     case ets:lookup(?CRED_TAB, Id) of
-        [Cred = #cred{}] -> Cred;
+        [Cred = #cred{}] ->
+            %% Check to see whether we need to upgrade a cred.
+            case upgrade_record(Cred) of
+                Cred -> Cred;
+                NewCred ->
+                    cache(NewCred),
+                    NewCred
+            end;
         _ -> no_such_cred
     end.
 
@@ -157,14 +174,15 @@ auth(Id, Pass) when is_binary(Id), is_binary(Pass) ->
             end
     end.
 
-
-
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
 cred_from_dict(<<"pass">>, Pass, Cred = #cred{}) ->
     Cred#cred{pass = Pass};
+
+cred_from_dict(<<"name">>, Name, Cred = #cred{}) ->
+    Cred#cred{name = Name};
 
 cred_from_dict(<<"full_api">>, _, Cred = #cred{perms = Perms}) ->
     Cred#cred{perms = ordsets:add_element(full_api, Perms)};
@@ -198,3 +216,7 @@ maybe_report_operation(Id, Perms, Op) ->
             ?WARN("at=reportable_perms op=~p cred_id=~p perms=~p",
                   [Op, Id, ordsets:to_list(Perms)])
     end.
+
+upgrade_record(#cred{} = Cred) -> Cred;
+upgrade_record({cred, Id, Pass, Perms}) ->
+    #cred{id = Id, pass = Pass, perms = Perms, name = undefined}.
