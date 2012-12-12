@@ -227,15 +227,18 @@ unquarantine_channel(ChannelId) when is_integer(ChannelId) ->
 
 -spec store_cred(ID::binary(),
                  Pass::binary(),
-                 Perms::[{binary(), binary()}]) ->
+                 Perms::[{binary(), binary()}],
+                 Name::binary()) ->
                         'ok' | {'error', Reason::term()}.
-store_cred(Id, Pass, Perms)
+store_cred(Id, Pass, Perms, Name)
   when is_binary(Id),
        is_binary(Pass),
-       is_list(Perms) ->
+       is_list(Perms),
+       is_binary(Name) ->
     Key = iolist_to_binary([<<"cred:">>, Id]),
     Cmd = [<<"HMSET">>, Key,
-           <<"pass">>, Pass
+           <<"pass">>, Pass,
+           <<"name">>, Name
            | lists:append([ [Perm, Value] || {Perm, Value} <- Perms]) ],
     case redo:cmd(config, Cmd) of
         <<"OK">> ->

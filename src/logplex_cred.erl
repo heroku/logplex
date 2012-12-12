@@ -115,9 +115,10 @@ lookup(Id) ->
 
 store(#cred{id = Id,
             pass = Pass,
-            perms = Perms}) ->
+            perms = Perms,
+            name = Name}) ->
     maybe_report_operation(Id, Perms, store),
-    redis_helper:store_cred(Id, Pass, perms_to_dict(Perms)).
+    redis_helper:store_cred(Id, Pass, perms_to_dict(Perms), Name).
 
 destroy(#cred{id = Id}) ->
     redis_helper:delete_cred(Id).
