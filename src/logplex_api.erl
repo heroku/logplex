@@ -434,34 +434,31 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
     end.
 
 authorize(Req) ->
-    AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
-    case Req:get_header_value("Authorization") of
-        [$B, $a, $s, $i, $c, $  | Encoded] ->
-            TrustedValues = [os:getenv("LOGPLEX_CORE_USERPASS"),
-                             os:getenv("LOGPLEX_ION_USERPASS")],
-            case basic_auth_is_valid(binary_to_list(base64:decode(list_to_binary(Encoded))), TrustedValues) of
-                true ->
-                    true;
-                _ ->
-                    throw({401, <<"Not Authorized">>})
-            end;
-        AuthKey ->
-            true;
-        _ ->
-            throw({401, <<"Not Authorized">>})
+    try
+        AuthKey = os:getenv("LOGPLEX_AUTH_KEY"),
+        "Basic " ++ Encoded = Req:get_header_value("Authorization"),
+        case Encoded of
+            AuthKey -> true;
+            _ ->
+                {authorized, Cred} = logplex_cred:verify_basic(Encoded),
+                permitted = logplex_cred:has_perm(full_api, Cred),
+                true
+        end
+    catch
+        error:{badmatch, {incorrect_pass, CredId}} ->
+            ?INFO("at=authorize cred_id=~p error=incorrect_pass",
+                  [CredId]),
+            error_resp(401, <<"Not Authorized">>);
+        Class:Ex ->
+            Stack = erlang:get_stacktrace(),
+            ?WARN("at=authorize exception=~1000p",
+                  [{Class, Ex, Stack}]),
+            error_resp(401, <<"Not Authorized">>)
     end.
-
-basic_auth_is_valid(Val, [Val|_]) when is_list(Val), length(Val) > 0 ->
-    true;
-
-basic_auth_is_valid(Val, [_|Tail]) ->
-    basic_auth_is_valid(Val, Tail);
-
-basic_auth_is_valid(_, []) ->
-    false.
 
 error_resp(RespCode, Body) ->
     throw({RespCode, Body}).
+
 
 filter_and_send_logs(Socket, Logs, [], _Num) ->
     [gen_tcp:send(Socket, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
@@ -480,6 +477,7 @@ filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
         false ->
             filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
     end.
+
 
 tail_init(Socket, Buffer, Filters) ->
     inet:setopts(Socket, [{active, once}]),

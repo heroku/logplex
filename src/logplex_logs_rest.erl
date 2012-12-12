@@ -24,10 +24,12 @@
 -export([handle/2
          ,terminate/2]).
 
--record(state, {token :: logplex_token:id(),
+-record(state, {token :: logplex_token:id() | 'any',
                 name :: logplex_token:name(),
-                channel_id :: logplex_channel:id(),
+                channel_id :: logplex_channel:id() | 'any',
                 msgs :: list()}).
+
+-define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 
 child_spec() ->
     cowboy:child_spec(?MODULE, 100,
@@ -62,26 +64,57 @@ is_authorized(Req, State) ->
     case cowboy_http_req:header('Authorization', Req) of
         {<<"Basic ", Base64/binary>>, Req2} ->
             case binary:split(base64:decode(Base64), <<":">>) of
-                [_User, TokenId = <<"t.", _/binary>>] ->
-                    case logplex_token:lookup(TokenId) of
-                        undefined ->
-                            ?INFO("at=authorization err=unknown_token token=~p", [TokenId]),
-                            {{false, <<"Basic realm=Logplex">>}, Req2, State};
-                        Token ->
-                            Name = logplex_token:name(Token),
-                            ChanId = logplex_token:channel_id(Token),
-                            {true, Req2,
-                             State#state{name=Name,
-                                         channel_id=ChanId,
-                                         token=logplex_token:id(Token)}}
-                    end;
-                _Else ->
-                    ?INFO("at=authorization err=incorrect_auth_header hdr=~p", [_Else]),
-                    {{false, <<"Basic realm=Logplex">>}, Req2, State}
+                [<<"token">>, TokenId = <<"t.", _/binary>>] ->
+                    token_auth(State, Req2, TokenId);
+                [CredId, Pass] ->
+                    cred_auth(State, Req2, CredId, Pass);
+                Else ->
+                    ?INFO("at=authorization err=incorrect_auth_header hdr=~p", [Else]),
+                    {{false, ?BASIC_AUTH}, Req2, State}
             end;
         {_, Req2} ->
             ?INFO("at=authorization err=missing_auth_header", []),
-            {{false, <<"Basic realm=Logplex">>}, Req2, State}
+            {{false, ?BASIC_AUTH}, Req2, State}
+    end.
+
+token_auth(State, Req2, TokenId) ->
+    case logplex_token:lookup(TokenId) of
+        undefined ->
+            ?INFO("at=authorization err=unknown_token token=~p", [TokenId]),
+            {{false, ?BASIC_AUTH}, Req2, State};
+        Token ->
+            Name = logplex_token:name(Token),
+            ChanId = logplex_token:channel_id(Token),
+            {true, Req2,
+             State#state{name=Name,
+                         channel_id=ChanId,
+                         token=logplex_token:id(Token)}}
+    end.
+
+cred_auth(State, Req2, CredId, Pass) ->
+    case logplex_cred:auth(CredId, Pass) of
+        {authorized, Cred} ->
+            case logplex_cred:has_perm(any_channel, Cred) of
+                permitted ->
+                    {true, Req2, State#state{name = CredId,
+                                             channel_id = any,
+                                             token = any}};
+                not_permitted ->
+                    ?INFO("at=authorization err=any_channel_not_permitted"
+                          " credid=~p", [CredId]),
+                    respond(403, <<"Credential not permitted "
+                                   "to write to any channel.">>,
+                            Req2, State)
+            end;
+        {error, {incorrect_pass, _}} ->
+            ?INFO("at=authorization err=invalid_credentials "
+                  "credid=~p", [CredId]),
+            {{false, ?BASIC_AUTH}, Req2, State};
+        {error, What} ->
+            ?INFO("at=authorization "
+                  "credid=~p err=~1000p",
+                  [CredId, What]),
+            {{false, ?BASIC_AUTH}, Req2, State}
     end.
 
 known_content_type(Req, State) ->
@@ -110,11 +143,16 @@ malformed_request(Req, State) ->
 
 process_post(Req, State = #state{token = Token,
                                  channel_id = ChannelId,
-                                 name = Name})
-             when is_binary(Token) ->
+                                 name = Name}) ->
     try parse_logplex_body(Req, State) of
-        {parsed, Req2, State2 = #state{msgs = Msgs}} when is_list(Msgs)->
+        {parsed, Req2, State2 = #state{msgs = Msgs}}
+          when is_list(Msgs), is_binary(Token),
+               is_integer(ChannelId), is_binary(Name) ->
             logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
+            {true, Req2, State2#state{msgs = []}};
+        {parsed, Req2, State2 = #state{msgs = Msgs}}
+          when Token =:= any, ChannelId =:= any ->
+            logplex_message:process_msgs(Msgs),
             {true, Req2, State2#state{msgs = []}};
         {{error, Reason}, Req2, State2} ->
             ?WARN("at=parse_logplex_body error=~p", [Reason]),
@@ -159,3 +197,11 @@ content_types_provided(Req, State) ->
 
 to_response(Req, State) ->
     {"OK", Req, State}.
+
+
+respond(Code, Text, Req, State) ->
+    {ok, Req2} = cowboy_http_req:set_resp_header(
+                   <<"Www-Authenticate">>, ?BASIC_AUTH, Req),
+    {ok, Req3} = cowboy_http_req:set_resp_body(Text, Req2),
+    {ok, Req4} = cowboy_http_req:reply(Code, Req3),
+    {halt, Req4, State}.

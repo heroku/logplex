@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -57,6 +57,8 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     read_git_branch(),
     read_availability_zone(),
+    read_environment(),
+    setup_crashdumps(),
     boot_pagerduty(),
     setup_redgrid_vals(),
     setup_redis_shards(),
@@ -99,6 +101,14 @@ read_availability_zone() ->
             ok
     end.
 
+read_environment() ->
+    [case os:getenv(SK) of
+         false -> ok;
+         Val ->
+             application:set_env(?APP, K, Val)
+     end
+     || {K, SK} <- [ {instance_name, "INSTANCE_NAME"} ]].
+
 boot_pagerduty() ->
     case os:getenv("HEROKU_DOMAIN") of
         "heroku.com" ->
@@ -107,7 +117,7 @@ boot_pagerduty() ->
                 _ ->
                     ok = application:load(pagerduty),
                     application:set_env(pagerduty, service_key, os:getenv("ROUTING_PAGERDUTY_SERVICE_KEY")),
-                    ok = application:start(pagerduty, temporary),
+                    a_start(pagerduty, temporary),
                     ok = error_logger:add_report_handler(logplex_report_handler)
             end;
         _ ->
@@ -136,6 +146,31 @@ setup_redis_shards() ->
            end,
     application:set_env(logplex, logplex_shard_urls,
                         logplex_shard:redis_sort(URLs)).
+
+setup_crashdumps() ->
+    case dumpdir() of
+        undefined -> ok;
+        Dir ->
+            File = string:join([config(instance_name),
+                                "boot",
+                                logplex_syslog_utils:datetime(now)], "_"),
+            DumpFile = filename:join(Dir, File),
+            ?INFO("at=setup_crashdumps dumpfile=~p",
+                  [DumpFile]),
+            os:putenv("ERL_CRASH_DUMP", DumpFile)
+    end.
+
+dumpdir() ->
+    case config(crashdump_dir, undefined) of
+        undefined ->
+            case os:getenv("ERL_CRASH_DUMP") of
+                false ->
+                    undefined;
+                File ->
+                    filename:dirname(File)
+            end;
+        Dir -> Dir
+    end.
 
 logplex_work_queue_args() ->
     MaxLength =

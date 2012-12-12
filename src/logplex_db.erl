@@ -34,6 +34,7 @@ create_ets_tables() ->
     ets:new(channels, [named_table, public, set, {keypos, 2}]),
     ets:new(tokens,   [named_table, public, set, {keypos, 2}]),
     ets:new(drains,   [named_table, public, set, {keypos, 2}]),
+    logplex_cred:create_ets_table(),
     logplex_session:create_ets_table(),
     ets:new(drain_sockets, [named_table, public, set]),
     ets:new(drain_socket_quarentine, [named_table, public, set]),

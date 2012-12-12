@@ -138,7 +138,7 @@ disconnected({post, Msg}, State) ->
     reconnect(buffer(Msg, State));
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
-          "data=~p state=disconnected",
+          "data=~1000p state=disconnected",
           log_info(State, [Msg])),
     {next_state, disconnected, State}.
 

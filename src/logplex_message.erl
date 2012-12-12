@@ -8,6 +8,8 @@
 -export([process_msg/4
          ,process_msg/5
          ,process_msgs/4
+         ,process_msgs/1
+         ,parse_msg/1
         ]).
 
 -include("logplex.hrl").
@@ -21,6 +23,23 @@ process_msgs(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
     [ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
       || RawMsg <- Msgs ],
     ok.
+
+process_msgs(Msgs) ->
+    ShardInfo = shard_info(),
+    [ case parse_msg(RawMsg) of
+          {ok, TokenId} ->
+              case logplex_token:lookup(TokenId) of
+                  undefined -> {error, invalid_token};
+                  Token ->
+                      ChannelId = logplex_token:channel_id(Token),
+                      TokenName = logplex_token:name(Token),
+                      process_msg(RawMsg, ChannelId, TokenId,
+                                  TokenName, ShardInfo)
+              end;
+          _ ->
+              {error, malformed_msg}
+      end
+      || {msg, RawMsg} <- Msgs ].
 
 process_msg(RawMsg, ChannelId, Token, TokenName) when not is_list(RawMsg) ->
     process_msg(RawMsg, ChannelId, Token, TokenName,
@@ -58,4 +77,13 @@ process_redis(ChannelId, ShardInfo, Msg) ->
             Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY,
                                               Msg, Expiry),
             logplex_queue:in(BufferPid, Cmd)
+    end.
+
+parse_msg(Msg) ->
+    case re:split(Msg, <<" +">>,
+                  [{parts, 5}]) of
+        [_PriVal, _Timestamp, _Host, Token = <<"t.", _/binary>>, _Rest] ->
+            {ok, Token};
+        _ ->
+            {error, token_not_found}
     end.
