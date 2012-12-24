@@ -57,7 +57,7 @@ loop(BufferPid, Socket, RedisOpts) ->
         {'EXIT', {noproc, _}} ->
             exit(normal);
         timeout -> ok;
-        {NumItems, Logs} ->
+        {NumItems, Logs} when is_list(Logs), is_integer(NumItems) ->
             case gen_tcp:send(Socket, Logs) of
                 ok ->
                     logplex_stats:incr(message_processed, NumItems),
@@ -69,7 +69,10 @@ loop(BufferPid, Socket, RedisOpts) ->
                 Err ->
                     ?INFO("event=send result=~p", [Err]),
                     exit(normal)
-            end
+            end;
+        Else ->
+            ?WARN("event=queue_out result=~p", [Else]),
+            exit(normal)
     end,
     receive stop -> exit(normal) after 0 -> ok end,
     ?MODULE:loop(BufferPid, Socket, RedisOpts).
