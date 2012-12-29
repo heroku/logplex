@@ -67,6 +67,10 @@ all_workers(NameOrPid) ->
 out(NameOrPid) ->
     out(NameOrPid, 1).
 
+-spec out(Name, pos_integer()) ->
+                 'ok' | {'error', 'closed'} |
+                 {non_neg_integer(), [any()]}
+                     when Name :: pid() | atom().
 out(NameOrPid, Num) when (is_atom(NameOrPid) orelse is_pid(NameOrPid)) andalso is_integer(Num) ->
     case gen_server:call(NameOrPid, {out, Num}, ?TIMEOUT) of
         empty ->
