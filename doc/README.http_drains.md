@@ -17,16 +17,16 @@ This is an example HTTP request that logplex might make if it had ten log messag
     User-Agent: Logplex/v49
     Content-Length: 771
     
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 1 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 2 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 3 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 4 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 5 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 6 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 7 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 8 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 9 Hi from erlang
-    75 <174>1 2012-07-22T00:06:26-00:00 somehost erlang console 10 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 1 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 2 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 3 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 4 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 5 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 6 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 7 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 8 Hi from erlang
+    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 9 Hi from erlang
+    75 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 10 Hi from erlang
         
     
 ### HTTP Headers
