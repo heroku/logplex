@@ -21,14 +21,23 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_db).
--export([start_link/0]).
+
+-behaviour(gen_server).
+
+-export([start_link/0, init/1, handle_call/3, handle_cast/2,
+         handle_info/2, terminate/2, code_change/3]).
+
 -export([poll/2]).
 
+-include("logplex_logging.hrl").
 -include_lib("logplex.hrl").
 
 start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+init([]) ->
     create_ets_tables(),
-    redo:start_link(config, redo_opts()).
+    {ok, []}.
 
 create_ets_tables() ->
     ets:new(channels, [named_table, public, set, {keypos, 2}]),
@@ -39,12 +48,6 @@ create_ets_tables() ->
     ets:new(drain_sockets, [named_table, public, set]),
     ets:new(drain_socket_quarentine, [named_table, public, set]),
     ok.
-
-redo_opts() ->
-    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
-        false -> [];
-        Url -> redo_uri:parse(Url)
-    end.
 
 -spec poll(fun ( () -> 'not_found' | {'found', T} | {'error', E} ),
            pos_integer()) ->
@@ -83,3 +86,24 @@ poll_cancel(Ref) ->
             end;
         _ -> ok
     end.
+
+handle_call(Call, _From, State) ->
+    ?WARN("Unexpected call ~p.", [Call]),
+    {noreply, State}.
+
+handle_cast(Msg, State) ->
+    ?WARN("Unexpected cast ~p", [Msg]),
+    {noreply, State}.
+
+%% @private
+handle_info(Info, State) ->
+    ?WARN("Unexpected info ~p", [Info]),
+    {noreply, State}.
+
+%% @private
+terminate(_Reason, _State) ->
+    ok.
+
+%% @private
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
