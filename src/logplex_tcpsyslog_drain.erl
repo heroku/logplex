@@ -96,6 +96,12 @@ valid_uri(#ex_uri{scheme="syslog",
 valid_uri(_) ->
     {error, invalid_tcpsyslog_uri}.
 
+-spec uri(Host, Port) ->
+                 #ex_uri{}
+                     when Host :: iolist(),
+                          Port :: 'undefined' | non_neg_integer().
+uri(Host, undefined) ->
+    uri(Host, 514);
 uri(Host, Port) when is_binary(Host), is_integer(Port) ->
     uri(binary_to_list(Host), Port);
 uri(Host, Port) when is_list(Host), is_integer(Port) ->
