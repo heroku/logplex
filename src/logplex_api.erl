@@ -610,23 +610,21 @@ uri_to_binary(Uri) ->
 
 valid_uri(Req) ->
     {struct, Data} = mochijson2:decode(Req:recv_body()),
-    case proplists:get_value(<<"url">>, Data) of
-        undefined ->
-            Port = proplists:get_value(<<"port">>, Data),
-            case proplists:get_value(<<"host">>, Data) of
-                undefined ->
-                    {error, missing_host_param};
-                Host ->
-                     logplex_drain:valid_uri(logplex_tcpsyslog_drain:uri(Host, Port))
+    Uri = case proplists:get_value(<<"url">>, Data) of
+              undefined ->
+                  Port = proplists:get_value(<<"port">>, Data),
+                  case proplists:get_value(<<"host">>, Data) of
+                      undefined ->
+                          {error, missing_host_param};
+                      Host ->
+                          logplex_tcpsyslog_drain:uri(Host, Port)
             end;
-        UrlString ->
-            try
-                logplex_drain:valid_uri(
-                  logplex_drain:parse_url(UrlString))
-            catch
-                error:badarg ->
-                    {error, UrlString}
-            end            
-    end.
-
-   
+              UrlString ->
+                  try
+                      logplex_drain:parse_url(UrlString)
+                  catch
+                      error:badarg ->
+                          {error, invalid_url}
+                  end
+          end,
+    logplex_drain:valid_uri(Uri).
