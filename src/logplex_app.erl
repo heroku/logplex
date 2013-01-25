@@ -56,6 +56,7 @@ start(_StartType, _StartArgs) ->
     ?INFO("at=start", []),
     cache_os_envvars(),
     set_cookie(),
+    redo_opts(),
     read_git_branch(),
     read_availability_zone(),
     read_environment(),
@@ -272,3 +273,11 @@ start_ok(App, Type, {error, {not_started, Dep}}) ->
     a_start(App, Type);
 start_ok(App, _Type, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
+
+redo_opts() ->
+    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
+        false -> [];
+        Url ->
+            ParsedUrl = redo_uri:parse(Url),
+            application:set_env(?APP, config_redis_url, ParsedUrl)
+    end.

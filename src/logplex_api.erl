@@ -309,7 +309,7 @@ handlers() ->
             {error, timeout} ->
                 json_error(404, <<"Unknown drain.">>);
             Token when is_binary(Token) ->
-                case logplex_drain:valid_uri(req_drain_uri(Req)) of
+                case valid_uri(Req) of
                     {error, What} ->
                         logplex_drain:delete_partial_drain(DrainId, Token),
                         Err = io_lib:format("Invalid drain destination: ~p",
@@ -347,7 +347,7 @@ handlers() ->
     %% V2
     {['POST', "^/v2/channels/(\\d+)/drains$"], fun(Req, [ChannelIdStr]) ->
         ChannelId = list_to_integer(ChannelIdStr),
-        case logplex_drain:valid_uri(req_drain_uri(Req)) of
+        case valid_uri(Req) of
             {error, What} ->
                 Err = io_lib:format("Invalid drain destination: ~p",
                                     [What]),
@@ -590,21 +590,6 @@ not_found_json() ->
     Json = {struct, [{error, <<"Not found">>}]},
     {404, iolist_to_binary(mochijson2:encode(Json))}.
 
-req_drain_uri(Req) ->
-    {struct, Data} = mochijson2:decode(Req:recv_body()),
-    case proplists:get_value(<<"url">>, Data) of
-        undefined ->
-            Port = proplists:get_value(<<"port">>, Data),
-            case proplists:get_value(<<"host">>, Data) of
-                undefined ->
-                    {error, missing_host_param};
-                Host ->
-                    logplex_tcpsyslog_drain:uri(Host, Port)
-            end;
-        UrlString ->
-            logplex_drain:parse_url(UrlString)
-    end.
-
 json_error(Code, Err) ->
     {Code, ?JSON_CONTENT,
      mochijson2:encode({struct, [{error, iolist_to_binary(Err)}]})}.
@@ -618,3 +603,24 @@ end_chunked_response(Socket) ->
 
 uri_to_binary(Uri) ->
     iolist_to_binary(ex_uri:encode(Uri)).
+
+valid_uri(Req) ->
+    {struct, Data} = mochijson2:decode(Req:recv_body()),
+    Uri = case proplists:get_value(<<"url">>, Data) of
+              undefined ->
+                  Port = proplists:get_value(<<"port">>, Data),
+                  case proplists:get_value(<<"host">>, Data) of
+                      undefined ->
+                          {error, missing_host_param};
+                      Host ->
+                          logplex_tcpsyslog_drain:uri(Host, Port)
+            end;
+              UrlString ->
+                  try
+                      logplex_drain:parse_url(UrlString)
+                  catch
+                      error:badarg ->
+                          {error, invalid_url}
+                  end
+          end,
+    logplex_drain:valid_uri(Uri).
