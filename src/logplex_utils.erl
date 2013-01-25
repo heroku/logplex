@@ -126,7 +126,10 @@ parse_redis_url(Url) ->
     case redis_uri:parse(Url) of
         {redis, _User, Pass, Host, Port, _Path, _Query} ->
             {ok, Ip} = inet:getaddr(Host, inet),
-            [{ip, Ip}, {port, Port}, {pass, list_to_binary(Pass)}];
+            [{ip, Ip}, {port, Port}, {pass, format_password(Pass)}];
         _ ->
             [{ip, "127.0.0.1"}, {port, 6379}]
     end.
+
+format_password([]) -> undefined;
+format_password(L=[_|_]) -> iolist_to_binary(L).
