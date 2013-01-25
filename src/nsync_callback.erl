@@ -162,7 +162,9 @@ create_token(Id, Dict) ->
             ?ERR("~p ~p ~p ~p",
                  [create_token, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
-            Ch = list_to_integer(binary_to_list(Val1)),
+            Ch = if is_binary(Val1) -> list_to_integer(binary_to_list(Val1));
+                    is_list(Val1) -> list_to_integer(Val1)
+                 end,
             Name = dict_find(<<"name">>, Dict),
             Token = #token{
                 id=Id,
