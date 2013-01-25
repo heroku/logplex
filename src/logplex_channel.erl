@@ -35,6 +35,8 @@
 -export([new/1
          ,new/2
          ,new/3
+         ,create/1
+         ,destroy/1
          ,id/1
          ,binary_to_id/1
          ,id_to_binary/1
@@ -61,6 +63,14 @@
 -type flags() :: [flag()].
 -type channel() :: #channel{}.
 -export_type([id/0, name/0, flags/0]).
+
+create(Name) ->
+    Chan = new(create_id(), Name),
+    store(Chan),
+    Chan.
+
+destroy(Chan) ->
+    delete(id(Chan)).
 
 new(Id) when is_integer(Id) ->
     #channel{id=Id}.
