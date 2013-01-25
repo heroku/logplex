@@ -81,12 +81,12 @@ start_phase(listen, normal, _Args) ->
 
 cache_os_envvars() ->
     cache_os_envvars([
-                      {cookie, "LOGPLEX_COOKIE", optional}
+                      {cookie, "LOGPLEX_COOKIE", required}
                      ,{http_port, "PORT", required}
                      ,{auth_key, "LOGPLEX_AUTH_KEY", required}
                      ,{core_userpass, "LOGPLEX_CORE_USERPASS", optional}
                      ,{ion_userpass, "LOGPLEX_ION_USERPASS", optional}
-                     ,{heroku_domain, "HEROKU_DOMAIN", required}
+                     ,{heroku_domain, "CLOUD_DOMAIN", required}
                      ,{instance_name, "INSTANCE_NAME", required}
                      ,{local_ip, "LOCAL_IP", required}
                      ,{config_redis_url, "LOGPLEX_CONFIG_REDIS_URL", required}
@@ -102,11 +102,20 @@ cache_os_envvars() ->
                      ,{drain_writers, "LOGPLEX_DRAIN_WRITERS", optional}
                      ,{redis_writers, "LOGPLEX_REDIS_WRITERS", optional}
                      ,{readers, "LOGPLEX_READERS", optional}
+                     ,{history, "LOGPLEX_LOG_HISTORY", optional, ?LOG_HISTORY}
                      ]),
     ok.
 
 cache_os_envvars([]) ->
     ok;
+cache_os_envvars([{Key, OsKey, optional, Default}|Tail]) when is_atom(Key) ->
+    case os:getenv(OsKey) of
+        false ->
+            set_config(Key, Default);
+        OsVal ->
+            set_config(Key, OsVal)
+    end,
+    cache_os_envvars(Tail);
 cache_os_envvars([{Key, OsKey, Required}|Tail]) when is_atom(Key) ->
     case os:getenv(OsKey) of
         false when Required == true ->
