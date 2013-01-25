@@ -120,7 +120,7 @@ handlers() ->
         Body = Req:recv_body(),
         {struct, Params} = mochijson2:decode(Body),
 
-        ChannelId = logplex_channel:create(),
+        ChannelId = logplex_channel:create_id(),
         not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
 
         Tokens =

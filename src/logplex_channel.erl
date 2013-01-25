@@ -27,7 +27,7 @@
          ,post_msg/2
         ]).
 
--export([create/0, delete/1, lookup/1,
+-export([create_id/0, delete/1, lookup/1,
          lookup_tokens/1, lookup_drains/1, logs/2, info/1
          ,can_add_drain/1
         ]).
@@ -94,8 +94,8 @@ post_msg({channel, ChannelId} = Name, Msg) when is_tuple(Msg) ->
     gproc:send({p, l, Name}, {post, Msg}),
     ok.
 
--spec create() -> id() | {'error', term()}.
-create() ->
+-spec create_id() -> id() | {'error', term()}.
+create_id() ->
     case redis_helper:channel_index() of
         ChannelId when is_integer(ChannelId) ->
             case redis_helper:create_channel(ChannelId) of
