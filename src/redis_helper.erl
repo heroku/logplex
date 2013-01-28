@@ -90,8 +90,19 @@ delete_channel(ChannelId) when is_integer(ChannelId) ->
     end.
 
 build_push_msg(ChannelId, Length, Msg, Expiry)
-  when is_integer(ChannelId), is_binary(Length), is_binary(Msg),
+  when is_integer(ChannelId), is_integer(Length), is_binary(Msg),
        is_binary(Expiry) ->
+    build_push_msg(ChannelId, integer_to_list(Length),
+                   Msg, Expiry);
+build_push_msg(ChannelId, Length, Msg, Expiry)
+  when is_integer(ChannelId), is_list(Length), is_binary(Msg),
+       is_binary(Expiry) ->
+    build_push_msg(ChannelId, iolist_to_binary(Length),
+                   Msg, Expiry);
+
+build_push_msg(ChannelId, Length, Msg, Expiry)
+  when is_integer(ChannelId), is_binary(Length),
+       is_binary(Msg), is_binary(Expiry) ->
     Key = iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]),
     Cmds = [ [<<"LPUSH">>, Key, Msg]
             ,[<<"LTRIM">>, Key, <<"0">>, Length]
