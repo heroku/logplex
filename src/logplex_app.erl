@@ -106,6 +106,7 @@ cache_os_envvars() ->
                      ,{log_history, "LOGPLEX_LOG_HISTORY", optional}
                      ]),
     cache_cloud_name(),
+    cache_stats_redis(),
     ok.
 
 cache_cloud_name() ->
@@ -119,6 +120,14 @@ cache_cloud_name() ->
                N -> N
            end,
     application:set_env(?APP, cloud_name, Name).
+
+cache_stats_redis() ->
+    URL = case config(redis_stats_url, undefined) of
+              undefined ->
+                  "redis://localhost:6379";
+              U -> U
+          end,
+    application:set_env(?APP, redis_stats_url, URL).
 
 cache_os_envvars([]) ->
     ok;
@@ -217,16 +226,13 @@ setup_redgrid_vals() ->
 
 setup_redis_shards() ->
     URLs = case os:getenv("LOGPLEX_SHARD_URLS") of
-               false ->
-                   erlang:error({fatal_config_error,
-                                 missing_logplex_shard_urls});
-               [] ->
+               UrlString when is_list(UrlString), UrlString =/= [] ->
+                   string:tokens(UrlString, ",");
+               _ ->
                    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
                        false -> ["redis://127.0.0.1:6379/"];
                        Url -> [Url]
-                   end;
-               UrlString when is_list(UrlString) ->
-                   string:tokens(UrlString, ",")
+                   end
            end,
     application:set_env(logplex, logplex_shard_urls,
                         logplex_shard:redis_sort(URLs)).
