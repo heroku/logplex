@@ -43,7 +43,7 @@ set_os_vars() ->
          {"LOGPLEX_CONFIG_REDIS_URL", "redis://localhost:6379/"},
          {"LOGPLEX_SHARD_URLS", "redis://localhost:6379/"},
          {"LOGPLEX_STATS_REDIS_URL", "redis://localhost:6379/"},
-         {"LOGPLEX_LOG_HISTORY", "<<\"10\">>"}]].
+         {"LOGPLEX_LOG_HISTORY", "1500"}]].
 
 
 boot_and_stop(_Config) ->
