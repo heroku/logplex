@@ -38,8 +38,8 @@ init([]) ->
      {{one_for_one, 5, 10},
       [{logplex_db, {logplex_db, start_link, []},
         permanent, 2000, worker, [logplex_db]}
-       ,{config_redis, {redo, start_link, [config, application:get_env(config_redis_url)]},
-         permanent, 2000, worker, [redo]}       
+       ,{config_redis, {redo, start_link, [config, logplex_app:config(config_redis_url)]},
+         permanent, 2000, worker, [redo]}
        ,{logplex_drain_sup,
          {logplex_drain_sup, start_link, []},
          permanent, 2000, supervisor, [logplex_drain_sup]}
