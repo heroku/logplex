@@ -66,13 +66,14 @@ make_msg(Token, N) ->
         "erlang",
         "web.1",
         integer_to_list(N)
-     ).
+    ).
 
 send_msg(Msg) ->
-    logplex_message:process_msgs([iolist_to_binary(Msg)]).
+    [Res] = logplex_message:process_msgs([{msg,iolist_to_binary(Msg)}]),
+    Res.
 
 read_logs(Chan) ->
-    logplex_channel:logs(logplex_channel:id(Chan), 10).
+    logplex_channel:logs(logplex_channel:id(Chan), 500000).
 
 wait_for_chan(Chan) ->
     case ets:match_object(channels, Chan) of
