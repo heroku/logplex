@@ -87,7 +87,7 @@ cache_os_envvars() ->
                      ,{auth_key, "LOGPLEX_AUTH_KEY", required}
                      ,{core_userpass, "LOGPLEX_CORE_USERPASS", optional}
                      ,{ion_userpass, "LOGPLEX_ION_USERPASS", optional}
-                     ,{heroku_domain, "CLOUD_DOMAIN", required}
+                     ,{heroku_domain, "HEROKU_DOMAIN", optional}
                      ,{instance_name, "INSTANCE_NAME", required}
                      ,{local_ip, "LOCAL_IP", required}
                      ,{config_redis_url, "LOGPLEX_CONFIG_REDIS_URL", required}
@@ -105,7 +105,20 @@ cache_os_envvars() ->
                      ,{readers, "LOGPLEX_READERS", optional}
                      ,{log_history, "LOGPLEX_LOG_HISTORY", optional}
                      ]),
+    cache_cloud_name(),
     ok.
+
+cache_cloud_name() ->
+    Name = case os:getenv("HEROKU_DOMAIN") of
+               false ->
+                   case os:getenv("LOGPLEX_CLOUD_NAME") of
+                       false ->
+                           config(cloud_name);
+                       N -> N
+                   end;
+               N -> N
+           end,
+    application:set_env(?APP, cloud_name, Name).
 
 cache_os_envvars([]) ->
     ok;
@@ -181,7 +194,7 @@ read_environment() ->
      || {K, SK} <- [ {instance_name, "INSTANCE_NAME"} ]].
 
 boot_pagerduty() ->
-    case config(heroku_domain) of
+    case config(cloud_name) of
         "heroku.com" ->
             case config(pagerduty) of
                 "0" -> ok;
@@ -199,7 +212,7 @@ setup_redgrid_vals() ->
     application:load(redgrid),
     application:set_env(redgrid, local_ip, config(local_ip)),
     application:set_env(redgrid, redis_url, config(redis_stats_url)),
-    application:set_env(redgrid, domain, config(heroku_domain)),
+    application:set_env(redgrid, domain, config(cloud_name)),
     ok.
 
 setup_redis_shards() ->

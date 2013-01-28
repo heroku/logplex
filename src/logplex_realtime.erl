@@ -91,7 +91,7 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
     [ets:update_counter(?MODULE, Key, -1 * Val)
      || {Key, Val} <- Stats,
         lists:member(Key, keys())],
-    HerokuDomain = logplex_app:config(heroku_domain),
+    CloudName = logplex_app:config(cloud_name),
     spawn(fun() ->
         Stats1 = [{instance_name, list_to_binary(InstanceName)},
                   {branch, git_branch()},
@@ -99,7 +99,7 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
                    [ proplists:lookup(K, Stats)
                      || K <- keys() ]],
         Json = iolist_to_binary(mochijson2:encode({struct, Stats1})),
-        redo:cmd(Conn, [<<"PUBLISH">>, iolist_to_binary([HerokuDomain, <<":stats">>]), Json], 60000)
+        redo:cmd(Conn, [<<"PUBLISH">>, iolist_to_binary([CloudName, <<":stats">>]), Json], 60000)
     end),
     {noreply, State};
 
