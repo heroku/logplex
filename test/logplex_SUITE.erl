@@ -4,7 +4,7 @@
 -include_lib("common_test/include/ct.hrl").
 -compile(export_all).
 
-all() -> [boot_and_stop, roundtrip].
+all() -> [boot_and_stop, roundtrip, log_history].
 
 init_per_suite(Config) ->
     ok = application:load(logplex),
@@ -55,6 +55,26 @@ roundtrip(Config) ->
     ok = send_msg(make_msg(Token,1)),
     timer:sleep(1000),
     [_] = read_logs(Chan).
+
+%% after hitting the configured limit of messages in log history,
+%% they start to rewrite themselves as in a ring buffer. The default size
+%% is set to 1500, but redis is 0-indexed so the max value is actually 1501
+log_history(Config) ->
+    Chan = ?config(channel, Config),
+    Token = ?config(token, Config),
+    Max = 1501,
+    [ok = send_msg(make_msg(Token,N)) ||
+        N <- lists:seq(1, Max)],
+    timer:sleep(1000),
+    FirstBatch = read_logs(Chan),
+    ok = send_msg(make_msg(Token, Max+1)),
+    ok = send_msg(make_msg(Token, Max+2)),
+    ok = send_msg(make_msg(Token, Max+3)),
+    timer:sleep(1000),
+    SecondBatch = read_logs(Chan),
+    Max = length(FirstBatch),
+    Max = length(SecondBatch),
+    Max = 3+length([X || X <- SecondBatch, lists:member(X,FirstBatch)]).
 
 make_msg(Token, N) ->
     logplex_syslog_utils:rfc5424(
