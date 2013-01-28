@@ -48,7 +48,7 @@
     ,{drain_writers, 10}
     ,{redis_writers, 10}
     ,{readers, 10}
-    ,{log_history, <<"1500">>}
+    ,{log_history, 1500}
     ,{cloud_name, "development"}
    ]}
  ,{start_phases,
