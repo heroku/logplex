@@ -103,7 +103,7 @@ cache_os_envvars() ->
                      ,{drain_writers, "LOGPLEX_DRAIN_WRITERS", optional}
                      ,{redis_writers, "LOGPLEX_REDIS_WRITERS", optional}
                      ,{readers, "LOGPLEX_READERS", optional}
-                     ,{history, "LOGPLEX_LOG_HISTORY", optional, ?LOG_HISTORY}
+                     ,{log_history, "LOGPLEX_LOG_HISTORY", optional}
                      ]),
     ok.
 

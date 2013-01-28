@@ -114,10 +114,11 @@ process_msg(ChannelId, State, Msg) ->
         no_redis -> ok;
         _ ->
             Expiry = logplex_app:config(redis_buffer_expiry),
+            HistorySize = logplex_app:config(log_history),
             {Map, Interval} = map_interval(State),
             BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
                                              Map, Interval),
-            Cmd = redis_helper:build_push_msg(ChannelId, ?LOG_HISTORY,
+            Cmd = redis_helper:build_push_msg(ChannelId, HistorySize,
                                               Msg, Expiry),
             logplex_queue:in(BufferPid, Cmd)
     end,
