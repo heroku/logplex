@@ -144,7 +144,7 @@ cache_os_envvars([{Key, OsKey, Required}|Tail]) when is_atom(Key) ->
         false when Required == true ->
             config(Key);
         false ->
-            ok;    
+            ok;
         OsVal ->
             set_config(Key, OsVal)
     end,
