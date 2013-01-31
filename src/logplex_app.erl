@@ -81,74 +81,43 @@ start_phase(listen, normal, _Args) ->
     ok.
 
 cache_os_envvars() ->
+    %% cache {key, EnvVarPrefList}
+    %% Last env var wins.
     cache_os_envvars([
-                      {cookie, "LOGPLEX_COOKIE", required}
-                     ,{http_port, "PORT", required}
-                     ,{auth_key, "LOGPLEX_AUTH_KEY", required}
-                     ,{core_userpass, "LOGPLEX_CORE_USERPASS", optional}
-                     ,{ion_userpass, "LOGPLEX_ION_USERPASS", optional}
-                     ,{heroku_domain, "HEROKU_DOMAIN", optional}
-                     ,{instance_name, "INSTANCE_NAME", required}
-                     ,{local_ip, "LOCAL_IP", required}
-                     ,{config_redis_url, "LOGPLEX_CONFIG_REDIS_URL", required}
-                     ,{redis_stats_url, "LOGPLEX_STATS_REDIS_URL", optional}
-                     ,{shard_urls, "LOGPLEX_SHARD_URLS", optional}
-                     ,{pagerduty, "PAGERDUTY", optional}
-                     ,{pagerduty_key, "ROUTING_PAGERDUTY_SERVICE_KEY", optional}
-                     ,{queue_length, "LOGPLEX_QUEUE_LENGTH", optional}
-                     ,{drain_buffer_length, "LOGPLEX_DRAIN_BUFFER_LENGTH", optional}
-                     ,{redis_buffer_length, "LOGPLEX_REDIS_BUFFER_LENGTH", optional}
-                     ,{read_queue_length, "LOGPLEX_READ_QUEUE_LENGTH", optional}
-                     ,{workers, "LOGPLEX_WORKERS", optional}
-                     ,{drain_writers, "LOGPLEX_DRAIN_WRITERS", optional}
-                     ,{redis_writers, "LOGPLEX_REDIS_WRITERS", optional}
-                     ,{readers, "LOGPLEX_READERS", optional}
-                     ,{log_history, "LOGPLEX_LOG_HISTORY", optional}
+                      %% availability_zone cached by read_availability_zone()
+                      {auth_key, ["LOGPLEX_AUTH_KEY"]}
+                      ,{cloud_name, ["LOGPLEX_CLOUD_NAME", "HEROKU_DOMAIN"]}
+                      %% core_userpass is deprecated
+                      ,{config_redis_url, ["LOGPLEX_CONFIG_REDIS_URL"]}
+                      ,{cookie, ["LOGPLEX_COOKIE"]}
+                      %% ERL_CRASH_DUMP read by setup_crashdumps
+                      %% git_branch cached by read_git_branch()
+                      ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"]}
+                      ,{pagerduty, ["PAGERDUTY"], optional}
+                      ,{pagerduty_key, ["ROUTING_PAGERDUTY_SERVICE_KEY"], optional}
+                      ,{instance_name, ["INSTANCE_NAME"]}
+                      ,{local_ip, ["LOCAL_IP"]}
                      ]),
-    cache_cloud_name(),
-    cache_stats_redis(),
     ok.
 
-cache_cloud_name() ->
-    Name = case os:getenv("HEROKU_DOMAIN") of
-               false ->
-                   case os:getenv("LOGPLEX_CLOUD_NAME") of
-                       false ->
-                           config(cloud_name);
-                       N -> N
-                   end;
-               N -> N
-           end,
-    application:set_env(?APP, cloud_name, Name).
+cache_os_envvars(Vars) ->
+    [ cache_os_envvar(Var)
+      || Var <- Vars ],
+    ok.
 
-cache_stats_redis() ->
-    URL = case config(redis_stats_url, undefined) of
-              undefined ->
-                  "redis://localhost:6379";
-              U -> U
-          end,
-    application:set_env(?APP, redis_stats_url, URL).
+cache_os_envvar({Var, Keys}) ->
+    cache_os_envvar(Var, Keys),
+    config(Var);
+cache_os_envvar({Var, Keys, optional}) ->
+    cache_os_envvar(Var, Keys).
 
-cache_os_envvars([]) ->
-    ok;
-cache_os_envvars([{Key, OsKey, optional, Default}|Tail]) when is_atom(Key) ->
-    case os:getenv(OsKey) of
-        false ->
-            set_config(Key, Default);
-        OsVal ->
-            set_config(Key, OsVal)
+cache_os_envvar(_Var, []) -> ok;
+cache_os_envvar(Var, [Key | Keys]) ->
+    case os:getenv(Key) of
+        false -> ok;
+        Value -> set_config(Var, Value)
     end,
-    cache_os_envvars(Tail);
-cache_os_envvars([{Key, OsKey, Required}|Tail]) when is_atom(Key) ->
-    case os:getenv(OsKey) of
-        false when Required == true ->
-            config(Key);
-        false ->
-            ok;
-        OsVal ->
-            set_config(Key, OsVal)
-    end,
-    cache_os_envvars(Tail).
+    cache_os_envvar(Var, Keys).
 
 set_config(KeyS, Value) when is_list(KeyS) ->
     set_config(list_to_atom(KeyS), Value);
@@ -180,9 +149,9 @@ read_git_branch() ->
     GitOutput = hd(string:tokens(os:cmd("git status"), "\n")),
     case re:run(GitOutput, "\# On branch (\\S+)", [{capture, all_but_first, list}]) of
         {match,[Branch]} ->
-            application:set_env(logplex, git_branch, Branch);
+            set_config(git_branch, Branch);
         _ ->
-            ok
+            set_config(git_branch, "unknown")
     end.
 
 read_availability_zone() ->
