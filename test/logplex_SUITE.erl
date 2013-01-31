@@ -39,11 +39,9 @@ set_os_vars() ->
         [{"INSTANCE_NAME", "localhost"},
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
-         {"LOGPLEX_COOKIE", "ct test"},
-         {"LOGPLEX_CONFIG_REDIS_URL", "redis://localhost:6379/"},
-         {"LOGPLEX_SHARD_URLS", "redis://localhost:6379/"},
-         {"LOGPLEX_STATS_REDIS_URL", "redis://localhost:6379/"},
-         {"LOGPLEX_LOG_HISTORY", "1500"}]].
+         {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
+         {"LOGPLEX_COOKIE", "ct test"}
+        ]].
 
 
 boot_and_stop(_Config) ->
