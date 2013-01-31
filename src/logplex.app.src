@@ -44,6 +44,7 @@
     ,{redis_writers, 10}
     ,{session_expiry_s, 360} % #seconds
     ,{session_lookup_timeout_s, 5} % #seconds
+    ,{stats_redis_url, "redis://localhost:6379"}
     ,{syslog_port, 6001} % syslog tcp listen port
     ,{tcp_drain_buffer_size, 1024} % #messages
     ,{tcp_syslog_backoff_max, 300} % seconds
