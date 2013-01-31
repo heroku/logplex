@@ -38,7 +38,8 @@ init([]) ->
      {{one_for_one, 5, 10},
       [{logplex_db, {logplex_db, start_link, []},
         permanent, 2000, worker, [logplex_db]}
-       ,{config_redis, {redo, start_link, [config, logplex_app:config(config_redis_url)]},
+       ,{config_redis,
+         {redo, start_link, [config, config_redis_opts()]},
          permanent, 2000, worker, [redo]}
        ,{logplex_drain_sup,
          {logplex_drain_sup, start_link, []},
@@ -81,3 +82,6 @@ init([]) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+config_redis_opts() ->
+    redo_uri:parse(logplex_app:config(config_redis_url)).
