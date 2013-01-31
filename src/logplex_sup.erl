@@ -39,7 +39,7 @@ init([]) ->
       [{logplex_db, {logplex_db, start_link, []},
         permanent, 2000, worker, [logplex_db]}
        ,{config_redis,
-         {redo, start_link, [config, config_redis_opts()]},
+         {redo, start_link, [config, redo_config(config_redis_url)]},
          permanent, 2000, worker, [redo]}
        ,{logplex_drain_sup,
          {logplex_drain_sup, start_link, []},
@@ -49,7 +49,7 @@ init([]) ->
        ,{redgrid, {redgrid, start_link, []},
          permanent, 2000, worker, [redgrid]}
        ,{logplex_realtime, {logplex_realtime, start_link,
-                            [redo_uri:parse(logplex_app:config(redis_stats_url))]},
+                            [redo_config(stats_redis_url)]},
          permanent, 2000, worker, [logplex_realtime]}
        ,{logplex_stats, {logplex_stats, start_link, []},
          permanent, 2000, worker, [logplex_stats]}
@@ -83,5 +83,5 @@ init([]) ->
 %% Internal functions
 %%====================================================================
 
-config_redis_opts() ->
-    redo_uri:parse(logplex_app:config(config_redis_url)).
+redo_config(ConfigVar) ->
+    redo_uri:parse(logplex_app:config(ConfigVar)).
