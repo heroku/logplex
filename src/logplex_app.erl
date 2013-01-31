@@ -55,12 +55,12 @@ start() ->
 start(_StartType, _StartArgs) ->
     ?INFO("at=start", []),
     cache_os_envvars(),
+    setup_crashdumps(),
     set_cookie(),
     redo_opts(),
     read_git_branch(),
     read_availability_zone(),
     read_environment(),
-    setup_crashdumps(),
     boot_pagerduty(),
     setup_redgrid_vals(),
     setup_redis_shards(),
