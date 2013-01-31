@@ -37,6 +37,7 @@
     ,{max_drains_per_channel, 5} % #channels
     ,{pagerduty, "0"}
     ,{queue_length, 2000}
+    ,{redgrid_redis_url, "redis://localhost:6379"}
     ,{redis_buffer_expiry, <<"604800">>} % s -- one week
     ,{redis_buffer_length, 2000}
     ,{redis_stats_url, "redis://localhost:6379"}
