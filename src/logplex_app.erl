@@ -57,10 +57,8 @@ start(_StartType, _StartArgs) ->
     cache_os_envvars(),
     setup_crashdumps(),
     set_cookie(),
-    redo_opts(),
     read_git_branch(),
     read_availability_zone(),
-    read_environment(),
     boot_pagerduty(),
     setup_redgrid_vals(),
     setup_redis_shards(),
@@ -92,11 +90,15 @@ cache_os_envvars() ->
                       ,{cookie, ["LOGPLEX_COOKIE"]}
                       %% ERL_CRASH_DUMP read by setup_crashdumps
                       %% git_branch cached by read_git_branch()
-                      ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"]}
-                      ,{pagerduty, ["PAGERDUTY"], optional}
-                      ,{pagerduty_key, ["ROUTING_PAGERDUTY_SERVICE_KEY"], optional}
                       ,{instance_name, ["INSTANCE_NAME"]}
                       ,{local_ip, ["LOCAL_IP"]}
+                      ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"]}
+                      ,{pagerduty, ["PAGERDUTY"],
+                        optional}
+                      ,{pagerduty_key, ["ROUTING_PAGERDUTY_SERVICE_KEY"],
+                        optional}
+                      ,{redgrid_redis_url, ["LOGPLEX_CONFIG_REDIS_URL",
+                                            "LOGPLEX_STATS_REDIS_URL"]}
                      ]),
     ok.
 
@@ -163,14 +165,6 @@ read_availability_zone() ->
             ok
     end.
 
-read_environment() ->
-    [case os:getenv(SK) of
-         false -> ok;
-         Val ->
-             application:set_env(?APP, K, Val)
-     end
-     || {K, SK} <- [ {instance_name, "INSTANCE_NAME"} ]].
-
 boot_pagerduty() ->
     case config(cloud_name) of
         "heroku.com" ->
@@ -189,19 +183,16 @@ boot_pagerduty() ->
 setup_redgrid_vals() ->
     application:load(redgrid),
     application:set_env(redgrid, local_ip, config(local_ip)),
-    application:set_env(redgrid, redis_url, config(redis_stats_url)),
+    application:set_env(redgrid, redis_url, config(redgrid_redis_url)),
     application:set_env(redgrid, domain, config(cloud_name)),
     ok.
 
 setup_redis_shards() ->
-    URLs = case os:getenv("LOGPLEX_SHARD_URLS") of
+    URLs = case config(logplex_shard_urls) of
                UrlString when is_list(UrlString), UrlString =/= [] ->
                    string:tokens(UrlString, ",");
                _ ->
-                   case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
-                       false -> ["redis://127.0.0.1:6379/"];
-                       Url -> [Url]
-                   end
+                   [config(config_redis_url)]
            end,
     application:set_env(logplex, logplex_shard_urls,
                         logplex_shard:redis_sort(URLs)).
@@ -223,10 +214,8 @@ dumpdir() ->
     case config(crashdump_dir, undefined) of
         undefined ->
             case os:getenv("ERL_CRASH_DUMP") of
-                false ->
-                    undefined;
-                File ->
-                    filename:dirname(File)
+                false -> undefined;
+                File -> filename:dirname(File)
             end;
         Dir -> Dir
     end.
@@ -244,9 +233,11 @@ nsync_opts() ->
     RedisUrl = config(config_redis_url),
     RedisOpts = logplex_utils:parse_redis_url(RedisUrl),
     Ip = case proplists:get_value(ip, RedisOpts) of
-        {_,_,_,_}=L -> string:join([integer_to_list(I) || I <- tuple_to_list(L)], ".");
-        Other -> Other
-    end,
+             {_,_,_,_}=L ->
+                 string:join([integer_to_list(I)
+                              || I <- tuple_to_list(L)], ".");
+             Other -> Other
+         end,
     RedisOpts1 = proplists:delete(ip, RedisOpts),
     RedisOpts2 = [{host, Ip} | RedisOpts1],
     [{callback, {nsync_callback, handle, []}} | RedisOpts2].
@@ -261,11 +252,3 @@ start_ok(App, Type, {error, {not_started, Dep}}) ->
     a_start(App, Type);
 start_ok(App, _Type, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
-
-redo_opts() ->
-    case os:getenv("LOGPLEX_CONFIG_REDIS_URL") of
-        false -> [];
-        Url ->
-            ParsedUrl = redo_uri:parse(Url),
-            application:set_env(?APP, config_redis_url, ParsedUrl)
-    end.
