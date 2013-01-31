@@ -114,14 +114,14 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 git_branch() ->
-    case application:get_env(logplex, git_branch) of
-        {ok, Val} -> list_to_binary(Val);
-        undefined -> <<>>
+    case logplex_app:config(git_branch) of
+        undefined -> <<>>;
+        Val -> list_to_binary(Val)
     end.
 
 availability_zone() ->
-    case application:get_env(logplex, availability_zone) of
-        {ok, Val} -> list_to_binary(Val);
-        undefined -> <<>>
+    case logplex_app:config(availability_zone) of
+        undefined -> <<>>;
+        Val -> list_to_binary(Val)
     end.
 
