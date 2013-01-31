@@ -113,13 +113,15 @@ cache_os_envvar({Var, Keys}) ->
 cache_os_envvar({Var, Keys, optional}) ->
     cache_os_envvar(Var, Keys).
 
-cache_os_envvar(_Var, []) -> ok;
-cache_os_envvar(Var, [Key | Keys]) ->
-    case os:getenv(Key) of
-        false -> ok;
-        Value -> set_config(Var, Value)
-    end,
-    cache_os_envvar(Var, Keys).
+%% Read os environment for Key and write to var if set.
+%% Keys later in the list overwrite earlier values allowing multiple
+%% env keys to be the source for a single app environment variable
+%% with priority.
+cache_os_envvar(Var, Keys) ->
+    [ case os:getenv(Key) of
+          false -> ok;
+          Value -> set_config(Var, Value)
+      end || Key <- Keys ].
 
 set_config(KeyS, Value) when is_list(KeyS) ->
     set_config(list_to_atom(KeyS), Value);
