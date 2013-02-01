@@ -7,12 +7,8 @@
 all() -> [boot_and_stop, roundtrip, log_history].
 
 init_per_suite(Config) ->
-    ok = application:load(logplex),
     set_os_vars(),
-    [ok = application:start(App, permanent) || App <-
-        [sasl, crypto, public_key, ssl, inets,
-         gproc, ehmon, ex_uri, redis, cowboy,
-         logplex]],
+    ok = logplex_app:a_start(logplex, temporary),
     Config.
 
 end_per_suite(_Config) ->
