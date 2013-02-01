@@ -34,6 +34,7 @@
          ,config/0
          ,config/1
          ,config/2
+         ,set_config/2
          ,start/0
          ,a_start/2
         ]).
@@ -127,6 +128,8 @@ cache_os_envvar(Var, Keys) ->
 set_config(KeyS, Value) when is_list(KeyS) ->
     set_config(list_to_atom(KeyS), Value);
 set_config(Key, Value) when is_atom(Key) ->
+    ?INFO("at=update_running_config key=~p value=~1000p",
+          [Key, Value]),
     application:set_env(?APP, Key, Value).
 
 config() ->
