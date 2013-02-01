@@ -33,7 +33,7 @@
     ,{http_send_loss_msg, send} % send | dont_send
     ,{log_history, 1500}
     ,{log_unknown_tokens, false} % bool
-    ,{logplex_shard_urls, ["redis://localhost:6379"]}
+    ,{logplex_shard_urls, "redis://localhost:6379"}
     ,{max_drains_per_channel, 5} % #channels
     ,{pagerduty, "0"} % "0" = disabled
     ,{queue_length, 2000}
