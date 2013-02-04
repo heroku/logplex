@@ -4,6 +4,7 @@
 
 # Run
 
+    $ source keys.sh
     $ bin/logplex
 
 # Testing
