@@ -28,6 +28,7 @@
          ,len/1
          ,empty/1
          ,pop/1
+         ,resize/2
          ,to_list/1
          ,from_list/1
          ,to_pkts/3
@@ -210,37 +211,34 @@ to_pkts(Buf, BytesTotal, BytesRemaining, Fun)
             end
     end.
 
+resize(NewSize, Buf = #lpdb{max_size=OldSize})
+  when is_integer(NewSize),
+       NewSize > 0,
+       NewSize >= OldSize ->
+    Buf#lpdb{max_size=NewSize};
+resize(NewSize, Buf = #lpdb{})
+  when is_integer(NewSize),
+       NewSize > 0 ->
+    case len(Buf) - NewSize of
+        ToDrop when ToDrop > 0 ->
+            lose(ToDrop,
+                 drop(ToDrop, Buf));
+        _ ->
+            Buf#lpdb{max_size=NewSize}
+    end.
+
 -ifdef(TEST).
 
-prop_push_msgs() ->
-    ?FORALL(MsgList, list(g_log_msg()),
-            begin
-                Buf = lists:foldl(fun push/2,
-                                  new(),
-                                  MsgList),
-                lists:foldl(fun (Msg, B) ->
-                                    {{msg, Msg}, B1} =  pop(B),
-                                    B1
-                            end,
-                            Buf,
-                            MsgList),
-                true
-            end).
-
-g_log_msg() ->
-    ?LET({F, S, D, M},
-         {integer(0, 23), % Facility
-          integer(0, 7), % severity
-          integer(-86400, 86400),
-          binary()},
-         iolist_to_binary(io_lib:format("<~p>~p ~s ~s",
-                                        [F, S, g_date(D), M]))).
-
-g_date(Offset) ->
-    Date = calendar:datetime_to_gregorian_seconds(calendar:now_to_datetime(os:timestamp())),
-    {{Y,M,D},{H,MM,S}} = calendar:gregorian_seconds_to_datetime(Date + Offset),
-    io_lib:format("~4.10.0B-~2.10.0B-~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B"
-                  "Z+00:00",
-                  [Y,M,D, H,MM,S]).
+resize_test_() ->
+    Messages = [<<"msg 1">>, <<"msg 2">>, <<"msg 3">>],
+    [ ?_assertMatch(List when List =:= Messages,
+                    to_list(from_list(Messages))),
+      ?_assertMatch(List when List =:= Messages,
+                    to_list(resize(3, from_list(Messages)))),
+      ?_assertMatch(List when List =/= Messages andalso
+                              length(List) =:= length(Messages) andalso
+                              tl(List) =:= tl(Messages),
+                    to_list(resize(2, from_list(Messages))))
+    ].
 
 -endif.
