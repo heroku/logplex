@@ -45,7 +45,9 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/5]).
+-export([start_link/5
+         ,resize_msg_buffer/2
+        ]).
 
 -export([valid_uri/1
          ,uri/2
@@ -101,6 +103,10 @@ uri(Host, Port) when is_binary(Host), is_integer(Port) ->
 uri(Host, Port) when is_list(Host), is_integer(Port) ->
     #ex_uri{scheme="syslog",
             authority=#ex_uri_authority{host=Host, port=Port}}.
+
+resize_msg_buffer(Pid, NewSize)
+  when is_integer(NewSize), NewSize > 0 ->
+    gen_fsm:sync_send_all_state_event(Pid, {resize_msg_buffer, NewSize}).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
@@ -196,6 +202,12 @@ handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
 
 %% @private
+handle_sync_event({resize_msg_buffer, NewSize}, _From, StateName,
+                  State = #state{buf = Buf})
+  when is_integer(NewSize), NewSize > 0 ->
+    NewBuf = logplex_msg_buffer:resize(NewSize, Buf),
+    {reply, ok, StateName, State#state{buf = NewBuf}};
+
 handle_sync_event(Event, _From, StateName, State) ->
     ?WARN("[state ~p] Unexpected event ~p",
           [StateName, Event]),
