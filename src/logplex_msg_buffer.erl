@@ -29,6 +29,7 @@
          ,empty/1
          ,pop/1
          ,to_list/1
+         ,from_list/1
          ,to_pkts/3
          ]).
 
@@ -103,6 +104,10 @@ to_list(#lpdb{messages = Q,
   when N > 0 ->
     [{loss_indication, N, When} |
      queue:to_list(Q)].
+
+-spec from_list([msg()]) -> #lpdb{}.
+from_list(Msgs) ->
+    #lpdb{messages = queue:from_list(Msgs)}.
 
 insert(Msg, Buf = #lpdb{messages = Q}) ->
     Buf#lpdb{messages = queue:in(Msg, Q)}.
