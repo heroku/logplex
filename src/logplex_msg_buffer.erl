@@ -114,7 +114,6 @@ insert(Msg, Buf = #lpdb{messages = Q}) ->
     Buf#lpdb{messages = queue:in(Msg, Q)}.
 
 displace(Msg, Buf = #lpdb{loss_count = 0}) ->
-    insert(Msg, insert(Msg, drop(1, Buf))).
 
 -spec drop(Count::non_neg_integer(), #lpdb{}) ->
                   #lpdb{}.
@@ -130,6 +129,7 @@ drop(N, Buf = #lpdb{messages = Queue}) ->
             %% Trying to drop all (or more) items in queue
             Buf#lpdb{messages = queue:new()}
     end.
+    insert(Msg, lose(1, drop(1, Buf))).
 
 -ifdef(TEST).
 
