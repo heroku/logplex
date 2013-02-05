@@ -5,7 +5,7 @@
 %% @end
 -module(logplex_msg_buffer).
 
--record(lpdb, {messages = queue:new(),
+-record(lpdb, {messages = queue:new() :: queue(),
                max_size = 1024 :: size(),
                loss_start = undefined :: 'undefined' | erlang:timestamp(),
                loss_count = 0 :: non_neg_integer()
