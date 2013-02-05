@@ -32,6 +32,8 @@
          ,to_list/1
          ,from_list/1
          ,to_pkts/3
+         ,lose/2
+         ,drop/2
          ]).
 
 -ifdef(TEST).
@@ -114,22 +116,24 @@ insert(Msg, Buf = #lpdb{messages = Q}) ->
     Buf#lpdb{messages = queue:in(Msg, Q)}.
 
 displace(Msg, Buf = #lpdb{loss_count = 0}) ->
-
--spec drop(Count::non_neg_integer(), #lpdb{}) ->
-                  #lpdb{}.
-drop(1, Buf = #lpdb{messages = Queue}) ->
-    {_Drop, Q1} = queue:out(Queue),
-    Buf#lpdb{messages = Q1};
-drop(N, Buf = #lpdb{messages = Queue}) ->
-    case queue:len(Queue) >= N of
-        true ->
-            {_, Queue1} = queue:split(N, Queue),
-            Buf#lpdb{messages = Queue1};
-        false ->
-            %% Trying to drop all (or more) items in queue
-            Buf#lpdb{messages = queue:new()}
-    end.
     insert(Msg, lose(1, drop(1, Buf))).
+
+-spec drop(Count::non_neg_integer(), buf()) -> buf().
+drop(0, Buf = #lpdb{}) -> Buf;
+drop(1, Buf = #lpdb{messages = OldQueue}) ->
+    {_, NewQueue} = queue:out(OldQueue),
+    Buf#lpdb{messages = NewQueue};
+drop(N, Buf = #lpdb{messages = Queue})
+  when is_integer(N), N >= 0 ->
+    NewQueue = case queue:len(Queue) >= N of
+                   true ->
+                       {_, Queue1} = queue:split(N, Queue),
+                       Queue1;
+                   false ->
+                       %% Trying to drop all (or more) items in queue
+                       queue:new()
+               end,
+    Buf#lpdb{messages = NewQueue}.
 
 -ifdef(TEST).
 
@@ -145,13 +149,15 @@ drop_test_() ->
 %% lose(Buf) -> lose(os:timestamp(), 1, Buf).
 lose(Count, Buf) -> lose(os:timestamp(), Count, Buf).
 
-lose(_Time, 0, Buf) -> Buf;
-lose(Time, Count, Buf = #lpdb{loss_count=0})
+-spec lose(erlang:timestamp(), non_neg_integer(), buf()) -> buf().
+
+lose(_Time, 0, Buf = #lpdb{}) -> Buf;
+lose(Time = {_,_,_}, Count, Buf = #lpdb{loss_count=0})
   when Count > 0 ->
     Buf#lpdb{loss_count=Count,
              loss_start=Time};
 lose(_Time, NewCount, Buf = #lpdb{loss_count=OldCount})
-  when NewCount > 0 ->
+  when NewCount > 0, is_integer(OldCount) ->
     Buf#lpdb{loss_count=NewCount + OldCount}.
 
 -ifdef(TEST).
