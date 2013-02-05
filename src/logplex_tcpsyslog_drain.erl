@@ -45,7 +45,9 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/5]).
+-export([start_link/5
+         ,resize_msg_buffer/2
+        ]).
 
 -export([valid_uri/1
          ,uri/2
@@ -107,6 +109,10 @@ uri(Host, Port) when is_binary(Host), is_integer(Port) ->
 uri(Host, Port) when is_list(Host), is_integer(Port) ->
     #ex_uri{scheme="syslog",
             authority=#ex_uri_authority{host=Host, port=Port}}.
+
+resize_msg_buffer(Pid, NewSize)
+  when is_integer(NewSize), NewSize > 0 ->
+    gen_fsm:sync_send_all_state_event(Pid, {resize_msg_buffer, NewSize}).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
@@ -202,6 +208,12 @@ handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
 
 %% @private
+handle_sync_event({resize_msg_buffer, NewSize}, _From, StateName,
+                  State = #state{buf = Buf})
+  when is_integer(NewSize), NewSize > 0 ->
+    NewBuf = logplex_msg_buffer:resize(NewSize, Buf),
+    {reply, ok, StateName, State#state{buf = NewBuf}};
+
 handle_sync_event(Event, _From, StateName, State) ->
     ?WARN("[state ~p] Unexpected event ~p",
           [StateName, Event]),
@@ -423,8 +435,10 @@ send(State = #state{buf = Buf, sock = Sock,
         empty ->
             {next_state, ready_to_send, State};
         not_empty ->
+            PktSize = logplex_app:config(tcp_drain_target_bytes,
+                                         ?TARGET_SEND_SIZE),
             {Data, N, NewBuf} =
-                buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
+                buffer_to_pkts(Buf, PktSize, DrainTok),
             Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
             try
                 erlang:port_command(Sock, Data, []),
