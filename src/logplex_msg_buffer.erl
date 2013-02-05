@@ -33,7 +33,7 @@
          ]).
 
 -ifdef(TEST).
--include_lib("proper/include/proper.hrl").
+-include_lib("eunit/include/eunit.hrl").
 -endif.
 
 -spec new() -> buf().
@@ -107,19 +107,59 @@ to_list(#lpdb{messages = Q,
 insert(Msg, Buf = #lpdb{messages = Q}) ->
     Buf#lpdb{messages = queue:in(Msg, Q)}.
 
-displace(Msg, Buf = #lpdb{messages = Q,
-                          loss_count = 0}) ->
-    {_Drop, Q1} = queue:out(Q),
-    NewQueue = queue:in(Msg, Q1),
-    Buf#lpdb{messages = NewQueue,
-             loss_count = 1,
-             loss_start = os:timestamp()};
-displace(Msg, Buf = #lpdb{messages = Q,
-                          loss_count = N}) when N > 0 ->
-    {_Drop, Q1} = queue:out(Q),
-    NewQueue = queue:in(Msg, Q1),
-    Buf#lpdb{messages = NewQueue,
-             loss_count = N + 1}.
+displace(Msg, Buf = #lpdb{loss_count = 0}) ->
+    insert(Msg, insert(Msg, drop(1, Buf))).
+
+-spec drop(Count::non_neg_integer(), #lpdb{}) ->
+                  #lpdb{}.
+drop(1, Buf = #lpdb{messages = Queue}) ->
+    {_Drop, Q1} = queue:out(Queue),
+    Buf#lpdb{messages = Q1};
+drop(N, Buf = #lpdb{messages = Queue}) ->
+    case queue:len(Queue) >= N of
+        true ->
+            {_, Queue1} = queue:split(N, Queue),
+            Buf#lpdb{messages = Queue1};
+        false ->
+            %% Trying to drop all (or more) items in queue
+            Buf#lpdb{messages = queue:new()}
+    end.
+
+-ifdef(TEST).
+
+drop_test_() ->
+    M = 10,
+    Messages = [ list_to_binary(integer_to_list(N)) || N <- lists:seq(1,M)],
+    [ ?_assertMatch(L when M - length(L) =:= N,
+                    to_list(drop(N, from_list(Messages))))
+      || N <- lists:seq(1, M) ].
+
+-endif.
+
+%% lose(Buf) -> lose(os:timestamp(), 1, Buf).
+lose(Count, Buf) -> lose(os:timestamp(), Count, Buf).
+
+lose(_Time, 0, Buf) -> Buf;
+lose(Time, Count, Buf = #lpdb{loss_count=0})
+  when Count > 0 ->
+    Buf#lpdb{loss_count=Count,
+             loss_start=Time};
+lose(_Time, NewCount, Buf = #lpdb{loss_count=OldCount})
+  when NewCount > 0 ->
+    Buf#lpdb{loss_count=NewCount + OldCount}.
+
+-ifdef(TEST).
+lose_test_() ->
+    [ ?_assertMatch(#lpdb{loss_count = L} when L =:= N,
+                    lose(N, new(1)))
+      || N <- lists:seq(1,10)
+    ].
+
+lose2_test_() ->
+    [ ?_assertMatch([{loss_indication, 1, _}],
+                    to_list(lose(1, new(1))))
+    ].
+-endif.
 
 -spec to_pkts(buf(), IdealBytes::pos_integer(),
               framing_fun()) ->
