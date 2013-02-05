@@ -29,7 +29,7 @@ NodeVersions = fun () ->
                            [ {N,
                               element(2, rpc:call(N, application, get_env, [logplex, git_branch])),
                               rpc:call(N, os, getenv, ["INSTANCE_NAME"])}
-                             || N <- erlang:nodes() ])
+                             || N <- [node() | nodes()] ])
                end.
 
 f(NodesAt).
