@@ -429,8 +429,10 @@ send(State = #state{buf = Buf, sock = Sock,
         empty ->
             {next_state, ready_to_send, State};
         not_empty ->
+            PktSize = logplex_app:config(tcp_drain_target_bytes,
+                                         ?TARGET_SEND_SIZE),
             {Data, N, NewBuf} =
-                buffer_to_pkts(Buf, ?TARGET_SEND_SIZE, DrainTok),
+                buffer_to_pkts(Buf, PktSize, DrainTok),
             Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
             try
                 erlang:port_command(Sock, Data, []),
