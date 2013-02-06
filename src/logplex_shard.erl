@@ -35,6 +35,7 @@
 %% Redis Migration API
 -export([prepare_new_urls/1,
          prepare_url_update/2,
+         prepare_url_update/3,
          attempt_to_commit_url_update/1,
          make_update_permanent/1
         ]).
@@ -369,6 +370,7 @@ new_shard_info({replacements, NewUrls}) ->
 %% NewShardInfo = prepare_new_urls(...).
 %% Cluster = [node() | nodes()],
 %% prepare_url_update(Cluster, NewShardInfo).
+%% Check 'logplex_shard_info:read(new_logplex_read_pool_map).' looks sensible.
 %% If all are good:
 %%   attempt_to_commit_url_update(Cluster).
 %% If that succeeds:
@@ -389,14 +391,17 @@ prepare_new_urls({one_for_one, NewIps}) ->
 prepare_new_urls({replacements, NewUrls}) ->
     {replacements, NewUrls}.
 
+prepare_url_update(Nodes, NewShardInfo) ->
+    prepare_url_update(Nodes, NewShardInfo, timer:seconds(5)).
 
 prepare_url_update(Nodes,
-                   NewShardInfo = {Type, _})
+                   NewShardInfo = {Type, _}, Timeout)
   when Type =:= one_for_one;
        Type =:= replacements ->
     lists:foldl(fun (Node, {good, Acc}) ->
                         try gen_server:call({?MODULE, Node},
-                                             {prepare, {new_shard_info, NewShardInfo}}) of
+                                             {prepare, {new_shard_info, NewShardInfo}},
+                                            Timeout) of
                             ok ->
                                 {good, [Node | Acc]};
                             Err ->
