@@ -18,6 +18,8 @@ UpgradeNode = fun () ->
   l(logplex_msg_buffer),
   l(logplex_tcpsyslog_drain),
 
+  l(logplex_shard),
+
   io:format(whereis(user), "at=upgrade_end cur_vsn=55_1~n", []),
   application:set_env(logplex, git_branch, "v55_1"),
   ok
