@@ -34,7 +34,6 @@
 
 %% Redis Migration API
 -export([prepare_new_urls/1,
-         update_redis/1,
          prepare_url_update/2,
          attempt_to_commit_url_update/1,
          make_update_permanent/1
@@ -121,8 +120,8 @@ handle_call({abort, new_shard_info}, _From, State) ->
             {reply, {error, {C, E}}, State}
     end;
 
-handle_call({prepare, {new_shard_info, OldNewMap}}, _From, State) ->
-    {reply, prepare_new_shard_info(OldNewMap), State};
+handle_call({prepare, {new_shard_info, NewShardInfo}}, _From, State) ->
+    {reply, prepare_new_shard_info(NewShardInfo), State};
 
 handle_call({make_permanent, new_shard_info}, _From, State) ->
     try
@@ -224,11 +223,14 @@ logs_redis_urls() ->
     redis_sort(logplex_app:config(logplex_shard_urls)).
 
 populate_info_table(Urls) ->
+    populate_info_table(?CURRENT_READ_MAP, ?CURRENT_WRITE_MAP, Urls).
+
+populate_info_table(ReadMap, WriteMap, Urls) ->
     %% Populate Read pool
     ReadPools = [ {Url, add_pool(Url)} || Url <- redis_sort(Urls)],
     {ok, Map1, Interval1} =
         redis_shard:generate_map_and_interval(ReadPools),
-    logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
+    logplex_shard_info:save(ReadMap, Map1, Interval1),
 
     %% Populate write pool
     WritePools = [ {Url, add_buffer(Url)}
@@ -236,8 +238,7 @@ populate_info_table(Urls) ->
     {ok, Map2, Interval2} =
         redis_shard:generate_map_and_interval(WritePools),
 
-    logplex_shard_info:save(logplex_redis_buffer_map, Map2, Interval2),
-
+    logplex_shard_info:save(WriteMap, Map2, Interval2),
     ok.
 
 add_pool(Url) ->
@@ -297,21 +298,12 @@ consistent(URLs) ->
 %%% Redis cluster move code
 %%--------------------------------------------------------------------
 
-
-%% Update the boot-time list of redis servers
-update_redis(OldNewMap) ->
-    {OldUrls, NewUrls} = lists:unzip(OldNewMap),
-    [redo:cmd(config, [<<"SADD">>, <<"redis:shard:urls">>, list_to_binary(New)])
-     || New <- NewUrls] ++
-        [redo:cmd(config, [<<"SREM">>, <<"redis:shard:urls">>, list_to_binary(Old)])
-         || Old <- OldUrls].
-
 %% Attempt to create new shard maps with new redo processes. Catch
 %% errors and destroy any created processes.
-prepare_new_shard_info(OldNewMap) ->
+prepare_new_shard_info(NewShardInfo) ->
     {links, OldLinks} = process_info(self(), links),
     try
-        new_shard_info(OldNewMap)
+        new_shard_info(NewShardInfo)
     catch
         C:E ->
             {links, NewLinks} = process_info(self(), links),
@@ -347,7 +339,7 @@ make_new_shard_info_permanent() ->
     logplex_shard_info:copy(?NEW_READ_MAP, ?CURRENT_READ_MAP),
     ok.
 
-new_shard_info(OldNewMap) ->
+new_shard_info({one_for_one, OldNewMap}) ->
     {RM, RI, _} = logplex_shard_info:read(?CURRENT_READ_MAP),
     NewReadMap = dict:map(fun (_Slice, {OldUrl, _OldPid}) ->
                                   NewUrl = proplists:get_value(OldUrl, OldNewMap),
@@ -366,9 +358,26 @@ new_shard_info(OldNewMap) ->
                             NewReadMap, RI),
     logplex_shard_info:save(?NEW_WRITE_MAP,
                             NewWriteMap, WI),
+    ok;
+new_shard_info({replacements, NewUrls}) ->
+    populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
+                        NewUrls),
     ok.
 
-prepare_new_urls(NewIps) ->
+
+%% logplex_logs_redis / logplex_shard online replacement guide:
+%% NewShardInfo = prepare_new_urls(...).
+%% Cluster = [node() | nodes()],
+%% prepare_url_update(Cluster, NewShardInfo).
+%% If all are good:
+%%   attempt_to_commit_url_update(Cluster).
+%% If that succeeds:
+%%   make_update_permanent(Cluster).
+%%
+%% If anything goes wrong:
+%%   abort_url_update(Cluster).
+
+prepare_new_urls({one_for_one, NewIps}) ->
     NewIpsSorted = lists:sort(NewIps),
     OldUrls = lists:sort([binary_to_list(Url)
                           || Url <- urls()]),
@@ -376,12 +385,18 @@ prepare_new_urls(NewIps) ->
         orelse erlang:error({invalid_ip_list, different_length_to_existing}),
     NewUrls = [ update_redis_host(OldUrl, NewIp)
                 || {OldUrl, NewIp} <- lists:zip(OldUrls, NewIpsSorted)],
-    lists:zip(OldUrls, NewUrls).
+    {one_for_one, lists:zip(OldUrls, NewUrls)};
+prepare_new_urls({replacements, NewUrls}) ->
+    {replacements, NewUrls}.
 
-prepare_url_update(Nodes, OldNewMap) ->
+
+prepare_url_update(Nodes,
+                   NewShardInfo = {Type, _})
+  when Type =:= one_for_one;
+       Type =:= replacements ->
     lists:foldl(fun (Node, {good, Acc}) ->
                         try gen_server:call({?MODULE, Node},
-                                             {prepare, {new_shard_info, OldNewMap}}) of
+                                             {prepare, {new_shard_info, NewShardInfo}}) of
                             ok ->
                                 {good, [Node | Acc]};
                             Err ->
