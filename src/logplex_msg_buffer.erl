@@ -115,8 +115,22 @@ from_list(Msgs) ->
 insert(Msg, Buf = #lpdb{messages = Q}) ->
     Buf#lpdb{messages = queue:in(Msg, Q)}.
 
-displace(Msg, Buf = #lpdb{loss_count = 0}) ->
+displace(Msg, Buf = #lpdb{}) ->
     insert(Msg, lose(1, drop(1, Buf))).
+
+-ifdef(TEST).
+
+displace_test_() ->
+    [ ?_assertMatch([{loss_indication, 1, _}, <<"two">>],
+                    to_list(displace(<<"two">>,
+                                     insert([<<"one">>], new(1))))),
+      ?_assertMatch([{loss_indication, 2, _}, <<"three">>],
+                    to_list(displace(<<"three">>,
+                                     displace(<<"two">>,
+                                              insert([<<"one">>], new(1))))))
+    ].
+
+-endif.
 
 -spec drop(Count::non_neg_integer(), buf()) -> buf().
 drop(0, Buf = #lpdb{}) -> Buf;
