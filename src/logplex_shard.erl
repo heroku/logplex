@@ -373,6 +373,18 @@ new_shard_info({replacements, NewUrls}) ->
     ok.
 
 
+%% logplex_logs_redis / logplex_shard online replacement guide:
+%% NewShardInfo = prepare_new_urls(...).
+%% Cluster = [node() | nodes()],
+%% prepare_url_update(Cluster, NewShardInfo).
+%% If all are good:
+%%   attempt_to_commit_url_update(Cluster).
+%% If that succeeds:
+%%   make_update_permanent(Cluster).
+%%
+%% If anything goes wrong:
+%%   abort_url_update(Cluster).
+
 prepare_new_urls({one_for_one, NewIps}) ->
     NewIpsSorted = lists:sort(NewIps),
     OldUrls = lists:sort([binary_to_list(Url)
