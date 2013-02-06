@@ -223,11 +223,14 @@ logs_redis_urls() ->
     redis_sort(logplex_app:config(logplex_shard_urls)).
 
 populate_info_table(Urls) ->
+    populate_info_table(?CURRENT_READ_MAP, ?CURRENT_WRITE_MAP, Urls).
+
+populate_info_table(ReadMap, WriteMap, Urls) ->
     %% Populate Read pool
     ReadPools = [ {Url, add_pool(Url)} || Url <- redis_sort(Urls)],
     {ok, Map1, Interval1} =
         redis_shard:generate_map_and_interval(ReadPools),
-    logplex_shard_info:save(logplex_read_pool_map, Map1, Interval1),
+    logplex_shard_info:save(ReadMap, Map1, Interval1),
 
     %% Populate write pool
     WritePools = [ {Url, add_buffer(Url)}
@@ -235,8 +238,7 @@ populate_info_table(Urls) ->
     {ok, Map2, Interval2} =
         redis_shard:generate_map_and_interval(WritePools),
 
-    logplex_shard_info:save(logplex_redis_buffer_map, Map2, Interval2),
-
+    logplex_shard_info:save(WriteMap, Map2, Interval2),
     ok.
 
 add_pool(Url) ->
