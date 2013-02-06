@@ -121,8 +121,8 @@ handle_call({abort, new_shard_info}, _From, State) ->
             {reply, {error, {C, E}}, State}
     end;
 
-handle_call({prepare, {new_shard_info, OldNewMap}}, _From, State) ->
-    {reply, prepare_new_shard_info(OldNewMap), State};
+handle_call({prepare, {new_shard_info, NewShardInfo}}, _From, State) ->
+    {reply, prepare_new_shard_info(NewShardInfo), State};
 
 handle_call({make_permanent, new_shard_info}, _From, State) ->
     try
@@ -316,10 +316,10 @@ update_redis(OldNewMap) ->
 
 %% Attempt to create new shard maps with new redo processes. Catch
 %% errors and destroy any created processes.
-prepare_new_shard_info(OldNewMap) ->
+prepare_new_shard_info(NewShardInfo) ->
     {links, OldLinks} = process_info(self(), links),
     try
-        new_shard_info(OldNewMap)
+        new_shard_info(NewShardInfo)
     catch
         C:E ->
             {links, NewLinks} = process_info(self(), links),
