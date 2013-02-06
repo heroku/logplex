@@ -366,6 +366,10 @@ new_shard_info({one_for_one, OldNewMap}) ->
                             NewReadMap, RI),
     logplex_shard_info:save(?NEW_WRITE_MAP,
                             NewWriteMap, WI),
+    ok;
+new_shard_info({replacements, NewUrls}) ->
+    populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
+                        NewUrls),
     ok.
 
 
@@ -377,12 +381,15 @@ prepare_new_urls({one_for_one, NewIps}) ->
         orelse erlang:error({invalid_ip_list, different_length_to_existing}),
     NewUrls = [ update_redis_host(OldUrl, NewIp)
                 || {OldUrl, NewIp} <- lists:zip(OldUrls, NewIpsSorted)],
-    {one_for_one, lists:zip(OldUrls, NewUrls)}.
+    {one_for_one, lists:zip(OldUrls, NewUrls)};
+prepare_new_urls({replacements, NewUrls}) ->
+    {replacements, NewUrls}.
 
 
 prepare_url_update(Nodes,
                    NewShardInfo = {Type, _})
-  when Type =:= one_for_one ->
+  when Type =:= one_for_one;
+       Type =:= replacements ->
     lists:foldl(fun (Node, {good, Acc}) ->
                         try gen_server:call({?MODULE, Node},
                                              {prepare, {new_shard_info, NewShardInfo}}) of
