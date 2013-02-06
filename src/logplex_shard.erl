@@ -347,7 +347,7 @@ make_new_shard_info_permanent() ->
     logplex_shard_info:copy(?NEW_READ_MAP, ?CURRENT_READ_MAP),
     ok.
 
-new_shard_info(OldNewMap) ->
+new_shard_info({one_for_one, OldNewMap}) ->
     {RM, RI, _} = logplex_shard_info:read(?CURRENT_READ_MAP),
     NewReadMap = dict:map(fun (_Slice, {OldUrl, _OldPid}) ->
                                   NewUrl = proplists:get_value(OldUrl, OldNewMap),
@@ -368,7 +368,8 @@ new_shard_info(OldNewMap) ->
                             NewWriteMap, WI),
     ok.
 
-prepare_new_urls(NewIps) ->
+
+prepare_new_urls({one_for_one, NewIps}) ->
     NewIpsSorted = lists:sort(NewIps),
     OldUrls = lists:sort([binary_to_list(Url)
                           || Url <- urls()]),
@@ -376,12 +377,15 @@ prepare_new_urls(NewIps) ->
         orelse erlang:error({invalid_ip_list, different_length_to_existing}),
     NewUrls = [ update_redis_host(OldUrl, NewIp)
                 || {OldUrl, NewIp} <- lists:zip(OldUrls, NewIpsSorted)],
-    lists:zip(OldUrls, NewUrls).
+    {one_for_one, lists:zip(OldUrls, NewUrls)}.
 
-prepare_url_update(Nodes, OldNewMap) ->
+
+prepare_url_update(Nodes,
+                   NewShardInfo = {Type, _})
+  when Type =:= one_for_one ->
     lists:foldl(fun (Node, {good, Acc}) ->
                         try gen_server:call({?MODULE, Node},
-                                             {prepare, {new_shard_info, OldNewMap}}) of
+                                             {prepare, {new_shard_info, NewShardInfo}}) of
                             ok ->
                                 {good, [Node | Acc]};
                             Err ->
