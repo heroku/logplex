@@ -377,6 +377,7 @@ new_shard_info({replacements, NewUrls}) ->
 %% NewShardInfo = prepare_new_urls(...).
 %% Cluster = [node() | nodes()],
 %% prepare_url_update(Cluster, NewShardInfo).
+%% Check 'logplex_shard_info:read(new_logplex_read_pool_map).' looks sensible.
 %% If all are good:
 %%   attempt_to_commit_url_update(Cluster).
 %% If that succeeds:
