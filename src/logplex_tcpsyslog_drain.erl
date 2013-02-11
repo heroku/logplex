@@ -47,6 +47,7 @@
 
 -export([start_link/5
          ,resize_msg_buffer/2
+         ,set_target_send_size/2
         ]).
 
 -export([valid_uri/1
@@ -113,6 +114,10 @@ uri(Host, Port) when is_list(Host), is_integer(Port) ->
 resize_msg_buffer(Pid, NewSize)
   when is_integer(NewSize), NewSize > 0 ->
     gen_fsm:sync_send_all_state_event(Pid, {resize_msg_buffer, NewSize}).
+
+set_target_send_size(Pid, NewSize)
+  when is_integer(NewSize), NewSize > 0 ->
+    gen_fsm:sync_send_all_state_event(Pid, {set_target_send_size, NewSize}).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
@@ -208,6 +213,11 @@ handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
 
 %% @private
+handle_sync_event({set_target_send_size, Size}, _From, StateName,
+                  State = #state{})
+  when is_integer(Size), Size > 0 ->
+    put(target_send_size, Size),
+    {reply, {ok, Size}, StateName, State};
 handle_sync_event({resize_msg_buffer, NewSize}, _From, StateName,
                   State = #state{buf = Buf})
   when is_integer(NewSize), NewSize > 0 ->
@@ -435,8 +445,7 @@ send(State = #state{buf = Buf, sock = Sock,
         empty ->
             {next_state, ready_to_send, State};
         not_empty ->
-            PktSize = logplex_app:config(tcp_drain_target_bytes,
-                                         ?TARGET_SEND_SIZE),
+            PktSize = target_send_size(),
             {Data, N, NewBuf} =
                 buffer_to_pkts(Buf, PktSize, DrainTok),
             Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
@@ -496,4 +505,14 @@ pkt_fmt(DrainTok) ->
             end;
         ({msg, MData}) ->
             {frame, Frame(MData)}
+    end.
+
+target_send_size() ->
+    case get(target_send_size) of
+        Size when is_integer(Size),
+                  Size > 0 ->
+            Size;
+        _ ->
+            logplex_app:config(tcp_drain_target_bytes,
+                               ?TARGET_SEND_SIZE)
     end.
