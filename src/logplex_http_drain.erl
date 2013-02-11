@@ -253,12 +253,12 @@ try_send(Frame = #frame{tries = Tries},
     ReqStart = os:timestamp(),
     try logplex_http_client:raw_request(Pid, Req, ?REQUEST_TIMEOUT) of
         {ok, Status, _Headers} ->
-            ReqEnd = os:timestamp(),
+            %% ReqEnd = os:timestamp(),
             Result = status_action(Status),
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
-                  "result=~p status=~p msg_count=~p req_time=~p",
-                  log_info(State, [Result, Status, Frame#frame.msg_count,
-                                   ltcy(ReqStart, ReqEnd)])),
+            %% ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
+            %%       "result=~p status=~p msg_count=~p req_time=~p",
+            %%       log_info(State, [Result, Status, Frame#frame.msg_count,
+            %%                        ltcy(ReqStart, ReqEnd)])),
             case Result of
                 success ->
                     ready_to_send(sent_frame(Frame, State));
