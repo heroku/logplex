@@ -52,12 +52,14 @@ incr(_Key, _Inc) ->
 
 -type key() :: 'message_received' |
                'message_processed' |
-               'message_routed'.
+               'drain_delivered' |
+               'drain_dropped'.
 -spec keys() -> [key()].
 keys() ->
     [message_received
      ,message_processed
-     ,message_routed
+     ,drain_delivered
+     ,drain_dropped
     ].
 
 %%====================================================================
