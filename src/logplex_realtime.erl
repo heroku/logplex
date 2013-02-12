@@ -116,7 +116,7 @@ code_change(_OldVsn, State, _Extra) ->
 heroku_domain() ->
     case get(heroku_domain) of
         undefined ->
-            Domain = 
+            Domain =
                 case os:getenv("HEROKU_DOMAIN") of
                     false -> <<"">>;
                     Val -> list_to_binary(Val)
