@@ -425,7 +425,8 @@ buffer(Msg, State = #state{buf = Buf}) ->
     msg_stat(drain_buffered, 1, State),
     case Result of
         displace ->
-            msg_stat(drain_dropped, 1, State);
+            msg_stat(drain_dropped, 1, State),
+            logplex_realtime:incr(drain_dropped);
         insert -> ok
     end,
     State#state{buf=NewBuf}.
