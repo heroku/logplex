@@ -52,12 +52,14 @@ incr(_Key, _Inc) ->
 
 -type key() :: 'message_received' |
                'message_processed' |
-               'message_routed'.
+               'drain_delivered' |
+               'drain_dropped'.
 -spec keys() -> [key()].
 keys() ->
     [message_received
      ,message_processed
-     ,message_routed
+     ,drain_delivered
+     ,drain_dropped
     ].
 
 %%====================================================================
@@ -112,6 +114,7 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
 
 git_branch() ->
     case logplex_app:config(git_branch) of

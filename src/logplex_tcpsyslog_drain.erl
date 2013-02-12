@@ -431,7 +431,8 @@ buffer(Msg, State = #state{buf = Buf}) ->
     msg_stat(drain_buffered, 1, State),
     case Result of
         displace ->
-            msg_stat(drain_dropped, 1, State);
+            msg_stat(drain_dropped, 1, State),
+            logplex_realtime:incr(drain_dropped);
         insert -> ok
     end,
     State#state{buf=NewBuf}.
@@ -452,7 +453,7 @@ send(State = #state{buf = Buf, sock = Sock,
             try
                 erlang:port_command(Sock, Data, []),
                 msg_stat(drain_delivered, N, State),
-                logplex_realtime:incr(message_routed),
+                logplex_realtime:incr(drain_delivered, N),
                 {next_state, sending,
                  State#state{buf = NewBuf,
                              send_tref=Ref}}

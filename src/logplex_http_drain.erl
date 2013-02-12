@@ -375,12 +375,14 @@ target_bytes() ->
 %% @doc Called on frames we've decided to drop. Records count of
 %% messages dropped (not frame count).
 drop_frame(#frame{msg_count=Count}, State) ->
+    logplex_realtime:incr(drain_dropped, Count),
     msg_stat(drain_dropped, Count, State),
     State.
 
 %% @private
 sent_frame(#frame{msg_count=Count}, State) ->
     msg_stat(drain_delivered, Count, State),
+    logplex_realtime:incr(drain_delivered, Count),
     State.
 
 -spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered',

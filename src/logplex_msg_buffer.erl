@@ -33,6 +33,7 @@
          ,from_list/1
          ,to_pkts/3
          ,lose/2
+         ,lost/1
          ,drop/2
          ]).
 
@@ -186,6 +187,9 @@ lose2_test_() ->
                     to_list(lose(1, new(1))))
     ].
 -endif.
+
+-spec lost(buf()) -> non_neg_integer().
+lost(#lpdb{loss_count=N}) -> N.
 
 -spec to_pkts(buf(), IdealBytes::pos_integer(),
               framing_fun()) ->
