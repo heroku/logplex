@@ -34,16 +34,17 @@
          terminate/2,
          code_change/3]).
 
+-define(DEFAULT_MSG_CB,
+        {logplex_worker, logplex_worker:init_state()}).
+
+
 -record(state, {sock :: 'undefined' | port(),
                 buffer = syslog_parser:new(),
                 peername :: 'undefined' | {inet:ip4_address(),
                                            inet:port_number()},
                 connect_time :: 'undefined' | erlang:timestamp(),
-                cb :: 'undefined' | {Module::atom(), State::term()}
+                cb = ?DEFAULT_MSG_CB :: {Module::atom(), State::term()}
                }).
-
--define(DEFAULT_MSG_CB,
-        {logplex_worker, logplex_worker:init_state()}).
 
 -include("logplex_logging.hrl").
 
