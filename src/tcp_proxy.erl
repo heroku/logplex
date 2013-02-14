@@ -133,22 +133,6 @@ terminate(shutdown, _State) ->
 terminate(_Reason, _State) ->
     ok.
 
-code_change(v34,
-            {state, Sock, Buffer, PeerName,
-             ConnectTime},
-            _Extra) ->
-    {ok, #state{sock = Sock,
-                buffer = Buffer,
-                peername = PeerName,
-                connect_time = ConnectTime,
-                cb = ?DEFAULT_MSG_CB}};
-
-code_change(v33, {state, Sock, Buffer, PeerName}, _Extra) ->
-    %% Can't easily obtain a connection timestamp for an established connection.
-    {ok, #state{sock = Sock,
-                peername = PeerName,
-                buffer = Buffer}};
-
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
