@@ -84,8 +84,10 @@ start_link(ChannelID, DrainID, DrainTok,
                               uri = Uri},
                        []).
 
-valid_uri(#ex_uri{scheme=Http} = Uri)
-  when Http =:= "http"; Http =:= "https" ->
+valid_uri(#ex_uri{scheme=Http,
+                  host = Host} = Uri)
+  when (Http =:= "http" orelse Http =:= "https"),
+       is_list(Host), Host =/= "" ->
     {valid, http, Uri};
 valid_uri(_) ->
     {error, invalid_http_uri}.
