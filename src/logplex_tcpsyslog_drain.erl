@@ -267,7 +267,10 @@ handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
 %% @private
-terminate(_Reason, _StateName, _State) ->
+terminate(Reason, StateName, State) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+          "at=~p reason=~p",
+          log_info(State, [StateName, Reason])),
     ok.
 
 %% @private
