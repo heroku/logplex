@@ -435,7 +435,11 @@ buffer(Msg, State = #state{buf = Buf}) ->
     case Result of
         displace ->
             msg_stat(drain_dropped, 1, State),
-            logplex_realtime:incr(drain_dropped);
+            %% If socket is online, note drain dropped.
+            case State#state.sock of
+                undefined -> ok;
+                _ -> logplex_realtime:incr(drain_dropped)
+            end;
         insert -> ok
     end,
     State#state{buf=NewBuf}.
