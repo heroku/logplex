@@ -141,7 +141,7 @@ handle_info({post, Msg}, State = #state{}) when is_tuple(Msg) ->
     case post(Msg, State) of
         ok ->
             msg_stat(drain_delivered, 1, State),
-            logplex_realtime:incr(message_routed),
+            logplex_realtime:incr(drain_delivered),
             {noreply, udp_good(State)};
         {error, Reason} ->
             NewState = udp_bad(State#state{sock=undefined}),
