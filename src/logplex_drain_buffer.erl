@@ -192,8 +192,13 @@ handle_sync_event(Event, _From, StateName, State) ->
 
 %% @private
 handle_info({post, Msg}, StateName, S = #state{buf = OldBuf}) ->
-    NewState =
-        S#state{buf = logplex_msg_buffer:push(Msg, OldBuf)},
+    NewBuf = case logplex_msg_buffer:push_ext(Msg, OldBuf) of
+                 {insert, Buf} -> Buf;
+                 {displace, Buf} ->
+                     logplex_realtime:incr(drain_dropped, 1),
+                     Buf
+             end,
+    NewState = S#state{buf = NewBuf},
     case StateName of
         passive ->
             {next_state, passive, NewState};
