@@ -269,7 +269,7 @@ handle_info(Info, StateName, State) ->
 %% @private
 terminate(Reason, StateName, State) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
-          "at=~p reason=~p",
+          "at=terminate reason=~p",
           log_info(State, [StateName, Reason])),
     ok.
 
@@ -404,7 +404,8 @@ log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
   when is_list(Rest) ->
     [DrainId, ChannelId, logplex_logging:dest(H,P) | Rest].
 
--spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered',
+-spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered' |
+               'requests_sent',
                non_neg_integer(), #state{}) -> any().
 msg_stat(Key, N,
          #state{drain_id=DrainId, channel_id=ChannelId}) ->
