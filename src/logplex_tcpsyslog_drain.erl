@@ -185,6 +185,9 @@ ready_to_send(Msg, State = #state{sock = Sock})
 %% the send operation.
 sending({timeout, Ref, ?SEND_TIMEOUT_MSG},
         S = #state{send_tref=Ref}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s err=send_timeout "
+          "state=sending",
+          log_info(S, [])),
     reconnect(tcp_bad(S#state{send_tref=undefined}));
 sending({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State)};
