@@ -60,6 +60,7 @@
         ]).
 
 -export([by_dest/0
+         ,pids/0
         ]).
 
 -include("logplex.hrl").
@@ -322,3 +323,8 @@ uri_to_binary(#ex_uri{} = Uri) ->
 
 by_dest() ->
     gproc:lookup_local_properties(drain_dest).
+
+pids() ->
+    gproc:select({l, n},
+                 [{ { {n, l, {drain, '$1'}}, '$2', '_'},
+                    [], [{{'$1', '$2'}}]}]).
