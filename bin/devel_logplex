@@ -1,0 +1,7 @@
+#!/bin/sh
+
+export INSTANCE_NAME=`hostname --fqdn`
+export LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379"
+export LOCAL_IP="127.0.0.1"
+export LOGPLEX_COOKIE=123
+erl +K true +A100 +P500000 -env ERL_MAX_PORTS 65535 -kernel inet_dist_listen_min 9100 -kernel inet_dist_listen_max 9200 -name logplex@`hostname --fqdn` -pa ebin -env ERL_LIBS deps -s logplex_app
