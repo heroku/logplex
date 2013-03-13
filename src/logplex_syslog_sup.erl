@@ -43,7 +43,7 @@ init([]) ->
     {ok,
      { {one_for_all, 0, 1},
        [{tcp_proxy_sup, {tcp_proxy_sup, start_link, []},
-                permanent, 2000, worker, [tcp_proxy_sup]},
+                permanent, 2000, supervisor, [tcp_proxy_sup]},
         tcp_acceptor:child_spec()]} }.
 
 %%====================================================================
