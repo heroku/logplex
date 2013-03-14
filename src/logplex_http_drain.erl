@@ -361,7 +361,7 @@ framing_fun(Token) ->
                     skip;
                 _ ->
                     {frame,
-                     Frame(logplex_syslog_utils:overflow_msg(N, When))}
+                     Frame(logplex_syslog_utils:overflow_msg(N, When, Token))}
             end;
         ({msg, MData}) ->
             {frame, Frame(MData)}

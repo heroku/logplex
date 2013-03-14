@@ -513,7 +513,7 @@ pkt_fmt(DrainTok) ->
                     skip;
                 _ ->
                     {frame,
-                     Frame(logplex_syslog_utils:overflow_msg(N, When))}
+                     Frame(logplex_syslog_utils:overflow_msg(N, When, DrainTok))}
             end;
         ({msg, MData}) ->
             {frame, Frame(MData)}

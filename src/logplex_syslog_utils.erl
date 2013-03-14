@@ -15,6 +15,7 @@
          ,rfc5424/1
          ,rfc5424/8
          ,overflow_msg/2
+         ,overflow_msg/3
         ]).
 
 -type syslog_msg() :: {facility(), severity(),
@@ -49,11 +50,14 @@ nvl(undefined) -> $-;
 nvl(Val) -> Val.
 
 -spec overflow_msg(N::non_neg_integer(), datetime()) -> syslog_msg().
-overflow_msg(N, When) ->
+overflow_msg(N, When) -> overflow_msg(N, When, "logplex").
+
+-spec overflow_msg(N::non_neg_integer(), datetime(), iolist() | binary()) -> syslog_msg().
+overflow_msg(N, When, Token) ->
     fmt(local5,
         warning,
         now,
-        "logplex",
+        Token,
         "logplex",
         "Error L10 (Drain buffer overflow) -> This drain dropped ~p"
         " messages since ~s.",
