@@ -5,7 +5,7 @@ data
 channels
 tokens
 drains
-src/*.swp
+*.swp
 deps/
 *~
 ebin/logplex.app
