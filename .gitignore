@@ -18,3 +18,4 @@ doc/edoc-info
 logs/
 test/*.beam
 .edts
+.DS_Store
