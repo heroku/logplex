@@ -264,7 +264,7 @@ handlers() ->
                 {ok, Buffer} =
                     logplex_tail_buffer:start_link(ChannelId, self()),
                 try
-                    tail_init(Socket, Buffer, Filters)
+                    tail_init(Socket, Buffer, Filters, ChannelId)
                 after
                     ?INFO("at=tail_end channel_id=~p",
                           [ChannelId]),
@@ -475,24 +475,26 @@ filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
     end.
 
 
-tail_init(Socket, Buffer, Filters) ->
+tail_init(Socket, Buffer, Filters, ChannelId) ->
     inet:setopts(Socket, [{active, once}]),
-    tail_loop(Socket, Buffer, Filters).
+    tail_loop(Socket, Buffer, Filters, ChannelId, 0).
 
-tail_loop(Socket, Buffer, Filters) ->
+tail_loop(Socket, Buffer, Filters, ChannelId, BytesSent) ->
     logplex_tail_buffer:set_active(Buffer,
                                    tail_filter(Filters)),
     receive
         {logplex_tail_data, Buffer, Data} ->
             gen_tcp:send(Socket,
                          Data),
-            tail_loop(Socket, Buffer, Filters);
+            tail_loop(Socket, Buffer, Filters, ChannelId, size(Data) + BytesSent);
         {tcp_data, Socket, _} ->
             inet:setopts(Socket, [{active, once}]),
-            tail_loop(Socket, Buffer, Filters);
+            tail_loop(Socket, Buffer, Filters, ChannelId, BytesSent);
         {tcp_closed, Socket} ->
+            ?INFO("at=tail_loop event=tail_close reason=tcp_closed channel_id=~p bytes_sent=~p", [ChannelId, BytesSent]),
             ok;
-        {tcp_error, Socket, _Reason} ->
+        {tcp_error, Socket, Reason} ->
+            ?INFO("at=tail_loop event=tail_close reason=tcp_closed channel_id=~p reason=~p bytes_sent=~p", [ChannelId, Reason, BytesSent]),
             ok
     end.
 
