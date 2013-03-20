@@ -181,3 +181,17 @@ Supervises a [tcp_proxy_sup](https://github.com/heroku/logplex/blob/master/src/t
 ### logplex_logs_rest
 
 Starts a `cowboy_tcp_transport` process and serves as the callback for processing HTTP log input.
+
+# Realtime Metrics
+
+Logplex can send realtime metrics to Redis via pubsub and to a drain channel as
+logs. The following metrics are currently logged in this fashion:
+
+    * `message_received`
+    * `message_processed`
+    * `drain_delivered`
+    * `drain_dropped`
+
+To log these metrics to an internal drain channel, you'll need to set the
+`INTERNAL_DRAIN_TOKEN` environment variable to a drain token that has already
+been created.

@@ -90,6 +90,7 @@ handle_info(flush, #state{instance_name=undefined}=State) ->
 
 handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
     Stats = ets:tab2list(?MODULE),
+    Time = os:timestamp(),
     [ets:update_counter(?MODULE, Key, -1 * Val)
      || {Key, Val} <- Stats,
         lists:member(Key, keys())],
@@ -100,6 +101,18 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
                   {'AZ', availability_zone()} |
                    [ proplists:lookup(K, Stats)
                      || K <- keys() ]],
+        % Publish to internal metrics drain
+        case logplex_app:config(internal_drain_token, undefined) of
+            undefined -> ok; % do nothing
+            InternalDrainTokenId = <<"t.", _/binary>> ->
+                case channel_info_from_token(InternalDrainTokenId) of
+                    false -> ok; % do nothing
+                    {true, {TokenName, ChannelId, Token}} ->
+                        Msgs = assemble_stat_log_msgs(InstanceName, Time, Stats),
+                        logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)
+                end
+        end,
+        % Publish to redis
         Json = iolist_to_binary(mochijson2:encode({struct, Stats1})),
         redo:cmd(Conn, [<<"PUBLISH">>, iolist_to_binary([CloudName, <<":stats">>]), Json], 60000)
     end),
@@ -115,6 +128,9 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+%%====================================================================
+%% Internal functions
+%%====================================================================
 
 git_branch() ->
     case logplex_app:config(git_branch) of
@@ -122,9 +138,29 @@ git_branch() ->
         Val -> list_to_binary(Val)
     end.
 
+assemble_stat_log_msgs(InstanceName, Time, Stats) when is_list(Stats) ->
+    [logplex_syslog_utils:fmt(local0, info, Time, "logplex",
+                              atom_to_list(?MODULE),
+                              <<"measure=logplex.~s source=~s val=~B">>,
+                              [atom_to_binary(Key, utf8),
+                               list_to_binary(InstanceName),
+                               Val])
+     || {Key, Val} <- Stats,
+        lists:member(Key, keys())].
+
 availability_zone() ->
     case logplex_app:config(availability_zone) of
         undefined -> <<>>;
         Val -> list_to_binary(Val)
+    end.
+
+channel_info_from_token(TokenId) ->
+    case logplex_token:lookup(TokenId) of
+        undefined ->
+            false;
+        Token ->
+            Name = logplex_token:name(Token),
+            ChanId = logplex_token:channel_id(Token),
+            {true, {Name, ChanId, logplex_token:id(Token)}}
     end.
 
