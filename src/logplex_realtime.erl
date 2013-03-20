@@ -141,10 +141,10 @@ git_branch() ->
 assemble_stat_log_msgs(InstanceName, Time, Stats) when is_list(Stats) ->
     [logplex_syslog_utils:fmt(local0, info, Time, "logplex",
                               atom_to_list(?MODULE),
-                              <<"measure=logplex.~s source=~s val=~B">>,
+                              <<"measure=logplex.~s source=~s val=~B branch=~s az=~s">>,
                               [atom_to_binary(Key, utf8),
                                list_to_binary(InstanceName),
-                               Val])
+                               Val, git_branch(), availability_zone()])
      || {Key, Val} <- Stats,
         lists:member(Key, keys())].
 
