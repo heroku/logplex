@@ -181,7 +181,7 @@ create_drain(Id, Dict) ->
             ?ERR("~p ~p ~p ~p",
                  [create_drain, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
-            Ch = list_to_integer(binary_to_list(Val1)),
+            Ch = list_to_integer(Val1),
             case dict_find(<<"token">>, Dict) of
                 undefined ->
                     ?ERR("~p ~p ~p ~p",

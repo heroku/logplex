@@ -104,11 +104,11 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
         % Publish to internal metrics drain
         case logplex_app:config(internal_drain_token, undefined) of
             undefined -> ok; % do nothing
-            InternalDrainTokenId = <<"t.", _/binary>> ->
-                case channel_info_from_token(InternalDrainTokenId) of
+            InternalDrainTokenId = "t." ++ _ ->
+                case channel_info_from_token(list_to_binary(InternalDrainTokenId)) of
                     false -> ok; % do nothing
                     {true, {TokenName, ChannelId, Token}} ->
-                        Msgs = assemble_stat_log_msgs(InstanceName, Time, Stats),
+                        Msgs = assemble_stat_log_msgs(Token, InstanceName, Time, Stats),
                         logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)
                 end
         end,
@@ -138,15 +138,23 @@ git_branch() ->
         Val -> list_to_binary(Val)
     end.
 
-assemble_stat_log_msgs(InstanceName, Time, Stats) when is_list(Stats) ->
-    [logplex_syslog_utils:fmt(local0, info, Time, "logplex",
-                              atom_to_list(?MODULE),
-                              <<"measure=logplex.~s source=~s val=~B branch=~s az=~s">>,
-                              [atom_to_binary(Key, utf8),
-                               list_to_binary(InstanceName),
-                               Val, git_branch(), availability_zone()])
+assemble_stat_log_msgs(Token, InstanceName, Time, Stats) when is_list(Stats) ->
+    [assemble_stat_log_msg(Token, InstanceName, Time, Key, Val)
      || {Key, Val} <- Stats,
         lists:member(Key, keys())].
+
+assemble_stat_log_msg(Token, InstanceName, Time, Key, Val) ->
+    {msg, iolist_to_binary(logplex_syslog_utils:to_msg({
+        local0,
+        info,
+        logplex_syslog_utils:datetime(Time),
+        list_to_binary(InstanceName),
+        "logplex",
+        io_lib:format(<<"measure=logplex.~s source=~s val=~B branch=~s az=~s">>,
+                      [atom_to_binary(Key, utf8),
+                       list_to_binary(InstanceName),
+                       Val, git_branch(), availability_zone()])},
+       Token))}.
 
 availability_zone() ->
     case logplex_app:config(availability_zone) of
@@ -154,7 +162,7 @@ availability_zone() ->
         Val -> list_to_binary(Val)
     end.
 
-channel_info_from_token(TokenId) ->
+channel_info_from_token(TokenId) when is_binary(TokenId) ->
     case logplex_token:lookup(TokenId) of
         undefined ->
             false;
