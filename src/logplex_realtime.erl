@@ -102,10 +102,10 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
                    [ proplists:lookup(K, Stats)
                      || K <- keys() ]],
         % Publish to internal metrics drain
-        case logplex_app:config(internal_drain_token, undefined) of
+        case logplex_app:config(internal_metrics_channel_token, undefined) of
             undefined -> ok; % do nothing
-            InternalDrainTokenId = "t." ++ _ ->
-                case channel_info_from_token(list_to_binary(InternalDrainTokenId)) of
+            InternalChannelTokenId = "t." ++ _ ->
+                case channel_info_from_token(list_to_binary(InternalChannelTokenId)) of
                     false -> ok; % do nothing
                     {true, {TokenName, ChannelId, Token}} ->
                         Msgs = assemble_stat_log_msgs(Token, InstanceName, Time, Stats),

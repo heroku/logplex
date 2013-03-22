@@ -92,7 +92,7 @@ cache_os_envvars() ->
                       %% ERL_CRASH_DUMP read by setup_crashdumps
                       %% git_branch cached by read_git_branch()
                       ,{instance_name, ["INSTANCE_NAME"]}
-                      ,{internal_drain_token, ["INTERNAL_DRAIN_TOKEN"]}
+                      ,{internal_metrics_channel_token, ["INTERNAL_METRICS_CHANNEL_TOKEN"]}
                       ,{local_ip, ["LOCAL_IP"]}
                       ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"]}
                       ,{pagerduty, ["PAGERDUTY"],
