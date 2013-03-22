@@ -29,6 +29,7 @@ serialize_channel(ChannelId) when is_integer(ChannelId) ->
      logplex_token:lookup_by_channel(ChannelId),
      logplex_drain:lookup_by_channel(ChannelId)}.
 
+%% seems unused
 deserialize_channel({Chan,
                      Tokens,
                      Drains}) ->
