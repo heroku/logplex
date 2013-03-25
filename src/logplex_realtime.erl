@@ -142,7 +142,7 @@ assemble_stat_log_msg(InstanceName, Time, Key, Val) ->
         "logplex",
         "measure=logplex.~s source=~s val=~B branch=~s az=~s",
         [atom_to_binary(Key, utf8),
-         list_to_binary(InstanceName),
+         InstanceName,
          Val, git_branch(), availability_zone()]).
 
 availability_zone() ->
@@ -157,7 +157,7 @@ publish_stats_to_channel(Time, InstanceName, Stats) ->
         undefined -> ok; % do nothing
         InternalChannelId ->
             Msgs = assemble_stat_log_msgs(InstanceName, Time, Stats),
-            [ logplex_channel:post_msg({channel, InternalChannelId}, RawMsg)
-              || RawMsg <- Msgs ]
+            [ logplex_channel:post_msg({channel, InternalChannelId}, Msg)
+              || Msg <- Msgs ]
     end.
 
