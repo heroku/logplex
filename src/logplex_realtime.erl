@@ -157,7 +157,7 @@ publish_stats_to_channel(Time, InstanceName, Stats) ->
         undefined -> ok; % do nothing
         InternalChannelId ->
             Msgs = assemble_stat_log_msgs(InstanceName, Time, Stats),
-            [ logplex_channel:post_msg({channel, list_to_integer(InternalChannelId)}, RawMsg)
+            [ logplex_channel:post_msg({channel, InternalChannelId}, RawMsg)
               || RawMsg <- Msgs ]
     end.
 
