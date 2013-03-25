@@ -166,7 +166,7 @@ publish_stats_to_channel(Time, InstanceName, Stats) ->
     % Publish to internal metrics drain
     case logplex_app:config(internal_metrics_channel_token, undefined) of
         undefined -> ok; % do nothing
-        InternalChannelTokenId = "t." ++ _ ->
+        InternalChannelTokenId ->
             case channel_info_from_token(list_to_binary(InternalChannelTokenId)) of
                 false -> ok; % do nothing
                 {true, {TokenName, ChannelId, Token}} ->
