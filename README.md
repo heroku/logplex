@@ -193,5 +193,5 @@ logs. The following metrics are currently logged in this fashion:
     * `drain_dropped`
 
 To log these metrics to an internal drain channel, you'll need to set the
-`INTERNAL_METRICS_CHANNEL_TOKEN` environment variable to a drain token that has
+`INTERNAL_METRICS_CHANNEL_ID` environment variable to a drain token that has
 already been created.

@@ -128,17 +128,17 @@ git_branch() ->
         Val -> list_to_binary(Val)
     end.
 
-assemble_stat_log_msgs(Token, InstanceName, Time, Stats) when is_list(Stats) ->
-    [assemble_stat_log_msg(Token, InstanceName, Time, Key, Val)
+assemble_stat_log_msgs(InstanceName, Time, Stats) when is_list(Stats) ->
+    [assemble_stat_log_msg(InstanceName, Time, Key, Val)
      || {Key, Val} <- Stats,
         lists:member(Key, keys())].
 
-assemble_stat_log_msg(Token, InstanceName, Time, Key, Val) ->
+assemble_stat_log_msg(InstanceName, Time, Key, Val) ->
     logplex_syslog_utils:fmt(
         local0,
         info,
         Time,
-        Token,
+        "app",
         "logplex",
         "measure=logplex.~s source=~s val=~B branch=~s az=~s",
         [atom_to_binary(Key, utf8),
@@ -151,27 +151,13 @@ availability_zone() ->
         Val -> list_to_binary(Val)
     end.
 
-channel_info_from_token(TokenId) when is_binary(TokenId) ->
-    case logplex_token:lookup(TokenId) of
-        undefined ->
-            false;
-        Token ->
-            Name = logplex_token:name(Token),
-            ChanId = logplex_token:channel_id(Token),
-            {true, {Name, ChanId, logplex_token:id(Token)}}
-    end.
-
 publish_stats_to_channel(Time, InstanceName, Stats) ->
     % Publish to internal metrics drain
-    case logplex_app:config(internal_metrics_channel_token, undefined) of
+    case logplex_app:config(internal_metrics_channel_id, undefined) of
         undefined -> ok; % do nothing
-        InternalChannelTokenId ->
-            case channel_info_from_token(list_to_binary(InternalChannelTokenId)) of
-                false -> ok; % do nothing
-                {true, {_TokenName, ChannelId, Token}} ->
-                    Msgs = assemble_stat_log_msgs(Token, InstanceName, Time, Stats),
-                    [ logplex_channel:post_msg({channel, ChannelId}, RawMsg)
-                      || RawMsg <- Msgs ]
-            end
+        InternalChannelId ->
+            Msgs = assemble_stat_log_msgs(InstanceName, Time, Stats),
+            [ logplex_channel:post_msg({channel, list_to_integer(InternalChannelId)}, RawMsg)
+              || RawMsg <- Msgs ]
     end.
 
