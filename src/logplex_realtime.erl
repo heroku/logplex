@@ -101,17 +101,7 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
                   {'AZ', availability_zone()} |
                    [ proplists:lookup(K, Stats)
                      || K <- keys() ]],
-        % Publish to internal metrics drain
-        case logplex_app:config(internal_metrics_channel_token, undefined) of
-            undefined -> ok; % do nothing
-            InternalChannelTokenId = "t." ++ _ ->
-                case channel_info_from_token(list_to_binary(InternalChannelTokenId)) of
-                    false -> ok; % do nothing
-                    {true, {TokenName, ChannelId, Token}} ->
-                        Msgs = assemble_stat_log_msgs(Token, InstanceName, Time, Stats),
-                        logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)
-                end
-        end,
+        publish_stats_to_channel(Time, InstanceName, Stats),
         % Publish to redis
         Json = iolist_to_binary(mochijson2:encode({struct, Stats1})),
         redo:cmd(Conn, [<<"PUBLISH">>, iolist_to_binary([CloudName, <<":stats">>]), Json], 60000)
@@ -170,5 +160,18 @@ channel_info_from_token(TokenId) when is_binary(TokenId) ->
             Name = logplex_token:name(Token),
             ChanId = logplex_token:channel_id(Token),
             {true, {Name, ChanId, logplex_token:id(Token)}}
+    end.
+
+publish_stats_to_channel(Time, InstanceName, Stats) ->
+    % Publish to internal metrics drain
+    case logplex_app:config(internal_metrics_channel_token, undefined) of
+        undefined -> ok; % do nothing
+        InternalChannelTokenId = "t." ++ _ ->
+            case channel_info_from_token(list_to_binary(InternalChannelTokenId)) of
+                false -> ok; % do nothing
+                {true, {TokenName, ChannelId, Token}} ->
+                    Msgs = assemble_stat_log_msgs(Token, InstanceName, Time, Stats),
+                    logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)
+            end
     end.
 
