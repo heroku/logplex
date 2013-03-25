@@ -162,9 +162,7 @@ create_token(Id, Dict) ->
             ?ERR("~p ~p ~p ~p",
                  [create_token, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
-            Ch = if is_binary(Val1) -> list_to_integer(binary_to_list(Val1));
-                    is_list(Val1) -> list_to_integer(Val1)
-                 end,
+            Ch = convert_to_integer(Val1),
             Name = dict_find(<<"name">>, Dict),
             Token = #token{
                 id=Id,
@@ -181,7 +179,7 @@ create_drain(Id, Dict) ->
             ?ERR("~p ~p ~p ~p",
                  [create_drain, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
-            Ch = list_to_integer(binary_to_list(Val1)),
+            Ch = convert_to_integer(Val1),
             case dict_find(<<"token">>, Dict) of
                 undefined ->
                     ?ERR("~p ~p ~p ~p",
@@ -243,6 +241,11 @@ drain_uri(Dict) ->
 parse_id(Bin) ->
     [Id | _] = binary:split(Bin, <<":">>),
     Id.
+
+convert_to_integer(V) when is_binary(V) ->
+    list_to_integer(binary_to_list(V));
+convert_to_integer(V) when is_list(V) ->
+    list_to_integer(V).
 
 dict_from_list(List) ->
     dict_from_list(List, dict:new()).

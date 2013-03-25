@@ -90,6 +90,7 @@ handle_info(flush, #state{instance_name=undefined}=State) ->
 
 handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
     Stats = ets:tab2list(?MODULE),
+    Time = os:timestamp(),
     [ets:update_counter(?MODULE, Key, -1 * Val)
      || {Key, Val} <- Stats,
         lists:member(Key, keys())],
@@ -100,6 +101,8 @@ handle_info(flush, #state{instance_name=InstanceName, conn=Conn}=State) ->
                   {'AZ', availability_zone()} |
                    [ proplists:lookup(K, Stats)
                      || K <- keys() ]],
+        publish_stats_to_channel(Time, InstanceName, Stats),
+        % Publish to redis
         Json = iolist_to_binary(mochijson2:encode({struct, Stats1})),
         redo:cmd(Conn, [<<"PUBLISH">>, iolist_to_binary([CloudName, <<":stats">>]), Json], 60000)
     end),
@@ -115,6 +118,9 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+%%====================================================================
+%% Internal functions
+%%====================================================================
 
 git_branch() ->
     case logplex_app:config(git_branch) of
@@ -122,9 +128,36 @@ git_branch() ->
         Val -> list_to_binary(Val)
     end.
 
+assemble_stat_log_msgs(InstanceName, Time, Stats) when is_list(Stats) ->
+    [assemble_stat_log_msg(InstanceName, Time, Key, Val)
+     || {Key, Val} <- Stats,
+        lists:member(Key, keys())].
+
+assemble_stat_log_msg(InstanceName, Time, Key, Val) ->
+    logplex_syslog_utils:fmt(
+        local0,
+        info,
+        Time,
+        "app",
+        "logplex",
+        "measure=logplex.~s source=~s val=~B branch=~s az=~s",
+        [atom_to_binary(Key, utf8),
+         InstanceName,
+         Val, git_branch(), availability_zone()]).
+
 availability_zone() ->
     case logplex_app:config(availability_zone) of
         undefined -> <<>>;
         Val -> list_to_binary(Val)
+    end.
+
+publish_stats_to_channel(Time, InstanceName, Stats) ->
+    % Publish to internal metrics drain
+    case logplex_app:config(internal_metrics_channel_id, undefined) of
+        undefined -> ok; % do nothing
+        InternalChannelId ->
+            Msgs = assemble_stat_log_msgs(InstanceName, Time, Stats),
+            [ logplex_channel:post_msg({channel, InternalChannelId}, Msg)
+              || Msg <- Msgs ]
     end.
 
