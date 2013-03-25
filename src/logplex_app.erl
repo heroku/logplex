@@ -92,6 +92,9 @@ cache_os_envvars() ->
                       %% ERL_CRASH_DUMP read by setup_crashdumps
                       %% git_branch cached by read_git_branch()
                       ,{instance_name, ["INSTANCE_NAME"]}
+                      ,{internal_metrics_channel_id, ["INTERNAL_METRICS_CHANNEL_ID"],
+                        optional,
+                        integer}
                       ,{local_ip, ["LOCAL_IP"]}
                       ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"]}
                       ,{pagerduty, ["PAGERDUTY"],
@@ -110,19 +113,21 @@ cache_os_envvars(Vars) ->
     ok.
 
 cache_os_envvar({Var, Keys}) ->
-    cache_os_envvar(Var, Keys),
+    cache_os_envvar(Var, Keys, string),
     config(Var);
 cache_os_envvar({Var, Keys, optional}) ->
-    cache_os_envvar(Var, Keys).
+    cache_os_envvar(Var, Keys, string);
+cache_os_envvar({Var, Keys, optional, integer}) ->
+    cache_os_envvar(Var, Keys, integer).
 
 %% Read os environment for Key and write to var if set.
 %% Keys later in the list overwrite earlier values allowing multiple
 %% env keys to be the source for a single app environment variable
 %% with priority.
-cache_os_envvar(Var, Keys) ->
+cache_os_envvar(Var, Keys, Type) ->
     [ case os:getenv(Key) of
           false -> ok;
-          Value -> set_config(Var, Value)
+          Value -> set_config(Var, set_config_value(Value, Type))
       end || Key <- Keys ].
 
 set_config(KeyS, Value) when is_list(KeyS) ->
@@ -131,6 +136,9 @@ set_config(Key, Value) when is_atom(Key) ->
     ?INFO("at=update_running_config key=~p value=~1000p",
           [Key, Value]),
     application:set_env(?APP, Key, Value).
+
+set_config_value(Value, string) -> Value;
+set_config_value(Value, integer) -> list_to_integer(Value).
 
 config() ->
     application:get_all_env(logplex).
