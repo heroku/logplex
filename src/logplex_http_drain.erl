@@ -184,7 +184,7 @@ handle_info({timeout, _Ref, ?RECONNECT_MSG}, StateName,
     {next_state, StateName, State};
 
 handle_info(shutdown, _StateName, State) ->
-    {stop, shutdown, State};
+    {stop, {shutdown,call}, State};
 
 handle_info({'EXIT', ClientPid, Reason}, StateName,
             State = #state{client = ClientPid}) ->

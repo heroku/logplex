@@ -265,7 +265,7 @@ handle_info(shutdown, StateName, State = #state{sock = Sock})
           log_info(State, [StateName, shutdown, Sock, duration(State)])),
     {stop, shutdown, State#state{sock = undefined}};
 handle_info(shutdown, _StateName, State) ->
-    {stop, shutdown, State};
+    {stop, {shutdown,call}, State};
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
