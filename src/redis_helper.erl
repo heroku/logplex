@@ -37,12 +37,13 @@ session_key(UUID) when is_binary(UUID) ->
 create_session(UUID, Body) when is_binary(UUID), is_binary(Body) ->
     Key = session_key(UUID),
     SessionExpiry = logplex_session:expiry(),
-    redo:cmd(config, [<<"SETEX">>, Key, SessionExpiry, Body]).
+    redo_block:cmd(config_block, [<<"SETEX">>, Key, SessionExpiry, Body]).
 
+%% This seems to be used by nobody?
 -spec lookup_session(uuid:binary_string_uuid()) -> {error, any()} |
                                                    binary().
 lookup_session(UUID) when is_binary(UUID) ->
-    case redo:cmd(config, [<<"GET">>, session_key(UUID)]) of
+    case redo_block:cmd(config_block, [<<"GET">>, session_key(UUID)]) of
         {error, Err} -> {error, Err};
         Data when is_binary(Data) -> Data
     end.
@@ -51,7 +52,7 @@ lookup_session(UUID) when is_binary(UUID) ->
 %% CHANNEL
 %%====================================================================
 channel_index() ->
-    case redo:cmd(config, [<<"INCR">>, <<"channel_index">>]) of
+    case redo_block:cmd(config_block, [<<"INCR">>, <<"channel_index">>]) of
         {error, Err} -> {error, Err};
         ChannelId when is_integer(ChannelId) -> ChannelId
     end.
@@ -60,7 +61,7 @@ channel_index() ->
 create_channel(ChannelId) when is_integer(ChannelId) ->
     Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
     Cmd = [<<"HMSET">>, Key, <<"name">>, ""],
-    case redo:cmd(config, Cmd) of
+    case redo_block:cmd(config_block, Cmd) of
         <<"OK">> ->
             ok;
         {error, Err} ->
@@ -76,7 +77,7 @@ store_channel(ChannelId, Name, FlagStr)
        is_binary(FlagStr) ->
     Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
     Cmd = [<<"HMSET">>, Key, <<"name">>, Name, <<"flags">>, FlagStr],
-    case redo:cmd(config, Cmd) of
+    case redo_block:cmd(config_block, Cmd) of
         <<"OK">> ->
             ok;
         {error, Err} ->
@@ -84,7 +85,7 @@ store_channel(ChannelId, Name, FlagStr)
     end.
 
 delete_channel(ChannelId) when is_integer(ChannelId) ->
-    case redo:cmd(config, [<<"DEL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
+    case redo_block:cmd(config_block, [<<"DEL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
         1 -> ok;
         Err -> Err
     end.
@@ -110,8 +111,9 @@ build_push_msg(ChannelId, Length, Msg, Expiry)
     iolist_to_binary([ redis_proto:build(Cmd)
                        || Cmd <- Cmds ]).
 
+%% seems unused
 lookup_channel(ChannelId) when is_integer(ChannelId) ->
-    case redo:cmd(config, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
+    case redo_block:cmd(config_block, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             logplex_channel:new(ChannelId);
         _ ->
@@ -125,14 +127,14 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
                    logplex_token:name()) -> any().
 create_token(ChannelId, TokenId, TokenName)
   when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
-    Res = redo:cmd(config, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName]),
+    Res = redo_block:cmd(config_block, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
     end.
 
 delete_token(TokenId) when is_binary(TokenId) ->
-    case redo:cmd(config, [<<"DEL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
+    case redo_block:cmd(config_block, [<<"DEL">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>])]) of
         1 -> ok;
         Err -> Err
     end.
@@ -141,7 +143,7 @@ delete_token(TokenId) when is_binary(TokenId) ->
 %% DRAIN
 %%====================================================================
 drain_index() ->
-    case redo:cmd(config, [<<"INCR">>, <<"drain_index">>]) of
+    case redo_block:cmd(config_block, [<<"INCR">>, <<"drain_index">>]) of
         {error, Err} -> {error, Err};
         DrainId when is_integer(DrainId) -> DrainId
     end.
@@ -151,9 +153,9 @@ reserve_drain(DrainId, Token, ChannelId)
        is_binary(Token),
        is_integer(ChannelId) ->
     Key = drain_redis_key(DrainId),
-    Res = redo:cmd(config, [<<"HMSET">>, Key,
-                            <<"ch">>, integer_to_list(ChannelId),
-                            <<"token">>, Token]),
+    Res = redo_block:cmd(config_block, [<<"HMSET">>, Key,
+                                        <<"ch">>, integer_to_list(ChannelId),
+                                        <<"token">>, Token]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
@@ -163,11 +165,11 @@ create_url_drain(DrainId, ChannelId, Token, URL)
   when is_integer(DrainId), is_integer(ChannelId),
        is_binary(Token), is_binary(URL) ->
     Key = drain_redis_key(DrainId),
-    Res = redo:cmd(config, [<<"HMSET">>, Key,
-                            <<"ch">>, integer_to_list(ChannelId),
-                            <<"token">>, Token,
-                            <<"url">>, URL,
-                            <<"state">>,<<"provisioned">>]),
+    Res = redo_block:cmd(config_block, [<<"HMSET">>, Key,
+                                        <<"ch">>, integer_to_list(ChannelId),
+                                        <<"token">>, Token,
+                                        <<"url">>, URL,
+                                        <<"state">>,<<"provisioned">>]),
     case Res of
         <<"OK">> -> ok;
         Err -> Err
@@ -177,7 +179,7 @@ drain_redis_key(DrainId) when is_integer(DrainId) ->
     iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>]).
 
 delete_drain(DrainId) when is_integer(DrainId) ->
-    case redo:cmd(config, [<<"DEL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
+    case redo_block:cmd(config_block, [<<"DEL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
         1 -> ok;
         Err -> Err
     end.
@@ -185,26 +187,31 @@ delete_drain(DrainId) when is_integer(DrainId) ->
 %%====================================================================
 %% GRID
 %%====================================================================
+%% appears unused
 set_node_ex(Node, Ip, Domain) when is_binary(Node), is_binary(Ip), is_binary(Domain) ->
-    redo:cmd(config, [<<"SETEX">>, iolist_to_binary([<<"node:">>, Domain, <<":">>, Node]), <<"60">>, Ip]).
+    redo_block:cmd(config_block, [<<"SETEX">>, iolist_to_binary([<<"node:">>, Domain, <<":">>, Node]), <<"60">>, Ip]).
 
+%% appears unused
 register_with_face(Domain, Ip) ->
-    redo:cmd(config, [<<"SETEX">>, iolist_to_binary([Domain, <<":alive:">>, Ip]), <<"180">>, ""]).
+    redo_block:cmd(config_block, [<<"SETEX">>, iolist_to_binary([Domain, <<":alive:">>, Ip]), <<"180">>, ""]).
 
+%% appears unused
 set_weight(Domain, Ip, Weight) when is_integer(Weight) ->
-    redo:cmd(config, [<<"SETEX">>, iolist_to_binary([Domain, <<":weight:">>, Ip]), <<"604800">>, integer_to_list(Weight)]).
+    redo_block:cmd(config_block, [<<"SETEX">>, iolist_to_binary([Domain, <<":weight:">>, Ip]), <<"604800">>, integer_to_list(Weight)]).
 
+%% appears unused
 get_nodes(Domain) when is_binary(Domain) ->
-    redo:cmd(config, [<<"KEYS">>, iolist_to_binary([<<"node:">>, Domain, <<":*">>])]).
+    redo_block:cmd(config_block, [<<"KEYS">>, iolist_to_binary([<<"node:">>, Domain, <<":*">>])]).
 
+%% appears unused
 get_node(Node) when is_binary(Node) ->
-    redo:cmd(config, [<<"GET">>, Node]).
+    redo_block:cmd(config_block, [<<"GET">>, Node]).
 
 %%====================================================================
 %% HEALTHCHECK
 %%====================================================================
 healthcheck() ->
-    case redo:cmd(config, [<<"INCR">>, <<"healthcheck">>]) of
+    case redo_block:cmd(config_block, [<<"INCR">>, <<"healthcheck">>]) of
         Count when is_integer(Count) -> Count;
         Error -> exit(Error)
     end.
@@ -212,25 +219,29 @@ healthcheck() ->
 %%====================================================================
 %% STATS
 %%====================================================================
+%% appears unused
 publish_stats(InstanceName, Json) when is_list(InstanceName), is_binary(Json) ->
-    redo:cmd(config, [<<"PUBLISH">>, iolist_to_binary([<<"stats.">>, InstanceName]), Json]).
+    redo_block:cmd(config_block, [<<"PUBLISH">>, iolist_to_binary([<<"stats.">>, InstanceName]), Json]).
 
+%% appears unused
 register_stat_instance() ->
     InstanceName = logplex_app:config(instance_name),
     Domain = logplex_app:config(cloud_name),
-    redo:cmd(config, [<<"SETEX">>, iolist_to_binary([Domain, <<":stats:logplex:">>, InstanceName]), <<"60">>, <<"1">>]).
+    redo_block:cmd(config_block, [<<"SETEX">>, iolist_to_binary([Domain, <<":stats:logplex:">>, InstanceName]), <<"60">>, <<"1">>]).
 
 %%====================================================================
 %% QUARANTINES
 %%====================================================================
 
+%% appears unused
 quarantine_channel(ChannelId) when is_integer(ChannelId) ->
-    redo:cmd(config, [<<"SADD">>, <<"quarantine:channels">>,
-                      integer_to_list(ChannelId)]).
+    redo_block:cmd(config_block, [<<"SADD">>, <<"quarantine:channels">>,
+                                  integer_to_list(ChannelId)]).
 
+%% appears unused
 unquarantine_channel(ChannelId) when is_integer(ChannelId) ->
-    redo:cmd(config, [<<"SREM">>, <<"quarantine:channels">>,
-                      integer_to_list(ChannelId)]).
+    redo_block:cmd(config_block, [<<"SREM">>, <<"quarantine:channels">>,
+                                  integer_to_list(ChannelId)]).
 
 %%====================================================================
 %% CREDS
@@ -251,7 +262,7 @@ store_cred(Id, Pass, Perms, Name)
            <<"pass">>, Pass,
            <<"name">>, Name
            | lists:append([ [Perm, Value] || {Perm, Value} <- Perms]) ],
-    case redo:cmd(config, Cmd) of
+    case redo_block:cmd(config_block, Cmd) of
         <<"OK">> ->
             ok;
         {error, Err} ->
@@ -260,7 +271,7 @@ store_cred(Id, Pass, Perms, Name)
 
 delete_cred(Id) when is_binary(Id) ->
     Key = iolist_to_binary([<<"cred:">>, Id]),
-    case redo:cmd(config, [<<"DEL">>, Key ]) of
+    case redo_block:cmd(config_block, [<<"DEL">>, Key ]) of
         1 -> ok;
         Err -> Err
     end.

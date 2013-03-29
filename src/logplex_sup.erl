@@ -41,6 +41,9 @@ init([]) ->
        ,{config_redis,
          {redo, start_link, [config, redo_config(config_redis_url)]},
          permanent, 2000, worker, [redo]}
+       ,{config_redis_block,
+         {redo_block, start_link, [config_block, redo_config(config_redis_url)]},
+         permanent, 2000, worker, [redo_block]}
        ,{logplex_drain_sup,
          {logplex_drain_sup, start_link, []},
          permanent, 2000, supervisor, [logplex_drain_sup]}
