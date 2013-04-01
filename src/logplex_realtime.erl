@@ -141,7 +141,7 @@ assemble_stat_log_msg(InstanceName, Time, Key, Val) ->
         "app",
         "logplex",
         "measure=logplex.~s.~s source=~s val=~B branch=~s az=~s",
-        [logplex_app:config(logplex_metrics_namespace, "dev"), % Prefix metric name
+        [logplex_app:config(metrics_namespace, "dev"), % Prefix metric name
          atom_to_binary(Key, utf8),
          InstanceName,
          Val, git_branch(), availability_zone()]).
@@ -154,7 +154,7 @@ availability_zone() ->
 
 publish_stats_to_channel(Time, InstanceName, Stats) ->
     % Publish to internal metrics drain
-    case logplex_app:config(internal_metrics_channel_id, undefined) of
+    case logplex_app:config(metrics_channel_id, undefined) of
         undefined -> ok; % do nothing
         InternalChannelId ->
             Msgs = assemble_stat_log_msgs(InstanceName, Time, Stats),

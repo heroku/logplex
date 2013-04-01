@@ -92,11 +92,11 @@ cache_os_envvars() ->
                       %% ERL_CRASH_DUMP read by setup_crashdumps
                       %% git_branch cached by read_git_branch()
                       ,{instance_name, ["INSTANCE_NAME"]}
-                      ,{internal_metrics_channel_id, ["INTERNAL_METRICS_CHANNEL_ID"],
+                      ,{metrics_channel_id, ["METRICS_CHANNEL_ID"],
                         optional,
                         integer}
                       ,{local_ip, ["LOCAL_IP"]}
-                      ,{logplex_metrics_namespace, ["LOGPLEX_METRICS_NAMESPACE"],
+                      ,{metrics_namespace, ["METRICS_NAMESPACE"],
                         optional}
                       ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"]}
                       ,{pagerduty, ["PAGERDUTY"],

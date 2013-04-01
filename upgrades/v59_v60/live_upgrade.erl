@@ -14,8 +14,8 @@ UpgradeNode = fun () ->
 
   %% Stateless
 
-  application:set_env(logplex, internal_metrics_channel_id, 14209704),
-  application:set_env(logplex, logplex_metrics_namespace, "us-east-1"),
+  application:set_env(logplex, metrics_channel_id, 14209704),
+  application:set_env(logplex, metrics_namespace, "us-east-1"),
 
   l(logplex_app),
   l(logplex_drain),

@@ -35,6 +35,7 @@
     ,{log_unknown_tokens, false} % bool
     ,{logplex_shard_urls, "redis://localhost:6379"}
     ,{max_drains_per_channel, 5} % #channels
+    ,{metrics_namespace, "dev"} % string, no spaces
     ,{pagerduty, "0"} % "0" = disabled
     ,{queue_length, 2000}
     ,{redgrid_redis_url, "redis://localhost:6379"}
