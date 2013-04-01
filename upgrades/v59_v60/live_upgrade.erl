@@ -14,8 +14,8 @@ UpgradeNode = fun () ->
 
   %% Stateless
 
-  application:set_env(logplex, metrics_channel_id, 14209704),
-  application:set_env(logplex, metrics_namespace, "us-east-1"),
+  application:set_env(logplex, metrics_channel_id, erlang:error("replace with the int channel ID")),
+  application:set_env(logplex, metrics_namespace, erlang:error("replace with the string metrics namespace")),
 
   l(logplex_app),
   l(logplex_drain),
