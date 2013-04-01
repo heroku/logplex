@@ -127,8 +127,10 @@ stop(DrainId, Timeout) ->
             Ref = erlang:monitor(process, DrainPid),
             DrainPid ! shutdown,
             receive
-                {'DOWN', Ref, process, DrainPid, _} ->
-                    ok
+                {'DOWN', Ref, process, DrainPid, {shutdown,call}} ->
+                    ok;
+                {'DOWN', Ref, process, DrainPid, _} -> % bad reason!
+                    supervisor:terminate_child(logplex_drain_sup, DrainId)
             after Timeout ->
                     erlang:demonitor(Ref, [flush]),
                     supervisor:terminate_child(logplex_drain_sup, DrainId)
