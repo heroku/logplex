@@ -141,7 +141,7 @@ assemble_stat_log_msg(InstanceName, Time, Key, Val) ->
         "app",
         "logplex",
         "measure=logplex.~s.~s source=~s val=~B branch=~s az=~s",
-        [logplex_app:config(logplex_cluster_name, "dev"), % Prefix metric name
+        [logplex_app:config(logplex_metrics_namespace, "dev"), % Prefix metric name
          atom_to_binary(Key, utf8),
          InstanceName,
          Val, git_branch(), availability_zone()]).

@@ -96,7 +96,7 @@ cache_os_envvars() ->
                         optional,
                         integer}
                       ,{local_ip, ["LOCAL_IP"]}
-                      ,{logplex_cluster_name, ["LOGPLEX_CLUSTER_NAME"],
+                      ,{logplex_metrics_namespace, ["LOGPLEX_METRICS_NAMESPACE"],
                         optional}
                       ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"]}
                       ,{pagerduty, ["PAGERDUTY"],
