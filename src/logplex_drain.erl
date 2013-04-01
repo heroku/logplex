@@ -183,7 +183,7 @@ cache(DrainId, Token, ChannelId) when is_integer(DrainId),
                     {'error', term()}.
 create(ChannelId, URL) when is_list(URL);
                             is_binary(URL) ->
-    {ok, URI, _} = parse_url(URL),
+    URI = parse_url(URL),
     create(ChannelId, URI);
 create(ChannelId, URI) ->
     reserve_token(),
