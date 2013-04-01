@@ -35,6 +35,7 @@
          ,delete_partial_drain/2
          ,lookup_by_channel/1
          ,count_by_channel/1
+         ,create/2
          ,create/4
          ,store/1
          ,lookup_token/1
@@ -174,6 +175,18 @@ cache(DrainId, Token, ChannelId) when is_integer(DrainId),
                                       is_binary(Token),
                                       is_integer(ChannelId) ->
     redis_helper:reserve_drain(DrainId, Token, ChannelId).
+
+-spec create(logplex_channel:id(), #ex_uri{}) ->
+                    {'drain', id(), token()} |
+                    {'error', term()}.
+create(ChannelId, URL) when is_list(URL);
+                            is_binary(URL) ->
+    {ok, URI, _} = parse_url(URL),
+    create(ChannelId, URI);
+create(ChannelId, URI) ->
+    reserve_token(),
+    {ok, DrainId, Token} = reserve_token(),
+    create(DrainId, Token, ChannelId, URI).
 
 -spec create(id(), token(), logplex_channel:id(), #ex_uri{}) ->
                     {'drain', id(), token()} |
