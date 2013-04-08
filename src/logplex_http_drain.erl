@@ -324,7 +324,7 @@ terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
-code_change("v61", StateName, State, _Extra) ->
+code_change(v61, StateName, State, _Extra) ->
     NewState = list_to_tuple(tuple_to_list(State) ++ [undefined]),
     {ok, StateName, NewState};
 code_change(_OldVsn, StateName, State, _Extra) ->
