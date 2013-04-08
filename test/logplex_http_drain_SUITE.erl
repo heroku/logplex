@@ -5,7 +5,7 @@
 all() -> [{group, overflow}].
 
 groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
-                             full_buffer_temp_fail]}].
+                             full_buffer_temp_fail, full_stack]}].
 
 init_per_suite(Config) ->
     set_os_vars(),
@@ -22,6 +22,36 @@ init_per_group(overflow, Config) ->
 end_per_group(overflow, _Config) ->
     ok.
 
+init_per_testcase(full_stack, Config) ->
+    %% Same as any other overflow test case but with drain buffers
+    %% unmocked
+    %% Drain data
+    ChannelId = 1337,
+    DrainId = 2198712,
+    DrainTok = "d.12930-321-312213-12321",
+    {ok,URI,_} = ex_uri:decode("http://example.org"),
+    %% --- Mocks ---
+    %% HTTP Client
+    meck:new(logplex_http_client, [passthrough]),
+    meck:expect(logplex_http_client, start_link,
+        fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
+            {ok, self()}
+        end),
+    meck:expect(logplex_http_client, close, fun(_Pid) -> ok end),
+    %% We make failure controleable by helper functions.
+    %% Rube goldberg-esque, but makes writing the actual test
+    %% a bit simpler. Succeeds by default
+    Tab = client_call_init(),
+    meck:expect(logplex_http_client, raw_request,
+        fun(_Pid, _Req, _Timeout) ->
+                Status = client_call_status(Tab),
+                {ok, Status, []}
+        end),
+    %% Starting the drain
+    {ok, Pid} = logplex_http_drain:start_link(ChannelId, DrainId, DrainTok, URI),
+    unlink(Pid),
+    [{channel, ChannelId}, {drain_id, DrainId}, {drain_tok, DrainTok},
+     {uri, URI}, {drain,Pid}, {client, Tab} | Config];
 init_per_testcase(_, Config) ->
     %% Drain data
     ChannelId = 1337,
@@ -57,8 +87,8 @@ end_per_testcase(_, Config) ->
     Drain = ?config(drain,Config),
     erlang:monitor(process, Drain),
     Drain ! shutdown,
-    meck:unload(logplex_http_client),
-    meck:unload(logplex_drain_buffer),
+    catch meck:unload(logplex_http_client),
+    catch meck:unload(logplex_drain_buffer),
     client_call_end(?config(client,Config)),
     receive
         {'DOWN', _, _, Drain, {shutdown,call}} -> ok;
@@ -240,8 +270,46 @@ full_buffer_temp_fail(Config) ->
     {match, _} = re:run(Success2, "This drain dropped 3 messages"),
     {match, _} = re:run(Success3, "This drain dropped 3 messages").
 
+%% Checking that framing funs and overflow functions are alright
+full_stack(Config) ->
+    ChannelId = ?config(channel, Config),
+    Client = ?config(client, Config),
+    client_call_status(Client, 404),
+    Msg = fun(M) -> {user, debug, logplex_syslog_utils:datetime(now),
+                     "fakehost", "erlang", M}
+    end,
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg1")),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg2")),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg3")),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg4")),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg5")),
+    wait_for_mocked_call(logplex_http_client, raw_request, '_', 1, 5000),
+    client_call_status(Client, 200),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg6")),
+    wait_for_mocked_call(logplex_http_client, raw_request, '_', 2, 5000),
+    Hist = meck:history(logplex_http_client),
+    [Failure, Success] =
+      [iolist_to_binary(IoData) ||
+       {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
+    %% missed call
+    {match, _} = re:run(Failure, "mymsg1"),
+    {match, _} = re:run(Failure, "mymsg2"),
+    {match, _} = re:run(Failure, "mymsg3"),
+    {match, _} = re:run(Failure, "mymsg4"),
+    {match, _} = re:run(Failure, "mymsg5"),
+    nomatch = re:run(Failure, "mymsg6"),
+    nomatch = re:run(Failure, "Error L10"),
+    %% successful call
+    nomatch = re:run(Success, "mymsg1"),
+    nomatch = re:run(Success, "mymsg2"),
+    nomatch = re:run(Success, "mymsg3"),
+    nomatch = re:run(Success, "mymsg4"),
+    nomatch = re:run(Success, "mymsg5"),
+    {match, _} = re:run(Success, "mymsg6"),
+    {match, _} = re:run(Success, "Error L10"),
+    {match, _} = re:run(Success, "This drain dropped 5 messages").
 
-
+%%% HELPERS
 wait_for_mocked_call(Mod, Fun, Args, NumCalls, Time) ->
     wait_for_mocked_call(Mod,Fun,Args, NumCalls, Time*1000,os:timestamp()).
 
