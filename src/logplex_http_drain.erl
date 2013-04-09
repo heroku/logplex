@@ -325,7 +325,18 @@ terminate(_Reason, _StateName, _State) ->
 
 %% @private
 code_change(v61, StateName, State, _Extra) ->
-    NewState = list_to_tuple(tuple_to_list(State) ++ [undefined]),
+    NewState0 = list_to_tuple(tuple_to_list(State) ++ [undefined]),
+    OldQueue = NewState0#state.out_q,
+    NewState = case queue:is_empty(OldQueue) of
+        true -> NewState0;
+        false ->
+            Queue = queue:from_list(
+                [#frame{frame=Frame, msg_count=Count, loss_count=0,
+                        tries=Tries, id=Id}
+                 || {frame, Frame, Count, Tries, Id} <- queue:to_list(OldQueue)]
+            ),
+            NewState0#state{out_q=Queue}
+    end,
     {ok, StateName, NewState};
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
