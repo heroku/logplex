@@ -26,13 +26,14 @@ For more details, you can look at  stream management documentationa in `doc/`.
 
 Given an empty local redis (v2.6ish):
 
-    $ ./rebar --config test.rebar.config get-deps compile
+    $ ./rebar get-deps compile --config test.rebar.config
     $ INSTANCE_NAME=`hostname` \
       LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
       LOGPLEX_SHARD_URLS="redis://localhost:6379" \
       LOCAL_IP="127.0.0.1" \
       LOGPLEX_COOKIE=123 \
-      rebar skip_deps=true ct --config public.rebar.config 
+      ERL_LIBS=`pwd`/deps/:$ERL_LIBS \
+      ct_run -spec logplex.spec -pa ebin
 
 Runs the common test suite for logplex.
 
