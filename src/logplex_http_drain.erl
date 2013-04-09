@@ -349,13 +349,13 @@ request_to_iolist(#frame{frame = Body0,
         {undefined,0} -> {Body0, Count0};
         {undefined,_} ->
             T0 = os:timestamp(),
-            Msg = to_syslog_msg(
+            Msg = frame(
                 Token,
                 logplex_syslog_utils:overflow_msg(Lost,T0,Token)
             ),
             {[Msg, Body0],Count0+1};
         {{T0,Dropped},_} ->
-            Msg = to_syslog_msg(
+            Msg = frame(
                 Token,
                 logplex_syslog_utils:overflow_msg(Dropped+Lost,T0,Token)
             ),
