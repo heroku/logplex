@@ -12,6 +12,10 @@ UpgradeNode = fun () ->
           erlang:error({wrong_version, Else})
   end,
 
+  %% stateless -- didn't change in this release, but might not have been
+  %% reloaded in older ones
+  l(logplex_msg_buffer),
+
   %% Stateful changes to HTTP drains -- gotta suspend, reload, and then
   %% resume all drains before going for the stateless drain buffer update
   Drains = [Pid || {Pid, http} <- gproc:lookup_local_properties(drain_type)],
