@@ -2,7 +2,7 @@
 -include_lib("common_test/include/ct.hrl").
 -compile(export_all).
 
-all() -> [{group, overflow}].
+all() -> [{group, overflow}, timezone_offset].
 
 groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                              full_buffer_temp_fail, full_stack]}].
@@ -22,6 +22,8 @@ init_per_group(overflow, Config) ->
 end_per_group(overflow, _Config) ->
     ok.
 
+init_per_testcase(timezone_offset, Config) ->
+    init_per_testcase(full_stack, Config);
 init_per_testcase(full_stack, Config) ->
     %% Same as any other overflow test case but with drain buffers
     %% unmocked
@@ -308,6 +310,24 @@ full_stack(Config) ->
     {match, _} = re:run(Success, "mymsg6"),
     {match, _} = re:run(Success, "Error L10"),
     {match, _} = re:run(Success, "This drain dropped 5 messages").
+
+
+timezone_offset(Config) ->
+    ChannelId = ?config(channel, Config),
+    Msg = fun(M) -> {user, debug, logplex_syslog_utils:datetime(now),
+                     "fakehost", "erlang", M}
+    end,
+    logplex_channel:post_msg({channel, ChannelId}, Msg("my message")),
+    %% wait for the call to be done
+    wait_for_mocked_call(logplex_http_client, raw_request, '_', 1, 5000),
+    Hist = meck:history(logplex_http_client),
+    [Call] =
+      [iolist_to_binary(IoData) ||
+       {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
+    %% run regexes on the HTML
+    {match, _} = re:run(Call, "my message"),
+    {match, _} = re:run(Call, "Z"),
+    nomatch = re:run(Call, "\\+00:00").
 
 %%% HELPERS
 wait_for_mocked_call(Mod, Fun, Args, NumCalls, Time) ->
