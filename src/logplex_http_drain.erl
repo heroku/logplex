@@ -27,6 +27,9 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
 
+-type drop_info() :: {erlang:timestamp(), pos_integer()}.
+
+
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
                 channel_id :: logplex_channel:id(),
@@ -34,11 +37,13 @@
                 buf :: pid(),
                 client :: pid(),
                 out_q = queue:new() :: queue(),
-                reconnect_tref :: reference() | 'undefined'
+                reconnect_tref :: reference() | 'undefined',
+                drop_info :: drop_info() | 'undefined'
                }).
 
 -record(frame, {frame :: iolist(),
                 msg_count :: non_neg_integer(),
+                loss_count = 0 :: non_neg_integer(),
                 tries = 0 :: non_neg_integer(),
                 id :: binary()
                }).
@@ -123,9 +128,13 @@ init(State0 = #state{uri=URI,
 disconnected({logplex_drain_buffer, Buf, new_data},
              State = #state{buf = Buf}) ->
     try_connect(cancel_reconnect(State));
+disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
+             State = #state{buf = Buf}) ->
+    try_connect(cancel_reconnect(push_frame(Frame, MsgCount, Lost, State)));
+%% Old request format. This clause should be gone in v63
 disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount}},
              State = #state{buf = Buf}) ->
-    try_connect(cancel_reconnect(push_frame(Frame, MsgCount, State)));
+    try_connect(cancel_reconnect(push_frame(Frame, MsgCount, 0, State)));
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=disconnected",
@@ -133,9 +142,13 @@ disconnected(Msg, State) ->
     {next_state, disconnected, State}.
 
 %% @private
+connected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
+          State = #state{buf = Buf}) ->
+    ready_to_send(push_frame(Frame, MsgCount, Lost, State));
+%% Old request format. This clause should be gone in v63
 connected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount}},
           State = #state{buf = Buf}) ->
-    ready_to_send(push_frame(Frame, MsgCount, State));
+    ready_to_send(push_frame(Frame, MsgCount, 0, State));
 connected({logplex_drain_buffer, Buf, new_data},
           State = #state{buf = Buf}) ->
     ready_to_send(State);
@@ -311,6 +324,20 @@ terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
+code_change(v61, StateName, State, _Extra) ->
+    NewState0 = list_to_tuple(tuple_to_list(State) ++ [undefined]),
+    OldQueue = NewState0#state.out_q,
+    NewState = case queue:is_empty(OldQueue) of
+        true -> NewState0;
+        false ->
+            Queue = queue:from_list(
+                [#frame{frame=Frame, msg_count=Count, loss_count=0,
+                        tries=Tries, id=Id}
+                 || {frame, Frame, Count, Tries, Id} <- queue:to_list(OldQueue)]
+            ),
+            NewState0#state{out_q=Queue}
+    end,
+    {ok, StateName, NewState};
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
@@ -322,11 +349,29 @@ log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=URI}, Rest)
 %% @private
 
 %% @private
-request_to_iolist(#frame{frame = Body,
-                         msg_count = Count,
+request_to_iolist(#frame{frame = Body0,
+                         msg_count = Count0,
+                         loss_count=Lost,
                          id = Id},
                   #state{uri = URI = #ex_uri{},
+                         drop_info=Drops,
                          drain_tok = Token}) ->
+    {Body, Count} = case {Drops,Lost} of
+        {undefined,0} -> {Body0, Count0};
+        {undefined,_} ->
+            T0 = os:timestamp(),
+            Msg = frame(
+                Token,
+                logplex_syslog_utils:overflow_msg(Lost,T0,Token)
+            ),
+            {[Msg, Body0],Count0+1};
+        {{T0,Dropped},_} ->
+            Msg = frame(
+                Token,
+                logplex_syslog_utils:overflow_msg(Dropped+Lost,T0,Token)
+            ),
+            {[Msg, Body0],Count0+1}
+    end,
     AuthHeader = auth_header(URI),
     MD5Header = case logplex_app:config(http_body_checksum, none) of
                     md5 -> [{<<"Content-MD5">>,
@@ -347,22 +392,19 @@ request_to_iolist(#frame{frame = Body,
                                     full_host_iolist(URI),
                                     uri_ref(URI)).
 
+frame(Token, LogTuple) ->
+    logplex_syslog_utils:frame(to_syslog_msg(Token, LogTuple)).
+
+to_syslog_msg(Token, {Facility, Severity, Time, Source, Ps, Content}) ->
+    logplex_syslog_utils:rfc5424(Facility, Severity,
+                                 Time, Source, Ps,
+                                 Token, undefined,
+                                 Content).
+
 framing_fun(Token) ->
-    Frame = fun ({Facility, Severity, Time, Source, Ps, Content}) ->
-                    SyslogMsg = logplex_syslog_utils:rfc5424(Facility, Severity,
-                                                             Time, Source, Ps,
-                                                             Token, undefined,
-                                                             Content),
-                    logplex_syslog_utils:frame(SyslogMsg)
-            end,
-    fun ({loss_indication, N, When}) ->
-            case logplex_app:config(http_send_loss_msg, send) of
-                dont_send ->
-                    skip;
-                _ ->
-                    {frame,
-                     Frame(logplex_syslog_utils:overflow_msg(N, When, Token))}
-            end;
+    Frame = fun(Args) -> frame(Token, Args) end,
+    fun ({loss_indication, _N, _When}) ->
+            skip;
         ({msg, MData}) ->
             {frame, Frame(MData)}
     end.
@@ -376,16 +418,34 @@ target_bytes() ->
 %% @private
 %% @doc Called on frames we've decided to drop. Records count of
 %% messages dropped (not frame count).
-drop_frame(#frame{msg_count=Count}, State) ->
-    logplex_realtime:incr(drain_dropped, Count),
-    msg_stat(drain_dropped, Count, State),
-    State.
+drop_frame(#frame{msg_count=Msgs, loss_count=Lost}, State) ->
+    lost_msgs(Msgs+Lost, State).
 
 %% @private
-sent_frame(#frame{msg_count=Count}, State) ->
+%% @doc Accounts for losses reported in the frame, globally.
+lost_msgs(0, State) -> State;
+lost_msgs(Lost, S=#state{drop_info=undefined}) ->
+    S#state{drop_info={os:timestamp(), Lost}};
+lost_msgs(Lost, S=#state{drop_info={TS,Dropped}}) ->
+    S#state{drop_info={TS,Dropped+Lost}}.
+
+%% @private
+%% if we had failures, they should have been delivered with this frame
+sent_frame(#frame{msg_count=Count, loss_count=Lost}, State=#state{drop_info=Drop}) ->
     msg_stat(drain_delivered, Count, State),
     logplex_realtime:incr(drain_delivered, Count),
-    State.
+    case {Lost,Drop} of
+        {0, undefined} ->
+            State;
+        {_, undefined} ->
+            logplex_realtime:incr(drain_dropped, Lost),
+            msg_stat(drain_dropped, Lost, State),
+            State;
+        {_, {_,Dropped}} ->
+            logplex_realtime:incr(drain_dropped, Lost+Dropped),
+            msg_stat(drain_dropped, Lost+Dropped, State),
+            State#state{drop_info=undefined}
+    end.
 
 -spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered',
                non_neg_integer(), #state{}) -> any().
@@ -399,11 +459,12 @@ msg_stat(Key, N,
 %% @private
 %% Turn a Frame::iolist(), MsgCoung::non_neg_integer() into a #frame
 %% and enqueue it.
-push_frame(FrameData, MsgCount, State = #state{out_q = Q})
+push_frame(FrameData, MsgCount, Lost, State = #state{out_q = Q})
   when not is_record(FrameData, frame) ->
     Retries = logplex_app:config(http_frame_retries, 1),
     Tries = Retries + 1,
     Frame = #frame{frame=FrameData, msg_count=MsgCount,
+                   loss_count=Lost,
                    tries = Tries,
                    id = frame_id()},
     NewQ = queue:in(Frame, Q),

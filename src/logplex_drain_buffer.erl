@@ -27,7 +27,8 @@
 -type rx_msgs() :: {'post', Msg::term()}.
 -type tx_msgs() :: {'logplex_drain_buffer', pid(), 'new_data'} |
                    {'logplex_drain_buffer', pid(),
-                    {frame, Frame::iolist(), Count::non_neg_integer()}}.
+                       {frame, Frame::iolist(), Count::non_neg_integer(),
+                               Lost::non_neg_integer()}}.
 
 -export_type([rx_msgs/0, tx_msgs/0]).
 
@@ -71,20 +72,7 @@ start_link(ChannelId, Owner) ->
 
 -spec start_link(ChannelId::logplex_channel:id(),
                  Owner::pid(),
-                 {active, TargBytes::pos_integer(),
-                  Fun::logplex_msg_buffer:framing_fun()} |
                  'passive' | 'notify', Size::pos_integer()) -> any().
-start_link(ChannelId, Owner, {active, TargBytes, Fun}, Size)
-  when is_integer(ChannelId),
-       is_pid(Owner),
-       is_integer(TargBytes), TargBytes > 0,
-       is_function(Fun, 1),
-       is_integer(Size), Size > 0 ->
-    gen_fsm:start_link(?MODULE, {active,
-                                 #state{channel_id = ChannelId,
-                                        owner = Owner,
-                                        buf_size = Size,
-                                        on_activation = {TargBytes, Fun}}}, []);
 start_link(ChannelId, Owner, Mode, Size)
   when is_integer(ChannelId),
        is_pid(Owner),
@@ -194,9 +182,7 @@ handle_sync_event(Event, _From, StateName, State) ->
 handle_info({post, Msg}, StateName, S = #state{buf = OldBuf}) ->
     NewBuf = case logplex_msg_buffer:push_ext(Msg, OldBuf) of
                  {insert, Buf} -> Buf;
-                 {displace, Buf} ->
-                     logplex_realtime:incr(drain_dropped, 1),
-                     Buf
+                 {displace, Buf} -> Buf
              end,
     NewState = S#state{buf = NewBuf},
     case StateName of
@@ -232,7 +218,8 @@ send_notification(S = #state{owner = Owner}) ->
 %% @private
 send(S = #state{owner = Owner, buf = Buf,
                 on_activation = {Targ, Fun}}) ->
+    Lost = logplex_msg_buffer:lost(Buf),
     {Frame, Count, NewBuf} = logplex_msg_buffer:to_pkts(Buf, Targ, Fun),
     NewState = S#state{buf=NewBuf, on_activation=undefined},
-    Owner ! {logplex_drain_buffer, self(), {frame, Frame, Count}},
+    Owner ! {logplex_drain_buffer, self(), {frame, Frame, Count, Lost}},
     {next_state, passive, NewState}.
