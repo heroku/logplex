@@ -12,6 +12,8 @@ UpgradeNode = fun () ->
           erlang:error({wrong_version, Else})
   end,
 
+  %% stateless, internal
+  l(logplex_logs_rest),
   %% stateless, dependency
   l(rdb_load),
   l(nsync),
