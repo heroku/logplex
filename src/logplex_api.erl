@@ -525,7 +525,7 @@ filters([], Filters) ->
     Filters;
 
 filters([{<<"ps">>, Ps}|Tail], Filters) ->
-    Size = size(Ps),
+    Size = byte_size(Ps),
     Filters1 = [
         fun(Msg) ->
             case Msg#msg.ps of
