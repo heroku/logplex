@@ -486,7 +486,7 @@ tail_loop(Socket, Buffer, Filters, ChannelId, BytesSent) ->
         {logplex_tail_data, Buffer, Data} ->
             gen_tcp:send(Socket,
                          Data),
-            tail_loop(Socket, Buffer, Filters, ChannelId, size(Data) + BytesSent);
+            tail_loop(Socket, Buffer, Filters, ChannelId, iolist_size(Data) + BytesSent);
         {tcp_data, Socket, _} ->
             inet:setopts(Socket, [{active, once}]),
             tail_loop(Socket, Buffer, Filters, ChannelId, BytesSent);
