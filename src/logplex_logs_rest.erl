@@ -154,8 +154,12 @@ process_post(Req, State = #state{token = Token,
           when Token =:= any, ChannelId =:= any ->
             logplex_message:process_msgs(Msgs),
             {true, Req2, State2#state{msgs = []}};
-        {{error, Reason}, Req2, State2} ->
+        {{error, Reason}, Req2, State2} when is_integer(ChannelId) ->
             ?WARN("at=parse_logplex_body channel_id=~p error=~p", [ChannelId, Reason]),
+            %% XXX - Log parse failure
+            {false, Req2, State2};
+        {{error, Reason}, Req2, State2} when ChannelId =:= any ->
+            ?WARN("at=parse_logplex_body cred_id=~p error=~p", [Name, Reason]),
             %% XXX - Log parse failure
             {false, Req2, State2}
     catch
