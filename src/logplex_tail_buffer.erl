@@ -126,10 +126,13 @@ become_active(S = #state{buf = Buf}) ->
 
 send(S = #state{owner = Owner, buf = Buf,
                 active_fun = Fun}) ->
-    {Data, _Count, NewBuf} = logplex_msg_buffer:to_pkts(Buf, 4096, Fun),
-    Owner ! {logplex_tail_data, self(), Data},
-    {next_state, passive,
-     S#state{buf=NewBuf}}.
+    case logplex_msg_buffer:to_pkts(Buf, 4096, Fun) of
+        {_, 0, NewBuf} ->
+            {next_state, active, S#state{buf=NewBuf}};
+        {Data, _Count, NewBuf} ->
+            Owner ! {logplex_tail_data, self(), Data},
+            {next_state, passive, S#state{buf=NewBuf}}
+    end.
 
 check_overload(#state{channel_id=Id}) ->
     case process_info(self(), message_queue_len) of
