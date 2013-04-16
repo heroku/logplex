@@ -156,12 +156,12 @@ process_post(Req, State = #state{token = Token,
             {true, Req2, State2#state{msgs = []}};
         {{error, Reason}, Req2, State2} when is_integer(ChannelId) ->
             ?WARN("at=parse_logplex_body channel_id=~p error=~p", [ChannelId, Reason]),
-            %% XXX - Log parse failure
-            {false, Req2, State2};
+            {ok, Req3} = cowboy_http_req:reply(400, Req2),
+            {halt, Req3, State2};
         {{error, Reason}, Req2, State2} when ChannelId =:= any ->
-            ?WARN("at=parse_logplex_body cred_id=~p error=~p", [Name, Reason]),
-            %% XXX - Log parse failure
-            {false, Req2, State2}
+            ?WARN("at=parse_logplex_body channel_id=~p error=~p", [ChannelId, Reason]),
+            {ok, Req3} = cowboy_http_req:reply(400, Req2),
+            {halt, Req3, State2}
     catch
         Class:Error ->
             Stack = erlang:get_stacktrace(),
