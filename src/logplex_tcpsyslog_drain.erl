@@ -305,11 +305,18 @@ do_reconnect(State = #state{sock = undefined,
             send(NewState);
         {error, Reason} ->
             NewState = tcp_bad(State),
-            ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
-                 "err=gen_tcp data=~p try=~p last_success=~s "
-                 "state=disconnected",
-                 log_info(State, [Reason, NewState#state.failures,
-                                  time_failed(NewState)])),
+            case Failures of
+                0 ->
+                    %% Reduce log volume by skipping logging on
+                    %% first failure.
+                    ok;
+                _ ->
+                    ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
+                         "err=gen_tcp data=~p try=~p last_success=~s "
+                         "state=disconnected",
+                         log_info(State, [Reason, NewState#state.failures,
+                                          time_failed(NewState)]))
+            end,
             reconnect(NewState)
     end.
 
