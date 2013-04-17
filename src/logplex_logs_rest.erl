@@ -154,6 +154,10 @@ process_post(Req, State = #state{token = Token,
           when Token =:= any, ChannelId =:= any ->
             logplex_message:process_msgs(Msgs),
             {true, Req2, State2#state{msgs = []}};
+        {{error, msg_count_mismatch}, Req2, State2} ->
+            %% XXX - Add stat counter here?
+            {ok, Req3} = cowboy_http_req:reply(400, Req2),
+            {halt, Req3, State2};
         {{error, Reason}, Req2, State2} when is_integer(ChannelId) ->
             ?WARN("at=parse_logplex_body channel_id=~p error=~p", [ChannelId, Reason]),
             {ok, Req3} = cowboy_http_req:reply(400, Req2),
