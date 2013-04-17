@@ -165,7 +165,7 @@ full_buffer_success(Config) ->
       [iolist_to_binary(IoData) ||
        {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
     {match, _} = re:run(Success, Msg),
-    L10 = "Error L10 \\(Drain buffer overflow\\) -> This drain dropped 3 messages",
+    L10 = "Error L10 \\(output buffer overflow\\): 3 messages dropped since",
     {match, _} = re:run(Success, L10).
 
 %% We drop frames twice, but the rest is successfully delivered. Overflow
@@ -203,10 +203,10 @@ full_buffer_fail(Config) ->
        {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
     {match, _} = re:run(Fail, Msg),
     %% 15 + 3 failures
-    {match, _} = re:run(Fail, "This drain dropped 3 messages"),
+    {match, _} = re:run(Fail, "3 messages dropped since"),
     {match, _} = re:run(Success, Msg),
     %% (15 + 3) + 3 failures
-    {match, _} = re:run(Success, "This drain dropped 21 messages").
+    {match, _} = re:run(Success, "21 messages dropped since").
 
 %% We drop frames twice, but the rest is successfully delivered. Overflow
 %% messages should be accumulated. This one experiments with temporary
@@ -266,9 +266,9 @@ full_buffer_temp_fail(Config) ->
     {match, _} = re:run(Success2, Msg), % success 3rd frame
     {match, _} = re:run(Success3, Msg), % success 4th frame
     %% 15 + 3 + 3 failures
-    {match, _} = re:run(Success1, "This drain dropped 21 messages"),
-    {match, _} = re:run(Success2, "This drain dropped 3 messages"),
-    {match, _} = re:run(Success3, "This drain dropped 3 messages").
+    {match, _} = re:run(Success1, "21 messages dropped since"),
+    {match, _} = re:run(Success2, "3 messages dropped since"),
+    {match, _} = re:run(Success3, "3 messages dropped since").
 
 %% Checking that framing funs and overflow functions are alright
 full_stack(Config) ->
@@ -307,7 +307,7 @@ full_stack(Config) ->
     nomatch = re:run(Success, "mymsg5"),
     {match, _} = re:run(Success, "mymsg6"),
     {match, _} = re:run(Success, "Error L10"),
-    {match, _} = re:run(Success, "This drain dropped 5 messages").
+    {match, _} = re:run(Success, "5 messages dropped since").
 
 %%% HELPERS
 wait_for_mocked_call(Mod, Fun, Args, NumCalls, Time) ->
