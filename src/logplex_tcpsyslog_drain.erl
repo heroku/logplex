@@ -291,12 +291,13 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 -spec do_reconnect(#state{}) ->
                           {next_state, pstate(), #state{}}.
 do_reconnect(State = #state{sock = undefined,
-                            reconnect_tref = undefined}) ->
+                            reconnect_tref = undefined,
+                            failures = Failures}) ->
     case connect(State) of
         {ok, Sock} ->
             ?INFO("drain_id=~p channel_id=~p dest=~s "
                   "state=disconnected at=connect try=~p sock=~p",
-                  log_info(State, [State#state.failures + 1, Sock])),
+                  log_info(State, [Failures + 1, Sock])),
             NewState = State#state{sock=Sock,
                                    reconnect_tref = undefined,
                                    send_tref = undefined,
