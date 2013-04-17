@@ -50,20 +50,21 @@ nvl(undefined) -> $-;
 nvl(Val) -> Val.
 
 -spec overflow_msg(N::non_neg_integer(), datetime()) -> syslog_msg().
-overflow_msg(N, When) -> overflow_msg(N, When, "logplex").
-
--spec overflow_msg(N::non_neg_integer(), datetime(), iolist() | binary()) -> syslog_msg().
-overflow_msg(N, When, Token) ->
+overflow_msg(N, When) ->
     fmt(local5,
         warning,
         now,
-        Token,
+        "heroku",
         "logplex",
-        "Error L10 (Drain buffer overflow) -> This drain dropped ~p"
-        " messages since ~s.",
+        "Error L10 (output buffer overflow): "
+        "~p messages dropped since ~s.",
         [N,
          datetime(When)]).
 
+%% Live upgrade compat function
+%% XXX remove in v66.
+overflow_msg(N, When, _) ->
+    overflow_msg(N, When).
 
 
 from_msg(Msg) when is_binary(Msg) ->

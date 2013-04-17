@@ -362,13 +362,13 @@ request_to_iolist(#frame{frame = Body0,
             T0 = os:timestamp(),
             Msg = frame(
                 Token,
-                logplex_syslog_utils:overflow_msg(Lost,T0,Token)
+                logplex_syslog_utils:overflow_msg(Lost,T0)
             ),
             {[Msg, Body0],Count0+1};
         {{T0,Dropped},_} ->
             Msg = frame(
                 Token,
-                logplex_syslog_utils:overflow_msg(Dropped+Lost,T0,Token)
+                logplex_syslog_utils:overflow_msg(Dropped+Lost,T0)
             ),
             {[Msg, Body0],Count0+1}
     end,
@@ -393,13 +393,7 @@ request_to_iolist(#frame{frame = Body0,
                                     uri_ref(URI)).
 
 frame(Token, LogTuple) ->
-    logplex_syslog_utils:frame(to_syslog_msg(Token, LogTuple)).
-
-to_syslog_msg(Token, {Facility, Severity, Time, Source, Ps, Content}) ->
-    logplex_syslog_utils:rfc5424(Facility, Severity,
-                                 Time, Source, Ps,
-                                 Token, undefined,
-                                 Content).
+    logplex_syslog_utils:frame(logplex_syslog_utils:to_msg(LogTuple, Token)).
 
 framing_fun(Token) ->
     Frame = fun(Args) -> frame(Token, Args) end,
