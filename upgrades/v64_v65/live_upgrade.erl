@@ -14,7 +14,9 @@ UpgradeNode = fun () ->
 
   %% stateless, internal
   l(logplex_logs_rest),
+  l(logplex_syslog_utils),
   l(logplex_tcpsyslog_drain),
+  l(logplex_http_drain),
 
   io:format(whereis(user), "at=upgrade_end cur_vsn=65~n", []),
   application:set_env(logplex, git_branch, "v65"),
