@@ -381,9 +381,6 @@ reconnect(State = #state{failures = F}) ->
 
 reconnect_in(MS, State = #state{}) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=reconnect_delay delay=~p "
-          "ref=~p",
-          log_info(State, [MS, Ref])),
     State#state{reconnect_tref = Ref}.
 
 %% @private
