@@ -158,6 +158,10 @@ process_post(Req, State = #state{token = Token,
             %% XXX - Add stat counter here?
             {ok, Req3} = cowboy_http_req:reply(400, Req2),
             {halt, Req3, State2};
+        {{error, malfomed_messages}, Req2, State2} ->
+            %% XXX - Add stat counter here?
+            {ok, Req3} = cowboy_http_req:reply(400, Req2),
+            {halt, Req3, State2};
         {{error, Reason}, Req2, State2} when is_integer(ChannelId) ->
             ?WARN("at=parse_logplex_body channel_id=~p error=~p",
                   [ChannelId, Reason]),
@@ -180,26 +184,45 @@ parse_logplex_body(Req, State) ->
     {ok, Body, Req2} = cowboy_http_req:body(Req),
     case syslog_parser:parse(Body) of
         {ok, Msgs, _} ->
-            case cowboy_http_req:header(<<"Logplex-Msg-Count">>
-                                        , Req2, false) of
-                {false, Req3} ->
-                    {parsed, Req3, State#state{msgs=Msgs}};
-                {Val, Req3} ->
-                    try
-                        Count = list_to_integer(binary_to_list(Val)),
-                        Count = length(Msgs),
-                        {parsed, Req3, State#state{msgs=Msgs}}
-                    catch
-                        _:_ ->
-                            {{error, msg_count_mismatch}, Req3, State}
-                    end
-            end;
+            check_messages(Msgs, Req2, State);
         {{error, Reason}, _, _} ->
             ?WARN("at=parse_syslog reason=~p body=~1000p",
                   [Reason, Body]),
             {{error, Reason}, Req2, State}
     end.
 
+check_messages(Msgs, Req, State) ->
+    case split_messages(Msgs) of
+        {Good, []} ->
+            check_message_count(Good, Req, State);
+        {_,_Malformed} ->
+            {{error, malformed_messages}, Req, State}
+    end.
+
+check_message_count(Good, Req, State) ->
+    %% Logplex-Msg-Count header is optional,
+    %% but if present, check our count matches sent count.
+    case cowboy_http_req:header(<<"Logplex-Msg-Count">>
+                                , Req, false) of
+        {false, Req2} ->
+            {parsed, Req2, State#state{msgs=Good}};
+        {Val, Req2} ->
+            try
+                Count = list_to_integer(binary_to_list(Val)),
+                Count = length(Good),
+                {parsed, Req2, State#state{msgs=Good}}
+            catch
+                _:_ ->
+                    {{error, msg_count_mismatch}, Req2, State}
+            end
+    end.
+
+split_messages(Messages) ->
+    lists:partition(fun ({msg, _}) -> true;
+                        ({malformed, _}) -> false;
+                        (_) -> false
+                    end,
+                    Messages).
 
 content_types_provided(Req, State) ->
     {[{{<<"text">>, <<"plain">>, []}, to_response}],
