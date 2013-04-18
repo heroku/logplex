@@ -39,9 +39,6 @@ read(Key) ->
     case ets:lookup(?TABLE, Key) of
         [{Key, Map, Interval, TS}] ->
             {Map, Interval, TS};
-        [{Key, {Map, Interval}}] ->
-            %% XXX Legacy read -- phase this out post v33.
-            {Map, Interval, os:timestamp()};
         [] ->
             no_such_key
     end.

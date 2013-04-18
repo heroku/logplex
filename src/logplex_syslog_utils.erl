@@ -15,7 +15,6 @@
          ,rfc5424/1
          ,rfc5424/8
          ,overflow_msg/2
-         ,overflow_msg/3
         ]).
 
 -type syslog_msg() :: {facility(), severity(),
@@ -60,12 +59,6 @@ overflow_msg(N, When) ->
         "~p messages dropped since ~s.",
         [N,
          datetime(When)]).
-
-%% Live upgrade compat function
-%% XXX remove in v66.
-overflow_msg(N, When, _) ->
-    overflow_msg(N, When).
-
 
 from_msg(Msg) when is_binary(Msg) ->
     %% <40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 t.xxx web.1 - - State changed from created to starting
