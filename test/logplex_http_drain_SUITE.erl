@@ -2,10 +2,12 @@
 -include_lib("common_test/include/ct.hrl").
 -compile(export_all).
 
-all() -> [{group, overflow}].
+all() -> [{group, overflow},
+          {group, drain_buf}].
 
 groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
-                             full_buffer_temp_fail, full_stack]}].
+                             full_buffer_temp_fail, full_stack]},
+             {drain_buf, [], [restart_drain_buf]}].
 
 init_per_suite(Config) ->
     set_os_vars(),
@@ -16,12 +18,43 @@ end_per_suite(_Config) ->
     application:stop(logplex),
     meck:unload().
 
+init_per_group(drain_buf, Config) ->
+    Config;
 init_per_group(overflow, Config) ->
     Config.
 
+end_per_group(drain_buf, _Config) ->
+    ok;
 end_per_group(overflow, _Config) ->
     ok.
 
+init_per_testcase(restart_drain_buf, Config) ->
+    %% Drain data
+    ChannelId = 1337,
+    DrainId = 2198712,
+    DrainTok = "d.12930-321-312213-12321",
+    {ok,URI,_} = ex_uri:decode("http://example.org"),
+    %% HTTP Client
+    meck:new(logplex_http_client, [passthrough]),
+    meck:expect(logplex_http_client, start_link,
+        fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
+            {ok, self()}
+        end),
+    meck:expect(logplex_http_client, close, fun(_Pid) -> ok end),
+    %% We make failure controleable by helper functions.
+    %% Rube goldberg-esque, but makes writing the actual test
+    %% a bit simpler. Succeeds by default
+    Tab = client_call_init(),
+    meck:expect(logplex_http_client, raw_request,
+        fun(_Pid, _Req, _Timeout) ->
+                Status = client_call_status(Tab),
+                {ok, Status, []}
+        end),
+    %% Starting the drain
+    {ok, Pid} = logplex_http_drain:start_link(ChannelId, DrainId, DrainTok, URI),
+    unlink(Pid),
+    [{channel, ChannelId}, {drain_id, DrainId}, {drain_tok, DrainTok},
+     {uri, URI}, {drain,Pid}, {client, Tab} | Config];
 init_per_testcase(full_stack, Config) ->
     %% Same as any other overflow test case but with drain buffers
     %% unmocked
@@ -308,6 +341,18 @@ full_stack(Config) ->
     {match, _} = re:run(Success, "mymsg6"),
     {match, _} = re:run(Success, "Error L10"),
     {match, _} = re:run(Success, "5 messages dropped").
+
+%% Check that the drain restarts the drain buffer if we kill it.
+restart_drain_buf(Config) ->
+    {Buf0, true} = gen_fsm:sync_send_all_state_event(?config(drain, Config),
+                                                     buf_alive),
+    exit(Buf0, zing),
+    ct:pal("Old buf ~p", [Buf0]),
+    timer:sleep(1),
+    {Buf1, true} = gen_fsm:sync_send_all_state_event(?config(drain, Config),
+                                                     buf_alive),
+    ct:pal("New buf ~p", [Buf1]),
+    false = Buf0 =:= Buf1.
 
 %%% HELPERS
 wait_for_mocked_call(Mod, Fun, Args, NumCalls, Time) ->

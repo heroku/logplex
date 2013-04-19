@@ -106,16 +106,12 @@ user_agent() ->
 
 %% @private
 init(State0 = #state{uri=URI,
-                     drain_id=DrainId,
-                     channel_id=ChannelId}) ->
+                     drain_id=DrainId}) ->
     process_flag(trap_exit, true),
     try
         Dest = uri_to_string(URI),
-        Size = logplex_app:config(http_drain_buffer_size, 1024),
-        {ok, Buf} = logplex_drain_buffer:start_link(ChannelId, self(),
-                                                    notify, Size),
+        State = start_drain_buffer(State0),
         logplex_drain:register(DrainId, http, Dest),
-        State = State0#state{buf = Buf},
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, disconnected,
@@ -165,6 +161,18 @@ handle_event(Event, StateName, State) ->
     {next_state, StateName, State}.
 
 %% @private
+handle_sync_event(buf_alive, _From, StateName,
+                  State = #state{buf = Buf}) ->
+    {reply, {Buf, erlang:is_process_alive(Buf)}, StateName, State};
+handle_sync_event(restart_buf, _From, StateName,
+                  State = #state{buf = Buf}) ->
+    case erlang:is_process_alive(Buf) of
+        true ->
+            {reply, buf_alive, StateName, State};
+        false ->
+            NewState = start_drain_buffer(State#state{buf = undefined}),
+            {reply, {new_buf, NewState#state.buf}, StateName, NewState}
+    end;
 handle_sync_event(notify, _From, StateName, State = #state{buf = Buf}) ->
     logplex_drain_buffer:notify(Buf),
     {reply, ok, StateName, State};
@@ -198,6 +206,14 @@ handle_info({timeout, _Ref, ?RECONNECT_MSG}, StateName,
 
 handle_info(shutdown, _StateName, State) ->
     {stop, {shutdown,call}, State};
+
+handle_info({'EXIT', BufPid, Reason}, StateName,
+            State = #state{buf = BufPid}) ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s at=drain_buffer_exit "
+          "state=~p buffer_pid=~p err=~1000p",
+          log_info(State, [StateName, BufPid, Reason])),
+    NewState = start_drain_buffer(State#state{buf = undefined}),
+    {next_state, StateName, NewState};
 
 handle_info({'EXIT', ClientPid, Reason}, StateName,
             State = #state{client = ClientPid}) ->
@@ -544,3 +560,10 @@ cancel_reconnect(State = #state{reconnect_tref=undefined}) ->
 
 ltcy(Start, End) ->
     timer:now_diff(End, Start).
+
+start_drain_buffer(State = #state{channel_id=ChannelId,
+                                  buf = undefined}) ->
+    Size = logplex_app:config(http_drain_buffer_size, 1024),
+    {ok, Buf} = logplex_drain_buffer:start_link(ChannelId, self(),
+                                                notify, Size),
+    State#state{buf = Buf}.
