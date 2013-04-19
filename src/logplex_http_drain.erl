@@ -164,6 +164,15 @@ handle_event(Event, StateName, State) ->
 handle_sync_event(buf_alive, _From, StateName,
                   State = #state{buf = Buf}) ->
     {reply, {Buf, erlang:is_process_alive(Buf)}, StateName, State};
+handle_sync_event(restart_buf, _From, StateName,
+                  State = #state{buf = Buf}) ->
+    case erlang:is_process_alive(Buf) of
+        true ->
+            {reply, buf_alive, StateName, State};
+        false ->
+            NewState = start_drain_buffer(State#state{buf = undefined}),
+            {reply, {new_buf, NewState#state.buf}, StateName, NewState}
+    end;
 handle_sync_event(notify, _From, StateName, State = #state{buf = Buf}) ->
     logplex_drain_buffer:notify(Buf),
     {reply, ok, StateName, State};
