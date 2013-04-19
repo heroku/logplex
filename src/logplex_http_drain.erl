@@ -161,6 +161,9 @@ handle_event(Event, StateName, State) ->
     {next_state, StateName, State}.
 
 %% @private
+handle_sync_event(buf_alive, _From, StateName,
+                  State = #state{buf = Buf}) ->
+    {reply, {Buf, erlang:is_process_alive(Buf)}, StateName, State};
 handle_sync_event(notify, _From, StateName, State = #state{buf = Buf}) ->
     logplex_drain_buffer:notify(Buf),
     {reply, ok, StateName, State};
