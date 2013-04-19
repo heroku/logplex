@@ -195,6 +195,14 @@ handle_info({timeout, _Ref, ?RECONNECT_MSG}, StateName,
 handle_info(shutdown, _StateName, State) ->
     {stop, {shutdown,call}, State};
 
+handle_info({'EXIT', BufPid, Reason}, StateName,
+            State = #state{buf = BufPid}) ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s at=drain_buffer_exit "
+          "state=~p buffer_pid=~p err=~1000p",
+          log_info(State, [StateName, BufPid, Reason])),
+    NewState = start_drain_buffer(State#state{buf = undefined}),
+    {next_state, StateName, NewState};
+
 handle_info({'EXIT', ClientPid, Reason}, StateName,
             State = #state{client = ClientPid}) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s at=http_client_exit "
