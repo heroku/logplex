@@ -106,16 +106,12 @@ user_agent() ->
 
 %% @private
 init(State0 = #state{uri=URI,
-                     drain_id=DrainId,
-                     channel_id=ChannelId}) ->
+                     drain_id=DrainId}) ->
     process_flag(trap_exit, true),
     try
         Dest = uri_to_string(URI),
-        Size = logplex_app:config(http_drain_buffer_size, 1024),
-        {ok, Buf} = logplex_drain_buffer:start_link(ChannelId, self(),
-                                                    notify, Size),
+        State = start_drain_buffer(State0),
         logplex_drain:register(DrainId, http, Dest),
-        State = State0#state{buf = Buf},
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, disconnected,
@@ -544,3 +540,10 @@ cancel_reconnect(State = #state{reconnect_tref=undefined}) ->
 
 ltcy(Start, End) ->
     timer:now_diff(End, Start).
+
+start_drain_buffer(State = #state{channel_id=ChannelId,
+                                  buf = undefined}) ->
+    Size = logplex_app:config(http_drain_buffer_size, 1024),
+    {ok, Buf} = logplex_drain_buffer:start_link(ChannelId, self(),
+                                                notify, Size),
+    State#state{buf = Buf}.
