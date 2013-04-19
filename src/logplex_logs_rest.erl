@@ -157,7 +157,7 @@ process_post(Req, State = #state{token = Token,
         {{error, msg_count_mismatch}, Req2, State2} ->
             %% XXX - Add stat counter here?
             respond(400, <<"Message count mismatch">>, Req2, State2);
-        {{error, malfomed_messages}, Req2, State2} ->
+        {{error, malformed_messages}, Req2, State2} ->
             %% XXX - Add stat counter here?
             respond(400, <<"Malformed log messages">>, Req2, State2);
         {{error, Reason}, Req2, State2} when is_integer(ChannelId) ->
