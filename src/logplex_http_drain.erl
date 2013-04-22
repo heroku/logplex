@@ -266,12 +266,12 @@ http_fail(State = #state{client = Client}) ->
      set_reconnect_timer(NewState)}.
 
 %% @private
-ready_to_send(State = #state{buf = Buf, drain_tok=Token,
+ready_to_send(State = #state{buf = Buf,
                              out_q = Q}) ->
     case queue:out(Q) of
         {empty, Q} ->
             logplex_drain_buffer:set_active(Buf, target_bytes(),
-                                            framing_fun(Token)),
+                                            framing_fun()),
             {next_state, connected, State};
         {{value, Frame}, Q2} ->
             try_send(Frame, State#state{out_q = Q2})
@@ -377,13 +377,11 @@ request_to_iolist(#frame{frame = Body0,
         {undefined,_} ->
             T0 = os:timestamp(),
             Msg = frame(
-                Token,
                 logplex_syslog_utils:overflow_msg(Lost,T0)
             ),
             {[Msg, Body0],Count0+1};
         {{T0,Dropped},_} ->
             Msg = frame(
-                Token,
                 logplex_syslog_utils:overflow_msg(Dropped+Lost,T0)
             ),
             {[Msg, Body0],Count0+1}
@@ -408,15 +406,18 @@ request_to_iolist(#frame{frame = Body0,
                                     full_host_iolist(URI),
                                     uri_ref(URI)).
 
-frame(Token, LogTuple) ->
-    logplex_syslog_utils:frame(logplex_syslog_utils:to_msg(LogTuple, Token)).
+rfc5424({Facility, Severity, Time, Source, Process, Msg}) ->
+    logplex_syslog_utils:rfc5424(Facility, Severity, Time, "host",
+                                 Source, Process, undefined, Msg).
 
-framing_fun(Token) ->
-    Frame = fun(Args) -> frame(Token, Args) end,
+frame(LogTuple) ->
+    logplex_syslog_utils:frame(rfc5424(LogTuple)).
+
+framing_fun() ->
     fun ({loss_indication, _N, _When}) ->
             skip;
         ({msg, MData}) ->
-            {frame, Frame(MData)}
+            {frame, frame(MData)}
     end.
 
 -spec target_bytes() -> pos_integer().
