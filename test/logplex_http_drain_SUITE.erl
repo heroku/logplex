@@ -348,7 +348,7 @@ restart_drain_buf(Config) ->
                                                      buf_alive),
     exit(Buf0, zing),
     ct:pal("Old buf ~p", [Buf0]),
-    timer:sleep(1),
+    wait_for_dead_proc(Buf0),
     {Buf1, true} = gen_fsm:sync_send_all_state_event(?config(drain, Config),
                                                      buf_alive),
     ct:pal("New buf ~p", [Buf1]),
@@ -366,4 +366,13 @@ wait_for_mocked_call(Mod,Fun,Args, NumCalls, Max,T0) ->
         {_, _} ->
             timer:sleep(10),
             wait_for_mocked_call(Mod,Fun,Args,NumCalls,Max,T0)
+    end.
+
+wait_for_dead_proc(Pid) ->
+    Ref = erlang:monitor(process,Pid),
+    receive
+         {'DOWN', Ref, process, Pid, _} -> ok
+    after
+        1000 ->
+            erlang:exit("process took more than 1s to exit")
     end.
