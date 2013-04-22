@@ -63,6 +63,7 @@
         ]).
 
 -export([user_agent/0
+         ,drain_buf_framing/1
         ]).
 
 %% ------------------------------------------------------------------
@@ -271,7 +272,7 @@ ready_to_send(State = #state{buf = Buf,
     case queue:out(Q) of
         {empty, Q} ->
             logplex_drain_buffer:set_active(Buf, target_bytes(),
-                                            framing_fun()),
+                                            fun ?MODULE:drain_buf_framing/1),
             {next_state, connected, State};
         {{value, Frame}, Q2} ->
             try_send(Frame, State#state{out_q = Q2})
@@ -413,12 +414,10 @@ rfc5424({Facility, Severity, Time, Source, Process, Msg}) ->
 frame(LogTuple) ->
     logplex_syslog_utils:frame(rfc5424(LogTuple)).
 
-framing_fun() ->
-    fun ({loss_indication, _N, _When}) ->
-            skip;
-        ({msg, MData}) ->
-            {frame, frame(MData)}
-    end.
+drain_buf_framing({loss_indication, _N, _When}) ->
+    skip;
+drain_buf_framing({msg, MData}) ->
+    {frame, frame(MData)}.
 
 -spec target_bytes() -> pos_integer().
 %% @private
