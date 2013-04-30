@@ -280,11 +280,14 @@ has_valid_uri(#drain{uri=Uri}) ->
     end.
 
 delete_by_channel(ChannelId) when is_integer(ChannelId) ->
-    ets:select_delete(drains,
-                      ets:fun2ms(fun (#drain{channel_id=C})
-                                     when C =:= ChannelId ->
-                                         true
-                                 end)).
+    Drains = ets:select(drains,
+                        ets:fun2ms(fun (#drain{id=Id,channel_id=C})
+                                        when C =:= ChannelId ->
+                                            Id
+                                    end)),
+    [delete(DrainId) || DrainId <- Drains],
+    ok.
+
 
 count_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select_count(drains,
