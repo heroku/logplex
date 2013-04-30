@@ -76,6 +76,9 @@ init([]) ->
        ,{logplex_shard, {logplex_shard, start_link, []},
          permanent, 2000, worker, [logplex_shard]}
 
+       ,{logplex_monitor, {logplex_mon_sup, start_link, []},
+         permanent, 2000, supervisor, [logplex_mon_sup]}
+
        %% All tcp listen processes start from the 'listen' start phase
        %% in logplex_app
 

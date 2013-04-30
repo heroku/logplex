@@ -51,6 +51,8 @@
          ,binary_to_flags/1
         ]).
 
+-export([num_channels/0]).
+
 -compile({no_auto_import,[whereis/1]}).
 
 -include("logplex.hrl").
@@ -231,3 +233,6 @@ binary_to_id(Bin) when is_binary(Bin) ->
 
 id_to_binary(Id) when is_integer(Id) ->
     iolist_to_binary(integer_to_list(Id)).
+
+num_channels() ->
+    ets:info(channels, size).
