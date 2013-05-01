@@ -352,13 +352,13 @@ num_drains() ->
                        [{ { {n, l, {drain, '_'}}, '_', '_'},
                           [], [true]}]).
 
--spec pids() -> [{Id::pos_integer(),pid()}].
+-spec pids() -> [{id(),pid()}].
 pids() ->
     gproc:select({l, n},
                  [{ { {n, l, {drain, '$1'}}, '$2', '_'},
                     [], [{{'$1', '$2'}}]}]).
 
--spec ids() -> [pos_integer()].
+-spec ids() -> [id()].
 ids() ->
     gproc:select({l, n},
                  [{ { {n, l, {drain, '$1'}}, '_', '_'},
@@ -366,7 +366,7 @@ ids() ->
 
 %% This call may take a long time to return and be heavy on the redis resource
 %% usage. Run sparingly. The order of types is important.
--spec orphans() -> [{Id::pos_integer(), pid(),
+-spec orphans() -> [{id(), pid(),
                      ['ets_drain'|'ets_channel'|'redis_channel',...]}].
 orphans() ->
     [{Id,Pid,Types} || {Id,Pid} <- pids(), Types = [_|_] <- [orphaned(Id)]].
