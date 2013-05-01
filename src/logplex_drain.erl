@@ -61,7 +61,11 @@
         ]).
 
 -export([by_dest/0
+         ,num_drains/0
          ,pids/0
+         ,ids/0
+         ,orphans/0
+         ,orphaned/1
         ]).
 
 -include("logplex.hrl").
@@ -276,11 +280,14 @@ has_valid_uri(#drain{uri=Uri}) ->
     end.
 
 delete_by_channel(ChannelId) when is_integer(ChannelId) ->
-    ets:select_delete(drains,
-                      ets:fun2ms(fun (#drain{channel_id=C})
-                                     when C =:= ChannelId ->
-                                         true
-                                 end)).
+    Drains = ets:select(drains,
+                        ets:fun2ms(fun (#drain{id=Id,channel_id=C})
+                                        when C =:= ChannelId ->
+                                            Id
+                                    end)),
+    [delete(DrainId) || DrainId <- Drains],
+    ok.
+
 
 count_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select_count(drains,
@@ -339,7 +346,49 @@ uri_to_binary(#ex_uri{} = Uri) ->
 by_dest() ->
     gproc:lookup_local_properties(drain_dest).
 
+-spec num_drains() -> non_neg_integer().
+num_drains() ->
+    gproc:select_count({l, n},
+                       [{ { {n, l, {drain, '_'}}, '_', '_'},
+                          [], [true]}]).
+
+-spec pids() -> [{id(),pid()}].
 pids() ->
     gproc:select({l, n},
                  [{ { {n, l, {drain, '$1'}}, '$2', '_'},
                     [], [{{'$1', '$2'}}]}]).
+
+-spec ids() -> [id()].
+ids() ->
+    gproc:select({l, n},
+                 [{ { {n, l, {drain, '$1'}}, '_', '_'},
+                    [], ['$1']}]).
+
+%% This call may take a long time to return and be heavy on the redis resource
+%% usage. Run sparingly. The order of types is important.
+-spec orphans() -> [{id(), pid(),
+                     ['ets_drain'|'ets_channel'|'redis_channel',...]}].
+orphans() ->
+    [{Id,Pid,Types} || {Id,Pid} <- pids(), Types = [_|_] <- [orphaned(Id)]].
+
+%% The order of returned values is important
+orphaned(Id) ->
+    case lookup(Id) of
+        undefined -> [ets_drain];
+        _ -> []
+    end
+    ++
+    case ets:match(drains, #drain{id=Id, channel_id='$1', _='_'}) of
+        [] -> [];
+        [[Chan]] ->
+            case logplex_channel:lookup(Chan) of
+                undefined -> [ets_channel];
+                _ -> []
+            end
+            ++
+            case redis_helper:lookup_channel(Chan) of
+                undefined -> [redis_channel];
+                _ -> []
+            end
+    end.
+
