@@ -3,7 +3,7 @@
 
 -behaviour(gen_server).
 
--define(DELAY, 120000). % two minutes
+-define(DELAY, 300000). % 5 minutes
 -define(TABLE, ?MODULE).
 
 %% API
