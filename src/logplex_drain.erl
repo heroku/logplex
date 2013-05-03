@@ -385,10 +385,5 @@ orphaned(Id) ->
                 undefined -> [ets_channel];
                 _ -> []
             end
-            ++
-            case redis_helper:lookup_channel(Chan) of
-                undefined -> [redis_channel];
-                _ -> []
-            end
     end.
 

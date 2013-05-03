@@ -62,16 +62,16 @@ code_change(_OldVsn, State, _Extra) ->
 check_orphans() ->
     case logplex_drain:orphans() of
         [] ->
-            {0,0,0,0};
+            {0,0,0};
         List ->
-            {All, ETSDrain, AllChannels, PartChannels} =
-              lists:foldl(fun categorize/2, {0,0,0,0}, List),
+            {All, Drain, Channels} =
+              lists:foldl(fun categorize/2, {0,0,0}, List),
             %% any: total number of orphan pids
             %% all: orphans that are not in the drains table,
             ?WARN("at=check_orphans any=~b all=~b drain=~b "
-                  "channel=~b partial_channel=~b",
-                  [length(List), All, ETSDrain, AllChannels, PartChannels]),
-            {All,ETSDrain,AllChannels,PartChannels}
+                  "channel=~b",
+                  [length(List), All, Drain, Channels]),
+            {All,Drain,Channels}
     end.
 
 check_drain_count() ->
@@ -88,14 +88,14 @@ check_chan_count() ->
 
 categorize({_Id,_Pid,List}, Acc) -> categorize1(List,Acc).
 
-categorize1([ets_drain,ets_channel,redis_channel], {All,Drain,AllChan,PartChan}) ->
-    {All+1,Drain+1,AllChan+1,PartChan};
-categorize1([ets_drain|Rest], {All,Drain,AllChan,PartChan}) ->
-    categorize1(Rest, {All,Drain+1,AllChan,PartChan});
-categorize1([ets_channel,redis_channel], {All,Drain,AllChan,PartChan}) ->
-    {All,Drain,AllChan+1,PartChan};
-categorize1([_], {All,Drain,AllChan,PartChan}) ->
-    {All,Drain,AllChan,PartChan};
+categorize1([ets_drain,ets_channel], {All,Drain,Chan}) ->
+    {All+1,Drain+1,Chan+1};
+categorize1([ets_drain|Rest], {All,Drain,Chan}) ->
+    categorize1(Rest, {All,Drain+1,Chan});
+categorize1([ets_channel], {All,Drain,Chan}) ->
+    {All,Drain,Chan+1};
+categorize1([_], {All,Drain,Chan}) ->
+    {All,Drain,Chan};
 categorize1([], Acc) ->
     Acc.
 
