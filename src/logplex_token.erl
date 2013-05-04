@@ -28,6 +28,7 @@
 -export([id/1
          ,channel_id/1
          ,name/1
+         ,new_unique_token_id/0
         ]).
 
 -export([store/1]).
@@ -48,7 +49,7 @@ name(#token{name=Name}) -> Name.
 
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
-    TokenId = new_token(),
+    TokenId = new_unique_token_id(),
     case redis_helper:create_token(ChannelId, TokenId, TokenName) of
         ok ->
             TokenId;
@@ -72,19 +73,21 @@ lookup(TokenId) when is_binary(TokenId) ->
             undefined
     end.
 
-new_token() ->
-    new_token(10).
+new_unique_token_id() ->
+    new_unique_token_id(10).
 
-new_token(0) ->
+new_unique_token_id(0) ->
     exit({error, failed_to_provision_token});
-
-new_token(Retries) when is_integer(Retries), Retries > 0 ->
-    Token = list_to_binary("t." ++ uuid:to_string(uuid:v4())),
-    T = logplex_utils:empty_token(),
-    case ets:match_object(tokens, T#token{id=Token}) of
-        [#token{}] -> new_token(Retries-1);
-        [] -> Token
+new_unique_token_id(Retries) when is_integer(Retries),
+                                  Retries > 0 ->
+    TokenId = new_token_id(),
+    case ets:lookup(tokens, TokenId) of
+        [#token{}] -> new_unique_token_id(Retries-1);
+        [] -> TokenId
     end.
+
+new_token_id() ->
+    <<"t.", (uuid:v4())/binary>>.
 
 lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select(tokens,
