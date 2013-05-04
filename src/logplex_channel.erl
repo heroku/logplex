@@ -42,12 +42,16 @@
          ,id_to_binary/1
          ,name/1
          ,flags/1
+         ,tokens/1
+         ,has_token/2
         ]).
 
 -export([lookup_flag/2
          ,lookup_flags/1
          ,store/1
          ,cache/3
+         ,cache/1
+         ,cache_token/2
          ,binary_to_flags/1
          ,create_ets_table/0
         ]).
@@ -88,6 +92,7 @@ new(Id, Name, Flags) when is_integer(Id),
 id(#channel{id=Id}) -> Id.
 name(#channel{id=Name}) -> Name.
 flags(#channel{flags=Flags}) -> Flags.
+tokens(#channel{tokens=Tokens}) -> Tokens.
 
 register({channel, ChannelId} = C)
   when is_integer(ChannelId) ->
@@ -130,9 +135,11 @@ cache(ChannelId, Name, Flags)
   when is_integer(ChannelId),
        is_binary(Name),
        is_list(Flags) ->
-    Chan = #channel{id=ChannelId,
-                    name=Name,
-                    flags=Flags},
+    cache(#channel{id=ChannelId,
+                   name=Name,
+                   flags=Flags}).
+
+cache(Chan = #channel{}) ->
     true = ets:insert(channels, Chan),
     Chan.
 
@@ -154,8 +161,9 @@ delete(ChannelId) when is_integer(ChannelId) ->
     case lookup(ChannelId) of
         undefined ->
             {error, not_found};
-        _ ->
-            [logplex_token:delete(TokenId) || #token{id=TokenId} <- lookup_tokens(ChannelId)],
+        Chan ->
+            [logplex_token:delete(TokenId)
+             || #token{id=TokenId} <- tokens(Chan)],
             logplex_drain:delete_by_channel(ChannelId),
             redis_helper:delete_channel(ChannelId)
     end.
@@ -190,7 +198,11 @@ lookup_flags(ChannelId) when is_integer(ChannelId) ->
     end.
 
 lookup_tokens(ChannelId) when is_integer(ChannelId) ->
-    logplex_token:lookup_by_channel(ChannelId).
+    case lookup(ChannelId) of
+        undefined -> no_such_channel;
+        #channel{tokens = Tokens} ->
+            Tokens
+    end.
 
 lookup_drains(ChannelId) when is_integer(ChannelId) ->
     logplex_drain:lookup_by_channel(ChannelId).
@@ -237,3 +249,25 @@ id_to_binary(Id) when is_integer(Id) ->
 
 num_channels() ->
     ets:info(channels, size).
+
+has_token(TokenId, #channel{tokens = Tokens}) ->
+    lists:keyfind(TokenId, #token.id, Tokens).
+
+cache_token(ChannelId, Token)
+  when is_integer(ChannelId) ->
+    case lookup(ChannelId) of
+        undefined ->
+            no_such_channel;
+        Chan = #channel{tokens = Tokens} ->
+            Id = logplex_token:id(Token),
+            case has_token(Id, Chan) of
+                false ->
+                    NewTokens = [Token | Tokens],
+                    cache(Chan#channel{tokens = NewTokens});
+                Token ->
+                    no_change;
+                _OldToken ->
+                    NewTokens = lists:keyreplace(Id, #token.id, Tokens, Token),
+                    cache(Chan#channel{tokens = NewTokens})
+            end
+    end.
