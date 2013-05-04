@@ -28,6 +28,7 @@
 -export([id/1
          ,channel_id/1
          ,name/1
+         ,cache/1
          ,new_unique_token_id/0
         ]).
 
@@ -100,3 +101,6 @@ store(#token{id=Token,
              channel_id=ChannelId,
              name=Name}) ->
     redis_helper:create_token(ChannelId, Token, Name).
+
+cache(Token = #token{}) ->
+    ets:insert(tokens, Token).
