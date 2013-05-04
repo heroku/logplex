@@ -164,11 +164,8 @@ create_token(Id, Dict) ->
         Val1 ->
             Ch = convert_to_integer(Val1),
             Name = dict_find(<<"name">>, Dict),
-            Token = #token{
-                id=Id,
-                channel_id=Ch,
-                name=Name
-            },
+            Token = logplex_token:new(Id, Ch, Name),
+            logplex_token:cache(Token),
             ets:insert(tokens, Token),
             Token
     end.
