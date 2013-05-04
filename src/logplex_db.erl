@@ -40,7 +40,7 @@ init([]) ->
     {ok, []}.
 
 create_ets_tables() ->
-    ets:new(channels, [named_table, public, set, {keypos, 2}]),
+    logplex_channel:create_ets_table(),
     ets:new(tokens,   [named_table, public, set, {keypos, 2}]),
     ets:new(drains,   [named_table, public, set, {keypos, 2}]),
     logplex_cred:create_ets_table(),

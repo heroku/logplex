@@ -49,6 +49,7 @@
          ,store/1
          ,cache/3
          ,binary_to_flags/1
+         ,create_ets_table/0
         ]).
 
 -export([num_channels/0]).
