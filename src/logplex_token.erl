@@ -33,15 +33,18 @@
 
 -export([store/1]).
 
+-include("logplex.hrl").
+-include_lib("stdlib/include/ms_transform.hrl").
+
 -type id() :: binary().
 -type name() :: binary().
+-type token() :: #token{}.
 
 -export_type([id/0
               ,name/0
+              ,token/0
              ]).
 
--include("logplex.hrl").
--include_lib("stdlib/include/ms_transform.hrl").
 
 id(#token{id=Id}) -> Id.
 channel_id(#token{channel_id=ChannelId}) -> ChannelId.
