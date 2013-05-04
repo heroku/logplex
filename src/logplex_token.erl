@@ -29,6 +29,7 @@
          ,channel_id/1
          ,name/1
          ,cache/1
+         ,new/2
          ,new_unique_token_id/0
         ]).
 
@@ -46,6 +47,9 @@
               ,token/0
              ]).
 
+new(Id, ChannelId)
+  when is_binary(Id), is_integer(ChannelId) ->
+    #token{id = Id, channel_id = ChannelId}.
 
 id(#token{id=Id}) -> Id.
 channel_id(#token{channel_id=ChannelId}) -> ChannelId.
