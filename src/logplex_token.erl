@@ -33,7 +33,8 @@
          ,new_unique_token_id/0
         ]).
 
--export([store/1]).
+-export([store/1
+        ]).
 
 -include("logplex.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
