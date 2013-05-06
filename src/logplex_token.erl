@@ -81,7 +81,7 @@ create_ets_table() ->
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_unique_token_id(),
-    case redis_helper:create_token(ChannelId, TokenId, TokenName) of
+    case store(new(TokenId, ChannelId, TokenName)) of
         ok ->
             TokenId;
         Err ->
