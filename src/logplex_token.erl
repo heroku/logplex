@@ -43,9 +43,11 @@
 
 -type id() :: binary().
 -type name() :: binary().
+-type token() :: #token{}.
 
 -export_type([id/0
               ,name/0
+              ,token/0
              ]).
 
 new(Id, ChannelId)
