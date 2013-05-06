@@ -49,6 +49,7 @@
          ,store/1
          ,cache/3
          ,binary_to_flags/1
+         ,create_ets_table/0
         ]).
 
 -export([num_channels/0]).
@@ -87,6 +88,9 @@ new(Id, Name, Flags) when is_integer(Id),
 id(#channel{id=Id}) -> Id.
 name(#channel{id=Name}) -> Name.
 flags(#channel{flags=Flags}) -> Flags.
+
+create_ets_table() ->
+    ets:new(channels, [named_table, public, set, {keypos, #channel.id}]).
 
 register({channel, ChannelId} = C)
   when is_integer(ChannelId) ->
@@ -154,7 +158,7 @@ delete(ChannelId) when is_integer(ChannelId) ->
         undefined ->
             {error, not_found};
         _ ->
-            [logplex_token:delete(TokenId) || #token{id=TokenId} <- lookup_tokens(ChannelId)],
+            logplex_token:delete_by_channel(ChannelId),
             logplex_drain:delete_by_channel(ChannelId),
             redis_helper:delete_channel(ChannelId)
     end.

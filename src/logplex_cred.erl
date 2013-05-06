@@ -59,7 +59,7 @@
 %%====================================================================
 
 create_ets_table() ->
-    ets:new(?CRED_TAB, [named_table, public, set, {keypos, 2}]).
+    ets:new(?CRED_TAB, [named_table, public, set, {keypos, #cred.id}]).
 
 new(Id) when is_binary(Id) -> #cred{id = Id,
                                     pass = pass()}.
