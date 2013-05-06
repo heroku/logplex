@@ -104,7 +104,7 @@ whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
 create_ets_table() ->
-    ets:new(drains, [named_table, public, set, {keypos, 2}]).
+    ets:new(drains, [named_table, public, set, {keypos, #drain.id}]).
 
 start(Type, DrainId, Args) ->
     start_mod(mod(Type), DrainId, Args).

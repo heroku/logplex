@@ -90,7 +90,7 @@ name(#channel{id=Name}) -> Name.
 flags(#channel{flags=Flags}) -> Flags.
 
 create_ets_table() ->
-    ets:new(channels, [named_table, public, set, {keypos, 2}]).
+    ets:new(channels, [named_table, public, set, {keypos, #channel.id}]).
 
 register({channel, ChannelId} = C)
   when is_integer(ChannelId) ->
