@@ -32,6 +32,7 @@
          ,name/1
          ,cache/1
          ,delete/1
+         ,delete_by_id/1
          ,delete_by_channel/1
          ,new/3
          ,new/2
@@ -139,6 +140,14 @@ cache(Token = #token{}) ->
 delete(Token = #token{id = Id}) ->
     ets:delete(?TOKEN_TAB, Id),
     ets:delete_object(?CHAN_TOKEN_TAB, index_rec(Token)).
+
+delete_by_id(Id) ->
+    case lookup(Id) of
+        Token = #token{} ->
+            delete(Token);
+        _ ->
+            ok
+    end.
 
 delete_by_channel(ChannelId) when is_integer(ChannelId) ->
     [ ets:delete(?TOKEN_TAB, Id)

@@ -92,7 +92,7 @@ handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = parse_id(Rest),
     ?INFO("at=delete type=token id=~p", [Id]),
-    logplex_token:delete(Id);
+    logplex_token:delete_by_id(Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = drain_id(parse_id(Rest)),
