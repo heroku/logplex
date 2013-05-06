@@ -29,7 +29,7 @@ UpgradeNode = fun () ->
                             [{token_idx, Chan, Id}
                              || {Chan, Id} <- TokenInfo,
                                 is_integer(Chan), is_binary(Id)]),
-                 F(ets:select(Cont))
+                 F(F, ets:select(Cont))
          end,
   Fill(Fill,
        ets:select(tokens,
