@@ -167,6 +167,7 @@ create_token(Id, Dict) ->
             Token = logplex_token:new(Id, Ch, Name),
             logplex_token:cache(Token),
             ets:insert(tokens, Token),
+            logplex_channel:cache_token(Ch, Token),
             Token
     end.
 
