@@ -158,7 +158,7 @@ delete(ChannelId) when is_integer(ChannelId) ->
         undefined ->
             {error, not_found};
         _ ->
-            [logplex_token:delete(TokenId) || #token{id=TokenId} <- lookup_tokens(ChannelId)],
+            logplex_token:delete_by_channel(ChannelId),
             logplex_drain:delete_by_channel(ChannelId),
             redis_helper:delete_channel(ChannelId)
     end.
