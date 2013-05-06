@@ -92,7 +92,7 @@ handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
 handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
     Id = parse_id(Rest),
     ?INFO("at=delete type=token id=~p", [Id]),
-    ets:delete(tokens, Id);
+    logplex_token:delete(Id);
 
 handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
     Id = drain_id(parse_id(Rest)),
@@ -164,12 +164,8 @@ create_token(Id, Dict) ->
         Val1 ->
             Ch = convert_to_integer(Val1),
             Name = dict_find(<<"name">>, Dict),
-            Token = #token{
-                id=Id,
-                channel_id=Ch,
-                name=Name
-            },
-            ets:insert(tokens, Token),
+            Token = logplex_token:new(Id, Ch, Name),
+            logplex_token:cache(Token),
             Token
     end.
 

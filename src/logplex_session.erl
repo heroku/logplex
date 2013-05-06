@@ -34,7 +34,7 @@
 -include("logplex_session.hrl").
 
 create_ets_table() ->
-    ets:new(sessions, [named_table, public, set, {keypos, 2}]).
+    ets:new(sessions, [named_table, public, set, {keypos, #session.id}]).
 
 new(Body) when is_binary(Body) ->
     SessionId = uuid:to_binary(uuid:v4()),

@@ -23,7 +23,7 @@
 -module(logplex_utils).
 -export([rpc/4, set_weight/1, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
-         empty_token/0, parse_redis_url/1, nl/1, to_int/1]).
+         parse_redis_url/1, nl/1, to_int/1]).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -118,9 +118,6 @@ to_int(Bin) when is_binary(Bin) ->
     to_int(binary_to_list(Bin));
 to_int(Int) when is_integer(Int) ->
     Int.
-
-empty_token() ->
-    setelement(1, erlang:make_tuple(length(record_info(fields, token))+1, '_'), token).
 
 parse_redis_url(Url) ->
     case redis_uri:parse(Url) of
