@@ -94,6 +94,9 @@ name(#channel{id=Name}) -> Name.
 flags(#channel{flags=Flags}) -> Flags.
 tokens(#channel{tokens=Tokens}) -> Tokens.
 
+create_ets_table() ->
+    ets:new(channels, [named_table, public, set, {keypos, 2}]).
+
 register({channel, ChannelId} = C)
   when is_integer(ChannelId) ->
     put(logplex_channel_id, ChannelId), %% post mortem debug info
