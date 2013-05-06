@@ -22,20 +22,23 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_token).
 
--export([create/2, lookup/1, destroy/1]).
--export([lookup_by_channel/1]).
+-export([lookup/1
+         ,lookup_by_channel/1
+        ]).
 
 -export([id/1
          ,channel_id/1
          ,name/1
          ,cache/1
-         ,new/2
          ,delete/1
+         ,new/3
          ,new_unique_token_id/0
          ,new_token_id/0
         ]).
 
 -export([store/1
+         ,create/2
+         ,destroy/1
          ,create_ets_table/0
         ]).
 
@@ -46,16 +49,20 @@
 -type name() :: binary().
 -type token() :: #token{}.
 
+-record(token_idx, {channel_id :: logplex_channel:id(),
+                    id :: id()}).
+
 -export_type([id/0
               ,name/0
               ,token/0
              ]).
 
-new(Id, ChannelId)
-  when is_binary(Id), is_integer(ChannelId) ->
-    #token{id = Id, channel_id = ChannelId}.
 -define(TOKEN_TAB, tokens).
 -define(CHAN_TOKEN_TAB, channel_tokens).
+
+new(Id, ChannelId, Name)
+  when is_binary(Id), is_integer(ChannelId), is_binary(Name) ->
+    #token{id = Id, channel_id = ChannelId, name = Name}.
 
 id(#token{id=Id}) -> Id.
 channel_id(#token{channel_id=ChannelId}) -> ChannelId.
