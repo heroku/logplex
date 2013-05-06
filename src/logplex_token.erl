@@ -31,6 +31,7 @@
          ,cache/1
          ,new/2
          ,new_unique_token_id/0
+         ,new_token_id/0
         ]).
 
 -export([store/1
@@ -97,7 +98,7 @@ new_unique_token_id(Retries) when is_integer(Retries),
     end.
 
 new_token_id() ->
-    <<"t.", (uuid:v4())/binary>>.
+    iolist_to_binary(["t.", uuid:to_iolist(uuid:v4())]).
 
 lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select(tokens,
