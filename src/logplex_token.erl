@@ -22,7 +22,7 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_token).
 
--export([create/2, lookup/1, delete/1]).
+-export([create/2, lookup/1, destroy/1]).
 -export([lookup_by_channel/1]).
 
 -export([id/1
@@ -30,6 +30,7 @@
          ,name/1
          ,cache/1
          ,new/2
+         ,delete/1
          ,new_unique_token_id/0
          ,new_token_id/0
         ]).
@@ -53,13 +54,16 @@
 new(Id, ChannelId)
   when is_binary(Id), is_integer(ChannelId) ->
     #token{id = Id, channel_id = ChannelId}.
+-define(TOKEN_TAB, tokens).
+-define(CHAN_TOKEN_TAB, channel_tokens).
 
 id(#token{id=Id}) -> Id.
 channel_id(#token{channel_id=ChannelId}) -> ChannelId.
 name(#token{name=Name}) -> Name.
 
 create_ets_table() ->
-    ets:new(tokens, [named_table, public, set, {keypos, 2}]).
+    ets:new(?TOKEN_TAB, [named_table, public, set, {keypos, 2}]),
+    ets:new(?CHAN_TOKEN_TAB, [named_table, public, bag, {keypos, 2}]).
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_unique_token_id(),
@@ -70,7 +74,7 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
             Err
     end.
 
-delete(TokenId) when is_binary(TokenId) ->
+destroy(TokenId) when is_binary(TokenId) ->
     case lookup(TokenId) of
         #token{} ->
             redis_helper:delete_token(TokenId);
@@ -79,7 +83,7 @@ delete(TokenId) when is_binary(TokenId) ->
     end.
 
 lookup(TokenId) when is_binary(TokenId) ->
-    case ets:lookup(tokens, TokenId) of
+    case ets:lookup(?TOKEN_TAB, TokenId) of
         [Token] when is_record(Token, token) ->
             Token;
         _ ->
@@ -94,7 +98,7 @@ new_unique_token_id(0) ->
 new_unique_token_id(Retries) when is_integer(Retries),
                                   Retries > 0 ->
     TokenId = new_token_id(),
-    case ets:lookup(tokens, TokenId) of
+    case ets:lookup(?TOKEN_TAB, TokenId) of
         [#token{}] -> new_unique_token_id(Retries-1);
         [] -> TokenId
     end.
@@ -103,11 +107,12 @@ new_token_id() ->
     iolist_to_binary(["t.", uuid:to_iolist(uuid:v4())]).
 
 lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
-    ets:select(tokens,
-               ets:fun2ms(fun (#token{channel_id=C})
-                                when C =:= ChannelId ->
-                                  object()
-                          end)).
+    Ids = [ Id
+            || #token_idx{id = Id} <- ets:lookup(?CHAN_TOKEN_TAB, ChannelId)],
+    lists:flatmap(fun (Id) ->
+                          ets:lookup(?TOKEN_TAB, Id)
+                  end,
+                  Ids).
 
 store(#token{id=Token,
              channel_id=ChannelId,
@@ -115,4 +120,12 @@ store(#token{id=Token,
     redis_helper:create_token(ChannelId, Token, Name).
 
 cache(Token = #token{}) ->
-    ets:insert(tokens, Token).
+    ets:insert(?TOKEN_TAB, Token),
+    ets:insert(?CHAN_TOKEN_TAB, index_rec(Token)).
+
+delete(Token = #token{id = Id}) ->
+    ets:delete(?TOKEN_TAB, Id),
+    ets:delete_object(?CHAN_TOKEN_TAB, index_rec(Token)).
+
+index_rec(#token{id = Id, channel_id = Chan}) ->
+    #token_idx{channel_id = Chan, id = Id}.
