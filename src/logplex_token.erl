@@ -146,8 +146,12 @@ delete_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:delete(?CHAN_TOKEN_TAB, ChannelId).
 
 lookup_ids_by_channel(ChannelId) when is_integer(ChannelId) ->
-    [ Id
-      || #token_idx{id = Id} <- ets:lookup(?CHAN_TOKEN_TAB, ChannelId) ].
+    try
+        ets:lookup_element(?CHAN_TOKEN_TAB, ChannelId, #token_idx.id)
+    catch
+        error:badarg ->
+            []
+    end.
 
 index_rec(#token{id = Id, channel_id = Chan}) ->
     #token_idx{channel_id = Chan, id = Id}.
