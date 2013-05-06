@@ -33,7 +33,9 @@
          ,new_unique_token_id/0
         ]).
 
--export([store/1]).
+-export([store/1
+         ,create_ets_table/0
+        ]).
 
 -include("logplex.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
@@ -53,6 +55,8 @@ id(#token{id=Id}) -> Id.
 channel_id(#token{channel_id=ChannelId}) -> ChannelId.
 name(#token{name=Name}) -> Name.
 
+create_ets_table() ->
+    ets:new(tokens, [named_table, public, set, {keypos, 2}]).
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_unique_token_id(),
