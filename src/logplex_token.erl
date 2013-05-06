@@ -24,6 +24,7 @@
 
 -export([lookup/1
          ,lookup_by_channel/1
+         ,lookup_ids_by_channel/1
         ]).
 
 -export([id/1
@@ -31,6 +32,7 @@
          ,name/1
          ,cache/1
          ,delete/1
+         ,delete_by_channel/1
          ,new/3
          ,new/2
          ,new_unique_token_id/0
@@ -118,13 +120,11 @@ new_unique_token_id(Retries) when is_integer(Retries),
 new_token_id() ->
     iolist_to_binary(["t.", uuid:to_iolist(uuid:v4())]).
 
-lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
-    Ids = [ Id
-            || #token_idx{id = Id} <- ets:lookup(?CHAN_TOKEN_TAB, ChannelId)],
+lookup_by_channel(ChannelId) ->
     lists:flatmap(fun (Id) ->
                           ets:lookup(?TOKEN_TAB, Id)
                   end,
-                  Ids).
+                  lookup_ids_by_channel(ChannelId)).
 
 store(#token{id=Token,
              channel_id=ChannelId,
@@ -138,6 +138,15 @@ cache(Token = #token{}) ->
 delete(Token = #token{id = Id}) ->
     ets:delete(?TOKEN_TAB, Id),
     ets:delete_object(?CHAN_TOKEN_TAB, index_rec(Token)).
+
+delete_by_channel(ChannelId) when is_integer(ChannelId) ->
+    [ ets:delete(?TOKEN_TAB, Id)
+      || #token_idx{id = Id} <- lookup_ids_by_channel(ChannelId) ],
+    ets:delete(?CHAN_TOKEN_TAB, ChannelId).
+
+lookup_ids_by_channel(ChannelId) when is_integer(ChannelId) ->
+    [ Id
+      || #token_idx{id = Id} <- ets:lookup(?CHAN_TOKEN_TAB, ChannelId) ].
 
 index_rec(#token{id = Id, channel_id = Chan}) ->
     #token_idx{channel_id = Chan, id = Id}.
