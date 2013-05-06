@@ -41,6 +41,7 @@
          ,lookup_token/1
          ,poll_token/1
          ,store_token/3
+         ,create_ets_table/0
         ]).
 
 -export([new/5
@@ -101,6 +102,9 @@ start(#drain{type=Type, id=Id,
 
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
+
+create_ets_table() ->
+    ets:new(drains, [named_table, public, set, {keypos, 2}]).
 
 start(Type, DrainId, Args) ->
     start_mod(mod(Type), DrainId, Args).
