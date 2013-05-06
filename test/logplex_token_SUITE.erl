@@ -16,7 +16,7 @@
 %% a single atom.
 
 all() ->
-    [lookup_by_channel].
+    [by_channel].
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%% Setup/Teardown %%%
@@ -32,7 +32,7 @@ end_per_suite(Config) ->
     Config.
 
 %% Runs before the test case. Runs in the same process.
-init_per_testcase(lookup_by_channel, Config) ->
+init_per_testcase(by_channel, Config) ->
     logplex_db:start_link(),
     [{chan, 1} | Config];
 init_per_testcase(_CaseName, Config) ->
@@ -46,7 +46,7 @@ end_per_testcase(_CaseName, Config) ->
 %%% TESTS %%%
 %%%%%%%%%%%%%
 
-lookup_by_channel(Config) ->
+by_channel(Config) ->
     Chan = ?config(chan, Config),
     Tokens = [ logplex_token:new(Chan, list_to_binary(Name))
                || Name <- ["heroku", "app", "postgres", "bob"]],
@@ -54,4 +54,6 @@ lookup_by_channel(Config) ->
     [ logplex_token:cache(Token)
       || Token <- Tokens ],
     true = lists:sort(Tokens) =:=
-        lists:sort(logplex_token:lookup_by_channel(Chan)).
+        lists:sort(logplex_token:lookup_by_channel(Chan)),
+    logplex_token:delete_by_channel(Chan),
+    [] = logplex_token:lookup_by_channel(Chan).
