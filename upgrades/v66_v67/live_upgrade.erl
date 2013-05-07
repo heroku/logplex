@@ -23,6 +23,7 @@ UpgradeNode = fun () ->
   [Nsync] = [ Pid
               || {nsync, Pid, _, _} <- supervisor:which_children(logplex_sup)],
   sys:suspend(Nsync),
+  l(logplex_token),
   Fill = fun (_F, '$end_of_table') -> ok;
              (F, {TokenInfo, Cont}) ->
                  ets:insert(channel_tokens,
@@ -35,7 +36,6 @@ UpgradeNode = fun () ->
        ets:select(tokens,
                   [{{token,'$1','$2','_'},[],[{{'$2','$1'}}]}],
                   100)),
-  l(logplex_token),
   l(nsync_callback),
   l(logplex_channel),
   sys:resume(Nsync),
