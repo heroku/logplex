@@ -126,7 +126,8 @@ handlers() ->
         Tokens =
             case proplists:get_value(<<"tokens">>, Params) of
                 List when length(List) > 0 ->
-                    [{TokenName, logplex_token:create(ChannelId, TokenName)} || TokenName <- List];
+                    [{TokenName, logplex_token:create(ChannelId, TokenName)}
+                     || TokenName <- List];
                 _ ->
                     []
             end,
