@@ -157,15 +157,25 @@ create_channel(ChannelId, Dict) ->
     end.
 
 create_token(Id, Dict) ->
-    case dict_find(<<"ch">>, Dict) of
-        undefined ->
+    case find_token(Id, Dict) of
+        {error, missing_channel} ->
             ?ERR("~p ~p ~p ~p",
                  [create_token, missing_ch, Id, dict:to_list(Dict)]);
+        {ok, Token} ->
+            logplex_token:cache(Token),
+            Token
+    end.
+
+find_token(Id, Dict) ->
+    case dict_find(<<"ch">>, Dict) of
+        undefined ->
+            {error, missing_channel};
         Val1 ->
             Ch = convert_to_integer(Val1),
             Name = dict_find(<<"name">>, Dict),
             Token = logplex_token:new(Id, Ch, Name),
-            logplex_token:cache(Token),
+            {ok, Token}
+    end.
             Token
     end.
 
