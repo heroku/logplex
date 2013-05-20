@@ -31,6 +31,7 @@
          ,channel_id/1
          ,name/1
          ,cache/1
+         ,load/1
          ,delete/1
          ,delete_by_id/1
          ,delete_by_channel/1
@@ -133,9 +134,14 @@ store(#token{id=Token,
              name=Name}) ->
     redis_helper:create_token(ChannelId, Token, Name).
 
+%% Load token into ETS and index it.
 cache(Token = #token{}) ->
-    ets:insert(?TOKEN_TAB, Token),
+    load(Token),
     ets:insert(?CHAN_TOKEN_TAB, index_rec(Token)).
+
+%% Load token into ETS only - used by nsync callback for faster boot time.
+load(Token = #token{}) ->
+    ets:insert(?TOKEN_TAB, Token).
 
 delete(Token = #token{id = Id}) ->
     ets:delete(?TOKEN_TAB, Id),
