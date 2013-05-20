@@ -45,6 +45,8 @@
          ,create/2
          ,destroy/1
          ,create_ets_table/0
+         ,reindex_tokens/1
+         ,reindex_tokens/0
         ]).
 
 -include("logplex.hrl").
@@ -174,3 +176,24 @@ lookup_ids_by_channel(ChannelId) when is_integer(ChannelId) ->
 
 index_rec(#token{id = Id, channel_id = Chan}) ->
     #token_idx{channel_id = Chan, id = Id}.
+
+sel_pat() ->
+    ets:fun2ms(fun (#token{channel_id = C, id = I}) -> {C, I} end).
+
+reindex_tokens() ->
+    Step = logplex_app:config(ets_token_reindex_step_size),
+    reindex_tokens(Step).
+
+reindex_tokens(Step) ->
+    ets:delete_all_objects(?CHAN_TOKEN_TAB),
+    reindex_tokens_itr(ets:select(?TOKEN_TAB,
+                                  sel_pat(),
+                                  Step)).
+
+reindex_tokens_itr('$end_of_table') ->
+    ok;
+reindex_tokens_itr({Recs, Cont}) ->
+    ets:insert(?CHAN_TOKEN_TAB,
+               [#token_idx{channel_id = Chan, id = Id}
+                || {Chan, Id} <- Recs]),
+    reindex_tokens_itr(Cont).
