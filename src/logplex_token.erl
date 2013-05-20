@@ -57,8 +57,8 @@
 -type name() :: binary().
 -type token() :: #token{}.
 
--record(token_idx, {channel_id :: logplex_channel:id(),
-                    id :: id()}).
+-record(token_idx, {key :: {logplex_channel:id(),
+                            id() | '$1'} }).
 
 -export_type([id/0
               ,name/0
@@ -84,8 +84,8 @@ create_ets_table() ->
     ets:new(?TOKEN_TAB, [named_table, public, set, {keypos, #token.id},
                          {read_concurrency, true},
                          {write_concurrency, true}]),
-    ets:new(?CHAN_TOKEN_TAB, [named_table, public, bag,
-                              {keypos, #token_idx.channel_id},
+    ets:new(?CHAN_TOKEN_TAB, [named_table, public, ordered_set,
+                              {keypos, #token_idx.key},
                               {read_concurrency, true},
                               {write_concurrency, true}]).
 
@@ -152,7 +152,7 @@ load(Token = #token{}) ->
 
 delete(Token = #token{id = Id}) ->
     ets:delete(?TOKEN_TAB, Id),
-    ets:delete_object(?CHAN_TOKEN_TAB, index_rec(Token)).
+    ets:delete(?CHAN_TOKEN_TAB, index_rec(Token)).
 
 delete_by_id(Id) ->
     case lookup(Id) of
@@ -163,23 +163,30 @@ delete_by_id(Id) ->
     end.
 
 delete_by_channel(ChannelId) when is_integer(ChannelId) ->
+    Ids = lookup_ids_by_channel(ChannelId),
     [ ets:delete(?TOKEN_TAB, Id)
-      || #token_idx{id = Id} <- lookup_ids_by_channel(ChannelId) ],
-    ets:delete(?CHAN_TOKEN_TAB, ChannelId).
+      || Id <- Ids ],
+    [ ets:delete(?CHAN_TOKEN_TAB, index_key(ChannelId, Id))
+      || Id <- Ids ],
+    ok.
 
 lookup_ids_by_channel(ChannelId) when is_integer(ChannelId) ->
-    try
-        ets:lookup_element(?CHAN_TOKEN_TAB, ChannelId, #token_idx.id)
-    catch
-        error:badarg ->
-            []
-    end.
+    ets:select(?CHAN_TOKEN_TAB,
+               [{#token_idx{key = {ChannelId, '$1'}},[],['$1']}]).
 
 index_rec(#token{id = Id, channel_id = Chan}) ->
-    #token_idx{channel_id = Chan, id = Id}.
+    index_rec(Chan, Id).
+
+index_rec(Chan, Id) ->
+    #token_idx{key = index_key(Chan, Id) }.
+
+index_key(Chan, Id) ->
+    {Chan, Id}.
 
 sel_pat() ->
-    ets:fun2ms(fun (#token{channel_id = C, id = I}) -> {C, I} end).
+    ets:fun2ms(fun (#token{channel_id = C, id = I}) ->
+                       {C, I}
+               end).
 
 reindex_tokens() ->
     Step = logplex_app:config(ets_token_reindex_step_size),
@@ -195,7 +202,7 @@ reindex_tokens_itr('$end_of_table') ->
     ok;
 reindex_tokens_itr({Recs, Cont}) ->
     ets:insert(?CHAN_TOKEN_TAB,
-               [#token_idx{channel_id = Chan, id = Id}
+               [index_rec(Chan, Id)
                 || {Chan, Id} <- Recs]),
     reindex_tokens_itr(ets:select(Cont)).
 
