@@ -39,6 +39,8 @@
          ,a_start/2
         ]).
 
+-export([elb_healthcheck/0]).
+
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
 
@@ -268,3 +270,11 @@ start_ok(App, Type, {error, {not_started, Dep}}) ->
     a_start(App, Type);
 start_ok(App, _Type, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
+
+elb_healthcheck() ->
+    case config(nsync_loaded, false) of
+        false ->
+            unhealthy;
+        true ->
+            healthy
+    end.
