@@ -15,6 +15,7 @@
                   ,redis
                   ,cowboy
                  ]},
+  {included_applications, [heroku_crashdumps]},
   {mod, {logplex_app, []}},
   {env,
    [
