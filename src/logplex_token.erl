@@ -197,7 +197,7 @@ reindex_tokens_itr({Recs, Cont}) ->
     ets:insert(?CHAN_TOKEN_TAB,
                [#token_idx{channel_id = Chan, id = Id}
                 || {Chan, Id} <- Recs]),
-    reindex_tokens_itr(Cont).
+    reindex_tokens_itr(ets:select(Cont)).
 
 num_records() ->
     ets:info(?TOKEN_TAB, size).
