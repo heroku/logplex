@@ -78,9 +78,13 @@ channel_id(#token{channel_id=ChannelId}) -> ChannelId.
 name(#token{name=Name}) -> Name.
 
 create_ets_table() ->
-    ets:new(?TOKEN_TAB, [named_table, public, set, {keypos, #token.id}]),
+    ets:new(?TOKEN_TAB, [named_table, public, set, {keypos, #token.id},
+                         {read_concurrency, true},
+                         {write_concurrency, true}]),
     ets:new(?CHAN_TOKEN_TAB, [named_table, public, bag,
-                              {keypos, #token_idx.channel_id}]).
+                              {keypos, #token_idx.channel_id},
+                              {read_concurrency, true},
+                              {write_concurrency, true}]).
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_unique_token_id(),
