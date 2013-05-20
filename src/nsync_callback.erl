@@ -51,9 +51,10 @@ handle({load, _Key, _Val}) ->
 handle({load, eof}) ->
     ?INFO("at=nsync_load_complete", []),
     {Time, Result} = timer:tc(fun logplex_token:reindex_tokens/0),
-    Tokens = logplex_token:num_records(),
-    ?INFO("at=tokens_reindexed time=~pus records=~p result=~p",
-          [Time, Tokens, Result]),
+    Tokens = logplex_token:num_records(tokens),
+    Idxs = logplex_token:num_records(token_idxs),
+    ?INFO("at=tokens_reindexed time=~pus records=~p idxrecords=~p result=~p",
+          [Time, Tokens, Idxs, Result]),
     error_logger:info_msg("NSYNC sync complete"),
     application:set_env(logplex, nsync_loaded, true),
     ok;

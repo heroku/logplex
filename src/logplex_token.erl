@@ -47,7 +47,7 @@
          ,create_ets_table/0
          ,reindex_tokens/1
          ,reindex_tokens/0
-         ,num_records/0
+         ,num_records/1
         ]).
 
 -include("logplex.hrl").
@@ -206,5 +206,7 @@ reindex_tokens_itr({Recs, Cont}) ->
                 || {Chan, Id} <- Recs]),
     reindex_tokens_itr(ets:select(Cont)).
 
-num_records() ->
-    ets:info(?TOKEN_TAB, size).
+num_records(tokens) ->
+    ets:info(?TOKEN_TAB, size);
+num_records(token_idxs) ->
+    ets:info(?CHAN_TOKEN_TAB, size).
