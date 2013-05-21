@@ -157,11 +157,8 @@ delete_by_id(Id) ->
     end.
 
 delete_by_channel(ChannelId) when is_integer(ChannelId) ->
-    Ids = lookup_ids_by_channel(ChannelId),
-    [ ets:delete(?TOKEN_TAB, Id)
-      || Id <- Ids ],
-    [ ets:delete(?CHAN_TOKEN_TAB, index_key(ChannelId, Id))
-      || Id <- Ids ],
+    [ delete(Token)
+      || Token <- lookup_by_channel(ChannelId)],
     ok.
 
 lookup_by_channel(ChannelId) ->
