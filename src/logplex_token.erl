@@ -130,12 +130,6 @@ new_unique_token_id(Retries) when is_integer(Retries),
 new_token_id() ->
     iolist_to_binary(["t.", uuid:to_iolist(uuid:v4())]).
 
-lookup_by_channel(ChannelId) ->
-    lists:flatmap(fun (Id) ->
-                          ets:lookup(?TOKEN_TAB, Id)
-                  end,
-                  lookup_ids_by_channel(ChannelId)).
-
 store(#token{id=Token,
              channel_id=ChannelId,
              name=Name}) ->
@@ -169,6 +163,12 @@ delete_by_channel(ChannelId) when is_integer(ChannelId) ->
     [ ets:delete(?CHAN_TOKEN_TAB, index_key(ChannelId, Id))
       || Id <- Ids ],
     ok.
+
+lookup_by_channel(ChannelId) ->
+    lists:flatmap(fun (Id) ->
+                          ets:lookup(?TOKEN_TAB, Id)
+                  end,
+                  lookup_ids_by_channel(ChannelId)).
 
 lookup_ids_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select(?CHAN_TOKEN_TAB,
