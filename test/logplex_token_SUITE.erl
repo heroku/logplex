@@ -16,7 +16,7 @@
 %% a single atom.
 
 all() ->
-    [by_channel].
+    [by_channel, by_id].
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%% Setup/Teardown %%%
@@ -32,6 +32,9 @@ end_per_suite(Config) ->
     Config.
 
 %% Runs before the test case. Runs in the same process.
+init_per_testcase(by_id, Config) ->
+    logplex_db:start_link(),
+    Config;
 init_per_testcase(by_channel, Config) ->
     logplex_db:start_link(),
     [{chan, 1} | Config];
@@ -57,3 +60,20 @@ by_channel(Config) ->
         lists:sort(logplex_token:lookup_by_channel(Chan)),
     logplex_token:delete_by_channel(Chan),
     [] = logplex_token:lookup_by_channel(Chan).
+
+by_id(_Config) ->
+    Chan = 2,
+    Id = <<"t.1">>,
+    BobT = logplex_token:new(Id, Chan, <<"bob">>),
+    undefined = logplex_token:lookup(Id),
+    logplex_token:load(BobT),
+    BobT = logplex_token:lookup(Id),
+    [] = logplex_token:lookup_by_channel(Chan),
+    logplex_token:cache(BobT),
+    [BobT] = logplex_token:lookup_by_channel(Chan),
+    [Id] = logplex_token:lookup_ids_by_channel(Chan),
+    logplex_token:delete_by_id(Id),
+    [] = logplex_token:lookup_by_channel(Chan),
+    [] = logplex_token:lookup_ids_by_channel(Chan),
+    undefined = logplex_token:lookup(Id),
+    ok.
