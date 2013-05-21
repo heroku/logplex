@@ -150,9 +150,9 @@ cache(Token = #token{}) ->
 load(Token = #token{}) ->
     ets:insert(?TOKEN_TAB, Token).
 
-delete(Token = #token{id = Id, channel_id = ChannelId}) ->
+delete(#token{id = Id, channel_id = ChannelId}) ->
     ets:delete(?TOKEN_TAB, Id),
-    ets:delete(?CHAN_TOKEN_TAB, index_key(ChannelId, Token)).
+    ets:delete(?CHAN_TOKEN_TAB, index_key(ChannelId, Id)).
 
 delete_by_id(Id) ->
     case lookup(Id) of
