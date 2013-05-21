@@ -133,6 +133,10 @@ handle({cmd, "publish", _Args}) ->
     %% <<"geoff.herokudev.com:stats">>,JSONBinary
     ok;
 
+handle({cmd, "ping", _Args}) ->
+    %% XXX - ignore ping commands
+    ok;
+
 handle({cmd, Cmd, Args}) ->
     ?INFO("at=unknown_command cmd=~p args=~1000p",
           [Cmd, Args]),
