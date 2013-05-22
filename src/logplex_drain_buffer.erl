@@ -41,6 +41,7 @@
          ,start_link/4
          ,set_active/3
          ,notify/1
+         ,resize_msg_buffer/2
         ]).
 
 -export([active/2,
@@ -93,6 +94,10 @@ set_active(Buffer, TargBytes, Fun)
   when is_integer(TargBytes), TargBytes > 0,
        is_function(Fun, 1) ->
     gen_fsm:send_event(Buffer, {set_active, TargBytes, Fun}).
+
+resize_msg_buffer(Buffer, NewSize)
+  when is_integer(NewSize), NewSize > 0 ->
+    gen_fsm:sync_send_all_state_event(Buffer, {resize_msg_buffer, NewSize}).
 
 %% ------------------------------------------------------------------
 %% Hand crafted API for humans.
@@ -173,6 +178,9 @@ handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
 
 %% @private
+handle_sync_event({resize_msg_buffer, NewSize}, _From, StateName, State=#state{buf=Buf}) ->
+    NewBuf = logplex_msg_buffer:resize(NewSize, Buf),
+    {reply, ok, StateName, State#state{buf=NewBuf}};
 handle_sync_event(Event, _From, StateName, State) ->
     ?WARN("[state ~p] Unexpected event ~p",
           [StateName, Event]),
