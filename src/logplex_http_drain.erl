@@ -128,10 +128,6 @@ disconnected({logplex_drain_buffer, Buf, new_data},
 disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
              State = #state{buf = Buf}) ->
     try_connect(cancel_reconnect(push_frame(Frame, MsgCount, Lost, State)));
-%% Old request format. This clause should be gone in v63
-disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount}},
-             State = #state{buf = Buf}) ->
-    try_connect(cancel_reconnect(push_frame(Frame, MsgCount, 0, State)));
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=disconnected",
@@ -142,10 +138,6 @@ disconnected(Msg, State) ->
 connected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
           State = #state{buf = Buf}) ->
     ready_to_send(push_frame(Frame, MsgCount, Lost, State));
-%% Old request format. This clause should be gone in v63
-connected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount}},
-          State = #state{buf = Buf}) ->
-    ready_to_send(push_frame(Frame, MsgCount, 0, State));
 connected({logplex_drain_buffer, Buf, new_data},
           State = #state{buf = Buf}) ->
     ready_to_send(State);
