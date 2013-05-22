@@ -263,7 +263,7 @@ handle_info(shutdown, StateName, State = #state{sock = Sock})
     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
           "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, shutdown, Sock, duration(State)])),
-    {stop, shutdown, State#state{sock = undefined}};
+    {stop, {shutdown,call}, State#state{sock = undefined}};
 handle_info(shutdown, _StateName, State) ->
     {stop, {shutdown,call}, State};
 handle_info(Info, StateName, State) ->
