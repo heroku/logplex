@@ -69,7 +69,10 @@ end_per_testcase(_, Config) ->
         {'DOWN', _, _, Drain, {shutdown,call}} -> ok;
         {'DOWN', _, _, Drain, Other} -> ct:pal("DRAIN DIED OF REASON: ~p",[Other])
     after 2000 ->
-        error({not_dead, sys:get_status(Drain)})
+        case Drain of
+            undefined -> ok;
+            _ -> error({not_dead, sys:get_status(Drain)})
+        end
     end,
     stop_server(Config).
 
