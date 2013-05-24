@@ -1,11 +1,25 @@
-%%%-------------------------------------------------------------------
-%% @copyright Geoff Cant
-%% @author Geoff Cant <nem@erlang.geek.nz>
-%% @version {@vsn}, {@date} {@time}
-%% @doc Syslog/tcp drain
-%% @end
-%%%-------------------------------------------------------------------
-
+%% Copyright (c) 2013 Heroku <mononcqc@ferd.ca>
+%%
+%% Permission is hereby granted, free of charge, to any person
+%% obtaining a copy of this software and associated documentation
+%% files (the "Software"), to deal in the Software without
+%% restriction, including without limitation the rights to use,
+%% copy, modify, merge, publish, distribute, sublicense, and/or sell
+%% copies of the Software, and to permit persons to whom the
+%% Software is furnished to do so, subject to the following
+%% conditions:
+%%
+%% The above copyright notice and this permission notice shall be
+%% included in all copies or substantial portions of the Software.
+%%
+%% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+%% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+%% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+%% NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+%% HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+%% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+%% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+%% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_tcpsyslog_drain).
 -behaviour(gen_fsm).
 -define(SERVER, ?MODULE).
@@ -26,7 +40,7 @@
                 port :: inet:port_number(),
                 sock = undefined :: 'undefined' | inet:socket(),
                 %% Buffer for messages while disconnected
-                buf = logplex_msg_buffer:new() :: logplex_msg_buffer:buf(),
+                buf :: pid(),
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
                 %% TCP failures since last_good_time
@@ -36,10 +50,20 @@
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
                 %% Time of last successful connection
-                connect_time :: 'undefined' | erlang:timestamp()
+                connect_time :: 'undefined' | erlang:timestamp(),
+                %% Buffered items to send
+                out_q = queue:new() :: queue(),
+                drop_info :: {erlang:timestamp(), pos_integer()}
+               }).
+
+-record(frame, {frame :: iolist(),
+                msg_count = 0 :: non_neg_integer(),
+                loss_count = 0 :: non_neg_integer(),
+                tries = 0 :: non_neg_integer()
                }).
 
 -type pstate() :: 'disconnected' | 'ready_to_send' | 'sending'.
+
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -60,11 +84,10 @@
 %% ------------------------------------------------------------------
 
 -export([disconnected/2,
-         ready_to_send/2,
-         sending/2
+         connected/2
          ]).
 
--export([init/1,  handle_event/3, handle_sync_event/4,
+-export([init/1, handle_event/3, handle_sync_event/4,
          handle_info/3, terminate/3, code_change/4]).
 
 %% ------------------------------------------------------------------
@@ -124,14 +147,12 @@ set_target_send_size(Pid, NewSize)
 %% ------------------------------------------------------------------
 
 %% @private
-init([State0 = #state{sock = undefined, host=H, port=P,
-                      drain_id=DrainId, channel_id=ChannelId}])
-  when H =/= undefined, is_integer(P) ->
+init([State0=#state{sock = undefined, host=H, port=P,
+                    drain_id=DrainId}]) when H =/= undefined, is_integer(P) ->
+    process_flag(trap_exit, true),
     try
-        logplex_drain:register(DrainId, ChannelId, tcpsyslog,
-                               {H,P}),
-        DrainSize = logplex_app:config(tcp_drain_buffer_size),
-        State = State0#state{buf = logplex_msg_buffer:new(DrainSize)},
+        logplex_drain:register(DrainId, tcpsyslog, {H,P}),
+        State = start_drain_buffer(State0),
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, disconnected,
@@ -151,65 +172,29 @@ disconnected({timeout, Received, ?RECONNECT_MSG},
           "expected=~p received=~p state=disconnected",
           log_info(State, [Expected, Received])),
     reconnect(State);
-disconnected({post, Msg}, State) ->
-    reconnect(buffer(Msg, State));
+disconnected({logplex_drain_buffer, Buf, new_data}, State=#state{buf=Buf}) ->
+    reconnect(State);
+disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
+             State=#state{buf=Buf}) ->
+    reconnect(push_frame(Frame, MsgCount, Lost, State));
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~1000p state=disconnected",
           log_info(State, [Msg])),
     {next_state, disconnected, State}.
 
-%% @doc We have a socket open and messages to send. Collect up an
-%% appropriate amount and flush them to the socket.
-ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
-              State = #state{sock = Sock})
-  when is_port(Sock) ->
-    %% Stale message.
+connected({logplex_drain_buffer, Buf, new_data}, State = #state{buf=Buf}) ->
     send(State);
-ready_to_send({post, Msg}, State = #state{sock = Sock})
-  when is_port(Sock) ->
-    send(buffer(Msg, State));
-ready_to_send({inet_reply, Sock, ok}, S = #state{sock = Sock})
-  when is_port(Sock) ->
-    %% Stale inet reply
-    send(S);
-ready_to_send(Msg, State = #state{sock = Sock})
+connected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
+               State = #state{buf=Buf}) ->
+    send(push_frame(Frame, MsgCount, Lost, State));
+connected(Msg, State = #state{sock = Sock})
   when is_port(Sock) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=ready_to_send",
           log_info(State, [Msg])),
-    {next_state, ready_to_send, State}.
+    {next_state, connected, State}.
 
-
-%% @doc We sent some data to the socket and are waiting the result of
-%% the send operation.
-sending({timeout, Ref, ?SEND_TIMEOUT_MSG},
-        S = #state{send_tref=Ref}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s err=send_timeout "
-          "state=sending",
-          log_info(S, [])),
-    reconnect(tcp_bad(S#state{send_tref=undefined}));
-sending({post, Msg}, State) ->
-    {next_state, sending, buffer(Msg, State)};
-sending({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
-    send(tcp_good(cancel_send_timeout(S)));
-sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
-    ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
-         "err=gen_tcp data=~p sock=~p duration=~s state=sending",
-          log_info(S, [sending, Reason, Sock, duration(S)])),
-    reconnect(tcp_bad(S));
-sending(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
-          "data=~p state=sending",
-          log_info(State, [Msg])),
-    {next_state, sending, State}.
-
-
-%% @private
-%% state_name(Event, _From, State) ->
-%%     ?WARN("[state ~p] Unexpected event ~p",
-%%           [state_name, Event]),
-%%     {next_state, state_name, State}.
 
 %% @private
 handle_event(_Event, StateName, State) ->
@@ -224,9 +209,8 @@ handle_sync_event({set_target_send_size, Size}, _From, StateName,
 handle_sync_event({resize_msg_buffer, NewSize}, _From, StateName,
                   State = #state{buf = Buf})
   when is_integer(NewSize), NewSize > 0 ->
-    NewBuf = logplex_msg_buffer:resize(NewSize, Buf),
-    {reply, ok, StateName, State#state{buf = NewBuf}};
-
+    logplex_drain_buffer:resize_msg_buffer(Buf, NewSize),
+    {reply, ok, StateName, State};
 handle_sync_event(Event, _From, StateName, State) ->
     ?WARN("[state ~p] Unexpected event ~p",
           [StateName, Event]),
@@ -266,19 +250,42 @@ handle_info(shutdown, StateName, State = #state{sock = Sock})
     {stop, {shutdown,call}, State#state{sock = undefined}};
 handle_info(shutdown, _StateName, State) ->
     {stop, {shutdown,call}, State};
+handle_info({'EXIT', Buf, _Reason}, StateName, State = #state{buf=Buf}) ->
+    {next_state, StateName, start_drain_buffer(State)};
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
 %% @private
-terminate(Reason, StateName, State) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
-          "at=terminate reason=~p",
-          log_info(State, [StateName, Reason])),
-    ok.
+code_change(v67, OldStateName, OldState, _Extra) ->
+    13 = tuple_size(OldState),
+    StateL = tuple_to_list(OldState),
+    State0 = list_to_tuple(StateL ++ [queue:new(),undefined]),
+    %% Prepare to have the new buffer checked
+    process_flag(trap_exit, true),
+    %% Unregister the channel and let the new buffer handle it
+    %% remain registered as a drain
+    Chan = {channel, State0#state.channel_id},
+    logplex_channel:unregister(Chan),
+    %% Convert messages to the new format and send them back
+    State = #state{buf=Pid} = start_drain_buffer(State0#state{buf=undefined}),
+    [logplex_drain_buffer:post(Pid, Msg)
+     || Msg <- logplex_msg_buffer:to_list(State0#state.buf)],
+    %% We'll have lost a few messages to updating -- they're probably in the
+    %% mailbox right now, but oh well.
+    StateName = case OldStateName of
+        disconnected -> disconnected;
+        sending -> connected;
+        ready_to_send -> connected
+    end,
+    {ok, StateName, State};
 
-%% @private
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
+
+
+%% @private
+terminate(_Reason, _StateName, _State) ->
+    ok.
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -337,11 +344,13 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{keepalive, true}
                ,{packet, raw}
                ,{reuseaddr, true}
+               ,{linger, {true,1}}
               ],
     gen_tcp:connect(HostS, Port, Options,
                     timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.
+
 
 -spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private
@@ -428,101 +437,109 @@ duration(#state{connect_time=T0}) ->
     US = timer:now_diff(os:timestamp(), T0),
     io_lib:format("~f", [US / 1000000]).
 
-%% -spec buffer_status(#state{}) -> 'empty' | 'has_messages_to_send'.
-%% %% @private
-%% buffer_status(State = #state{buf = Buf}) ->
-%%     case logplex_msg_buffer:len(Buf) of
-%%         0 -> empty;
-%%         _ -> has_messages_to_send
-%%     end.
+-spec push_frame(iodata(), non_neg_integer(), non_neg_integer(), #state{}) -> #state{}.
+push_frame(Data, MsgCount, Lost, State = #state{out_q=Q}) ->
+    Retries = logplex_app:config(tcp_syslog_retries, 1),
+    Tries = Retries + 1,
+    Frame = #frame{frame=Data,
+                   msg_count=MsgCount,
+                   loss_count=Lost,
+                   tries=Tries},
+    NewQ = queue:in(Frame, Q),
+    State#state{out_q = NewQ}.
 
--spec buffer(any(), #state{}) -> #state{}.
+-spec sent_frame(#frame{}, #state{}) -> #state{}.
+sent_frame(#frame{msg_count=Count, loss_count=Lost}, State=#state{drop_info=Drop}) ->
+    logplex_realtime:incr(drain_delivered, Count),
+    msg_stat(drain_delivered, Count, State),
+    case {Lost, Drop} of
+        {0, undefined} ->
+            State;
+        {_, undefined} ->
+            logplex_realtime:incr(drain_dropped, Lost),
+            msg_stat(drain_dropped, Lost, State),
+            State;
+        {_, {_,Dropped}} ->
+            logplex_realtime:incr(drain_dropped, Lost+Dropped),
+            msg_stat(drain_dropped, Lost+Dropped, State),
+            State#state{drop_info=undefined}
+    end.
+
+retry_frame(Frame = #frame{tries = N},
+            State = #state{out_q = Q}) when N > 1 ->
+    NewQ = queue:in_r(Frame#frame{tries = N - 1}, Q),
+    State#state{out_q = NewQ};
+retry_frame(Frame = #frame{tries = N}, State) when N =< 1 ->
+    drop_frame(Frame, State).
+
 %% @private
-buffer(Msg, State = #state{buf = Buf}) ->
-    {Result, NewBuf} = logplex_msg_buffer:push_ext(Msg, Buf),
-    msg_stat(drain_buffered, 1, State),
-    case Result of
-        displace ->
-            msg_stat(drain_dropped, 1, State),
-            %% If socket is online, note drain dropped.
-            case State#state.sock of
-                undefined -> ok;
-                _ -> logplex_realtime:incr(drain_dropped)
-            end;
-        insert -> ok
-    end,
-    State#state{buf=NewBuf}.
+%% @doc Called on frames we've decided to drop. Records count of
+%% messages dropped (not frame count).
+drop_frame(#frame{msg_count=Msgs, loss_count=Lost}, State) ->
+    lost_msgs(Msgs+Lost, State).
+
+lost_msgs(0, State) -> State;
+lost_msgs(Lost, S = #state{drop_info=undefined}) ->
+    S#state{drop_info={os:timestamp(), Lost}};
+lost_msgs(Lost, S = #state{drop_info={TS,Dropped}}) ->
+    S#state{drop_info={TS,Dropped+Lost}}.
+
 
 %% @private
 %% @doc Send buffered messages.
 -spec send(#state{}) -> {next_state, 'sending' | 'ready_to_send', #state{}}.
-send(State = #state{buf = Buf, sock = Sock,
-                    drain_tok = DrainTok}) ->
-    case logplex_msg_buffer:empty(Buf) of
-        empty ->
-            {next_state, ready_to_send, State};
-        not_empty ->
-            PktSize = target_send_size(),
-            {Data, N, NewBuf} =
-                buffer_to_pkts(Buf, PktSize, DrainTok),
-            Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
-            try
-                erlang:port_command(Sock, Data, []),
-                msg_stat(drain_delivered, N, State),
-                logplex_realtime:incr(drain_delivered, N),
-                {next_state, sending,
-                 State#state{buf = NewBuf,
-                             send_tref=Ref}}
-            catch
-                error:badarg ->
-                    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
-                          "err=gen_tcp data=~p sock=~p duration=~s",
-                          log_info(State, [send, closed, Sock,
-                                           duration(State)])),
-                    erlang:cancel_timer(Ref),
-                    %% Re-use old state as we know the messages we
-                    %% just de-buffered are lost to tcp.
-                    reconnect(tcp_bad(State))
-            end
+send(State = #state{buf = Buf, out_q = Q}) ->
+    case queue:out(Q) of
+        {empty,_} ->
+            set_active(Buf, State),
+            {next_state, connected, State};
+        {{value,Frame}, NewQ} ->
+            do_send(Frame, State#state{out_q=NewQ})
     end.
 
--spec cancel_send_timeout(#state{}) -> #state{send_tref :: undefined}.
-cancel_send_timeout(State = #state{send_tref = undefined}) -> State;
-cancel_send_timeout(State = #state{send_tref = Ref})
-  when is_reference(Ref) ->
-    case erlang:cancel_timer(Ref) of
-        false ->
-            %% Flush expired timer message
-            receive
-                {timeout, Ref, ?SEND_TIMEOUT_MSG} -> ok
-            after 0 -> ok
-            end;
-        _Time ->
-            %% Timer didn't fire, so no message to worry about
-            ok
+do_send(Frame = #frame{frame=Data0, tries=Tries, loss_count=Lost},
+        State = #state{sock = Sock, drop_info=Drops, drain_tok=DrainTok})
+        when Tries > 0 ->
+    Data = case {Drops,Lost} of
+        {undefined,0} -> Data0;
+        {undefined,_} ->
+            T0 = os:timestamp(),
+            Msg = frame(logplex_syslog_utils:overflow_msg(Lost,T0), DrainTok),
+            [Msg,Data0];
+        {{T0,Dropped},_} ->
+            Msg = frame(logplex_syslog_utils:overflow_msg(Dropped+Lost,T0), DrainTok),
+            [Msg,Data0]
     end,
-    State#state{send_tref=undefined}.
+    try gen_tcp:send(Sock, Data) of
+        ok ->
+            send(tcp_good(sent_frame(Frame, State)));
+        {error, closed} ->
+            reconnect(tcp_bad(retry_frame(Frame, State)));
+        {error, enotconn} ->
+            reconnect(tcp_bad(retry_frame(Frame, State)));
+        {error, _Reason} -> % may or may no have closed the connection
+            send(retry_frame(Frame, State))
+    catch
+        error:badarg ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+                "err=gen_tcp data=~p sock=~p duration=~s",
+                log_info(State, [send, closed, Sock,
+                         duration(State)])),
+            %% Re-use old state as we know the messages we
+            %% just de-buffered are lost to tcp.
+            reconnect(tcp_bad(retry_frame(Frame, State)))
+    end;
+do_send(Frame = #frame{tries=0, msg_count=C}, State=#state{}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=do_send result=tries_exceeded "
+          "frame_tries=0 dropped_msgs=~p",
+          log_info(State, [C])),
+      send(drop_frame(Frame, State)).
 
-buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
-    logplex_msg_buffer:to_pkts(Buf, BytesRemaining,
-                               pkt_fmt(DrainTok)).
 
-pkt_fmt(DrainTok) ->
-    Frame = fun (Msg) ->
-                    SyslogMsg = logplex_syslog_utils:to_msg(Msg, DrainTok),
-                    logplex_syslog_utils:frame(SyslogMsg)
-            end,
-    fun ({loss_indication, N, When}) ->
-            case logplex_app:config(tcp_syslog_send_loss_msg) of
-                dont_send ->
-                    skip;
-                _ ->
-                    {frame,
-                     Frame(logplex_syslog_utils:overflow_msg(N, When))}
-            end;
-        ({msg, MData}) ->
-            {frame, Frame(MData)}
-    end.
+set_active(Buf, #state{drain_tok=Token}) ->
+    TargBytes = target_send_size(),
+    logplex_drain_buffer:set_active(Buf, TargBytes, drain_buf_framing(Token)),
+    ok.
 
 target_send_size() ->
     case get(target_send_size) of
@@ -533,3 +550,20 @@ target_send_size() ->
             logplex_app:config(tcp_drain_target_bytes,
                                ?TARGET_SEND_SIZE)
     end.
+
+frame(LogTuple, DrainToken) ->
+    logplex_syslog_utils:frame(logplex_syslog_utils:to_msg(LogTuple, DrainToken)).
+
+%% This function is local, so we need to replace it every time we update
+%% this module!
+drain_buf_framing(DrainToken) ->
+    fun({loss_indication, _N, _When}) -> skip;
+       ({msg, MData}) -> {frame, frame(MData, DrainToken)}
+    end.
+
+start_drain_buffer(State=#state{channel_id=ChannelId, buf=undefined}) ->
+    DrainSize = logplex_app:config(tcp_drain_buffer_size),
+    {ok, Buf} = logplex_drain_buffer:start_link(ChannelId, self(),
+                                                notify, DrainSize),
+    State#state{buf = Buf}.
+
