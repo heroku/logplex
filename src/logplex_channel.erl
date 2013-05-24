@@ -24,6 +24,7 @@
 
 -export([whereis/1
          ,register/1
+         ,unregister/1
          ,post_msg/2
         ]).
 
@@ -96,6 +97,11 @@ register({channel, ChannelId} = C)
   when is_integer(ChannelId) ->
     put(logplex_channel_id, ChannelId), %% post mortem debug info
     gproc:add_local_property(C, true).
+
+unregister({channel, ChannelId} = C)
+  when is_integer(ChannelId) ->
+    erase(logplex_channel_id),
+    gproc:unreg({p, l, C}).
 
 whereis({channel, _ChannelId} = Name) ->
     [ Pid || {Pid, true} <- gproc:lookup_local_properties(Name) ].
