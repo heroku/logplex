@@ -25,7 +25,8 @@ UpgradeNode = fun () ->
   %% caught in a kind of race condition between the events.
   io:format(whereis(user), "at=upgrade_suspend cur_vsn=67~n", []),
   [sys:suspend(Pid) || Pid <- Pids],
-  Sorted = lists:reverse(lists:sort([{process_info(Pid,message_queue_len),Pid} || Pid <- Pids])),
+  l(logplex_tcpsyslog_drain),
+  Sorted = [Pid || {_,Pid} <- lists:reverse(lists:sort([{process_info(Pid,message_queue_len),Pid} || Pid <- Pids]))],
   io:format(whereis(user), "at=upgrade_change_code cur_vsn=67~n", []),
   [sys:change_code(Pid, logplex_tcpsyslog_drain, v67, [])
      || Pid <- Sorted],
