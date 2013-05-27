@@ -68,7 +68,7 @@ init_per_testcase(full_stack, Config) ->
     DrainTok = "d.12930-321-312213-12321",
     {ok,URI,_} = ex_uri:decode("syslog://127.0.0.1:"++integer_to_list(?PORT)),
     ok = meck:new(logplex_drain_buffer, [passthrough, no_link]),
-    {ok, Pid} = logplex_tcpsyslog_drain2:start_link(ChannelId, DrainId, DrainTok, URI),
+    {ok, Pid} = logplex_tcpsyslog_drain:start_link(ChannelId, DrainId, DrainTok, URI),
     unlink(Pid),
     [{channel,ChannelId},{listen,Port},{drain,Pid} | Config];
 init_per_testcase(_, Config) ->
@@ -166,7 +166,7 @@ retry(Config) ->
     %% a timer ref with a very long delay so that we don't try to reconnect in
     %% vain and lock the process
     Ref = erlang:start_timer(60000, self(), fake_timer),
-    {ok, _, State0 = #state{buf=Buf},_} = logplex_tcpsyslog_drain2:init([
+    {ok, _, State0 = #state{buf=Buf},_} = logplex_tcpsyslog_drain:init([
         #state{drain_id=DrainId, drain_tok=DrainTok, channel_id=ChannelId,
                host=Host, port=Port, reconnect_tref=Ref}
     ]),
@@ -175,7 +175,7 @@ retry(Config) ->
     Frame1 = [syslog("msg1",DrainTok), syslog("msg2",DrainTok)],
     Lost1 = 1, % we pretend!
     %% this calls send after putting the frame in the out_q
-    {next_state, disconnected, State1} = logplex_tcpsyslog_drain2:connected(
+    {next_state, disconnected, State1} = logplex_tcpsyslog_drain:connected(
         {logplex_drain_buffer, Buf, {frame, Frame1, length(Frame1), Lost1}},
         State0#state{sock=fake_port()}
     ),
@@ -187,7 +187,7 @@ retry(Config) ->
     Frame2 = [syslog("msg3",DrainTok), syslog("msg4",DrainTok)],
     Lost2 = 0,
     %% Drop once more, get a failure that should result in a L10 later on
-    {next_state, disconnected, State2} = logplex_tcpsyslog_drain2:connected(
+    {next_state, disconnected, State2} = logplex_tcpsyslog_drain:connected(
         {logplex_drain_buffer, Buf, {frame, Frame2, length(Frame2), Lost2}},
         State1#state{sock=fake_port(), reconnect_tref=Ref}
     ),
@@ -197,7 +197,7 @@ retry(Config) ->
     %% Fail once for the new one,
     %% We use a 'new_data' message that still goes through send as if
     %% stuff was incoming to prompt actual sending.
-    {next_state, disconnected, State3} = logplex_tcpsyslog_drain2:connected(
+    {next_state, disconnected, State3} = logplex_tcpsyslog_drain:connected(
         {logplex_drain_buffer, Buf, new_data},
         State2#state{sock=fake_port(), reconnect_tref=Ref}
     ),
@@ -210,7 +210,7 @@ retry(Config) ->
         S ! {sock, Sock}
         end),
     {ok,Client} = gen_tcp:connect(Host,Port,tcp_options()),
-    {next_state, connected, State4} = logplex_tcpsyslog_drain2:connected(
+    {next_state, connected, State4} = logplex_tcpsyslog_drain:connected(
         {logplex_drain_buffer, Buf, new_data},
         State3#state{sock=Client}
     ),
