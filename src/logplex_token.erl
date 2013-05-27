@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -31,6 +31,7 @@
          ,channel_id/1
          ,name/1
          ,cache/1
+         ,load/1
          ,delete/1
          ,delete_by_id/1
          ,delete_by_channel/1
@@ -44,6 +45,9 @@
          ,create/2
          ,destroy/1
          ,create_ets_table/0
+         ,reindex_tokens/1
+         ,reindex_tokens/0
+         ,num_records/1
         ]).
 
 -include("logplex.hrl").
@@ -53,8 +57,8 @@
 -type name() :: binary().
 -type token() :: #token{}.
 
--record(token_idx, {channel_id :: logplex_channel:id(),
-                    id :: id()}).
+-record(token_idx, {key :: {logplex_channel:id(),
+                            id() | '$1'} }).
 
 -export_type([id/0
               ,name/0
@@ -77,9 +81,13 @@ channel_id(#token{channel_id=ChannelId}) -> ChannelId.
 name(#token{name=Name}) -> Name.
 
 create_ets_table() ->
-    ets:new(?TOKEN_TAB, [named_table, public, set, {keypos, #token.id}]),
-    ets:new(?CHAN_TOKEN_TAB, [named_table, public, bag,
-                              {keypos, #token_idx.channel_id}]).
+    ets:new(?TOKEN_TAB, [named_table, public, set, {keypos, #token.id},
+                         {read_concurrency, true},
+                         {write_concurrency, true}]),
+    ets:new(?CHAN_TOKEN_TAB, [named_table, public, ordered_set,
+                              {keypos, #token_idx.key},
+                              {read_concurrency, true},
+                              {write_concurrency, true}]).
 
 create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
     TokenId = new_unique_token_id(),
@@ -122,24 +130,23 @@ new_unique_token_id(Retries) when is_integer(Retries),
 new_token_id() ->
     iolist_to_binary(["t.", uuid:to_iolist(uuid:v4())]).
 
-lookup_by_channel(ChannelId) ->
-    lists:flatmap(fun (Id) ->
-                          ets:lookup(?TOKEN_TAB, Id)
-                  end,
-                  lookup_ids_by_channel(ChannelId)).
-
 store(#token{id=Token,
              channel_id=ChannelId,
              name=Name}) ->
     redis_helper:create_token(ChannelId, Token, Name).
 
+%% Load token into ETS and index it.
 cache(Token = #token{}) ->
-    ets:insert(?TOKEN_TAB, Token),
+    load(Token),
     ets:insert(?CHAN_TOKEN_TAB, index_rec(Token)).
 
-delete(Token = #token{id = Id}) ->
+%% Load token into ETS only - used by nsync callback for faster boot time.
+load(Token = #token{}) ->
+    ets:insert(?TOKEN_TAB, Token).
+
+delete(#token{id = Id, channel_id = ChannelId}) ->
     ets:delete(?TOKEN_TAB, Id),
-    ets:delete_object(?CHAN_TOKEN_TAB, index_rec(Token)).
+    ets:delete(?CHAN_TOKEN_TAB, index_key(ChannelId, Id)).
 
 delete_by_id(Id) ->
     case lookup(Id) of
@@ -150,17 +157,53 @@ delete_by_id(Id) ->
     end.
 
 delete_by_channel(ChannelId) when is_integer(ChannelId) ->
-    [ ets:delete(?TOKEN_TAB, Id)
-      || #token_idx{id = Id} <- lookup_ids_by_channel(ChannelId) ],
-    ets:delete(?CHAN_TOKEN_TAB, ChannelId).
+    [ delete(Token)
+      || Token <- lookup_by_channel(ChannelId)],
+    ok.
+
+lookup_by_channel(ChannelId) ->
+    lists:flatmap(fun (Id) ->
+                          ets:lookup(?TOKEN_TAB, Id)
+                  end,
+                  lookup_ids_by_channel(ChannelId)).
 
 lookup_ids_by_channel(ChannelId) when is_integer(ChannelId) ->
-    try
-        ets:lookup_element(?CHAN_TOKEN_TAB, ChannelId, #token_idx.id)
-    catch
-        error:badarg ->
-            []
-    end.
+    ets:select(?CHAN_TOKEN_TAB,
+               [{#token_idx{key = {ChannelId, '$1'}},[],['$1']}]).
 
 index_rec(#token{id = Id, channel_id = Chan}) ->
-    #token_idx{channel_id = Chan, id = Id}.
+    index_rec(Chan, Id).
+
+index_rec(Chan, Id) ->
+    #token_idx{key = index_key(Chan, Id) }.
+
+index_key(Chan, Id) ->
+    {Chan, Id}.
+
+sel_pat() ->
+    ets:fun2ms(fun (#token{channel_id = C, id = I}) ->
+                       {C, I}
+               end).
+
+reindex_tokens() ->
+    Step = logplex_app:config(ets_token_reindex_step_size),
+    reindex_tokens(Step).
+
+reindex_tokens(Step) ->
+    ets:delete_all_objects(?CHAN_TOKEN_TAB),
+    reindex_tokens_itr(ets:select(?TOKEN_TAB,
+                                  sel_pat(),
+                                  Step)).
+
+reindex_tokens_itr('$end_of_table') ->
+    ok;
+reindex_tokens_itr({Recs, Cont}) ->
+    ets:insert(?CHAN_TOKEN_TAB,
+               [index_rec(Chan, Id)
+                || {Chan, Id} <- Recs]),
+    reindex_tokens_itr(ets:select(Cont)).
+
+num_records(tokens) ->
+    ets:info(?TOKEN_TAB, size);
+num_records(token_idxs) ->
+    ets:info(?CHAN_TOKEN_TAB, size).

@@ -35,7 +35,7 @@ handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
 
 handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = parse_id(Rest),
-    create_token(Id, Dict);
+    load_token(Id, Dict);
 
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = drain_id(parse_id(Rest)),
@@ -50,6 +50,11 @@ handle({load, _Key, _Val}) ->
 
 handle({load, eof}) ->
     ?INFO("at=nsync_load_complete", []),
+    {Time, Result} = timer:tc(fun logplex_token:reindex_tokens/0),
+    Tokens = logplex_token:num_records(tokens),
+    Idxs = logplex_token:num_records(token_idxs),
+    ?INFO("at=tokens_reindexed time=~pus records=~p idxrecords=~p result=~p",
+          [Time, Tokens, Idxs, Result]),
     error_logger:info_msg("NSYNC sync complete"),
     application:set_env(logplex, nsync_loaded, true),
     ok;
@@ -128,6 +133,10 @@ handle({cmd, "publish", _Args}) ->
     %% <<"geoff.herokudev.com:stats">>,JSONBinary
     ok;
 
+handle({cmd, "ping", _Args}) ->
+    %% XXX - ignore ping commands
+    ok;
+
 handle({cmd, Cmd, Args}) ->
     ?INFO("at=unknown_command cmd=~p args=~1000p",
           [Cmd, Args]),
@@ -157,15 +166,35 @@ create_channel(ChannelId, Dict) ->
     end.
 
 create_token(Id, Dict) ->
-    case dict_find(<<"ch">>, Dict) of
-        undefined ->
+    case find_token(Id, Dict) of
+        {error, missing_channel} ->
             ?ERR("~p ~p ~p ~p",
                  [create_token, missing_ch, Id, dict:to_list(Dict)]);
+        {ok, Token} ->
+            logplex_token:cache(Token),
+            Token
+    end.
+
+find_token(Id, Dict) ->
+    case dict_find(<<"ch">>, Dict) of
+        undefined ->
+            {error, missing_channel};
         Val1 ->
             Ch = convert_to_integer(Val1),
             Name = dict_find(<<"name">>, Dict),
             Token = logplex_token:new(Id, Ch, Name),
-            logplex_token:cache(Token),
+            {ok, Token}
+    end.
+
+%% Loads tokens without indexing them. Can only be used by rdb-load
+%% routines and must be followed by a logplex_token:reindex_tokens().
+load_token(Id, Dict) ->
+    case find_token(Id, Dict) of
+        {error, missing_channel} ->
+            ?ERR("~p ~p ~p ~p",
+                 [create_token, missing_ch, Id, dict:to_list(Dict)]);
+        {ok, Token} ->
+            logplex_token:load(Token),
             Token
     end.
 

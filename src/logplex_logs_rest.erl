@@ -48,7 +48,13 @@ init(_Transport, _Req, [logs]) ->
 
 %% Healthcheck implementation
 handle(Req, State) ->
-    {ok, Req2} = cowboy_http_req:reply(200, [], <<"OK">>, Req),
+    {ok, Req2} = case logplex_app:elb_healthcheck() of
+                     healthy ->
+                         cowboy_http_req:reply(200, [], <<"OK">>, Req);
+                     unhealthy ->
+                         cowboy_http_req:reply(503, [],
+                                               <<"SYSTEM BOOTING">>, Req)
+                 end,
     {ok, Req2, State}.
 
 terminate(_, _) -> ok.

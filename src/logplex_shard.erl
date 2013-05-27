@@ -367,7 +367,7 @@ new_shard_info({replacements, NewUrls}) ->
 
 
 %% logplex_logs_redis / logplex_shard online replacement guide:
-%% NewShardInfo = prepare_new_urls(...).
+%% NewShardInfo = prepare_new_urls(logplex_shard:redis_sort(string:tokens(NEW_LOGPLEX_SHARD_URLS, ",")).
 %% Cluster = [node() | nodes()],
 %% prepare_url_update(Cluster, NewShardInfo).
 %% Check 'logplex_shard_info:read(new_logplex_read_pool_map).' looks sensible.
