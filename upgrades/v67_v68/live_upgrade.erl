@@ -26,15 +26,10 @@ UpgradeNode = fun () ->
   io:format(whereis(user), "at=upgrade_suspend cur_vsn=67~n", []),
   [sys:suspend(Pid) || Pid <- Pids],
   l(logplex_tcpsyslog_drain),
-  Sorted = [Pid || {_,Pid} <- lists:reverse(lists:sort([{process_info(Pid,message_queue_len),Pid} || Pid <- Pids]))],
   io:format(whereis(user), "at=upgrade_change_code cur_vsn=67~n", []),
-  [sys:change_code(Pid, logplex_tcpsyslog_drain, v67, [])
-     || Pid <- Sorted],
-  %% unfreeze the procs. We'll probably have a lot of garbage report for
-  %% unexpected messages based on the messages received while frozen, but too bad.
-  %% We're still losing fewer than if we restarted.
-  io:format(whereis(user), "at=upgrade_resume cur_vsn=67~n", []),
-  [sys:resume(Pid) || Pid <- Pids],
+  %% Upgrade and unfreeze
+  [spawn(fun() -> sys:change_code(Pid, logplex_tcpsyslog_drain, v67, [], infinity), sys:resume(Pid) end)
+     || Pid <- Pids],
   %% done
   io:format(whereis(user), "at=upgrade_end cur_vsn=68~n", []),
   application:set_env(logplex, git_branch, "v68"),
