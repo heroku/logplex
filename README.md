@@ -8,7 +8,7 @@ Applications sitting on their own node or server need to send their log messages
 
 On the other end of the spectrum, consumers may subscribe to a logplex instance, which will then merge streams of incoming log messages and forward them to the subscriber. Alternatively, the consumer may register a given endpoint (say, a database behind the proper API) and logplex nodes will be able to push messages to that end-point as they come in.
 
-For more details, you can look at  stream management documentationa in `doc/`.
+For more details, you can look at stream management documentation in `doc/`.
 
 # Table of Contents
 
@@ -151,7 +151,7 @@ availability_zone
 
 ### logplex_stats
 
-Owns the `logplex_stats` ETS table.  Prints channel, drain and system stats every 60 seconds.
+Owns the `logplex_stats` ETS table. Prints channel, drain and system stats every 60 seconds.
 
 ### logplex_tail
 
