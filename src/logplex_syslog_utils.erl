@@ -63,7 +63,7 @@ overflow_msg(N, When) ->
 from_msg(Msg) when is_binary(Msg) ->
     %% <40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 t.xxx web.1 - - State changed from created to starting
     %% <PriFac>1 Time Host Token Process - - Msg
-    case re:run(Msg, "^<(\\d+)>1 (\\S+) \\S+ (\\S+) (\\S+) \\S+ \\S+ (.*)",
+    case re:run(Msg, "^<(\\d+)>1 (\\S+) \\S+ (\\S+) (\\S+) \\S+ (?:-|(?:\\[(?:[^\\]]|\\\\])+\\])+) (.*)",
                 [dotall, {capture, all_but_first, binary}]) of
         {match, [PriFac, Time, Source, Ps, Content]} ->
             <<Facility:5, Severity:3>> =
