@@ -45,6 +45,7 @@ UpgradeNode = fun () ->
   l(logplex_drain),
   l(logplex_session),
   l(logplex_utils),
+  l(logplex_syslog_utils),
 
   application:set_env(logplex, git_branch, "v67"),
   ok
