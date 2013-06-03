@@ -3,9 +3,11 @@ UpgradeNode = fun () ->
   case logplex_app:config(git_branch) of
       "v67" ->
           io:format(whereis(user), "at=upgrade_start cur_vsn=67~n", []);
+      "v67.1" ->
+          io:format(whereis(user), "at=upgrade_start cur_vsn=67.1~n", []);
       "v68" ->
           io:format(whereis(user),
-                    "at=upgrade type=retry cur_vsn=67 old_vsn=68~n", []);
+                    "at=upgrade type=retry cur_vsn=67(.1) old_vsn=68~n", []);
       Else ->
           io:format(whereis(user),
                     "at=upgrade_start old_vsn=~p abort=wrong_version", [tl(Else)]),
@@ -28,8 +30,14 @@ UpgradeNode = fun () ->
   l(logplex_tcpsyslog_drain),
   io:format(whereis(user), "at=upgrade_change_code cur_vsn=67~n", []),
   %% Upgrade and unfreeze
-  [spawn(fun() -> sys:change_code(Pid, logplex_tcpsyslog_drain, v67, [], infinity), sys:resume(Pid) end)
-     || Pid <- Pids],
+  S = self(), R=make_ref(),
+  Workers = [spawn(fun() ->
+                  sys:change_code(Pid, logplex_tcpsyslog_drain, v67, [], infinity),
+                  sys:resume(Pid),
+                  S ! {R, ok}
+             end) || Pid <- Pids],
+  io:format(whereis(user), "at=upgrade_change_confirm cur_vsn=v67~n", []),
+  [receive {R, ok} end || _ <- Workers],
   %% done
   io:format(whereis(user), "at=upgrade_end cur_vsn=68~n", []),
   application:set_env(logplex, git_branch, "v68"),
