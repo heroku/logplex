@@ -37,7 +37,7 @@ UpgradeNode = fun () ->
                   S ! {R, ok}
              end) || Pid <- Pids],
   io:format(whereis(user), "at=upgrade_change_confirm cur_vsn=v67~n", []),
-  [receive {R, ok} end || _ <- Workers],
+  [receive {R, ok} -> ok end || _ <- Workers],
   %% done
   io:format(whereis(user), "at=upgrade_end cur_vsn=68~n", []),
   application:set_env(logplex, git_branch, "v68"),
