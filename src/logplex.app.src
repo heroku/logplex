@@ -13,6 +13,7 @@
                   ,ehmon
                   ,ex_uri
                   ,redis
+                  ,ranch
                   ,cowboy
                  ]},
   {included_applications, [heroku_crashdumps]},
