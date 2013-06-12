@@ -69,7 +69,7 @@ cached() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init([]) ->
-    ets:new(?MODULE, [public, named_table, set]),
+    ets:new(?MODULE, [public, named_table, set, {write_concurrency, true}]),
     start_timer(),
     {ok, []}.
 
