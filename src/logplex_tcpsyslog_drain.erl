@@ -256,29 +256,6 @@ handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
 %% @private
-code_change(v67, OldStateName, OldState, _Extra) ->
-    13 = tuple_size(OldState),
-    StateL = tuple_to_list(OldState),
-    State0 = list_to_tuple(StateL ++ [queue:new(),undefined]),
-    %% Prepare to have the new buffer checked
-    process_flag(trap_exit, true),
-    %% Unregister the channel and let the new buffer handle it
-    %% remain registered as a drain
-    Chan = {channel, State0#state.channel_id},
-    logplex_channel:unregister(Chan),
-    %% Convert messages to the new format and send them back
-    State = #state{buf=Pid} = start_drain_buffer(State0#state{buf=undefined}),
-    [logplex_drain_buffer:post(Pid, Msg)
-     || Msg <- logplex_msg_buffer:to_list(State0#state.buf)],
-    %% We'll have lost a few messages to updating -- they're probably in the
-    %% mailbox right now, but oh well.
-    StateName = case OldStateName of
-        disconnected -> disconnected;
-        sending -> connected;
-        ready_to_send -> connected
-    end,
-    {ok, StateName, State};
-
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
