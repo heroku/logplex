@@ -66,7 +66,7 @@ keys() ->
 %% gen_server callbacks
 %%====================================================================
 init([Opts]) ->
-    ets:new(?MODULE, [named_table, set, public]),
+    ets:new(?MODULE, [named_table, set, public, {write_concurrency,true}]),
     ets:insert(?MODULE, [{K, 0} || K <- keys()]),
     timer:send_interval(timer:seconds(1), flush),
     case redo:start_link(undefined, Opts) of
