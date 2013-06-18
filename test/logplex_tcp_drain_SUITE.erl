@@ -182,7 +182,7 @@ wait_until(F) ->
 %% receives N line-delimited messages from Sock.
 %% We can do it with line mode because tcpsyslog
 %% automatically adds a newline
-receive_logs(N, Sock) ->
+receive_logs(Sock, N) ->
     inet:setopts(Sock, [{packet, line},{active,false}]),
     [begin
         {ok,Res} = gen_tcp:recv(Sock,0,2000),
