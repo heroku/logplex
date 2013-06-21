@@ -33,7 +33,7 @@
          ,redis_sort/1]).
 
 %% Redis Migration API
--export([prepare_new_urls/1,
+-export([prepare_shard_urls/1,
          prepare_url_update/2,
          prepare_url_update/3,
          attempt_to_commit_url_update/1,
@@ -340,7 +340,7 @@ make_new_shard_info_permanent() ->
     logplex_shard_info:copy(?NEW_READ_MAP, ?CURRENT_READ_MAP),
     ok.
 
-new_shard_info({replacements, NewUrls}) ->
+new_shard_info(NewUrls) ->
     populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
                         NewUrls),
     ok.
@@ -359,16 +359,16 @@ new_shard_info({replacements, NewUrls}) ->
 %% If anything goes wrong:
 %%   abort_url_update(Cluster).
 
-prepare_new_urls({replacements, NewUrls}) ->
-    {replacements, NewUrls}.
+-spec prepare_shard_urls(string()) -> [string()]|[].
+prepare_shard_urls(ShardUrls) ->
+    Shards = string:tokens(ShardUrls, ","),
+    logplex_shard:redis_sort(Shards).
 
 prepare_url_update(Nodes, NewShardInfo) ->
     prepare_url_update(Nodes, NewShardInfo, timer:seconds(5)).
 
 prepare_url_update(Nodes,
-                   NewShardInfo = {Type, _}, Timeout)
-  when Type =:= one_for_one;
-       Type =:= replacements ->
+                   NewShardInfo, Timeout) ->
     lists:foldl(fun (Node, {good, Acc}) ->
                         try gen_server:call({?MODULE, Node},
                                              {prepare, {new_shard_info, NewShardInfo}},
