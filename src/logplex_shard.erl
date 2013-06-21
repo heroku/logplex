@@ -34,10 +34,13 @@
 
 %% Redis Migration API
 -export([prepare_shard_urls/1,
+         prepare_url_update/1,
          prepare_url_update/2,
          prepare_url_update/3,
          attempt_to_commit_url_update/1,
-         make_update_permanent/1
+         attempt_to_commit_url_update/0,
+         make_update_permanent/1,
+         make_update_permanent/0
         ]).
 
 -include("logplex.hrl").
@@ -363,6 +366,37 @@ new_shard_info(NewUrls) ->
 prepare_shard_urls(ShardUrls) ->
     Shards = string:tokens(ShardUrls, ","),
     logplex_shard:redis_sort(Shards).
+
+-type shards_info() :: [string()].
+-spec prepare_url_update(shards_info()) -> good|{error, any()}.
+prepare_url_update(NewShardInfo) ->
+    Node = node(),
+    case prepare_url_update([Node], NewShardInfo) of
+        {good, [Node]} ->
+            good;
+        {failed, {Node, Error}, _} ->
+            {failed, Error}
+    end.
+
+-spec attempt_to_commit_url_update() -> good|{failed, term()}.
+attempt_to_commit_url_update() ->
+    Node = node(),
+    case attempt_to_commit_url_update([Node]) of
+        {good, [Node]} ->
+            good;
+        {failed, {Node, Err}, _} ->
+            {failed, Err}
+    end.
+
+-spec make_update_permanent() -> shard_info_updated|{failed, term()}.
+make_update_permanent() ->
+    Node = node(),
+    case make_update_permanent([Node]) of
+        [{Node, ok}] ->
+            shard_info_updated;
+        {Node, {error, Err}} ->
+            {failed, Err}
+    end.
 
 prepare_url_update(Nodes, NewShardInfo) ->
     prepare_url_update(Nodes, NewShardInfo, timer:seconds(5)).
