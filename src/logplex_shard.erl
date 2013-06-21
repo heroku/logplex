@@ -340,26 +340,6 @@ make_new_shard_info_permanent() ->
     logplex_shard_info:copy(?NEW_READ_MAP, ?CURRENT_READ_MAP),
     ok.
 
-new_shard_info({one_for_one, OldNewMap}) ->
-    {RM, RI, _} = logplex_shard_info:read(?CURRENT_READ_MAP),
-    NewReadMap = dict:map(fun (_Slice, {OldUrl, _OldPid}) ->
-                                  NewUrl = proplists:get_value(OldUrl, OldNewMap),
-                                  NewPid = add_pool(NewUrl),
-                                  {NewUrl, NewPid}
-                          end,
-                          RM),
-    {WM, WI, _} = logplex_shard_info:read(?CURRENT_WRITE_MAP),
-    NewWriteMap = dict:map(fun (_Slice, {OldUrl, _OldPid}) ->
-                                   NewUrl = proplists:get_value(OldUrl, OldNewMap),
-                                   NewPid = add_buffer(NewUrl),
-                                   {NewUrl, NewPid}
-                           end,
-                           WM),
-    logplex_shard_info:save(?NEW_READ_MAP,
-                            NewReadMap, RI),
-    logplex_shard_info:save(?NEW_WRITE_MAP,
-                            NewWriteMap, WI),
-    ok;
 new_shard_info({replacements, NewUrls}) ->
     populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
                         NewUrls),
@@ -379,15 +359,6 @@ new_shard_info({replacements, NewUrls}) ->
 %% If anything goes wrong:
 %%   abort_url_update(Cluster).
 
-prepare_new_urls({one_for_one, NewIps}) ->
-    NewIpsSorted = lists:sort(NewIps),
-    OldUrls = lists:sort([binary_to_list(Url)
-                          || Url <- urls()]),
-    length(OldUrls) =:= length(NewIpsSorted)
-        orelse erlang:error({invalid_ip_list, different_length_to_existing}),
-    NewUrls = [ update_redis_host(OldUrl, NewIp)
-                || {OldUrl, NewIp} <- lists:zip(OldUrls, NewIpsSorted)],
-    {one_for_one, lists:zip(OldUrls, NewUrls)};
 prepare_new_urls({replacements, NewUrls}) ->
     {replacements, NewUrls}.
 
@@ -488,13 +459,6 @@ parse_redis_uri_db(#ex_uri{path=Path}) when Path =/= undefined ->
             []
     end;
 parse_redis_uri_db(_) -> [].
-
-update_redis_host(OldUrl, NewHost) ->
-    {ok, OldUri = #ex_uri{authority = #ex_uri_authority{} = Authority}, _}
-        = ex_uri:decode(OldUrl),
-    New = OldUri#ex_uri{authority =
-                            Authority#ex_uri_authority{host=NewHost}},
-    ex_uri:encode(New).
 
 redis_sort(Urls) ->
     Parsed = lists:map(fun parse_redis_uri/1, Urls),
