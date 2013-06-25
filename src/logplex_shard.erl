@@ -35,11 +35,7 @@
 %% Redis Migration API
 -export([prepare_shard_urls/1,
          prepare_url_update/1,
-         prepare_url_update/2,
-         prepare_url_update/3,
-         attempt_to_commit_url_update/1,
          attempt_to_commit_url_update/0,
-         make_update_permanent/1,
          make_update_permanent/0
         ]).
 
@@ -370,83 +366,34 @@ prepare_shard_urls(ShardUrls) ->
 -type shards_info() :: [string()].
 -spec prepare_url_update(shards_info()) -> good|{error, any()}.
 prepare_url_update(NewShardInfo) ->
-    Node = node(),
-    case prepare_url_update([Node], NewShardInfo) of
-        {good, [Node]} ->
+    case gen_server:call(?MODULE, {prepare, {new_shard_info, NewShardInfo}}) of
+        ok ->
             good;
-        {failed, {Node, Error}, _} ->
-            {failed, Error}
+        Err ->
+            {failed, Err}
     end.
 
 -spec attempt_to_commit_url_update() -> good|{failed, term()}.
 attempt_to_commit_url_update() ->
-    Node = node(),
-    case attempt_to_commit_url_update([Node]) of
-        {good, [Node]} ->
+    case gen_server:call(?MODULE, {commit, new_shard_info}) of
+        ok ->
             good;
-        {failed, {Node, Err}, _} ->
+        Err ->
+            abort_url_update(),
             {failed, Err}
     end.
 
 -spec make_update_permanent() -> shard_info_updated|{failed, term()}.
 make_update_permanent() ->
-    Node = node(),
-    case make_update_permanent([Node]) of
-        [{Node, ok}] ->
+    case gen_server:call(?MODULE, {make_permanent, new_shard_info}) of
+        ok ->
             shard_info_updated;
-        {Node, {error, Err}} ->
+        {error, Err} ->
             {failed, Err}
     end.
 
-prepare_url_update(Nodes, NewShardInfo) ->
-    prepare_url_update(Nodes, NewShardInfo, timer:seconds(5)).
-
-prepare_url_update(Nodes,
-                   NewShardInfo, Timeout) ->
-    lists:foldl(fun (Node, {good, Acc}) ->
-                        try gen_server:call({?MODULE, Node},
-                                             {prepare, {new_shard_info, NewShardInfo}},
-                                            Timeout) of
-                            ok ->
-                                {good, [Node | Acc]};
-                            Err ->
-                                {failed, {Node, Err}, Acc}
-                        catch
-                            C:E ->
-                                {failed, {Node, {C,E}}, Acc}
-                        end;
-                    (_Node, Acc) -> Acc
-                end,
-                {good,[]},
-                Nodes).
-
-attempt_to_commit_url_update(Nodes) ->
-    lists:foldl(fun (Node, {good, Acc}) ->
-                        try gen_server:call({?MODULE, Node},
-                                             {commit, new_shard_info}) of
-                            ok ->
-                                {good, [Node | Acc]};
-                            Err ->
-                                abort_url_update(Acc),
-                                {failed, {Node, Err}, Acc}
-                        catch
-                            C:E ->
-                                abort_url_update(Acc),
-                                {failed, {Node, {C,E}}, Acc}
-                        end;
-                    (_Node, Acc) -> Acc
-                end,
-                {good,[]},
-                Nodes).
-
-abort_url_update(Nodes) ->
-    [ {N, catch gen_server:call({?MODULE, N}, {abort, new_shard_info})}
-      || N <- Nodes].
-
-make_update_permanent(Nodes) ->
-    [ {N, catch gen_server:call({?MODULE, N},
-                                {make_permanent, new_shard_info})}
-      || N <- Nodes].
+abort_url_update() ->
+    gen_server:call(?MODULE, {abort, new_shard_info}).
 
 stop_pool(Pid) ->
     redo:shutdown(Pid).
