@@ -70,7 +70,14 @@ cookie(CookieString) ->
     list_to_atom(CookieString).
 
 logplex_node() ->
-    list_to_atom("logplex@" ++ net_adm:localhost()).
+    NodeName = 
+        case os:getenv("LOGPLEX_NODE_NAME") of
+            false ->
+                string:join(["logplex", net_adm:localhost()], "@");
+            NodeName1 ->
+                NodeNmae1
+        end,
+    list_to_atom(NodeName).
 
 caller_name() ->
     Me = filename:basename(escript:script_name()),
