@@ -3,14 +3,14 @@
 %%!
 
 %%% - Replace the shards used by the [local] logplex
-%%% instace.
+%%%   instace.
 
-main([Shards, LogplexShardUrls]) when Shards =:= "-s";
-                               Shards =:= "--shards" ->
-    from_stdin(LogplexShardUrls);
 main([Env]) when Env =:= "-e";
                  Env =:= "--env" ->
     from_env();
+main([Keys]) when Keys =:= "-k";
+                  Keys =:= "--keys-file" ->
+    from_keys();
 main(_) ->
     usage().
 
@@ -18,25 +18,23 @@ main(_) ->
 usage() ->
     io:format("Usage: bin/replace_shards~n"),
     io:format("  bin/replace_shards -h/--help~n"),
-    io:format("  bin/replace_shards -s/--shards LIST_OF_SHARDS~n"),
-    io:format("  bin/replace_shards -e/--env~n").
-
-from_stdin(LogplexShardUrls) ->
-    update_shards(LogplexShardUrls).
+    io:format("  bin/replace_shards -e/--env~n"),
+    io:format("  bin/replace_shards -k/--keys-file~n").
 
 from_env() ->
-    case os:getenv("LOGPLEX_SHARD_URLS") of
-        false ->
-            io:format("LOGPLEX_SHARD_URLS is not set"),
-            halt(1);
-        LogplexShardUrls ->
-            update_shards(LogplexShardUrls)
-    end.
+    LogplexShardUrls = getenv("LOGPLEX_SHARD_URLS"),
+    Cookie = getenv("LOGPLEX_COOKIE"),
+    update_shards(LogplexShardUrls, Cookie).
 
-update_shards(LogplexShardUrls) ->
-    case connect(logplex_node(), cookie()) of
+from_keys() ->
+    LogplexShardUrls = get_from_keys("LOGPLEX_SHARD_URLS"),
+    Cookie = get_from_keys("LOGPLEX_COOKIE"),
+    update_shards(LogplexShardUrls, Cookie).
+
+update_shards(LogplexShardUrls, Cookie) ->
+    case connect(logplex_node(), cookie(Cookie)) of
         {error, Why} ->
-            io:format("Could not connect to node ~p", [Why]),
+            io:format("Could not connect to node ~p~n", [Why]),
             halt(1);
         {connected, Node} ->
             {OldShards, _, _} = rpc:call(Node, logplex_shard_info, read, [logplex_read_pool_map]),
@@ -46,8 +44,7 @@ update_shards(LogplexShardUrls) ->
             shard_info_updated = rpc:call(Node, logplex_shard, make_update_permanent, []),
             {NewShards, _, _} = rpc:call(Node, logplex_shard_info, read, [logplex_read_pool_map]),
             io:format("Replaced shards:~n~p~nwith new shards:~n ~p~n", [dict:to_list(OldShards),
-                                                                        dict:to_list(NewShards)]),
-            halt(0)
+                                                                        dict:to_list(NewShards)])
     end.
 
 
@@ -64,22 +61,12 @@ try_connect(RemoteNode, RetriesLeft) ->
         pong ->
             {connected, RemoteNode};
         Error ->
-            io:format("Could not connect, retrying in 1 second, Reason ~p", [Error]),
+            io:format("Could not connect, retrying in 1 second, Reason ~p~n", [Error]),
             timer:sleep(timer:seconds(1)),
             try_connect(RemoteNode, RetriesLeft - 1)
     end.
 
-cookie() ->
-    CookieString = 
-        case os:getenv("LOGPLEX_COOKIE") of
-            false ->
-                {ok, Bin} = file:read_file("/home/logplex/keys.sh"),
-                {match, [CookieStr]} = re:run(Bin, "LOGPLEX_COOKIE='(.*)'",
-                                              [{capture, all_but_first, list}]),
-                CookieStr;
-            CookieStr ->
-                CookieStr
-        end,
+cookie(CookieString) ->
     list_to_atom(CookieString).
 
 logplex_node() ->
@@ -90,3 +77,29 @@ caller_name() ->
     list_to_atom(Me ++ "_"
                  ++ os:getpid()
                  ++ "@" ++ net_adm:localhost()).
+
+get_from_keys(Key) ->
+    Filename = filename:join([os:getenv("HOME"), "keys.sh"]),
+    case file:read_file(Filename) of
+        {error, Error} ->
+            io:format("Cannot open file ~s, error ~s (more info: http://www.erlang.org/doc/man/file.html#read_file-1)~n", [Filename, Error]),
+            halt(1);
+        {ok, Keys} ->
+            case re:run(Keys, io_lib:format("~s='(.*)'", [Key]),
+                        [{capture, all_but_first, list}]) of
+                {match, [Val]} ->
+                    Val;
+                nomatch ->
+                    io:format("No such key ~s in file ~s~n", [Key, Filename]),
+                    halt(1)
+            end
+    end.
+
+getenv(Key) ->
+    case os:getenv(Key) of
+        false ->
+            io:format("Env variable ~s not set~n", [Key]),
+            halt(1);
+        Val ->
+            Val
+    end.
