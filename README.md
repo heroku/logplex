@@ -67,7 +67,7 @@ post a log msg
 
     $ curl -v \
     -H "Content-Type: application/logplex-1" \
-    -H "Content-Length: 119" \
+    -H "Logplex-Msg-Count: 1" \
     -d "116 <134>1 2012-12-10T03:00:48.123456Z erlang t.feff49f1-4d55-4c9e-aee1-2d2b10e69b42 console.1 - Logsplat test message 1" \
     http://local:password@localhost:8601/logs
 

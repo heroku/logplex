@@ -14,15 +14,16 @@
          ,allowed_methods/2
          ,is_authorized/2
          ,known_content_type/2
+         ,content_types_accepted/2
          ,malformed_request/2
-         ,process_post/2
+         ,from_logplex/2
          ,content_types_provided/2
          ,to_response/2
         ]).
 
 %% Healthcheck exports.
 -export([handle/2
-         ,terminate/2]).
+         ,terminate/3]).
 
 -record(state, {token :: logplex_token:id() | 'any',
                 name :: logplex_token:name(),
@@ -32,42 +33,44 @@
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 
 child_spec() ->
-    cowboy:child_spec(?MODULE, 100,
-                      cowboy_tcp_transport,
-                      [{port, logplex_app:config(http_log_input_port)}],
-                      cowboy_http_protocol,
-                      [{dispatch,
-                        [{'_', [{[<<"healthcheck">>], ?MODULE, [healthcheck]},
-                                {[<<"logs">>], ?MODULE, [logs]}]}]}]).
+    ranch:child_spec(?MODULE, 100,
+                     ranch_tcp,
+                     [{port, logplex_app:config(http_log_input_port)}],
+                     cowboy_protocol,
+                     [{env,
+                       [{dispatch,
+                         [{'_',[],
+                            [{[<<"healthcheck">>], [], ?MODULE, [healthcheck]},
+                             {[<<"logs">>], [], ?MODULE, [logs]}]}]}]}]).
 
 
 init(_Transport, Req, [healthcheck]) ->
     {ok, Req, undefined};
 init(_Transport, _Req, [logs]) ->
-    {upgrade, protocol, cowboy_http_rest}.
+    {upgrade, protocol, cowboy_rest}.
 
 %% Healthcheck implementation
 handle(Req, State) ->
     {ok, Req2} = case logplex_app:elb_healthcheck() of
                      healthy ->
-                         cowboy_http_req:reply(200, [], <<"OK">>, Req);
+                         cowboy_req:reply(200, [], <<"OK">>, Req);
                      unhealthy ->
-                         cowboy_http_req:reply(503, [],
+                         cowboy_req:reply(503, [],
                                                <<"SYSTEM BOOTING">>, Req)
                  end,
     {ok, Req2, State}.
 
-terminate(_, _) -> ok.
+terminate(_, _, _) -> ok.
 
 %% Logs cowboy_rest implementation
 rest_init(Req, _Opts) ->
     {ok, Req, #state{}}.
 
 allowed_methods(Req, State) ->
-    {['POST'], Req, State}.
+    {[<<"POST">>], Req, State}.
 
 is_authorized(Req, State) ->
-    case cowboy_http_req:header('Authorization', Req) of
+    case cowboy_req:header(<<"authorization">>, Req) of
         {<<"Basic ", Base64/binary>>, Req2} ->
             case binary:split(base64:decode(Base64), <<":">>) of
                 [<<"token">>, TokenId = <<"t.", _/binary>>] ->
@@ -124,36 +127,30 @@ cred_auth(State, Req2, CredId, Pass) ->
     end.
 
 known_content_type(Req, State) ->
-    case cowboy_http_req:header('Content-Type', Req) of
+    case cowboy_req:header(<<"content-type">>, Req) of
         {<<"application/logplex-1">>, Req2} ->
             {true, Req2, State};
-        {_, Req2} ->
+        {<<"application/x-logplex-1">>, Req2} ->
+            {true, Req2, State};
+        {_BadType, Req2} ->
             {false, Req2, State}
     end.
 
 malformed_request(Req, State) ->
     {false, Req, State}.
 
-%% XXX - Doesn't get used in current cowboy rest code. #fail
-%% content_types_accepted(Req, State) ->
-%%     {[{{<<"application">>, <<"x-logplex-1">>, []}, from_logplex},
-%%       {{<<"application">>, <<"logplex-1">>, []}, from_logplex}],
-%%      Req, State}.
-%% from_logplex(Req, State) ->
-%%     case parse_logplex_body(Req, State) of
-%%         {parsed, Req2, State2} ->
-%%             {true, Req2, State2};
-%%         {{error, _Reason}, Req2, State2} ->
-%%             {false, Req2, State2}
-%%     end.
+content_types_accepted(Req, State) ->
+    {[{{<<"application">>, <<"x-logplex-1">>, []}, from_logplex},
+      {{<<"application">>, <<"logplex-1">>, []}, from_logplex}],
+     Req, State}.
 
-process_post(Req, State = #state{token = Token,
+from_logplex(Req, State = #state{token = Token,
                                  channel_id = ChannelId,
                                  name = Name}) ->
-    try parse_logplex_body(Req, State) of
+    case parse_logplex_body(Req, State) of
         {parsed, Req2, State2 = #state{msgs = Msgs}}
           when is_list(Msgs), is_binary(Token),
-               is_integer(ChannelId), is_binary(Name) ->
+                 is_integer(ChannelId), is_binary(Name) ->
             logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
             {true, Req2, State2#state{msgs = []}};
         {parsed, Req2, State2 = #state{msgs = Msgs}}
@@ -174,16 +171,10 @@ process_post(Req, State = #state{token = Token,
             ?WARN("at=parse_logplex_body channel_id=~p error=~p",
                   [ChannelId, Reason]),
             respond(400, <<"Bad request">>, Req2, State2)
-    catch
-        Class:Error ->
-            Stack = erlang:get_stacktrace(),
-            ?WARN("at=process_post exception=~p:~p stack=~1000p",
-                  [Class, Error, Stack]),
-            {false, Req, State}
     end.
 
 parse_logplex_body(Req, State) ->
-    {ok, Body, Req2} = cowboy_http_req:body(Req),
+    {ok, Body, Req2} = cowboy_req:body(Req),
     case syslog_parser:parse(Body) of
         {ok, Msgs, _} ->
             check_messages(Msgs, Req2, State);
@@ -204,7 +195,7 @@ check_messages(Msgs, Req, State) ->
 check_message_count(Good, Req, State) ->
     %% Logplex-Msg-Count header is optional,
     %% but if present, check our count matches sent count.
-    case cowboy_http_req:header(<<"Logplex-Msg-Count">>
+    case cowboy_req:header(<<"logplex-msg-count">>
                                 , Req, false) of
         {false, Req2} ->
             {parsed, Req2, State#state{msgs=Good}};
@@ -235,8 +226,8 @@ to_response(Req, State) ->
 
 
 respond(Code, Text, Req, State) ->
-    {ok, Req2} = cowboy_http_req:set_resp_header(
+    Req2 = cowboy_req:set_resp_header(
                    <<"Www-Authenticate">>, ?BASIC_AUTH, Req),
-    {ok, Req3} = cowboy_http_req:set_resp_body(Text, Req2),
-    {ok, Req4} = cowboy_http_req:reply(Code, Req3),
+    Req3 = cowboy_req:set_resp_body(Text, Req2),
+    {ok, Req4} = cowboy_req:reply(<<(integer_to_binary(Code))/binary, " ", Text/binary>>, Req3),
     {halt, Req4, State}.

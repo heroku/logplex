@@ -127,8 +127,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 
-scheme_to_transport("https") -> cowboy_ssl_transport;
-scheme_to_transport("http") -> cowboy_tcp_transport.
+scheme_to_transport("https") -> ranch_ssl;
+scheme_to_transport("http") -> ranch_tcp.
 
 client_init("http") ->
     cowboy_client:init([]);
