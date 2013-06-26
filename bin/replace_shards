@@ -75,7 +75,7 @@ logplex_node() ->
             false ->
                 string:join(["logplex", net_adm:localhost()], "@");
             NodeName1 ->
-                NodeNmae1
+                NodeName1
         end,
     list_to_atom(NodeName).
 
