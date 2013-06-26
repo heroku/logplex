@@ -33,11 +33,10 @@
          ,redis_sort/1]).
 
 %% Redis Migration API
--export([prepare_new_urls/1,
-         prepare_url_update/2,
-         prepare_url_update/3,
-         attempt_to_commit_url_update/1,
-         make_update_permanent/1
+-export([prepare_shard_urls/1,
+         prepare_url_update/1,
+         attempt_to_commit_url_update/0,
+         make_update_permanent/0
         ]).
 
 -include("logplex.hrl").
@@ -340,27 +339,7 @@ make_new_shard_info_permanent() ->
     logplex_shard_info:copy(?NEW_READ_MAP, ?CURRENT_READ_MAP),
     ok.
 
-new_shard_info({one_for_one, OldNewMap}) ->
-    {RM, RI, _} = logplex_shard_info:read(?CURRENT_READ_MAP),
-    NewReadMap = dict:map(fun (_Slice, {OldUrl, _OldPid}) ->
-                                  NewUrl = proplists:get_value(OldUrl, OldNewMap),
-                                  NewPid = add_pool(NewUrl),
-                                  {NewUrl, NewPid}
-                          end,
-                          RM),
-    {WM, WI, _} = logplex_shard_info:read(?CURRENT_WRITE_MAP),
-    NewWriteMap = dict:map(fun (_Slice, {OldUrl, _OldPid}) ->
-                                   NewUrl = proplists:get_value(OldUrl, OldNewMap),
-                                   NewPid = add_buffer(NewUrl),
-                                   {NewUrl, NewPid}
-                           end,
-                           WM),
-    logplex_shard_info:save(?NEW_READ_MAP,
-                            NewReadMap, RI),
-    logplex_shard_info:save(?NEW_WRITE_MAP,
-                            NewWriteMap, WI),
-    ok;
-new_shard_info({replacements, NewUrls}) ->
+new_shard_info(NewUrls) ->
     populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
                         NewUrls),
     ok.
@@ -379,69 +358,42 @@ new_shard_info({replacements, NewUrls}) ->
 %% If anything goes wrong:
 %%   abort_url_update(Cluster).
 
-prepare_new_urls({one_for_one, NewIps}) ->
-    NewIpsSorted = lists:sort(NewIps),
-    OldUrls = lists:sort([binary_to_list(Url)
-                          || Url <- urls()]),
-    length(OldUrls) =:= length(NewIpsSorted)
-        orelse erlang:error({invalid_ip_list, different_length_to_existing}),
-    NewUrls = [ update_redis_host(OldUrl, NewIp)
-                || {OldUrl, NewIp} <- lists:zip(OldUrls, NewIpsSorted)],
-    {one_for_one, lists:zip(OldUrls, NewUrls)};
-prepare_new_urls({replacements, NewUrls}) ->
-    {replacements, NewUrls}.
+-spec prepare_shard_urls(string()) -> [string()]|[].
+prepare_shard_urls(ShardUrls) ->
+    Shards = string:tokens(ShardUrls, ","),
+    logplex_shard:redis_sort(Shards).
 
-prepare_url_update(Nodes, NewShardInfo) ->
-    prepare_url_update(Nodes, NewShardInfo, timer:seconds(5)).
+-type shards_info() :: [string()].
+-spec prepare_url_update(shards_info()) -> good|{error, any()}.
+prepare_url_update(NewShardInfo) ->
+    case gen_server:call(?MODULE, {prepare, {new_shard_info, NewShardInfo}}) of
+        ok ->
+            good;
+        Err ->
+            {failed, Err}
+    end.
 
-prepare_url_update(Nodes,
-                   NewShardInfo = {Type, _}, Timeout)
-  when Type =:= one_for_one;
-       Type =:= replacements ->
-    lists:foldl(fun (Node, {good, Acc}) ->
-                        try gen_server:call({?MODULE, Node},
-                                             {prepare, {new_shard_info, NewShardInfo}},
-                                            Timeout) of
-                            ok ->
-                                {good, [Node | Acc]};
-                            Err ->
-                                {failed, {Node, Err}, Acc}
-                        catch
-                            C:E ->
-                                {failed, {Node, {C,E}}, Acc}
-                        end;
-                    (_Node, Acc) -> Acc
-                end,
-                {good,[]},
-                Nodes).
+-spec attempt_to_commit_url_update() -> good|{failed, term()}.
+attempt_to_commit_url_update() ->
+    case gen_server:call(?MODULE, {commit, new_shard_info}) of
+        ok ->
+            good;
+        Err ->
+            abort_url_update(),
+            {failed, Err}
+    end.
 
-attempt_to_commit_url_update(Nodes) ->
-    lists:foldl(fun (Node, {good, Acc}) ->
-                        try gen_server:call({?MODULE, Node},
-                                             {commit, new_shard_info}) of
-                            ok ->
-                                {good, [Node | Acc]};
-                            Err ->
-                                abort_url_update(Acc),
-                                {failed, {Node, Err}, Acc}
-                        catch
-                            C:E ->
-                                abort_url_update(Acc),
-                                {failed, {Node, {C,E}}, Acc}
-                        end;
-                    (_Node, Acc) -> Acc
-                end,
-                {good,[]},
-                Nodes).
+-spec make_update_permanent() -> shard_info_updated|{failed, term()}.
+make_update_permanent() ->
+    case gen_server:call(?MODULE, {make_permanent, new_shard_info}) of
+        ok ->
+            shard_info_updated;
+        {error, Err} ->
+            {failed, Err}
+    end.
 
-abort_url_update(Nodes) ->
-    [ {N, catch gen_server:call({?MODULE, N}, {abort, new_shard_info})}
-      || N <- Nodes].
-
-make_update_permanent(Nodes) ->
-    [ {N, catch gen_server:call({?MODULE, N},
-                                {make_permanent, new_shard_info})}
-      || N <- Nodes].
+abort_url_update() ->
+    gen_server:call(?MODULE, {abort, new_shard_info}).
 
 stop_pool(Pid) ->
     redo:shutdown(Pid).
@@ -488,13 +440,6 @@ parse_redis_uri_db(#ex_uri{path=Path}) when Path =/= undefined ->
             []
     end;
 parse_redis_uri_db(_) -> [].
-
-update_redis_host(OldUrl, NewHost) ->
-    {ok, OldUri = #ex_uri{authority = #ex_uri_authority{} = Authority}, _}
-        = ex_uri:decode(OldUrl),
-    New = OldUri#ex_uri{authority =
-                            Authority#ex_uri_authority{host=NewHost}},
-    ex_uri:encode(New).
 
 redis_sort(Urls) ->
     Parsed = lists:map(fun parse_redis_uri/1, Urls),
