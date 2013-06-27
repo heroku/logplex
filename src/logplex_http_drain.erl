@@ -382,7 +382,7 @@ request_to_iolist(#frame{frame = Body0,
     AuthHeader = auth_header(URI),
     MD5Header = case logplex_app:config(http_body_checksum, none) of
                     md5 -> [{<<"Content-MD5">>,
-                             base64:encode(crypto:md5(Body))}];
+                             base64:encode(crypto:hash(md5,Body))}];
                     none -> []
                 end,
     Headers = MD5Header ++ AuthHeader ++
@@ -473,7 +473,7 @@ push_frame(FrameData, MsgCount, Lost, State = #state{out_q = Q})
     State#state{out_q = NewQ}.
 
 frame_id() ->
-    crypto:md5(term_to_binary({self(), now()})).
+    crypto:hash(md5, term_to_binary({self(), now()})).
 
 frame_id_to_iolist(ID) when is_binary(ID) ->
     [ hd(integer_to_list(I, 16)) || <<I:4>> <= ID ].
