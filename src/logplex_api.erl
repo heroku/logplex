@@ -221,6 +221,15 @@ handlers() ->
          mochijson2:encode({struct, [{url, api_relative_url(api_v2, UUID)}]})}
     end},
 
+    {['POST', "^/v2/canary-sessions$"], fun(Req, _Match) ->
+        authorize(Req),
+        Body = Req:recv_body(),
+        UUID = logplex_session:publish(Body),
+        not is_binary(UUID) andalso exit({expected_binary, UUID}),
+        {201, ?JSON_CONTENT,
+         mochijson2:encode({struct, [{url, api_relative_url(canary, UUID)}]})}
+    end},
+
     {['GET', "^/sessions/([\\w-]+)$"], fun(Req, [Session]) ->
         proplists:get_value("srv", Req:parse_qs()) == undefined
             andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version. If this error message persists then uninstall the Heroku client gem completely and re-install.\n">>),
@@ -272,6 +281,43 @@ handlers() ->
                     exit(Buffer, shutdown)
                 end
         end,
+
+        {200, ""}
+    end},
+
+    {['GET', "^/v2/canary-fetch/([\\w-]+)$"], fun(Req, [Session]) ->
+        proplists:get_value("srv", Req:parse_qs()) == undefined
+            andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version. If this error message persists then uninstall the Heroku client gem completely and re-install.\n">>),
+        Timeout = timer:seconds(logplex_app:config(session_lookup_timeout_s,
+                                                   5)),
+        Body = logplex_session:poll(list_to_binary(Session),
+                                    Timeout),
+        not is_binary(Body) andalso error_resp(404, <<"Not found">>),
+
+        {struct, Data} = mochijson2:decode(Body),
+        ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
+        not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
+        ChannelId = list_to_integer(binary_to_list(ChannelId0)),
+
+        logplex_stats:incr(session_accessed),
+
+        Filters = filters(Data),
+        NumBin = proplists:get_value(<<"num">>, Data, <<"100">>),
+        Num = list_to_integer(binary_to_list(NumBin)),
+
+        Logs = logplex_channel:logs(ChannelId, Num),
+        Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
+        not is_list(Logs) andalso exit({expected_list, Logs}),
+        ContentLength = lists:foldr(fun(L, Acc) -> Acc + byte_size(L) end, 0, Logs),
+
+        Socket = Req:get(socket),
+        Req:start_response_length({200, ?HDR, ContentLength}),
+
+        inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
+
+        filter_and_send_logs(Socket, Logs, Filters, Num),
+
+        end_chunked_response(Socket),
 
         {200, ""}
     end},
@@ -597,6 +643,8 @@ json_error(Code, Err) ->
     {Code, ?JSON_CONTENT,
      mochijson2:encode({struct, [{error, iolist_to_binary(Err)}]})}.
 
+api_relative_url(canary, UUID) when is_binary(UUID) ->
+    iolist_to_binary([<<"/v2/canary-fetch/">>, UUID]);
 api_relative_url(_APIVSN, UUID) when is_binary(UUID) ->
     iolist_to_binary([<<"/sessions/">>, UUID]).
 
