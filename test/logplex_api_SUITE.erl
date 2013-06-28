@@ -6,11 +6,24 @@ groups() ->
     [{v2_canary, [sequence],
       [v2_canary_session
        ,v2_canary_fetch
-      ]}
+      ]},
+     {v1, [sequence],
+      [get_channels
+       ,create_token
+       ,del_channel]},
+     {v2, [sequence],
+      [v2_get_channels
+       ,v2_create_token
+       ,v2_del_channels]}
     ].
 
 all() ->
-    [{group, v2_canary}
+    [
+     healthcheck
+     ,load
+     ,{group, v1}
+     ,{group, v2}
+     ,{group, v2_canary}
     ].
 
 init_per_suite(Config) ->
@@ -39,7 +52,99 @@ init_per_testcase(v2_canary_fetch, Config) ->
         N <- lists:seq(1, 10)],
     timer:sleep(1000),
     Config;
+init_per_testcase(v2_get_channels=Case, Config) ->
+    Channel = logplex_channel:create(atom_to_binary(Case, latin1)),
+    ChannelId = logplex_channel:id(Channel),
+    [{channel, ChannelId}|Config];
 init_per_testcase(_Case, Config) ->
+    Config.
+
+healthcheck(Config) ->
+    Api = ?config(api, Config) ++ "/healthcheck",
+    BasicAuth = ?config(auth, Config),
+    Res = get_(Api, [{headers, [{"Authorization", BasicAuth}]}]),
+    200 = proplists:get_value(status_code, Res),
+    "OK" = proplists:get_value(body, Res),
+    Config.
+
+load(Config) ->
+    Api = ?config(api, Config) ++ "/load",
+    BasicAuth = ?config(auth, Config),
+    Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
+                     {body, "[\"logplex\"]"}]),
+    200 = proplists:get_value(status_code, Res),
+    "[]" = proplists:get_value(body, Res),
+    Config.
+
+get_channels(Config) ->
+    Api = ?config(api, Config) ++ "/channels",
+    BasicAuth = ?config(auth, Config),
+    Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
+                     {body, "{\"tokens\":[\"token1\",\"token2\"]}"}]),
+    201 = proplists:get_value(status_code, Res),
+    {struct, Json} = mochijson2:decode(proplists:get_value(body, Res)),
+    Channel = proplists:get_value(<<"channel_id">>, Json),
+    {struct, Tokens} = proplists:get_value(<<"tokens">>, Json),
+    Token1 = proplists:get_value(<<"token1">>, Tokens),
+    Token2 = proplists:get_value(<<"token2">>, Tokens),
+    true = is_tuple(get_token(Token1)),
+    true = is_tuple(get_token(Token2)),
+    {save_config, [{channel, Channel}]}.
+
+create_token(Config) ->
+    {get_channels, SavedConfig} = ?config(saved_config, Config),
+    Channel = proplists:get_value(channel, SavedConfig),
+    BasicAuth = ?config(auth, Config),
+    Api = ?config(api, Config) ++ "/channels/" ++ integer_to_list(Channel) ++ "/token",
+    Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
+                     {body, "{\"name\":\"token1\"}"}]),
+    201 = proplists:get_value(status_code, Res),
+    [$t,$.|_] = proplists:get_value(body, Res),
+    {save_config, [{channel, Channel}]}.
+
+del_channel(Config) ->
+    {create_token, SavedConfig} = ?config(saved_config, Config),
+    Channel = proplists:get_value(channel, SavedConfig),
+    BasicAuth = ?config(auth, Config),
+    Api = ?config(api, Config) ++ "/channels/" ++ integer_to_list(Channel),
+    Res = delete(Api, [{headers, [{"Authorization", BasicAuth}]}]),
+    200 = proplists:get_value(status_code, Res),
+    "OK" = proplists:get_value(body, Res),
+    Config.
+    
+v2_get_channels(Config) ->
+    BasicAuth = ?config(auth, Config),
+    Channel = ?config(channel, Config),
+    Api = ?config(api, Config) ++ "/v2/channels/" ++ integer_to_list(Channel),
+    Res = get_(Api, [{headers, [{"Authorization", BasicAuth}]}]),
+    200 = proplists:get_value(status_code, Res),
+    {struct, Json} = mochijson2:decode(proplists:get_value(body, Res)),
+    Channel = proplists:get_value(<<"channel_id">>, Json),
+    [] = proplists:get_value(<<"tokens">>, Json),
+    [] = proplists:get_value(<<"drains">>, Json),
+    {save_config, [{channel, Channel}]}.
+
+v2_create_token(Config) ->
+    {v2_get_channels, SavedConfig} = ?config(saved_config, Config),
+    Channel = proplists:get_value(channel, SavedConfig),
+    BasicAuth = ?config(auth, Config),
+    Api = ?config(api, Config) ++ "/v2/channels/" ++ integer_to_list(Channel) ++ "/tokens",
+    Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
+                     {body, "{\"name\":\"token1\"}"}]),
+    201 = proplists:get_value(status_code, Res),
+    {struct, Json} = mochijson2:decode(proplists:get_value(body, Res)),
+    <<"token1">> = proplists:get_value(<<"name">>, Json),
+    <<"t.", _/binary>> = proplists:get_value(<<"token">>, Json),
+    {save_config, [{channel, Channel}]}.
+
+v2_del_channels(Config) ->
+    {v2_create_token, SavedConfig} = ?config(saved_config, Config),
+    Channel = proplists:get_value(channel, SavedConfig),
+    BasicAuth = ?config(auth, Config),
+    error_logger:info_msg("Channel is ~p", [Channel]),
+    Api = ?config(api, Config) ++ "/v2/channels/" ++ integer_to_list(Channel),
+    Res = delete(Api, [{headers, [{"Authorization", BasicAuth}]}]),
+    200 = proplists:get_value(status_code, Res),
     Config.
 
 v2_canary_session(Config) ->
@@ -66,6 +171,9 @@ v2_canary_fetch(Config) ->
     Config.
 
 %% Other helpers
+delete(Url, Opts) ->
+    request(delete, Url, Opts).
+
 get_(Url, Opts) ->
     request(get, Url, Opts).
 
@@ -110,6 +218,15 @@ wait_for_http(RequestId, Headers, Body) ->
             wait_for_http(RequestId, Headers, Body++Body0);
         {http, {RequestId, stream_end, Headers0}} ->
             {Headers++Headers0, Body}
+    end.
+
+get_token(TokenId) ->
+    case logplex_token:lookup(TokenId) of
+        undefined ->
+            timer:sleep(50),
+            get_token(TokenId);
+        Token ->
+            Token
     end.
 
 wait_for_messages(Channel, MessageAmount, MaxWait, StartTime) ->
