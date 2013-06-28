@@ -60,16 +60,23 @@ loop(Req) ->
     Path = Req:get(path),
     ChannelId = header_value(Req, "Channel", ""),
     try
-        {Code, Hdr, Body} = case serve(handlers(), Method, Path, Req) of
-                                {C, B} ->
-                                    {C, ?HDR, B};
-                                {_C, _H, _B} = Resp -> Resp
-                            end,
+        Served = case serve(handlers(), Method, Path, Req) of
+                     {done,{C,D}} -> {done,{C,D}};
+                     {C, B} -> {C, ?HDR, B};
+                     {_C, _H, _B} = Resp -> Resp
+                 end,
         Time = timer:now_diff(os:timestamp(), Start) div 1000,
-        ?INFO("at=request channel_id=~s method=~p path=~s"
-              " resp_code=~w time=~w body=~s",
-              [ChannelId, Method, Path, Code, Time, Body]),
-        Req:respond({Code, Hdr, Body}),
+        case Served of
+            {Code, Hdr, Body} ->
+                ?INFO("at=request channel_id=~s method=~p path=~s"
+                    " resp_code=~w time=~w body=~s",
+                    [ChannelId, Method, Path, Code, Time, Body]),
+                Req:respond({Code, Hdr, Body});
+            {done,{Code,Details}} ->
+                ?INFO("at=request channel_id=~s method=~p path=~s "
+                      "resp_code=~w time=~w body=~s",
+                      [ChannelId, Method, Path, Code, Time, Details])
+        end,
         exit(normal)
     catch
         exit:normal ->
@@ -308,18 +315,16 @@ handlers() ->
         Logs = logplex_channel:logs(ChannelId, Num),
         Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
         not is_list(Logs) andalso exit({expected_list, Logs}),
-        ContentLength = lists:foldr(fun(L, Acc) -> Acc + byte_size(L) end, 0, Logs),
 
         Socket = Req:get(socket),
-        Req:start_response_length({200, ?HDR, ContentLength}),
-
         inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
+        Resp = Req:respond({200, ?HDR, chunked}),
 
-        filter_and_send_logs(Socket, Logs, Filters, Num),
+        filter_and_send_chunked_logs(Resp, Logs, Filters, Num),
 
-        end_chunked_response(Socket),
+        Resp:write_chunk(<<>>),
 
-        {200, ""}
+        {done, {200, "<chunked>"}}
     end},
 
     %% V1
@@ -461,6 +466,8 @@ serve([{[HMethod, Regexp], Fun}|Tail], Method, Path, Req) ->
                     {Code, Body};
                 {'EXIT', Err} ->
                     exit(Err);
+                {done, Details} ->
+                    {done, Details};
                 {Code, Body}
                   when is_integer(Code),
                        is_binary(Body) orelse is_list(Body) ->
@@ -519,6 +526,24 @@ filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
             filter_and_send_logs(Socket, Tail, Filters, Num-1, [logplex_utils:format(Msg1)|Acc]);
         false ->
             filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
+    end.
+
+filter_and_send_chunked_logs(Resp, Logs, [], _Num) ->
+    [Resp:write_chunk(logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
+
+filter_and_send_chunked_logs(Resp, Logs, Filters, Num) ->
+    filter_and_send_chunked_logs(Resp, Logs, Filters, Num, []).
+
+filter_and_send_chunked_logs(Resp, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
+    Resp:write_chunk(Acc);
+
+filter_and_send_chunked_logs(Resp, [Msg|Tail], Filters, Num, Acc) ->
+    Msg1 = logplex_utils:parse_msg(Msg),
+    case logplex_utils:filter(Msg1, Filters) of
+        true ->
+            filter_and_send_chunked_logs(Resp, Tail, Filters, Num-1, [logplex_utils:format(Msg1)|Acc]);
+        false ->
+            filter_and_send_chunked_logs(Resp, Tail, Filters, Num, Acc)
     end.
 
 

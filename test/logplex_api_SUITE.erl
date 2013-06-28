@@ -35,7 +35,7 @@ init_per_testcase(v2_canary_fetch, Config) ->
     ChannelId = ?config(channel_id, SavedConfig),
     TokenId = logplex_token:create(ChannelId, <<"ct">>),
     Token = logplex_SUITE:get_token(TokenId),
-    [ok = logplex_SUITE:send_msg(logplex_SUITE:make_msg(Token, N)) ||
+    [ok = logplex_SUITE:send_msg(make_msg(Token, N)) ||
         N <- lists:seq(1, 10)],
     timer:sleep(1000),
     Config;
@@ -61,8 +61,21 @@ v2_canary_fetch(Config) ->
         ++ binary_to_list(Session) ++ "?srv=ct",
     Res = get_(Api, []),
     Headers = proplists:get_value(headers, Res),
-    [] = proplists:get_value(body, Res),
     "text/html" = proplists:get_value("content-type", Headers),
+    %% httpc is a shifty bastard and transforms a chunked response back
+    %% into a regular one for you, and replaces the header for a regular
+    %% one with the right content-length. I'm somewhat full of hatred for
+    %% the time lost right now
+    %% "chunked" = proplists:get_value("transfer-encoding", Headers),
+    %
+    %% messages can be split by linebreak when being streamed. We should
+    %% have 10, each with the right numbers, in order, at the last position
+    Body = proplists:get_value(body, Res),
+    Logs = string:tokens(Body, "\n"),
+    10 = length(Logs),
+    ct:pal("zips: ~p",[lists:zip(lists:seq(1,10),Logs)]),
+    10 = length([1 || {N,Log} <- lists:zip(lists:seq(1,10),Logs),
+                      lists:suffix(integer_to_list(N), Log)]),
     Config.
 
 %% Other helpers
@@ -138,3 +151,15 @@ set_os_vars() ->
          {"LOGPLEX_COOKIE", "ct test"},
          {"LOGPLEX_NODE_NAME", atom_to_list(node())}
         ]].
+
+make_msg(Token, N) ->
+    logplex_syslog_utils:rfc5424(
+        user,
+        debug,
+        logplex_syslog_utils:datetime(now),
+        "fakehost",
+        logplex_token:id(Token),
+        "erlang",
+        "web.1 -", % the - is a trick because we suck at rfc5424 generation
+        integer_to_list(N)
+    ).
