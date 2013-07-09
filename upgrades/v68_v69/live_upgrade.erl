@@ -13,7 +13,15 @@ UpgradeNode = fun () ->
   end,
 
   %% stateless
+
+  % Minor changes to the shard module, removing node folds
   l(logplex_shard),
+
+  % Added the logplex canary api endpoints
+  l(logplex_api),
+
+  % Change to accomidate a changed crypto API
+  l(logplex_http_drain),
 
   application:set_env(logplex, git_branch, "v69"),
   ok
