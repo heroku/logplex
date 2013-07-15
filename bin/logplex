@@ -1,3 +1,3 @@
 #!/bin/sh
 
-erl +K true +A100 +P500000 -env ERL_MAX_PORTS 65535 -kernel inet_dist_listen_min 9100 -kernel inet_dist_listen_max 9200 -name logplex@`hostname --fqdn` -pa ebin -env ERL_LIBS deps -noshell -noinput -s logplex_app -setcookie ${LOGPLEX_COOKIE}
+erl +sfwi 1000 +K true +A100 +P500000 -env ERL_MAX_PORTS 65535 -kernel inet_dist_listen_min 9100 -kernel inet_dist_listen_max 9200 -name logplex@`hostname --fqdn` -pa ebin -env ERL_LIBS deps -noshell -noinput -s logplex_app -setcookie ${LOGPLEX_COOKIE}
