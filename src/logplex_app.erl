@@ -107,6 +107,9 @@ cache_os_envvars() ->
                       ,{redgrid_redis_url, ["LOGPLEX_CONFIG_REDIS_URL",
                                             "LOGPLEX_STATS_REDIS_URL"]}
                       ,{stats_redis_url, ["LOGPLEX_STATS_REDIS_URL"]}
+                      ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
+                        optional, %% in bytes
+                        integer}
                      ]),
     ok.
 

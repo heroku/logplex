@@ -79,6 +79,9 @@ init([]) ->
        ,{logplex_monitor, {logplex_mon_sup, start_link, []},
          permanent, 8000, supervisor, [logplex_mon_sup]}
 
+       %% Temporary workaround for refc binary memory leaks
+       ,{logplex_leak, {logplex_leak, start_link, []},
+         permanent, 5000, worker, [logplex_leak]}
        %% All tcp listen processes start from the 'listen' start phase
        %% in logplex_app
 
