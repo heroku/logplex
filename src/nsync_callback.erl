@@ -182,7 +182,7 @@ find_token(Id, Dict) ->
         Val1 ->
             Ch = convert_to_integer(Val1),
             Name = dict_find(<<"name">>, Dict),
-            Token = logplex_token:new(Id, Ch, Name),
+            Token = logplex_token:new(Id, Ch, binary:copy(Name)),
             {ok, Token}
     end.
 
@@ -209,7 +209,8 @@ create_drain(Id, Dict) ->
                 undefined ->
                     ?ERR("~p ~p ~p ~p",
                          [create_drain, missing_token, Id, dict:to_list(Dict)]);
-                Token when is_binary(Token) ->
+                Tok when is_binary(Tok) ->
+                    Token = binary:copy(Tok),
                     case drain_uri(Dict) of
                         partial_drain_record ->
                             ?INFO("at=partial_drain_record drain_id=~p "
@@ -220,7 +221,8 @@ create_drain(Id, Dict) ->
                             case logplex_drain:valid_uri(Uri) of
                                 {valid, Type, NewUri} ->
                                     Drain = logplex_drain:new(Id, Ch, Token,
-                                                              Type, NewUri),
+                                                              Type,
+                                                              NewUri),
                                     ets:insert(drains, Drain),
                                     logplex_drain:start(Drain),
                                     Drain;
@@ -247,7 +249,7 @@ drain_uri(Dict) ->
     case dict_find(<<"url">>, Dict) of
         URL when is_binary(URL) ->
             %% New style URI record
-            logplex_drain:parse_url(URL);
+            logplex_drain:parse_url(binary:copy(URL));
         undefined ->
             case {dict_find(<<"host">>, Dict),
                   dict_find(<<"port">>, Dict)} of
