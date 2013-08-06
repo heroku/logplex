@@ -68,10 +68,10 @@ loop(Req) ->
         Time = timer:now_diff(os:timestamp(), Start) div 1000,
         case Served of
             {Code, Hdr, Body} ->
+                Req:respond({Code, Hdr, Body}),
                 ?INFO("at=request channel_id=~s method=~p path=~s"
                     " resp_code=~w time=~w body=~s",
-                    [ChannelId, Method, Path, Code, Time, Body]),
-                Req:respond({Code, Hdr, Body});
+                    [ChannelId, Method, Path, Code, Time, Body]);
             {done,{Code,Details}} ->
                 ?INFO("at=request channel_id=~s method=~p path=~s "
                       "resp_code=~w time=~w body=~s",
@@ -83,11 +83,11 @@ loop(Req) ->
             exit(normal);
         Class:Exception ->
             Time1 = timer:now_diff(os:timestamp(), Start) div 1000,
+            Req:respond({500, ?HDR, ""}),
             ?ERR("channel_id=~s method=~p path=~s "
                  "time=~w exception=~1000p:~1000p stack=~1000p",
                  [ChannelId, Method, Path, Time1, Class, Exception,
                   erlang:get_stacktrace()]),
-            Req:respond({500, ?HDR, ""}),
             exit(normal)
     end.
 
