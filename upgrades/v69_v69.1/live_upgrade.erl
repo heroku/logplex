@@ -3,6 +3,10 @@ UpgradeNode = fun () ->
   case logplex_app:config(git_branch) of
       "v69" ->
           io:format(whereis(user), "at=upgrade_start cur_vsn=69~n", []);
+      "v69-R16B01" ->
+          io:format(whereis(user), "at=upgrade_start cur_vsn=69-R16B01~n", []);
+      "v69-R16B01-swfi" ->
+          io:format(whereis(user), "at=upgrade_start cur_vsn=69-R16B01-swfi~n", []);
       "v69.1" ->
           io:format(whereis(user),
                     "at=upgrade type=retry cur_vsn=69 old_vsn=69.1~n", []);
