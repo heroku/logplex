@@ -365,8 +365,11 @@ reconnect(State = #state{failures = 0, last_good_time=T})
     SecsSinceConnect = timer:now_diff(os:timestamp(), T) div 1000000,
     case SecsSinceConnect of
         TooFew when TooFew < Min ->
+            %% We hibernate only when we need to reconnect with a timer.  The
+            %% timer acts as a rate limiter! If you remove the timer, you must
+            %% re-think the hibernation.
             {next_state, disconnected,
-             reconnect_in(timer:seconds(Min), State)};
+             reconnect_in(timer:seconds(Min), State), hibernate};
         _EnoughTime ->
             do_reconnect(State)
     end;
@@ -376,8 +379,11 @@ reconnect(State = #state{failures = F}) ->
                   MaxExp when F > MaxExp -> Max;
                   _ -> 1 bsl F
               end,
+    %% We hibernate only when we need to reconnect with a timer. The timer
+    %% acts as a rate limiter! If you remove the timer, you must re-think
+    %% the hibernation.
     {next_state, disconnected,
-     reconnect_in(timer:seconds(BackOff), State)}.
+     reconnect_in(timer:seconds(BackOff), State), hibernate}.
 
 reconnect_in(MS, State = #state{}) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),

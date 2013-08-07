@@ -255,8 +255,13 @@ http_fail(State = #state{client = Client}) ->
                    undefined ->
                        State
                end,
-    {next_state, disconnected,
-     set_reconnect_timer(NewState)}.
+    %% We hibernate only when we need to reconnect with a timer. The timer
+    %% acts as a rate limiter! If you remove the timer, you must re-think
+    %% the hibernation.
+    case set_reconnect_timer(NewState) of
+        NewState -> {next_state, disconnected, NewState};
+        ReconnectState -> {next_state, disconnected, ReconnectState, hibernate}
+    end.
 
 %% @private
 ready_to_send(State = #state{buf = Buf,
