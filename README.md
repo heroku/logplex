@@ -46,7 +46,7 @@ run
       LOCAL_IP="127.0.0.1" \
       LOGPLEX_COOKIE=123 \
       LOGPLEX_AUTH_KEY=123 \
-      erl -name logplex@`hostname` -pa ebin -env ERL_LIBS deps -s logplex_app -setcookie ${LOGPLEX_COOKIE}
+      erl -name logplex@`hostname` -pa ebin -env ERL_LIBS deps -s logplex_app -setcookie ${LOGPLEX_COOKIE} -config sys
 
 create creds    
 
