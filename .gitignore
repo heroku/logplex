@@ -16,6 +16,7 @@ doc/erlang.png
 doc/stylesheet.css
 doc/edoc-info
 logs/
+log/
 test/*.beam
 .edts
 .DS_Store
