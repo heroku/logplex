@@ -49,6 +49,7 @@
 %%%===================================================================
 
 start() ->
+    start_lager(),
     a_start(?APP, permanent).
 
 %% ===================================================================
@@ -160,6 +161,16 @@ config(Key, Default) ->
         undefined -> Default;
         {ok, Val} -> Val
     end.
+
+start_lager() ->
+    application:load(lager),
+    %% We log to stdout only, using a format that does nothing fancy.
+    application:set_env(lager,
+                        handlers,
+                        [{lager_console_backend,
+                          [info, {lager_default_formatter, [message, "\n"]}]}
+                        ]),
+    a_start(lager, permanent).
 
 set_cookie() ->
     case config(cookie) of

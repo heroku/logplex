@@ -4,15 +4,16 @@
 
 -ifndef(logging_macros).
 -define(logging_macros, true).
+-compile([{parse_transform, lager_transform}]).
 
 -define(INFO(Format, Args),
-        io:format("pid=~p m=~p ln=~p class=info " ++ Format ++ "~n",
-                  [self(), ?MODULE, ?LINE | Args])).
+        lager:info("pid=~p m=~p ln=~p class=info " ++ Format,
+                   [self(), ?MODULE, ?LINE | Args])).
 -define(WARN(Format, Args),
-        io:format("pid=~p m=~p ln=~p class=warn " ++ Format ++ "~n",
-                  [self(), ?MODULE, ?LINE | Args])).
+        lager:warning("pid=~p m=~p ln=~p class=warn " ++ Format,
+                      [self(), ?MODULE, ?LINE | Args])).
 -define(ERR(Format, Args),
-        io:format("pid=~p m=~p ln=~p class=err " ++ Format ++ "~n",
-                  [self(), ?MODULE, ?LINE | Args])).
+        lager:error("pid=~p m=~p ln=~p class=err " ++ Format,
+                    [self(), ?MODULE, ?LINE | Args])).
 
 -endif. %logging
