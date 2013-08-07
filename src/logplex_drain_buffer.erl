@@ -29,6 +29,7 @@
                    {'logplex_drain_buffer', pid(),
                        {frame, Frame::iolist(), Count::non_neg_integer(),
                                Lost::non_neg_integer()}}.
+-define(HIBERNATE_TIMEOUT, 5000).
 
 -export_type([rx_msgs/0, tx_msgs/0]).
 
@@ -125,13 +126,16 @@ active({set_active, TargBytes, Fun},
        S = #state{})
   when is_integer(TargBytes), TargBytes > 0,
        is_function(Fun, 1) ->
-    {next_state, active, S#state{on_activation={TargBytes, Fun}}};
+    {next_state, active, S#state{on_activation={TargBytes, Fun}}, ?HIBERNATE_TIMEOUT};
 active(notify, S = #state{}) ->
     ?WARN("state=active error=duplicate_activation", []),
-    {next_state, notify, S#state{on_activation=undefined}};
+    {next_state, notify, S#state{on_activation=undefined}, ?HIBERNATE_TIMEOUT};
+active(timeout, S = #state{}) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, active, S, hibernate};
 active(Msg, S = #state{}) ->
     ?WARN("state=active Unexpected msg ~p", [Msg]),
-    {next_state, active, S}.
+    {next_state, active, S, ?HIBERNATE_TIMEOUT}.
 
 
 %% @private
@@ -139,7 +143,7 @@ passive(notify, S = #state{buf = Buf}) ->
     NewState = S#state{on_activation=undefined},
     case logplex_msg_buffer:empty(Buf) of
         empty ->
-            {next_state, notify, NewState};
+            {next_state, notify, NewState, ?HIBERNATE_TIMEOUT};
         not_empty ->
             send_notification(NewState)
     end;
@@ -149,13 +153,16 @@ passive({set_active, TargBytes, Fun}, S = #state{buf = Buf})
     NewState = S#state{on_activation={TargBytes, Fun}},
     case logplex_msg_buffer:empty(Buf) of
         empty ->
-            {next_state, active, NewState};
+            {next_state, active, NewState, ?HIBERNATE_TIMEOUT};
         not_empty ->
             send(NewState)
     end;
+passive(timeout, S = #state{}) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, passive, S, hibernate};
 passive(Msg, S = #state{}) ->
     ?WARN("state=passive Unexpected msg ~p", [Msg]),
-    {next_state, passive, S}.
+    {next_state, passive, S, ?HIBERNATE_TIMEOUT}.
 
 
 %% @private
@@ -163,28 +170,31 @@ notify({set_active, TargBytes, Fun},
        S = #state{})
   when is_integer(TargBytes), TargBytes > 0,
        is_function(Fun, 1) ->
-    {next_state, active, S#state{on_activation={TargBytes, Fun}}};
+    {next_state, active, S#state{on_activation={TargBytes, Fun}}, ?HIBERNATE_TIMEOUT};
 notify(notify, S = #state{}) ->
     ?WARN("state=notify error=duplicate_notification", []),
-    {next_state, notify, S};
+    {next_state, notify, S, ?HIBERNATE_TIMEOUT};
+notify(timeout, S = #state{}) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, notify, S, hibernate};
 notify(Msg, S = #state{}) ->
     ?WARN("state=notify Unexpected msg ~p", [Msg]),
-    {next_state, active, S}.
+    {next_state, active, S, ?HIBERNATE_TIMEOUT}.
 
 
 
 %% @private
 handle_event(_Event, StateName, State) ->
-    {next_state, StateName, State}.
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 handle_sync_event({resize_msg_buffer, NewSize}, _From, StateName, State=#state{buf=Buf}) ->
     NewBuf = logplex_msg_buffer:resize(NewSize, Buf),
-    {reply, ok, StateName, State#state{buf=NewBuf}};
+    {reply, ok, StateName, State#state{buf=NewBuf}, ?HIBERNATE_TIMEOUT};
 handle_sync_event(Event, _From, StateName, State) ->
     ?WARN("[state ~p] Unexpected event ~p",
           [StateName, Event]),
-    {next_state, StateName, State}.
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 handle_info({post, Msg}, StateName, S = #state{buf = OldBuf}) ->
@@ -195,16 +205,20 @@ handle_info({post, Msg}, StateName, S = #state{buf = OldBuf}) ->
     NewState = S#state{buf = NewBuf},
     case StateName of
         passive ->
-            {next_state, passive, NewState};
+            {next_state, passive, NewState, ?HIBERNATE_TIMEOUT};
         active ->
             send(NewState);
         notify ->
             send_notification(NewState)
     end;
 
+handle_info(timeout, StateName, State) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, StateName, State, hibernate};
+
 handle_info(Info, StateName, State) ->
     ?WARN("state=~p Unexpected info ~p", [StateName, Info]),
-    {next_state, StateName, State}.
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 terminate(_Reason, _StateName, _State) ->
@@ -212,7 +226,7 @@ terminate(_Reason, _StateName, _State) ->
 
 %% @private
 code_change(_OldVsn, StateName, State, _Extra) ->
-    {ok, StateName, State}.
+    {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -221,7 +235,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% @private
 send_notification(S = #state{owner = Owner}) ->
     Owner ! {logplex_drain_buffer, self(), new_data},
-    {next_state, passive, S}.
+    {next_state, passive, S, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 send(S = #state{owner = Owner, buf = Buf,
@@ -230,4 +244,4 @@ send(S = #state{owner = Owner, buf = Buf,
     {Frame, Count, NewBuf} = logplex_msg_buffer:to_pkts(Buf, Targ, Fun),
     NewState = S#state{buf=NewBuf, on_activation=undefined},
     Owner ! {logplex_drain_buffer, self(), {frame, Frame, Count, Lost}},
-    {next_state, passive, NewState}.
+    {next_state, passive, NewState, ?HIBERNATE_TIMEOUT}.

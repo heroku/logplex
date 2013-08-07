@@ -13,6 +13,7 @@
 -define(TARGET_SEND_SIZE, 4096).
 -define(SEND_TIMEOUT_MSG, send_timeout).
 -define(SEND_TIMEOUT, timer:seconds(4)).
+-define(HIBERNATE_TIMEOUT, 5000).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -153,11 +154,14 @@ disconnected({timeout, Received, ?RECONNECT_MSG},
     reconnect(State);
 disconnected({post, Msg}, State) ->
     reconnect(buffer(Msg, State));
+disconnected(timeout, State) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, disconnected, State, hibernate};
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~1000p state=disconnected",
           log_info(State, [Msg])),
-    {next_state, disconnected, State}.
+    {next_state, disconnected, State, ?HIBERNATE_TIMEOUT}.
 
 %% @doc We have a socket open and messages to send. Collect up an
 %% appropriate amount and flush them to the socket.
@@ -173,12 +177,15 @@ ready_to_send({inet_reply, Sock, ok}, S = #state{sock = Sock})
   when is_port(Sock) ->
     %% Stale inet reply
     send(S);
+ready_to_send(timeout, S = #state{}) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, ready_to_send, S, hibernate};
 ready_to_send(Msg, State = #state{sock = Sock})
   when is_port(Sock) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=ready_to_send",
           log_info(State, [Msg])),
-    {next_state, ready_to_send, State}.
+    {next_state, ready_to_send, State, ?HIBERNATE_TIMEOUT}.
 
 
 %% @doc We sent some data to the socket and are waiting the result of
@@ -190,7 +197,7 @@ sending({timeout, Ref, ?SEND_TIMEOUT_MSG},
           log_info(S, [])),
     reconnect(tcp_bad(S#state{send_tref=undefined}));
 sending({post, Msg}, State) ->
-    {next_state, sending, buffer(Msg, State)};
+    {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
 sending({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
     send(tcp_good(cancel_send_timeout(S)));
 sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
@@ -198,11 +205,14 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
+sending(timeout, S = #state{}) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, sending, S, hibernate};
 sending(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=sending",
           log_info(State, [Msg])),
-    {next_state, sending, State}.
+    {next_state, sending, State, ?HIBERNATE_TIMEOUT}.
 
 
 %% @private
@@ -213,24 +223,24 @@ sending(Msg, State) ->
 
 %% @private
 handle_event(_Event, StateName, State) ->
-    {next_state, StateName, State}.
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 handle_sync_event({set_target_send_size, Size}, _From, StateName,
                   State = #state{})
   when is_integer(Size), Size > 0 ->
     put(target_send_size, Size),
-    {reply, {ok, Size}, StateName, State};
+    {reply, {ok, Size}, StateName, State, ?HIBERNATE_TIMEOUT};
 handle_sync_event({resize_msg_buffer, NewSize}, _From, StateName,
                   State = #state{buf = Buf})
   when is_integer(NewSize), NewSize > 0 ->
     NewBuf = logplex_msg_buffer:resize(NewSize, Buf),
-    {reply, ok, StateName, State#state{buf = NewBuf}};
+    {reply, ok, StateName, State#state{buf = NewBuf}, ?HIBERNATE_TIMEOUT};
 
 handle_sync_event(Event, _From, StateName, State) ->
     ?WARN("[state ~p] Unexpected event ~p",
           [StateName, Event]),
-    {next_state, StateName, State}.
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 handle_info({tcp, Sock, Data}, StateName,
@@ -238,7 +248,7 @@ handle_info({tcp, Sock, Data}, StateName,
     ?WARN("drain_id=~p channel_id=~p dest=~s state=~p "
           "err=unexpected_peer_data data=~p",
           log_info(State, [StateName, Data])),
-    {next_state, StateName, State};
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
 handle_info({tcp_error, Sock, Reason}, StateName,
             State = #state{sock = Sock}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
@@ -266,6 +276,9 @@ handle_info(shutdown, StateName, State = #state{sock = Sock})
     {stop, {shutdown,call}, State#state{sock = undefined}};
 handle_info(shutdown, _StateName, State) ->
     {stop, {shutdown,call}, State};
+handle_info(timeout, StateName, State) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, StateName, State, hibernate};
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
@@ -278,7 +291,7 @@ terminate(Reason, StateName, State) ->
 
 %% @private
 code_change(_OldVsn, StateName, State, _Extra) ->
-    {ok, StateName, State}.
+    {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -353,7 +366,7 @@ reconnect(State = #state{reconnect_tref = Ref}) when is_reference(Ref) ->
             reconnect(State#state{reconnect_tref=undefined});
         _ ->
             %% and is still valid
-            {next_state, disconnected, State}
+            {next_state, disconnected, State, ?HIBERNATE_TIMEOUT}
     end;
 reconnect(State = #state{failures = 0, last_good_time=undefined}) ->
     %% First reconnect ever
