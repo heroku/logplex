@@ -26,6 +26,7 @@
 -include("logplex_logging.hrl").
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
+-define(HIBERNATE_TIMEOUT, 5000).
 
 -type drop_info() :: {erlang:timestamp(), pos_integer()}.
 
@@ -132,7 +133,7 @@ disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=disconnected",
           log_info(State, [Msg])),
-    {next_state, disconnected, State}.
+    {next_state, disconnected, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 connected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
@@ -145,18 +146,18 @@ connected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=connected",
           log_info(State, [Msg])),
-    {next_state, connected, State}.
+    {next_state, connected, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 handle_event(Event, StateName, State) ->
     ?WARN("state=~p at=unexpected_event event=\"~1000p\"",
           [StateName, Event]),
-    {next_state, StateName, State}.
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 handle_sync_event(buf_alive, _From, StateName,
                   State = #state{buf = Buf}) ->
-    {reply, {Buf, erlang:is_process_alive(Buf)}, StateName, State};
+    {reply, {Buf, erlang:is_process_alive(Buf)}, StateName, State, ?HIBERNATE_TIMEOUT};
 handle_sync_event(restart_buf, _From, StateName,
                   State = #state{buf = Buf}) ->
     case erlang:is_process_alive(Buf) of
@@ -164,15 +165,15 @@ handle_sync_event(restart_buf, _From, StateName,
             {reply, buf_alive, StateName, State};
         false ->
             NewState = start_drain_buffer(State#state{buf = undefined}),
-            {reply, {new_buf, NewState#state.buf}, StateName, NewState}
+            {reply, {new_buf, NewState#state.buf}, StateName, NewState, ?HIBERNATE_TIMEOUT}
     end;
 handle_sync_event(notify, _From, StateName, State = #state{buf = Buf}) ->
     logplex_drain_buffer:notify(Buf),
-    {reply, ok, StateName, State};
+    {reply, ok, StateName, State, ?HIBERNATE_TIMEOUT};
 handle_sync_event(Event, _From, StateName, State) ->
     ?WARN("state=~p at=unexpected_sync_event event=\"~1000p\"",
           [StateName, Event]),
-    {next_state, StateName, State}.
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 handle_info({timeout, Ref, ?RECONNECT_MSG}, disconnected,
@@ -183,19 +184,19 @@ handle_info({timeout, Ref, ?RECONNECT_MSG}, disconnected,
     case queue:is_empty(Q) of
         true ->
             logplex_drain_buffer:notify(Buf),
-            {next_state, disconnected, NewState};
+            {next_state, disconnected, NewState, ?HIBERNATE_TIMEOUT};
         false ->
             try_connect(NewState)
     end;
 handle_info({timeout, Ref, ?RECONNECT_MSG}, StateName,
             State = #state{reconnect_tref = Ref}) ->
-    {next_state, StateName, State#state{reconnect_tref=undefined}};
+    {next_state, StateName, State#state{reconnect_tref=undefined}, ?HIBERNATE_TIMEOUT};
 handle_info({timeout, _Ref, ?RECONNECT_MSG}, StateName,
             State = #state{}) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s at=reconnect_timeout "
           "err=invalid_timeout state=~p",
           log_info(State, [StateName])),
-    {next_state, StateName, State};
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
 
 handle_info(shutdown, _StateName, State) ->
     {stop, {shutdown,call}, State};
@@ -206,14 +207,18 @@ handle_info({'EXIT', BufPid, Reason}, StateName,
           "state=~p buffer_pid=~p err=~1000p",
           log_info(State, [StateName, BufPid, Reason])),
     NewState = start_drain_buffer(State#state{buf = undefined}),
-    {next_state, StateName, NewState};
+    {next_state, StateName, NewState, ?HIBERNATE_TIMEOUT};
 
 handle_info({'EXIT', ClientPid, Reason}, StateName,
             State = #state{client = ClientPid}) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s at=http_client_exit "
           "state=~p client_pid=~p err=~1000p",
           log_info(State, [StateName, ClientPid, Reason])),
-    {next_state, StateName, State};
+    {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
+
+handle_info(timeout, StateName, State) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, StateName, State, hibernate};
 
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
@@ -255,8 +260,13 @@ http_fail(State = #state{client = Client}) ->
                    undefined ->
                        State
                end,
-    {next_state, disconnected,
-     set_reconnect_timer(NewState)}.
+    %% We hibernate only when we need to reconnect with a timer. The timer
+    %% acts as a rate limiter! If you remove the timer, you must re-think
+    %% the hibernation.
+    case set_reconnect_timer(NewState) of
+        NewState -> {next_state, disconnected, NewState};
+        ReconnectState -> {next_state, disconnected, ReconnectState, hibernate}
+    end.
 
 %% @private
 ready_to_send(State = #state{buf = Buf,
@@ -265,7 +275,7 @@ ready_to_send(State = #state{buf = Buf,
         {empty, Q} ->
             logplex_drain_buffer:set_active(Buf, target_bytes(),
                                             fun ?MODULE:drain_buf_framing/1),
-            {next_state, connected, State};
+            {next_state, connected, State, ?HIBERNATE_TIMEOUT};
         {{value, Frame}, Q2} ->
             try_send(Frame, State#state{out_q = Q2})
     end.
@@ -333,22 +343,8 @@ terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
-code_change(v61, StateName, State, _Extra) ->
-    NewState0 = list_to_tuple(tuple_to_list(State) ++ [undefined]),
-    OldQueue = NewState0#state.out_q,
-    NewState = case queue:is_empty(OldQueue) of
-        true -> NewState0;
-        false ->
-            Queue = queue:from_list(
-                [#frame{frame=Frame, msg_count=Count, loss_count=0,
-                        tries=Tries, id=Id}
-                 || {frame, Frame, Count, Tries, Id} <- queue:to_list(OldQueue)]
-            ),
-            NewState0#state{out_q=Queue}
-    end,
-    {ok, StateName, NewState};
 code_change(_OldVsn, StateName, State, _Extra) ->
-    {ok, StateName, State}.
+    {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=URI}, Rest)
