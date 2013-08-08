@@ -22,6 +22,9 @@ UpgradeNode = fun () ->
                         [info, {lager_default_formatter, [message, "\n"]}]}
                       ]),
   application:set_env(lager, crash_log, undefined),
+  application:set_env(lager, async_threshold, 100),
+  application:set_env(lager, async_threshold_window, 20),
+  application:set_env(lager, error_logger_hwm, 500),
   logplex_app:a_start(lager, permanent),
   %% Potentially most catastrophic upgrade -- should be doable at run-time
   %% and self-upgrade
