@@ -15,6 +15,7 @@ UpgradeNode = fun () ->
   %% Start Lager with the correct handlers
   code:add_pathz("deps/lager/ebin"),
   code:add_pathz("deps/goldrush/ebin"),
+  code:add_pathz("deps/recon/ebin"),
   application:load(lager),
   application:set_env(lager,
                       handlers,
