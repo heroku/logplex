@@ -1,0 +1,45 @@
+#!/usr/bin/env escript
+
+%% Only works on localhost, assumes the current hostname will fit the localhost
+-define(NAME, filename:basename(escript:script_name())).
+
+main(["t."++_ = Token]) ->
+    Node = connect("logplex"),
+    Res = rpc:call(Node, logplex_token, lookup, [iolist_to_binary(Token)]),
+    io:format("App Id: ~p~n", [element(3,Res)]),
+    disconnect(),
+    halt(0);
+main(_) -> %% HELP
+    io:format("t.<token>~n"
+              "\tFetches the token data on logplex@<Node> and returns the app id.~n"),
+    halt(0).
+
+connect(Name) ->
+    %% -name ?FILE -hidden -setcookie $LOGPLEX_COOKIE
+    Node = name(Name),
+    io:format("Starting distributed mode.~n"),
+    {ok, _} = net_kernel:start([name(), longnames]),
+    set_cookie(Node),
+    io:format("Connecting (hidden) to ~p.~n", [Node]),
+    true = net_kernel:hidden_connect(Node), % undocumented yay!
+    io:format("Connected.~n"),
+    Node.
+
+disconnect() ->
+    io:format("Disconnecting.~n"),
+    net_kernel:stop().
+
+name() ->
+    name(?NAME).
+
+name(Name) ->
+    Localhost = net_adm:localhost(),
+    list_to_atom(Name ++ "@" ++ Localhost).
+
+set_cookie(Node) ->
+    case os:getenv("LOGPLEX_COOKIE") of
+        false ->
+            io:format("LOGPLEX_COOKIE not found, proceeding without it.~n");
+        Cookie ->
+            erlang:set_cookie(Node, list_to_atom(Cookie))
+    end.
