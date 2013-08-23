@@ -4,6 +4,8 @@
 %% Only works on localhost, assumes the current hostname will fit the localhost
 -define(NAME, filename:basename(escript:script_name())).
 
+main([Op]) -> main([Op, "logplex"]);
+
 main(["nodes", Name]) ->
     Node = connect(Name),
     Res = rpc:call(Node, redgrid, nodes, []),
@@ -24,6 +26,13 @@ main(["resume", Name]) ->
     io:format("ok.~n"),
     disconnect(),
     halt(0);
+main(["reload_config", Name]) ->
+    Node = connect(Name),
+    io:format("Reloading redgrid conf... "),
+    Res = rpc:call(Node, redgrid, reload_config, []),
+    io:format("Result: ~p.~n", [Res]),
+    disconnect(),
+    halt(0);
 main(["status", Name]) ->
     Node = connect(Name),
     Res = rpc:call(Node, sys, get_status, [redgrid]),
@@ -37,6 +46,8 @@ main(_) -> %% HELP
               "\tDeregister <Node> from redgrid and suspend the update process.~n"
               "resume <Node>~n"
               "\tRegister <Node> back into redgrid and resume regular activities.~n"
+              "reload_config <Node>~n"
+              "\tReload <Node>'s configuration from the app env or OS if not defined.~n"
               "status <Node>~n"
               "\tFetches the process status for redgrid on node <Node>.~n"),
     halt(0).
