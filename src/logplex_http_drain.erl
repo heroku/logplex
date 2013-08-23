@@ -53,7 +53,7 @@
 -define(HTTP_VERSION, 'HTTP/1.1').
 -define(RECONNECT_MSG, reconnect).
 -define(CONNECT_TIMEOUT, 1000).
--define(REQUEST_TIMEOUT, 1000).
+-define(REQUEST_TIMEOUT, 5000).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
