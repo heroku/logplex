@@ -72,10 +72,13 @@ v2_canary_fetch(Config) ->
     %% have 10, each with the right numbers, in order, at the last position
     Body = proplists:get_value(body, Res),
     Logs = string:tokens(Body, "\n"),
-    10 = length(Logs),
     ct:pal("zips: ~p",[lists:zip(lists:seq(1,10),Logs)]),
-    10 = length([1 || {N,Log} <- lists:zip(lists:seq(1,10),Logs),
-                      lists:suffix(integer_to_list(N), Log)]),
+    10 = length(Logs),
+    [1,2,3,4,5,6,7,8,9,10] = lists:sort(
+    [begin
+      {match, [N]} = re:run(Log, "[0-9]{1,2}$", [{capture,first,list}]),
+      list_to_integer(N)
+     end || Log <- Logs]),
     Config.
 
 %% Other helpers
