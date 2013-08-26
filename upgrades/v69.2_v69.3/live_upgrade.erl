@@ -16,8 +16,10 @@ UpgradeNode = fun () ->
   l(logplex_http_drain),
 
   %% redgrid change of state
+  code:add_pathz("deps/backoff/ebin"),
   sys:suspend(redgrid),
   l(redgrid),
+  sys:change_code(redgrid, redgrid, "v69.3", undefined),
   sys:resume(redgrid),
 
   application:set_env(logplex, git_branch, "v69.3"),
