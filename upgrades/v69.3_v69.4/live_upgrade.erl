@@ -12,7 +12,9 @@ UpgradeNode = fun () ->
           erlang:error({wrong_version, Else})
   end,
 
-  application:set_env(redgrid, redis_url, os:getenv("LOGPLEX_REDGRID_REDIS_URL")),
+  {ok, KeysFile} = file:read_file(filename:join(os:getenv("HOME"), "keys.sh")),
+  LogplexRedgridRedisUrl = hd([URL || "export LOGPLEX_REDGRID_REDIS_URL="++URL <- string:tokens(binary_to_list(KeysFile), "\n")]),
+  application:set_env(redgrid, redis_url, string:strip(LogplexRedgridRedisUrl, both, $')),
   supervisor:terminate_child(logplex_sup, redgrid),
   supervisor:restart_child(logplex_sup, redgrid),
   l(logplex_app),
