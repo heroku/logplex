@@ -104,8 +104,7 @@ cache_os_envvars() ->
                         optional}
                       ,{pagerduty_key, ["ROUTING_PAGERDUTY_SERVICE_KEY"],
                         optional}
-                      ,{redgrid_redis_url, ["LOGPLEX_CONFIG_REDIS_URL",
-                                            "LOGPLEX_STATS_REDIS_URL"]}
+                      ,{redgrid_redis_url, ["LOGPLEX_REDGRID_REDIS_URL"]}
                       ,{stats_redis_url, ["LOGPLEX_STATS_REDIS_URL"]}
                       ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
                         optional, %% in bytes
