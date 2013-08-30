@@ -147,7 +147,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 start_timer() ->
-    {_Mega, Secs, Micro} = now(),
+    {_Mega, Secs, Micro} = os:timestamp(),
     Time = 60000 - ((Secs rem 60 * 1000) + (Micro div 1000)),
     erlang:start_timer(Time, ?MODULE, flush).
 
