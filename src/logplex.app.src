@@ -16,6 +16,7 @@
                   ,ranch
                   ,cowboy
                   ,lager
+                  ,batchio
                  ]},
   {included_applications, [heroku_crashdumps]},
   {mod, {logplex_app, []}},
