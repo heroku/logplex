@@ -30,6 +30,7 @@ Given an empty local redis (v2.6ish):
     $ INSTANCE_NAME=`hostname` \
       LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
       LOGPLEX_SHARD_URLS="redis://localhost:6379" \
+      LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379" \
       LOCAL_IP="127.0.0.1" \
       LOGPLEX_COOKIE=123 \
       ERL_LIBS=`pwd`/deps/:$ERL_LIBS \
@@ -43,12 +44,13 @@ run
 
     $ INSTANCE_NAME=`hostname` \
       LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
+      LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379" \
       LOCAL_IP="127.0.0.1" \
       LOGPLEX_COOKIE=123 \
       LOGPLEX_AUTH_KEY=123 \
       erl -name logplex@`hostname` -pa ebin -env ERL_LIBS deps -s logplex_app -setcookie ${LOGPLEX_COOKIE} -config sys
 
-create creds    
+create creds
 
     1> logplex_cred:store(logplex_cred:grant('full_api', logplex_cred:grant('any_channel', logplex_cred:rename(<<"Local-Test">>, logplex_cred:new(<<"local">>, <<"password">>))))).
     ok
