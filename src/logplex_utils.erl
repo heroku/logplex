@@ -23,6 +23,7 @@
 -module(logplex_utils).
 -export([rpc/4, set_weight/1, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
+         format/4,
          parse_redis_url/1, nl/1, to_int/1]).
 
 -include("logplex.hrl").
@@ -78,17 +79,19 @@ formatted_utc_date() ->
     DateFormat = fun(Int) -> string:right(integer_to_list(Int), 2, $0) end,
     io_lib:format("~w-~s-~sT~s:~s:~s-~s:00", [Year, DateFormat(Month), DateFormat(Day), DateFormat(Hour), DateFormat(Min), DateFormat(Sec), DateFormat(Offset)]).
 
-format(Msg) when is_record(Msg, msg) ->
-    Ps =
-        case Msg#msg.ps of
-            undefined -> <<>>;
-            _ -> [<<"[">>, Msg#msg.ps, <<"]">>]
-        end,
-    iolist_to_binary([Msg#msg.time, <<" ">>, Msg#msg.source, Ps, <<": ">>,
-                      nl(Msg#msg.content)]);
-
+format(#msg{ps = Ps, time = Time, source = Source, content = Content}) ->
+    format(Ps, Time, Source, Content);
 format(_Msg) ->
     "".
+
+format(Ps, Time, Source, Content) ->
+    Ps1 =
+        case Ps of
+            undefined -> <<>>;
+            _ -> [<<"[">>, Ps, <<"]">>]
+        end,
+    iolist_to_binary([Time, <<" ">>, Source, Ps1, <<": ">>, nl(Content)]).
+
 
 -spec nl(iolist() | binary()) -> iolist().
 nl(<<>>) -> <<"\n">>;
