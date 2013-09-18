@@ -72,7 +72,8 @@ commit_update(_, 0) ->
 commit_update(Node, Retries) ->
     case rpc:call(Node, logplex_shard, attempt_to_commit_url_update, [], timer:seconds(60)) of
         good ->
-            shard_info_updated = rpc:call(Node, logplex_shard, make_update_permanent, []),
+            shard_info_updated = rpc:call(Node, logplex_shard, make_update_permanent, [],
+                                         timer:seconds(60)),
             {NewShards, _, _} = rpc:call(Node, logplex_shard_info, read,
                                          [logplex_read_pool_map]),
             NewShards;
