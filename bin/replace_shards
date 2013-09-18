@@ -39,14 +39,46 @@ update_shards(LogplexShardUrls, Cookie) ->
         {connected, Node} ->
             {OldShards, _, _} = rpc:call(Node, logplex_shard_info, read, [logplex_read_pool_map]),
             LogplexShards = rpc:call(Node, logplex_shard, prepare_shard_urls, [LogplexShardUrls]),
-            good = rpc:call(Node, logplex_shard, prepare_url_update, [LogplexShards]),
-            good = rpc:call(Node, logplex_shard, attempt_to_commit_url_update, []),
-            shard_info_updated = rpc:call(Node, logplex_shard, make_update_permanent, []),
+            NewShards = update_urls(Node, LogplexShards),
             {NewShards, _, _} = rpc:call(Node, logplex_shard_info, read, [logplex_read_pool_map]),
+            ok = rpc:call(Node, application, set_env, [logplex, logplex_shard_urls, NewShards]),
             io:format("Replaced shards:~n~p~nwith new shards:~n ~p~n", [dict:to_list(OldShards),
                                                                         dict:to_list(NewShards)])
     end.
 
+update_urls(Node, LogplexShards) ->
+    good = prepare_update(Node, LogplexShards, 5),
+    good = commit_update(Node, 5).
+
+prepare_update(_, _, 0) ->
+    {error, could_not_update};
+prepare_update(Node, LogplexShards, Retries) ->
+    case rpc:call(Node, logplex_shard, prepare_url_update, [LogplexShards],
+                  timer:seconds(60)) of
+        good ->
+            good;
+        _ ->
+            case catch rpc:call(Node, logplex_shard_info, map_list,
+                                [new_logplex_read_pool_map]) of
+                List when is_list(List) ->
+                    good;
+                _ ->
+                    prepare_update(Node, LogplexShards, Retries - 1)
+            end
+    end.
+
+commit_update(_, 0) ->
+    {error, could_not_commit};
+commit_update(Node, Retries) ->
+    case rpc:call(Node, logplex_shard, attempt_to_commit_url_update, [], timer:seconds(60)) of
+        good ->
+            shard_info_updated = rpc:call(Node, logplex_shard, make_update_permanent, []),
+            {NewShards, _, _} = rpc:call(Node, logplex_shard_info, read,
+                                         [logplex_read_pool_map]),
+            NewShards;
+        _ ->
+            commit_update(Node, Retries - 1)
+    end.
 
 connect(RemoteNode, Cookie) ->
     MyName = caller_name(),
