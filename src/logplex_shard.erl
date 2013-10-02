@@ -106,7 +106,9 @@ handle_call({commit, new_shard_info}, _From, State) ->
     backup_shard_info(),
     try
         make_new_shard_info_permanent(),
-        {reply, ok, State}
+        Map = dict:to_list(element(1,logplex_shard_info:read(?CURRENT_WRITE_MAP))),
+        Urls = logplex_shard:redis_sort([URL || {_Inter, {URL, _Pid}} <- Map]),
+        {reply, ok, State#state{urls=Urls}}
     catch C:E ->
             revert_shard_info(),
             {reply, {error, {C, E}}, State}
