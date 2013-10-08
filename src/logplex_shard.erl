@@ -28,7 +28,6 @@
          handle_info/2, terminate/2, code_change/3]).
 
 -export([lookup/3
-         ,logs_redis_urls/0
          ,urls/0
          ,redis_sort/1]).
 
@@ -50,7 +49,7 @@
 -define(CURRENT_WRITE_MAP, logplex_redis_buffer_map).
 -define(BACKUP_WRITE_MAP, backup_logplex_redis_buffer_map).
 
--record(state, {urls}).
+-record(state, {}).
 
 -define(TIMEOUT, 30000).
 
@@ -65,8 +64,9 @@ lookup(Key, Map, Interval) ->
         Other -> exit({shard_not_found, Other})
     end.
 
+-spec urls() -> [ Url::string() ].
 urls() ->
-    gen_server:call(?MODULE, urls).
+    redis_sort(logplex_app:config(logplex_shard_urls)).
 
 %%====================================================================
 %% gen_server callbacks
@@ -82,7 +82,7 @@ urls() ->
 %%--------------------------------------------------------------------
 init([]) ->
     ?INFO("at=init", []),
-    Urls = logs_redis_urls(),
+    Urls = urls(),
 
     erlang:process_flag(trap_exit, true),
 
@@ -90,7 +90,7 @@ init([]) ->
 
     populate_info_table(Urls),
 
-    {ok, #state{urls=Urls}}.
+    {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -139,8 +139,8 @@ handle_call({make_permanent, new_shard_info}, _From, State) ->
             {reply, {error, {C,E}}, State}
     end;
 
-handle_call(consistency_check, _From, State = #state{urls = Urls}) ->
-    {reply, try consistent(Urls)
+handle_call(consistency_check, _From, State = #state{}) ->
+    {reply, try consistent(urls())
             catch C:E ->
                     {error, {C, E, erlang:get_stacktrace()}}
             end, State};
@@ -153,9 +153,6 @@ handle_call({state_apply, F}, _From, State)
         Else ->
             {reply, {error, Else}, State}
     end;
-
-handle_call(urls, _From, State) ->
-    {reply, State#state.urls, State};
 
 handle_call(_Msg, _From, State) ->
     {reply, {error, invalid_call}, State}.
@@ -207,9 +204,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-logs_redis_urls() ->
-    redis_sort(logplex_app:config(logplex_shard_urls)).
-
 populate_info_table(Urls) ->
     populate_info_table(?CURRENT_READ_MAP, ?CURRENT_WRITE_MAP, Urls).
 
