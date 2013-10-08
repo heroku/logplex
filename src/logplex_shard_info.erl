@@ -15,6 +15,7 @@
          ,pid_info/1
          ,map_list/1
          ,pid_list/1
+         ,url_list/1
          ,copy/2
          ,delete/1
         ]).
@@ -103,6 +104,9 @@ map_list(Key) ->
 
 pid_list(Key) ->
     [ Pid || {_, {_, Pid}} <- map_list(Key) ].
+
+url_list(Key) ->
+    [ Url || {_, {Url, _Pid}} <- map_list(Key) ].
 
 copy(FromKey, ToKey) when FromKey =/= ToKey ->
     {Map, Interval, _} = read(FromKey),
