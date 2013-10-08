@@ -42,6 +42,9 @@
     ,{logplex_shard_urls, "redis://localhost:6379"}
     ,{max_drains_per_channel, 5} % #channels
     ,{metrics_namespace, "dev"} % string, no spaces
+    ,{no_tail_warning,
+      "Error L20 (Tail sessions forbidden) "
+      "Tail sessions for this app are forbidden due to log volume."} % string
     ,{pagerduty, "0"} % "0" = disabled
     ,{queue_length, 2000}
     ,{redgrid_redis_url, "redis://localhost:6379"}
