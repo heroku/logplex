@@ -552,8 +552,7 @@ no_tail_warning() ->
     logplex_utils:format(undefined,
                          logplex_utils:formatted_utc_date(),
                          <<"Logplex">>,
-                         "Tail sessions for this channel are forbidden"
-                         " due to log volume.").
+                         logplex_app:config(no_tail_warning)).
 
 tail_init(Socket, Buffer, Filters, ChannelId) ->
     inet:setopts(Socket, [{active, once}]),
