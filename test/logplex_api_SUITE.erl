@@ -7,10 +7,19 @@ groups() ->
       [v2_canary_session
        ,v2_canary_fetch
       ]}
+    ,{read_only, [],
+      [{group, v2_canary} % canaries keep working when API read-only
+      ]}
+    ,{disabled, [], % nothing works with API disabled
+      [unavailable_v2_canary_session
+      ,unavailable_v2_canary_fetch
+      ]}
     ].
 
 all() ->
     [{group, v2_canary}
+    ,{group, read_only}
+    ,{group, disabled}
     ].
 
 init_per_suite(Config) ->
@@ -21,6 +30,32 @@ init_per_suite(Config) ->
 
 end_per_suite(_Config) ->
     application:stop(logplex).
+
+init_per_group(read_only, Config) ->
+    InitialStatus = application:get_env(logplex, api_status),
+    logplex_api:set_status(read_only),
+    read_only = logplex_api:status(),
+    [{initial_api_status, InitialStatus} | Config];
+init_per_group(disabled, Config) ->
+    InitialStatus = application:get_env(logplex, api_status),
+    logplex_api:set_status(disabled),
+    disabled = logplex_api:status(),
+    [{initial_api_status, InitialStatus} | Config];
+init_per_group(_, Config) ->
+    Config.
+
+end_per_group(read_only, Config) ->
+    case ?config(initial_api_status, Config) of
+        undefined -> application:unset_env(logplex, api_status);
+        {ok,Val} -> application:set_env(logplex, api_status, Val)
+    end;
+end_per_group(disabled, Config) ->
+    case ?config(initial_api_status, Config) of
+        undefined -> application:unset_env(logplex, api_status);
+        {ok,Val} -> application:set_env(logplex, api_status, Val)
+    end;
+end_per_group(_, _Config) ->
+    ok.
 
 init_per_testcase(v2_canary_session=Case, Config) ->
     Channel = logplex_channel:create(atom_to_binary(Case, latin1)),
@@ -39,7 +74,33 @@ init_per_testcase(v2_canary_fetch, Config) ->
         N <- lists:seq(1, 10)],
     timer:sleep(1000),
     Config;
+init_per_testcase(unavailable_v2_canary_session=Case, Config) ->
+    Channel = logplex_channel:create(atom_to_binary(Case, latin1)),
+    ChannelId = logplex_channel:id(Channel),
+    logplex_SUITE:wait_for_chan(Channel),
+    logplex_channel:register({channel, ChannelId}),
+    logplex_SUITE:wait_for_registration({channel, ChannelId}),
+    [{channel_id, ChannelId}|Config];
+init_per_testcase(unavailable_v2_canary_fetch=Case, Config) ->
+    % Create a token and hook up to the channel
+    Channel = logplex_channel:create(atom_to_binary(Case, latin1)),
+    ChannelId = logplex_channel:id(Channel),
+    logplex_SUITE:wait_for_chan(Channel),
+    logplex_channel:register({channel, ChannelId}),
+    logplex_SUITE:wait_for_registration({channel, ChannelId}),
+    %% Create a working session to simulate a failure after having gotten auth
+    UUID = logplex_session:publish(<<"{\"channel_id\":\"",
+                                     (list_to_binary(integer_to_list(ChannelId)))/binary,
+                                     "\"}">>),
+    TokenId = logplex_token:create(ChannelId, <<"ct">>),
+    Token = logplex_SUITE:get_token(TokenId),
+    [ok = logplex_SUITE:send_msg(make_msg(Token, N)) ||
+        N <- lists:seq(1, 10)],
+    [{canary_session, UUID} | Config];
 init_per_testcase(_Case, Config) ->
+    Config.
+
+end_per_testcase(_Case, Config) ->
     Config.
 
 v2_canary_session(Config) ->
@@ -80,6 +141,21 @@ v2_canary_fetch(Config) ->
       list_to_integer(N)
      end || Log <- Logs]),
     Config.
+
+unavailable_v2_canary_session(Config) ->
+    Api = ?config(api, Config) ++ "/v2/canary-sessions",
+    BasicAuth = ?config(auth, Config),
+    ChannelId = ?config(channel_id, Config),
+    Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
+                     {body, "{\"channel_id\":\"" ++ integer_to_list(ChannelId) ++ "\"}"}]),
+    503 = proplists:get_value(status_code, Res).
+
+unavailable_v2_canary_fetch(Config) ->
+    Session = proplists:get_value(canary_session, Config),
+    Api = ?config(api, Config) ++ "/v2/canary-fetch/"
+        ++ binary_to_list(Session) ++ "?srv=ct",
+    Res = get_(Api, []),
+    503 = proplists:get_value(status_code, Res).
 
 %% Other helpers
 get_(Url, Opts) ->
