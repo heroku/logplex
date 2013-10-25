@@ -54,9 +54,7 @@ new(Max) when is_integer(Max), Max > 0 ->
 -spec push(msg(), buf()) -> buf().
 push(Msg, Buf = #lpdb{}) ->
     {_, NewBuf} = push_ext(Msg, Buf),
-    NewBuf;
-push(Msg, Buf = ?OLDBUF) ->
-    push(Msg, convert(Buf)).
+    NewBuf.
 
 -spec push_ext(msg(), buf()) -> {'displace' | 'insert', buf()}.
 push_ext(Msg, Buf = #lpdb{}) ->
@@ -65,9 +63,7 @@ push_ext(Msg, Buf = #lpdb{}) ->
             {displace, displace(Msg, Buf)};
         have_space ->
             {insert, insert(Msg, Buf)}
-    end;
-push_ext(Msg, Buf = ?OLDBUF) ->
-    push_ext(Msg, convert(Buf)).
+    end.
 
 -spec pop(buf()) -> {empty, buf()} |
                     {{msg, msg()}, buf()} |
@@ -86,20 +82,15 @@ pop(Buf = #lpdb{loss_count = N,
   when N > 0 ->
     {{loss_indication, N, When},
      Buf#lpdb{loss_count = 0,
-              loss_start = undefined}};
-pop(Buf = ?OLDBUF) ->
-    pop(convert(Buf)).
+              loss_start = undefined}}.
 
 full(#lpdb{max_size = Max, size = N}) when N >= Max -> full;
-full(#lpdb{}) -> have_space;
-full(Buf = ?OLDBUF) -> full(convert(Buf)).
+full(#lpdb{}) -> have_space.
 
 empty(#lpdb{size = 0}) -> empty;
-empty(#lpdb{}) -> not_empty;
-empty(Buf = ?OLDBUF) -> empty(convert(Buf)).
+empty(#lpdb{}) -> not_empty.
 
-len(#lpdb{size=Len}) -> Len;
-len(Buf = ?OLDBUF) -> len(convert(Buf)).
+len(#lpdb{size=Len}) -> Len.
 
 -spec to_list(buf()) -> [msg()].
 to_list(#lpdb{messages = Q,
@@ -110,23 +101,17 @@ to_list(#lpdb{messages = Q,
               loss_start = When})
   when N > 0 ->
     [{loss_indication, N, When} |
-     queue:to_list(Q)];
-to_list(Buf = ?OLDBUF) ->
-    to_list(convert(Buf)).
+     queue:to_list(Q)].
 
 -spec from_list([msg()]) -> #lpdb{}.
 from_list(Msgs) ->
     #lpdb{messages = queue:from_list(Msgs), size = length(Msgs)}.
 
 insert(Msg, Buf = #lpdb{messages = Q, size = Len}) ->
-    Buf#lpdb{messages = queue:in(Msg, Q), size = Len+1};
-insert(Msg, Buf = ?OLDBUF) ->
-    insert(Msg, convert(Buf)).
+    Buf#lpdb{messages = queue:in(Msg, Q), size = Len+1}.
 
 displace(Msg, Buf = #lpdb{}) ->
-    insert(Msg, lose(1, drop(1, Buf)));
-displace(Msg, Buf = ?OLDBUF) ->
-    displace(Msg, convert(Buf)).
+    insert(Msg, lose(1, drop(1, Buf))).
 
 -ifdef(TEST).
 
@@ -155,9 +140,7 @@ drop(N, Buf = #lpdb{messages = Queue, size=Size})
                             Size < N -> % Trying to drop all (or more) items in queue
                                 {queue:new(),0}
                          end,
-    Buf#lpdb{messages = NewQueue, size=NewSize};
-drop(N, Buf = ?OLDBUF) ->
-    drop(N, convert(Buf)).
+    Buf#lpdb{messages = NewQueue, size=NewSize}.
 
 -ifdef(TEST).
 
@@ -182,9 +165,7 @@ lose(Time = {_,_,_}, Count, Buf = #lpdb{loss_count=0})
              loss_start=Time};
 lose(_Time, NewCount, Buf = #lpdb{loss_count=OldCount})
   when NewCount > 0, is_integer(OldCount) ->
-    Buf#lpdb{loss_count=NewCount + OldCount};
-lose(Time, Count, Buf = ?OLDBUF) ->
-    lose(Time, Count, convert(Buf)).
+    Buf#lpdb{loss_count=NewCount + OldCount}.
 
 -ifdef(TEST).
 lose_test_() ->
@@ -200,8 +181,7 @@ lose2_test_() ->
 -endif.
 
 -spec lost(buf()) -> non_neg_integer().
-lost(#lpdb{loss_count=N}) -> N;
-lost(Buf = ?OLDBUF) -> lost(convert(Buf)).
+lost(#lpdb{loss_count=N}) -> N.
 
 -spec to_pkts(buf(), IdealBytes::pos_integer(),
               framing_fun()) ->
@@ -209,9 +189,7 @@ lost(Buf = ?OLDBUF) -> lost(convert(Buf)).
 to_pkts(Buf = #lpdb{},
         Bytes, Fun) when is_integer(Bytes),
                          is_function(Fun, 1) ->
-    to_pkts(Buf, Bytes, Bytes, Fun);
-to_pkts(Buf = ?OLDBUF, Bytes, Fun) ->
-    to_pkts(convert(Buf), Bytes, Fun).
+    to_pkts(Buf, Bytes, Bytes, Fun).
 
 to_pkts(Buf, BytesTotal, BytesRemaining, Fun)
   when BytesRemaining > 0 ->
@@ -260,12 +238,10 @@ resize(NewSize, Buf = #lpdb{size=Len})
     case Len - NewSize of
         ToDrop when ToDrop > 0 ->
             lose(ToDrop,
-                 drop(ToDrop, Buf));
+                 drop(ToDrop, Buf#lpdb{max_size=NewSize}));
         _ ->
             Buf#lpdb{max_size=NewSize}
-    end;
-resize(NewSize, Buf = ?OLDBUF) ->
-    resize(NewSize, convert(Buf)).
+    end.
 
 -ifdef(TEST).
 
@@ -282,10 +258,3 @@ resize_test_() ->
     ].
 
 -endif.
-
-convert({lpdb, Msgs, Max, LossStart, LossCount}) ->
-    #lpdb{messages=Msgs,
-          max_size=Max,
-          size=queue:len(Msgs),
-          loss_start=LossStart,
-          loss_count=LossCount}.
