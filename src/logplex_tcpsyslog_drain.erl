@@ -403,15 +403,17 @@ reconnect(State = #state{failures = F, last_good_time=LastGood, buf=Buf}) ->
               end,
     NewBuf = case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
         true -> Buf;
-        false when is_tuple(LastGood), tuple_size(LastGood) =:= 3 ->
-            case now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT of
-                true -> % more than SHRINK time since last connect
+        false ->
+            %% Shrink if we have never connected before or the last update time
+            %% is more than ?SHRINK_TIMEOUT milliseconds old
+            case (is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
+                  now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
+                 orelse LastGood =:= undefined of
+                true ->
                     logplex_msg_buffer:resize(?SHRINK_BUF_SIZE, Buf);
                 false ->
                     Buf
-            end;
-        false -> % we don't resize if we never connected
-            Buf
+            end
     end,
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
