@@ -14,6 +14,9 @@
 -define(SEND_TIMEOUT_MSG, send_timeout).
 -define(SEND_TIMEOUT, timer:seconds(4)).
 -define(HIBERNATE_TIMEOUT, 5000).
+-define(SHRINK_TIMEOUT, timer:minutes(5)).
+-define(SHRINK_BUF_SIZE, 10).
+
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -27,7 +30,7 @@
                 port :: inet:port_number(),
                 sock = undefined :: 'undefined' | inet:socket(),
                 %% Buffer for messages while disconnected
-                buf = logplex_msg_buffer:new() :: logplex_msg_buffer:buf(),
+                buf = logplex_msg_buffer:new(default_buf_size()) :: logplex_msg_buffer:buf(),
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
                 %% TCP failures since last_good_time
@@ -305,15 +308,21 @@ code_change(_OldVsn, StateName, State, _Extra) ->
                           {next_state, pstate(), #state{}}.
 do_reconnect(State = #state{sock = undefined,
                             reconnect_tref = undefined,
+                            buf=Buf,
                             failures = Failures}) ->
     case connect(State) of
         {ok, Sock} ->
             ?INFO("drain_id=~p channel_id=~p dest=~s "
                   "state=disconnected at=connect try=~p sock=~p",
                   log_info(State, [Failures + 1, Sock])),
+            NewBuf = case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
+                        true -> logplex_msg_buffer:resize(default_buf_size(), Buf);
+                        false -> Buf
+                    end,
             NewState = State#state{sock=Sock,
                                    reconnect_tref = undefined,
                                    send_tref = undefined,
+                                   buf = NewBuf,
                                    connect_time=os:timestamp()},
             send(NewState);
         {error, Reason} ->
@@ -386,17 +395,32 @@ reconnect(State = #state{failures = 0, last_good_time=T})
         _EnoughTime ->
             do_reconnect(State)
     end;
-reconnect(State = #state{failures = F}) ->
+reconnect(State = #state{failures = F, last_good_time=LastGood, buf=Buf}) ->
     Max = logplex_app:config(tcp_syslog_backoff_max, 300),
     BackOff = case length(integer_to_list(Max, 2)) of
                   MaxExp when F > MaxExp -> Max;
                   _ -> 1 bsl F
               end,
+    NewBuf = case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
+        true -> Buf;
+        false ->
+            %% Shrink if we have never connected before or the last update time
+            %% is more than ?SHRINK_TIMEOUT milliseconds old
+            case (is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
+                  now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
+                 orelse LastGood =:= undefined of
+                true ->
+                    logplex_msg_buffer:resize(?SHRINK_BUF_SIZE, Buf);
+                false ->
+                    Buf
+            end
+    end,
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
     %% the hibernation.
     {next_state, disconnected,
-     reconnect_in(timer:seconds(BackOff), State), hibernate}.
+     reconnect_in(timer:seconds(BackOff), State#state{buf=NewBuf}),
+     hibernate}.
 
 reconnect_in(MS, State = #state{}) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
@@ -552,3 +576,7 @@ target_send_size() ->
             logplex_app:config(tcp_drain_target_bytes,
                                ?TARGET_SEND_SIZE)
     end.
+
+now_to_msec({Mega,Sec,_}) -> (Mega*1000000 + Sec)*1000.
+
+default_buf_size() -> logplex_app:config(tcp_drain_buffer_size, 1024).

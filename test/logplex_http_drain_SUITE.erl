@@ -1,5 +1,6 @@
 -module(logplex_http_drain_SUITE).
 -include_lib("common_test/include/ct.hrl").
+-include_lib("ex_uri/include/ex_uri.hrl").
 -compile(export_all).
 
 all() -> [{group, overflow},
@@ -7,7 +8,21 @@ all() -> [{group, overflow},
 
 groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                              full_buffer_temp_fail, full_stack]},
-             {drain_buf, [], [restart_drain_buf]}].
+             {drain_buf, [], [restart_drain_buf, shrink]}].
+
+-record(state, {drain_id :: logplex_drain:id(),
+                drain_tok :: logplex_drain:token(),
+                channel_id :: logplex_channel:id(),
+                uri :: #ex_uri{},
+                buf :: pid(),
+                client :: pid(),
+                out_q = queue:new() :: queue(),
+                reconnect_tref :: reference() | 'undefined',
+                drop_info,
+                %% Last time we connected or successfully sent data
+                last_good_time :: 'undefined' | erlang:timestamp(),
+                service = normal :: 'normal' | 'degraded'
+               }).
 
 init_per_suite(Config) ->
     set_os_vars(),
@@ -85,6 +100,36 @@ init_per_testcase(full_stack, Config) ->
     unlink(Pid),
     [{channel, ChannelId}, {drain_id, DrainId}, {drain_tok, DrainTok},
      {uri, URI}, {drain,Pid}, {client, Tab} | Config];
+init_per_testcase(shrink, Config) ->
+    %% Drain data
+    ChannelId = 1337,
+    DrainId = 2198712,
+    DrainTok = "d.12931-e21-312213-12321",
+    {ok,URI,_} = ex_uri:decode("http://example.org:80"),
+    %% --- Mocks ---
+    %% Drain buffer
+    Ref = mock_drain_buffer(),
+    %% HTTP Client
+    meck:new(logplex_http_client, [passthrough]),
+    meck:expect(logplex_http_client, start_link,
+        fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
+            {ok, self()}
+        end),
+    meck:expect(logplex_http_client, close, fun(_Pid) -> ok end),
+    %% We make failure controleable by helper functions.
+    %% Rube goldberg-esque, but makes writing the actual test
+    %% a bit simpler. Succeeds by default
+    Tab = client_call_init(),
+    meck:expect(logplex_http_client, raw_request,
+        fun(_Pid, _Req, _Timeout) ->
+                Status = client_call_status(Tab),
+                {ok, Status, []}
+        end),
+    %% Starting the drain
+    {ok, Pid} = logplex_http_drain:start_link(ChannelId, DrainId, DrainTok, URI),
+    unlink(Pid),
+    [{channel, ChannelId}, {drain_id, DrainId}, {drain_tok, DrainTok},
+     {uri, URI}, {buffer, Ref}, {drain,Pid}, {client, Tab} | Config];
 init_per_testcase(_, Config) ->
     %% Drain data
     ChannelId = 1337,
@@ -152,6 +197,11 @@ mock_drain_buffer() ->
                 fun(_Buf, _Bytes, _Fun) ->
                     ok
                 end),
+    meck:expect(logplex_drain_buffer, resize_msg_buffer,
+        fun(_Buf, Size) when Size > 0 ->
+      ct:pal("CALLED: (~p, ~p)", [_Buf, Size]),
+                ok
+        end),
     Id.
 
 client_call_init() ->
@@ -353,6 +403,37 @@ restart_drain_buf(Config) ->
                                                      buf_alive),
     ct:pal("New buf ~p", [Buf1]),
     false = Buf0 =:= Buf1.
+
+shrink(Config) ->
+    Buf = ?config(buffer, Config),
+    State1 = #state{last_good_time={0,0,0},
+                    buf = Buf,
+                    uri = ?config(uri, Config),
+                    service=normal},
+    meck:expect(logplex_http_client, start_link,
+        fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
+            {error, mocked}
+        end),
+    %% Simulate an event according to which we've been disconnected
+    %% for a long time. This goes -> cancel_reconnect -> try_connect.
+    %% This in turns tries to connect, which fails because of the mock above.
+    %% This in turns calls http_fail/1, which will call resize on the buffer
+    Res1 = logplex_http_drain:disconnected({logplex_drain_buffer, Buf, new_data}, State1),
+    %% This remains disconnected and degraded the service
+    {next_state, disconnected, State2=#state{service=degraded}, hibernate} = Res1,
+    %% also called the drain buffer for a resize down to 10
+    wait_for_mocked_call(logplex_drain_buffer, resize_msg_buffer, ['_',10], 1, 1000),
+    %% This worked, so let's see the opposite -- that the size is brought back up
+    %% to whatever configured value we have:
+    Val = logplex_app:config(http_drain_buffer_size, 1024),
+    meck:expect(logplex_http_client, start_link,
+        fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
+            {ok, self()}
+        end),
+    Res2 = logplex_http_drain:disconnected({logplex_drain_buffer, Buf, new_data}, State2),
+    {next_state, connected, #state{service=normal}, _} = Res2,
+    %% The buffer was resized
+    wait_for_mocked_call(logplex_drain_buffer, resize_msg_buffer, ['_',Val], 1, 1000).
 
 %%% HELPERS
 wait_for_mocked_call(Mod, Fun, Args, NumCalls, Time) ->
