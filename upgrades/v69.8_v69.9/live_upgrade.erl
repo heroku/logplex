@@ -22,11 +22,11 @@ UpgradeNode = fun () ->
   %% Stateful changes to HTTP drains -- gotta suspend, reload, and then
   %% resume all drains before going for the stateless drain buffer update
   Drains = [Pid || {Pid, http} <- gproc:lookup_local_properties(drain_type)],
-  _ = [sys:suspend(Pid) || Pid <- Drains],
+  _ = [sys:suspend(Pid, 30000) || Pid <- Drains],
   l(logplex_http_drain),
-  _ = [sys:change_code(Pid, logplex_http_drain, "v69.8", undefined)
+  _ = [sys:change_code(Pid, logplex_http_drain, "v69.8", undefined, 30000)
        || Pid <- Drains, erlang:is_process_alive(Pid)],
-  _ = [sys:resume(Pid) || Pid <- Drains],
+  _ = [sys:resume(Pid, 30000) || Pid <- Drains, erlang:is_process_alive(Pid)],
 
 
   application:set_env(logplex, git_branch, "v69.9"),
@@ -53,11 +53,11 @@ RollbackNode = fun () ->
   %% Stateful changes to HTTP drains -- gotta suspend, reload, and then
   %% resume all drains before going for the stateless drain buffer update
   Drains = [Pid || {Pid, http} <- gproc:lookup_local_properties(drain_type)],
-  _ = [sys:suspend(Pid) || Pid <- Drains],
+  _ = [sys:suspend(Pid, 60000) || Pid <- Drains],
   l(logplex_http_drain),
-  _ = [sys:change_code(Pid, logplex_http_drain, "v69.9", undefined)
+  _ = [sys:change_code(Pid, logplex_http_drain, "v69.9", undefined, 60000)
        || Pid <- Drains, erlang:is_process_alive(Pid)],
-  _ = [sys:resume(Pid) || Pid <- Drains],
+  _ = [sys:resume(Pid, 60000) || Pid <- Drains, erlang:is_process_alive(Pid)],
 
 
   application:set_env(logplex, git_branch, "v69.8"),
