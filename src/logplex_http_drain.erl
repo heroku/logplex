@@ -254,12 +254,7 @@ try_connect(State = #state{uri=Uri,
             ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
-            case Status of
-                normal ->
-                    ok;
-                degraded ->
-                    logplex_drain_buffer:resize_msg_buffer(Buf, default_buf_size())
-            end,
+            maybe_resize(Status, Buf),
             ready_to_send(State#state{client=Pid, service=normal});
         Why ->
             ConnectEnd = os:timestamp(),
@@ -270,36 +265,24 @@ try_connect(State = #state{uri=Uri,
     end.
 
 %% @private
-http_fail(State = #state{client=Client,
-                         buf=Buf,
-                         last_good_time=LastGood,
-                         service=Status}) ->
+http_fail(State = #state{client=Client}) ->
     %% Close any existing client connection.
-    NewState = case Client of
+    ClosedState = case Client of
                    Pid when is_pid(Pid) ->
                        logplex_http_client:close(Pid),
                        State#state{client = undefined};
                    undefined ->
                        State
                end,
-    Service = case {(is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
-                     now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
-                    orelse LastGood =:= undefined,
-                   Status} of
-        {true, normal} ->
-            logplex_drain_buffer:resize_msg_buffer(Buf, ?SHRINK_BUF_SIZE),
-            degraded;
-        {_, _} ->
-            normal
-    end,
+    NewState = maybe_shrink(ClosedState),
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
     %% the hibernation.
     case set_reconnect_timer(NewState) of
         NewState ->
-            {next_state, disconnected, NewState#state{service=Service}};
+            {next_state, disconnected, NewState};
         ReconnectState ->
-            {next_state, disconnected, ReconnectState#state{service=Service}, hibernate}
+            {next_state, disconnected, ReconnectState, hibernate}
     end.
 
 %% @private
@@ -600,6 +583,26 @@ start_drain_buffer(State = #state{channel_id=ChannelId,
     {ok, Buf} = logplex_drain_buffer:start_link(ChannelId, self(),
                                                 notify, Size),
     State#state{buf = Buf}.
+
+maybe_resize(Status, Buf) ->
+    case Status of
+        normal ->
+            ok;
+        degraded ->
+            logplex_drain_buffer:resize_msg_buffer(Buf, default_buf_size())
+    end.
+
+maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) ->
+    case {(is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
+                     now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
+                    orelse LastGood =:= undefined,
+                   Status} of
+        {true, normal} ->
+            logplex_drain_buffer:resize_msg_buffer(Buf, ?SHRINK_BUF_SIZE),
+            State#state{service=degraded};
+        {_, _} ->
+            State#state{service=normal}
+    end.
 
 now_to_msec({Mega,Sec,_}) -> (Mega*1000000 + Sec)*1000.
 

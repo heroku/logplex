@@ -315,14 +315,10 @@ do_reconnect(State = #state{sock = undefined,
             ?INFO("drain_id=~p channel_id=~p dest=~s "
                   "state=disconnected at=connect try=~p sock=~p",
                   log_info(State, [Failures + 1, Sock])),
-            NewBuf = case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
-                        true -> logplex_msg_buffer:resize(default_buf_size(), Buf);
-                        false -> Buf
-                    end,
             NewState = State#state{sock=Sock,
                                    reconnect_tref = undefined,
                                    send_tref = undefined,
-                                   buf = NewBuf,
+                                   buf = maybe_resize(Buf),
                                    connect_time=os:timestamp()},
             send(NewState);
         {error, Reason} ->
@@ -401,20 +397,7 @@ reconnect(State = #state{failures = F, last_good_time=LastGood, buf=Buf}) ->
                   MaxExp when F > MaxExp -> Max;
                   _ -> 1 bsl F
               end,
-    NewBuf = case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
-        true -> Buf;
-        false ->
-            %% Shrink if we have never connected before or the last update time
-            %% is more than ?SHRINK_TIMEOUT milliseconds old
-            case (is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
-                  now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
-                 orelse LastGood =:= undefined of
-                true ->
-                    logplex_msg_buffer:resize(?SHRINK_BUF_SIZE, Buf);
-                false ->
-                    Buf
-            end
-    end,
+    NewBuf = maybe_shrink(Buf, LastGood),
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
     %% the hibernation.
@@ -575,6 +558,29 @@ target_send_size() ->
         _ ->
             logplex_app:config(tcp_drain_target_bytes,
                                ?TARGET_SEND_SIZE)
+    end.
+
+maybe_resize(Buf) ->
+    case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
+        true -> logplex_msg_buffer:resize(default_buf_size(), Buf);
+        false -> Buf
+    end.
+
+maybe_shrink(Buf, LastGood) ->
+    case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
+        true ->
+            Buf;
+        false ->
+            %% Shrink if we have never connected before or the last update time
+            %% is more than ?SHRINK_TIMEOUT milliseconds old
+            case (is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
+                  now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
+                 orelse LastGood =:= undefined of
+                true ->
+                    logplex_msg_buffer:resize(?SHRINK_BUF_SIZE, Buf);
+                false ->
+                    Buf
+            end
     end.
 
 now_to_msec({Mega,Sec,_}) -> (Mega*1000000 + Sec)*1000.
