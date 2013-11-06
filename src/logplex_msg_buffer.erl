@@ -28,6 +28,7 @@
          ,push/2
          ,push_ext/2
          ,len/1
+         ,max_size/1
          ,empty/1
          ,pop/1
          ,resize/2
@@ -91,6 +92,8 @@ empty(#lpdb{size = 0}) -> empty;
 empty(#lpdb{}) -> not_empty.
 
 len(#lpdb{size=Len}) -> Len.
+
+max_size(#lpdb{max_size=Max}) -> Max.
 
 -spec to_list(buf()) -> [msg()].
 to_list(#lpdb{messages = Q,
