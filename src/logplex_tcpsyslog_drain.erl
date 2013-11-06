@@ -561,13 +561,13 @@ target_send_size() ->
     end.
 
 maybe_resize(Buf) ->
-    case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
+    case logplex_msg_buffer:max_size(Buf) =:= ?SHRINK_BUF_SIZE of
         true -> logplex_msg_buffer:resize(default_buf_size(), Buf);
         false -> Buf
     end.
 
 maybe_shrink(Buf, LastGood) ->
-    case logplex_msg_buffer:len(Buf) =:= ?SHRINK_BUF_SIZE of
+    case logplex_msg_buffer:max_size(Buf) =:= ?SHRINK_BUF_SIZE of
         true ->
             Buf;
         false ->
