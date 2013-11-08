@@ -62,6 +62,7 @@ loop(Req) ->
     Method = Req:get(method),
     Path = Req:get(path),
     ChannelId = header_value(Req, "Channel", ""),
+    RequestId = header_value(Req, "Request-Id", "unknown"),
     try
         Served = case serve(handlers(), Method, Path, Req, status()) of
                      {done,{C,D}} -> {done,{C,D}};
@@ -73,12 +74,12 @@ loop(Req) ->
             {Code, Hdr, Body} ->
                 Req:respond({Code, Hdr, Body}),
                 ?INFO("at=request channel_id=~s method=~p path=~s"
-                    " resp_code=~w time=~w body=~s",
-                    [ChannelId, Method, Path, Code, Time, Body]);
+                    " resp_code=~w time=~w request_id=~s body=~s",
+                    [ChannelId, Method, Path, Code, Time, RequestId, Body]);
             {done,{Code,Details}} ->
                 ?INFO("at=request channel_id=~s method=~p path=~s "
-                      "resp_code=~w time=~w body=~s",
-                      [ChannelId, Method, Path, Code, Time, Details])
+                      "resp_code=~w time=~w request_id=~s body=~s",
+                      [ChannelId, Method, Path, Code, Time, RequestId, Details])
         end,
         exit(normal)
     catch
@@ -88,8 +89,8 @@ loop(Req) ->
             Time1 = timer:now_diff(os:timestamp(), Start) div 1000,
             Req:respond({500, ?HDR, ""}),
             ?ERR("channel_id=~s method=~p path=~s "
-                 "time=~w exception=~1000p:~1000p stack=~1000p",
-                 [ChannelId, Method, Path, Time1, Class, Exception,
+                 "time=~w request_id=~s exception=~1000p:~1000p stack=~1000p",
+                 [ChannelId, Method, Path, Time1, RequestId, Class, Exception,
                   erlang:get_stacktrace()]),
             exit(normal)
     end.
