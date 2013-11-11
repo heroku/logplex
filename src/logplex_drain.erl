@@ -62,6 +62,8 @@
         ]).
 
 -export([by_dest/0
+         ,by_type/0
+         ,by_type/1
          ,num_drains/0
          ,pids/0
          ,ids/0
@@ -310,6 +312,7 @@ lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
                                   object()
                           end)).
 
+
 -spec register(id(), logplex_channel:id(), atom(), term()) -> ok.
 register(DrainId, ChannelId, Type, Dest)
   when is_integer(DrainId), is_integer(ChannelId) ->
@@ -349,6 +352,14 @@ uri_to_binary(#ex_uri{} = Uri) ->
 
 by_dest() ->
     gproc:lookup_local_properties(drain_dest).
+
+by_type() ->
+    gproc:lookup_local_properties(drain_type).
+
+by_type(http) ->
+    [Pid || {Pid, http} <- gproc:lookup_local_properties(drain_type)];
+by_type(tcpsyslog) ->
+    [Pid || {Pid, tcpsyslog} <- gproc:lookup_local_properties(drain_type)].
 
 -spec num_drains() -> non_neg_integer().
 num_drains() ->
