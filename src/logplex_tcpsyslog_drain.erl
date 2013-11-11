@@ -561,8 +561,9 @@ target_send_size() ->
     end.
 
 maybe_resize(Buf) ->
-    case logplex_msg_buffer:max_size(Buf) =:= ?SHRINK_BUF_SIZE of
-        true -> logplex_msg_buffer:resize(default_buf_size(), Buf);
+    Default = default_buf_size(),
+    case logplex_msg_buffer:max_size(Buf) < Default of
+        true -> logplex_msg_buffer:resize(Default, Buf);
         false -> Buf
     end.
 

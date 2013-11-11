@@ -181,6 +181,8 @@ full_stack(Config) ->
     {match, _} = re:run(Logs, "mymsg7").
 
 shrink(Config) ->
+    %% Use an explicitly larger default than whatever the suite sets
+    application:set_env(logplex, tcp_drain_buffer_size, 1024),
     Msg = fun(M) -> {user, debug, logplex_syslog_utils:datetime(now),
                      "fakehost", "erlang", M}
     end,
