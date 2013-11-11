@@ -23,7 +23,7 @@ UpgradeNode = fun () ->
   %% resume all drains before going for the stateless drain buffer update
   l(logplex_msg_buffer),
   l(logplex_tcpsyslog_drain),
-  [logplex_tcpsyslog_drain:resize_msg_buffer(Pid,1024)
+  [catch logplex_tcpsyslog_drain:resize_msg_buffer(Pid,1024)
      || {Pid, tcpsyslog} <- gproc:lookup_local_properties(drain_type)],
 
 

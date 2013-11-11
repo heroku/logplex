@@ -191,6 +191,7 @@ shrink(Config) ->
         logplex_msg_buffer:new(10000),
         [Msg(integer_to_binary(N)) || N <- lists:seq(1,10000)]
     ),
+    HalfBuff = logplex_msg_buffer:resize(20000, FullBuff),
     Ref = make_ref(),
     State0 = #state{
         drain_id=1337,
@@ -208,27 +209,40 @@ shrink(Config) ->
     %% failed and will set up a backoff + timer, and attempt to shrink the
     %% drains. Note that this is different than if we had received the timer
     %% timeout event (which would have called do_reconnect)
+    %%
+    %% First try, don't resize because we don't have enough failures
     {next_state, disconnected, State1, _} = logplex_tcpsyslog_drain:disconnected({post,Msg("a")}, State0),
     #state{buf=Buf1} = State1,
-    10 = logplex_msg_buffer:len(Buf1),
+    10000 = logplex_msg_buffer:len(Buf1),
+    10000 = logplex_msg_buffer:max_size(Buf1),
+    full = logplex_msg_buffer:full(Buf1),
+    %% then we don't resize because the buffer isn't full/hasn't lost data
+    {next_state, disconnected, State2, _} = logplex_tcpsyslog_drain:disconnected({post,Msg("a")}, State0#state{buf=HalfBuff, failures=100}),
+    #state{buf=Buf2} = State2,
+    20000 = logplex_msg_buffer:max_size(Buf2),
+    have_space = logplex_msg_buffer:full(Buf2),
+    %% Then we lose because we have all the good criteria
+    {next_state, disconnected, State3, _} = logplex_tcpsyslog_drain:disconnected({post,Msg("a")}, State0#state{failures=100}),
+    #state{buf=Buf3} = State3,
+    10 = logplex_msg_buffer:len(Buf3),
     %% 9990 drops + the one triggered by {post, Msg}
-    {{loss_indication, 9991, _}, _} = logplex_msg_buffer:pop(Buf1),
-    10 = logplex_msg_buffer:len(logplex_msg_buffer:push(msg, Buf1)),
+    {{loss_indication, 9991, _}, _} = logplex_msg_buffer:pop(Buf3),
+    10 = logplex_msg_buffer:len(logplex_msg_buffer:push(msg, Buf3)),
     %% Buffer seems sane. Now let's reconnect and see if it gets resized.
     %% The server we used accepts only one connection and this one should
     %% be established.
-    State2 = State1#state{sock=undefined, failures = 0, reconnect_tref = Ref},
+    State4 = State3#state{sock=undefined, failures = 0, reconnect_tref = Ref},
     %% force a reconnect. This calls 'do_reconnect', which
     %% should succeed, then try to send data (which should succeed),
     %% then go to 'sending'
-    {next_state, sending, State3} = logplex_tcpsyslog_drain:disconnected({timeout, Ref, reconnect}, State2),
-    #state{buf=Buf2} = State3,
-    0 = logplex_msg_buffer:len(Buf2), % all stuff was sent
+    {next_state, sending, State5} = logplex_tcpsyslog_drain:disconnected({timeout, Ref, reconnect}, State4),
+    #state{buf=Buf4} = State5,
+    0 = logplex_msg_buffer:len(Buf4), % all stuff was sent
     %% resized to configured default
     Default = logplex_app:config(tcp_drain_buffer_size, 1024),
     Default = logplex_msg_buffer:len(lists:foldl(
         fun(M,Buf) -> logplex_msg_buffer:push(M,Buf) end,
-        Buf2,
+        Buf4,
         [Msg(integer_to_binary(N)) || N <- lists:seq(1,10000)]
     )).
 
