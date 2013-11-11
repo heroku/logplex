@@ -14,7 +14,7 @@
 -define(SEND_TIMEOUT_MSG, send_timeout).
 -define(SEND_TIMEOUT, timer:seconds(4)).
 -define(HIBERNATE_TIMEOUT, 5000).
--define(SHRINK_TIMEOUT, timer:minutes(5)).
+-define(SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
 
 
@@ -391,13 +391,13 @@ reconnect(State = #state{failures = 0, last_good_time=T})
         _EnoughTime ->
             do_reconnect(State)
     end;
-reconnect(State = #state{failures = F, last_good_time=LastGood, buf=Buf}) ->
+reconnect(State = #state{failures = F, buf=Buf}) ->
     Max = logplex_app:config(tcp_syslog_backoff_max, 300),
     BackOff = case length(integer_to_list(Max, 2)) of
                   MaxExp when F > MaxExp -> Max;
                   _ -> 1 bsl F
               end,
-    NewBuf = maybe_shrink(Buf, LastGood),
+    NewBuf = maybe_shrink(Buf, F),
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
     %% the hibernation.
@@ -561,28 +561,29 @@ target_send_size() ->
     end.
 
 maybe_resize(Buf) ->
-    case logplex_msg_buffer:max_size(Buf) =:= ?SHRINK_BUF_SIZE of
-        true -> logplex_msg_buffer:resize(default_buf_size(), Buf);
+    Default = default_buf_size(),
+    case logplex_msg_buffer:max_size(Buf) < Default of
+        true -> logplex_msg_buffer:resize(Default, Buf);
         false -> Buf
     end.
 
-maybe_shrink(Buf, LastGood) ->
-    case logplex_msg_buffer:max_size(Buf) =:= ?SHRINK_BUF_SIZE of
+maybe_shrink(Buf, Tries) ->
+    Max = logplex_msg_buffer:max_size(Buf),
+    case Max =:= ?SHRINK_BUF_SIZE of
         true ->
             Buf;
         false ->
             %% Shrink if we have never connected before or the last update time
-            %% is more than ?SHRINK_TIMEOUT milliseconds old
-            case (is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
-                  now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
-                 orelse LastGood =:= undefined of
+            %% is more than ?SHRINK_TRIES old, and if the buffer is
+            %% currently full and dropping data
+            case full =:= logplex_msg_buffer:full(Buf) andalso
+                 logplex_msg_buffer:lost(Buf) > 0 andalso
+                 Tries > ?SHRINK_TRIES of
                 true ->
                     logplex_msg_buffer:resize(?SHRINK_BUF_SIZE, Buf);
                 false ->
                     Buf
             end
     end.
-
-now_to_msec({Mega,Sec,_}) -> (Mega*1000000 + Sec)*1000.
 
 default_buf_size() -> logplex_app:config(tcp_drain_buffer_size, 1024).

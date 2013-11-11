@@ -29,6 +29,7 @@
          ,push_ext/2
          ,len/1
          ,max_size/1
+         ,full/1
          ,empty/1
          ,pop/1
          ,resize/2
