@@ -360,16 +360,6 @@ terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
-code_change("v69.8", StateName, State, _Extra) ->
-    {ok,
-     StateName,
-     list_to_tuple(tuple_to_list(State)++[undefined, normal]),
-     ?HIBERNATE_TIMEOUT};
-code_change("v69.9", StateName, State, _Extra) ->
-    {ok,
-     StateName,
-     list_to_tuple(lists:sublist(tuple_to_list(State), tuple_size(State)-2)),
-     ?HIBERNATE_TIMEOUT};
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
 
