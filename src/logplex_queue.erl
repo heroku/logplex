@@ -85,6 +85,8 @@ out(NameOrPid, Num) when (is_atom(NameOrPid) orelse is_pid(NameOrPid)) andalso i
             Packet
     end.
 
+-spec info(atom()|pid()) ->
+                  {pos_integer(), pos_integer()}.
 info(NameOrPid) when is_atom(NameOrPid); is_pid(NameOrPid) ->
     gen_server:call(NameOrPid, info, ?TIMEOUT).
 
@@ -174,8 +176,15 @@ handle_call(_Msg, _From, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Length, max_length=MaxLength, num_dropped=NumDropped}=State) when Length >= MaxLength ->
-    logplex_stats:incr(StatKey),
     logplex_realtime:incr(StatKey),
+    RedisUrl = case dict:find(redis_url, Dict) of
+            {ok, Value} ->
+                Value;
+            undefined ->
+                undefined
+        end,
+    logplex_stats:incr(#queue_stat{key=StatKey,
+                                   redis_url=RedisUrl}),
     case dict:find(producer_callback, Dict) of
         {ok, Fun} -> Fun(self(), stop_accepting);
         error -> ok
