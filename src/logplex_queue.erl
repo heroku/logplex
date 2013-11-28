@@ -43,7 +43,8 @@
     dict,
     workers=[],
     num_dropped=0,
-    accepting=true
+    accepting=true,
+    redis_url
 }).
 
 -define(TIMEOUT, 30000).
@@ -122,7 +123,8 @@ init([Props]) ->
         length = 0,
         max_length = proplists:get_value(max_length, Props),
         waiting = queue:new(),
-        dict = proplists:get_value(dict, Props, dict:new())
+        dict = proplists:get_value(dict, Props, dict:new()),
+        redis_url = proplists:get_value(redis_url, Props)
     },
     WorkerSup = proplists:get_value(worker_sup, Props),
     NumWorkers = proplists:get_value(num_workers, Props),
@@ -175,14 +177,9 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Length, max_length=MaxLength, num_dropped=NumDropped}=State) when Length >= MaxLength ->
+handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Length, max_length=MaxLength, num_dropped=NumDropped,
+                                  redis_url=RedisUrl}=State) when Length >= MaxLength ->
     logplex_realtime:incr(StatKey),
-    RedisUrl = case dict:find(redis_url, Dict) of
-            {ok, Value} ->
-                Value;
-            undefined ->
-                undefined
-        end,
     logplex_stats:incr(#queue_stat{key=StatKey,
                                    redis_url=RedisUrl}),
     case dict:find(producer_callback, Dict) of

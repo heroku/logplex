@@ -260,9 +260,8 @@ redis_buffer_opts(Url) ->
      {num_workers, NumWorkers},
      {worker_sup, logplex_redis_writer_sup},
      {worker_args, [RedisOpts]},
-     {dict, dict:from_list([
-        {redis_url, Url}
-     ])}].
+     {redis_url, Url}
+    ].
 
 handle_child_death(Pid) ->
     case logplex_shard_info:pid_info(Pid) of
