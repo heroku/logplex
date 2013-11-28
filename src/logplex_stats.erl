@@ -164,7 +164,7 @@ log_stat(UnixTS, #logplex_stat{module=Mod, key=K}, Val) ->
         [UnixTS, Mod, K, Val]);
 
 log_stat(UnixTS, #queue_stat{redis_url=RedisUrl, key=Key}, Val) ->
-    io:format("m=logplex_stats ts=~p redis_url=~p ~p=~p~n",
+    io:format(user, "m=logplex_stats ts=~p redis_url=~p ~p=~p~n",
               [UnixTS, RedisUrl, Key, Val]);
 
 log_stat(UnixTS, {Class, Key}, Val) ->
