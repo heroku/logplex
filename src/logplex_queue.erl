@@ -242,14 +242,16 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
-code_change("v69.11", #state{dict=Dict}=State, _Extra) ->
-    case dict:find(redis_url, Dict) of
+code_change("v69.11", State, _Extra) ->
+    Dict = element(8, State),
+    try dict:find(redis_url, Dict) of
         {ok, Value} ->
-            NewState = list_to_tuple(tuple_to_list(State)++[Value]),
-            {ok, NewState};
-        _ ->
+            {ok, State#state{redis_url=Value}}
+    catch
+        error:Reason ->
+            ?ERR("at=create_cred error=~1000p", [Reason]),
             {ok, State}
-    end.
+    end;
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
