@@ -242,14 +242,24 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
-code_change("v69.11", State, _Extra) ->
+code_change("v69.11", State, _Extra) when size(State) =:= 12 ->
     Dict = element(8, State),
-    try dict:find(redis_url, Dict) of
+    RedisUrl = element(12, State),
+    case dict:find(redis_url, Dict) of
+        {ok, RedisUrl} ->
+            % The redis_url is not removed from the dictionary during 
+            % upgrade to make the rollback easier
+            {ok, State};
+        error ->
+            % No redis URL in the dictionary
+            {ok, State#state{dict=dict:store(redis_url, RedisUrl, Dict)}}
+    end;
+code_change("v69.12", State, _Extra) when size(State) =:= 11 ->
+    Dict = element(8, State),
+    case dict:find(redis_url, Dict) of
         {ok, Value} ->
-            {ok, State#state{redis_url=Value}}
-    catch
-        error:Reason ->
-            ?ERR("at=create_cred error=~1000p", [Reason]),
+            {ok, State#state{redis_url=Value}};
+        error ->
             {ok, State}
     end;
 code_change(_OldVsn, State, _Extra) ->
