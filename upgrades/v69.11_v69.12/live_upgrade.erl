@@ -46,10 +46,6 @@ RollbackNode = fun () ->
           erlang:error({wrong_version, Else})
   end,
 
-  %% stateless
-  l(logplex_stats),
-  l(logplex_shard),
-
   %% Find all the buffers
   Buffers = 
     case logplex_shard_info:read(logplex_redis_buffer_map) of
@@ -60,10 +56,14 @@ RollbackNode = fun () ->
     end,
     Buffers2 = [ Pid || {_, Pid, _, _} <- supervisor:which_children(logplex_read_queue_sup) ] ++ Buffers,
     _ = [ sys:suspend(Pid, 30000) || Pid <- Buffers2 ],
-    l(logplex_queue),
     _ = [ sys:change_code(Pid, logplex_queue, "v69.11", undefined, 30000)
        || Pid <- Buffers2, erlang:is_process_alive(Pid) ],
+    l(logplex_queue),
     _ = [ sys:resume(Pid, 30000) || Pid <- Buffers2, erlang:is_process_alive(Pid) ],
+
+  %% stateless
+  l(logplex_stats),
+  l(logplex_shard),
 
   application:set_env(logplex, git_branch, "v69.11"),
   ok

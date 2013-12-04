@@ -242,17 +242,19 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
-code_change("v69.11", State, _Extra) when size(State) =:= 12 ->
-    Dict = element(8, State),
-    RedisUrl = element(12, State),
+code_change("v69.11", #state{dict=Dict,
+                             redis_url=RedisUrl}=State, _Extra) ->
+    NewState = list_to_tuple(lists:sublist(tuple_to_list(State), tuple_size(State)-1)),
     case dict:find(redis_url, Dict) of
         {ok, RedisUrl} ->
             % The redis_url is not removed from the dictionary during 
             % upgrade to make the rollback easier
-            {ok, State};
+            {ok, NewState};
         error ->
             % No redis URL in the dictionary
-            {ok, State#state{dict=dict:store(redis_url, RedisUrl, Dict)}}
+            Dict1 = dict:store(redis_url, RedisUrl, Dict),
+            NewState1 = erlang:setelement(8, NewState, Dict1),
+            {ok, NewState1}
     end;
 code_change("v69.12", State, _Extra) when size(State) =:= 11 ->
     Dict = element(8, State),
