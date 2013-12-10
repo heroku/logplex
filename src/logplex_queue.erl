@@ -43,7 +43,8 @@
     dict,
     workers=[],
     num_dropped=0,
-    accepting=true
+    accepting=true,
+    redis_url
 }).
 
 -define(TIMEOUT, 30000).
@@ -85,6 +86,8 @@ out(NameOrPid, Num) when (is_atom(NameOrPid) orelse is_pid(NameOrPid)) andalso i
             Packet
     end.
 
+-spec info(atom()|pid()) ->
+                  {pos_integer(), pos_integer()}.
 info(NameOrPid) when is_atom(NameOrPid); is_pid(NameOrPid) ->
     gen_server:call(NameOrPid, info, ?TIMEOUT).
 
@@ -120,7 +123,8 @@ init([Props]) ->
         length = 0,
         max_length = proplists:get_value(max_length, Props),
         waiting = queue:new(),
-        dict = proplists:get_value(dict, Props, dict:new())
+        dict = proplists:get_value(dict, Props, dict:new()),
+        redis_url = proplists:get_value(redis_url, Props)
     },
     WorkerSup = proplists:get_value(worker_sup, Props),
     NumWorkers = proplists:get_value(num_workers, Props),
@@ -173,9 +177,11 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Length, max_length=MaxLength, num_dropped=NumDropped}=State) when Length >= MaxLength ->
-    logplex_stats:incr(StatKey),
+handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Length, max_length=MaxLength, num_dropped=NumDropped,
+                                  redis_url=RedisUrl}=State) when Length >= MaxLength ->
     logplex_realtime:incr(StatKey),
+    logplex_stats:incr(#queue_stat{key=StatKey,
+                                   redis_url=RedisUrl}),
     case dict:find(producer_callback, Dict) of
         {ok, Fun} -> Fun(self(), stop_accepting);
         error -> ok
@@ -236,6 +242,28 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
+code_change("v69.11", #state{dict=Dict,
+                             redis_url=RedisUrl}=State, _Extra) ->
+    NewState = list_to_tuple(lists:sublist(tuple_to_list(State), tuple_size(State)-1)),
+    case dict:find(redis_url, Dict) of
+        {ok, RedisUrl} ->
+            % The redis_url is not removed from the dictionary during 
+            % upgrade to make the rollback easier
+            {ok, NewState};
+        error ->
+            % No redis URL in the dictionary
+            Dict1 = dict:store(redis_url, RedisUrl, Dict),
+            NewState1 = erlang:setelement(8, NewState, Dict1),
+            {ok, NewState1}
+    end;
+code_change("v69.12", State, _Extra) when size(State) =:= 11 ->
+    Dict = element(8, State),
+    case dict:find(redis_url, Dict) of
+        {ok, Value} ->
+            {ok, State#state{redis_url=Value}};
+        error ->
+            {ok, State}
+    end;
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 

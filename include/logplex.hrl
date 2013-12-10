@@ -12,6 +12,7 @@
                      key :: atom()}).
 -record(logplex_stat, {module :: atom(),
                        key :: any()}).
-
+-record(queue_stat, {redis_url :: iolist(),
+                     key :: list()}).
 -define(LOG_HISTORY, <<"1500">>).
 -define(MAX_SPOOL_POOL_SIZE, 1000).
