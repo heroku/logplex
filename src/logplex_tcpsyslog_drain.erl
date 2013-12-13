@@ -201,8 +201,8 @@ sending({timeout, Ref, ?SEND_TIMEOUT_MSG},
     reconnect(tcp_bad(S#state{send_tref=undefined}));
 sending({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
-sending({inet_reply, Sock, ok}, S = #state{sock = Sock}) ->
-    send(tcp_good(cancel_send_timeout(S)));
+sending({inet_reply, Sock, ok}, S = #state{sock = Sock, send_tref = TRef}) ->
+    send(tcp_good(S#state{send_tref=cancel_timeout(TRef, ?SEND_TIMEOUT_MSG)}));
 sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
     ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
@@ -512,22 +512,20 @@ send(State = #state{buf = Buf, sock = Sock,
             end
     end.
 
--spec cancel_send_timeout(#state{}) -> #state{send_tref :: undefined}.
-cancel_send_timeout(State = #state{send_tref = undefined}) -> State;
-cancel_send_timeout(State = #state{send_tref = Ref})
+cancel_timeout(undefined, _Msg) -> undefined;
+cancel_timeout(Ref, Msg)
   when is_reference(Ref) ->
     case erlang:cancel_timer(Ref) of
         false ->
             %% Flush expired timer message
             receive
-                {timeout, Ref, ?SEND_TIMEOUT_MSG} -> ok
-            after 0 -> ok
+                {timeout, Ref, Msg} -> undefined
+            after 0 -> undefined
             end;
         _Time ->
             %% Timer didn't fire, so no message to worry about
-            ok
-    end,
-    State#state{send_tref=undefined}.
+            undefined
+      end.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
     logplex_msg_buffer:to_pkts(Buf, BytesRemaining,
