@@ -260,7 +260,7 @@ code_change("v69.12.1", State, _Extra) when size(State) =:= 11 ->
     Dict = element(8, State),
     case dict:find(redis_url, Dict) of
         {ok, Value} ->
-            list_to_tuple(tuple_to_list(State)++[Value]);
+            {ok, list_to_tuple(tuple_to_list(State)++[Value])};
         error ->
             {ok, State}
     end;
