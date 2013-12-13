@@ -242,7 +242,7 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
-code_change("v69.11", #state{dict=Dict,
+code_change("v69.12", #state{dict=Dict,
                              redis_url=RedisUrl}=State, _Extra) ->
     NewState = list_to_tuple(lists:sublist(tuple_to_list(State), tuple_size(State)-1)),
     case dict:find(redis_url, Dict) of
@@ -256,7 +256,7 @@ code_change("v69.11", #state{dict=Dict,
             NewState1 = erlang:setelement(8, NewState, Dict1),
             {ok, NewState1}
     end;
-code_change("v69.12", State, _Extra) when size(State) =:= 11 ->
+code_change("v69.12.1", State, _Extra) when size(State) =:= 11 ->
     Dict = element(8, State),
     case dict:find(redis_url, Dict) of
         {ok, Value} ->
