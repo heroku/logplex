@@ -17,7 +17,8 @@
 -define(SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
 -define(IDLE_TIMEOUT_MSG, idle_timeout).
--define(IDLE_TIMEOUT, 300000).
+-define(IDLE_TIMEOUT, logplex_app:config(tcpsyslog_drain_idle_timeout,
+                                         timer:minutes(5)))
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -222,8 +223,8 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
 sending({timeout, Ref, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     %% Reschedule timeout to fire when done with sending
     cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
-    Ref = erlang:start_timer(100, self(), ?IDLE_TIMEOUT_MSG),
-    {next_state, sending, State#state{idle_tref=Ref}};
+    NewRef = erlang:start_timer(100, self(), ?IDLE_TIMEOUT_MSG),
+    {next_state, sending, State#state{idle_tref=NewRef}};
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, sending, S, hibernate};
