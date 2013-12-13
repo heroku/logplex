@@ -17,7 +17,7 @@
 -define(SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
 -define(IDLE_TIMEOUT_MSG, idle_timeout).
--define(IDLE_TIMEOUT, 30000).
+-define(IDLE_TIMEOUT, 300000).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
