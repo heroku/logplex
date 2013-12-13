@@ -13,6 +13,7 @@ groups() -> [{with_tcp_server,[],[shrink]}].
 %%% SETUP / TEADOWN %%%
 %%%%%%%%%%%%%%%%%%%%%%%
 
+%% TODO: move to .hrl file
 %% Directly copy/pastedfrom logplex_tcp_syslog_drain
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
@@ -30,6 +31,8 @@ groups() -> [{with_tcp_server,[],[shrink]}].
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
+                %% Idle timer reference
+                idle_tref = undefined :: 'undefined' | reference(),
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).

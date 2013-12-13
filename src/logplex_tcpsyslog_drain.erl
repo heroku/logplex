@@ -16,7 +16,8 @@
 -define(HIBERNATE_TIMEOUT, 5000).
 -define(SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
-
+-define(IDLE_TIMEOUT_MSG, idle_timeout).
+-define(IDLE_TIMEOUT, 30000).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -39,6 +40,8 @@
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
+                %% Idle timer reference
+                idle_tref = undefined :: 'undefined' | reference(),
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
@@ -157,6 +160,9 @@ disconnected({timeout, Received, ?RECONNECT_MSG},
     reconnect(State);
 disconnected({post, Msg}, State) ->
     reconnect(buffer(Msg, State));
+disconnected({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, State) ->
+    %% Already disconnected; nothing to do here
+    {next_state, disconnected, State, hibernate};
 disconnected(timeout, State) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, disconnected, State, hibernate};
@@ -173,6 +179,11 @@ ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
   when is_port(Sock) ->
     %% Stale message.
     send(State);
+ready_to_send({timeout, _Ref, ?IDLE_TIMEOUT_MSG},
+              State = #state{sock = Sock}) ->
+    gen_tcp:close(Sock),
+    {next_state, disconnected, State#state{sock = undefined,
+                                           idle_tref = undefined}, hibernate};
 ready_to_send({post, Msg}, State = #state{sock = Sock})
   when is_port(Sock) ->
     send(buffer(Msg, State));
@@ -208,6 +219,11 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
+sending({timeout, Ref, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
+    %% Reschedule timeout to fire when done with sending
+    cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
+    Ref = erlang:start_timer(100, self(), ?IDLE_TIMEOUT_MSG),
+    {next_state, sending, State#state{idle_tref=Ref}};
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, sending, S, hibernate};
@@ -464,7 +480,9 @@ duration(#state{connect_time=T0}) ->
 
 -spec buffer(any(), #state{}) -> #state{}.
 %% @private
-buffer(Msg, State = #state{buf = Buf}) ->
+buffer(Msg, State = #state{buf = Buf, idle_tref = TRef}) ->
+    cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
+    Ref = erlang:start_timer(?IDLE_TIMEOUT, self(), ?IDLE_TIMEOUT_MSG),
     {Result, NewBuf} = logplex_msg_buffer:push_ext(Msg, Buf),
     msg_stat(drain_buffered, 1, State),
     case Result of
@@ -477,7 +495,7 @@ buffer(Msg, State = #state{buf = Buf}) ->
             end;
         insert -> ok
     end,
-    State#state{buf=NewBuf}.
+    State#state{buf=NewBuf, idle_tref=Ref}.
 
 %% @private
 %% @doc Send buffered messages.
