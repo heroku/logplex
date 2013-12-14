@@ -221,10 +221,7 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
 sending({timeout, Ref, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
-    %% Reschedule timeout to fire when done with sending
-    cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
-    NewRef = erlang:start_timer(100, self(), ?IDLE_TIMEOUT_MSG),
-    {next_state, sending, State#state{idle_tref=NewRef}};
+    {next_state, disconnecting, State#state{idle_tref=NewRef}};
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, sending, S, hibernate};
@@ -233,6 +230,42 @@ sending(Msg, State) ->
           "data=~p state=sending",
           log_info(State, [Msg])),
     {next_state, sending, State, ?HIBERNATE_TIMEOUT}.
+
+%% @doc We got an idle timeout while in the sending state but haven't
+%% gotten an inet_reply yet.
+disconnecting({timeout, Ref, ?SEND_TIMEOUT_MSG},
+              S = #state{send_tref=Ref}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s err=send_timeout "
+          "state=disconnecting", log_info(S, [])),
+    {next_state, disconnected, tcp_bad(S#state{send_tref=undefined}), hibernate};
+disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
+                                                     idle_tref = IdleTRef,
+                                                     send_tref = SendTRef}) ->
+    case Status of
+        {error, Reason} ->
+            ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
+                "err=gen_tcp data=~p sock=~p duration=~s state=disconnecting",
+                log_info(S, [disconnecting, Reason, Sock, duration(S)]));
+        _ -> ok
+    end,
+    NewState = State#state{sock = undefined,
+                           send_tref = cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG)
+                           idle_tref = cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG)}
+    {next_state, disconnected, NewState, hibernate}
+disconnecting({post, Msg}, State) ->
+    {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
+disconnecting({timeout, Ref, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
+    %% Shouldn't see this because entering this state cancels the timer.
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_idle_timeout "
+          "data=~p state=disconnecting", log_info(State, [Msg])),
+    {next_state, disconnecting, State#state{idle_tref=undefined}};
+disconnecting(timeout, S = #state{}) ->
+    %% Sleep when inactive, trigger fullsweep GC & Compact
+    {next_state, disconnecting, S, hibernate};
+disconnecting(Msg, State) ->
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+          "data=~p state=disconnecting", log_info(State, [Msg])),
+    {next_state, disconnecting, State, ?HIBERNATE_TIMEOUT}.
 
 
 %% @private

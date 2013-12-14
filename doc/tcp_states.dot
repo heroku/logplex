@@ -20,13 +20,13 @@ digraph logplex_tcpsyslog_drain {
     sending -> sending [label = "{post, Msg}"];
     sending -> sending [label = "timeout"];
     sending -> send [label = "{inet_reply, Sock, ok}"];
-    // sending -> disconnecting [label = "{timeout, _, ?IDLE_TIMEOUT_MSG}"]
+    sending -> disconnecting [label = "{timeout, _, ?IDLE_TIMEOUT_MSG}"]
     
-    // disconnecting -> reconnect [label = "{timeout, _, ?SEND_TIMEOUT_MSG}"];
-    // disconnecting -> reconnect [label = "{inet_reply, _, {error, Reason}}"];
-    // disconnecting -> sending [label = "{post, Msg}"];
-    // disconnecting -> disconnecting [label = "timeout"];
-    // disconnecting -> send [label = "{inet_reply, Sock, ok}"];
+    disconnecting -> reconnect [label = "{timeout, _, ?SEND_TIMEOUT_MSG}"];
+    disconnecting -> reconnect [label = "{inet_reply, _, {error, Reason}}"];
+    disconnecting -> sending [label = "{post, Msg}"];
+    disconnecting -> disconnecting [label = "timeout"];
+    disconnecting -> send [label = "{inet_reply, Sock, ok}"];
     
     ready_to_send -> disconnected [label = "{timeout, _, ?IDLE_TIMEOUT_MSG}"];
     ready_to_send -> ready_to_send [label = "timeout"];
