@@ -17,8 +17,6 @@
 -define(SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
 -define(IDLE_TIMEOUT_MSG, idle_timeout).
--define(IDLE_TIMEOUT, logplex_app:config(tcpsyslog_drain_idle_timeout,
-                                         timer:minutes(5)))
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -69,7 +67,8 @@
 
 -export([disconnected/2,
          ready_to_send/2,
-         sending/2
+         sending/2,
+         disconnecting/2
          ]).
 
 -export([init/1,  handle_event/3, handle_sync_event/4,
@@ -182,6 +181,9 @@ ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
     send(State);
 ready_to_send({timeout, _Ref, ?IDLE_TIMEOUT_MSG},
               State = #state{sock = Sock}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout "
+          "state=ready_to_send",
+          log_info(State, [])),
     gen_tcp:close(Sock),
     {next_state, disconnected, State#state{sock = undefined,
                                            idle_tref = undefined}, hibernate};
@@ -220,8 +222,9 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
-sending({timeout, Ref, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
-    {next_state, disconnecting, State#state{idle_tref=NewRef}};
+sending({timeout, _, ?IDLE_TIMEOUT_MSG}, State = #state{idle_tref = TRef}) ->
+    cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
+    {next_state, disconnecting, State#state{idle_tref=undefined}};
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, sending, S, hibernate};
@@ -248,16 +251,17 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
                 log_info(S, [disconnecting, Reason, Sock, duration(S)]));
         _ -> ok
     end,
-    NewState = State#state{sock = undefined,
-                           send_tref = cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG)
-                           idle_tref = cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG)}
-    {next_state, disconnected, NewState, hibernate}
+    NewState = S#state{sock = undefined,
+                       send_tref = cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG),
+                       idle_tref = cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG)},
+    {next_state, disconnected, NewState, hibernate};
 disconnecting({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
-disconnecting({timeout, Ref, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
+disconnecting({timeout, _, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     %% Shouldn't see this because entering this state cancels the timer.
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_idle_timeout "
-          "data=~p state=disconnecting", log_info(State, [Msg])),
+          "data=~p state=disconnecting", log_info(State, [])),
+    cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
     {next_state, disconnecting, State#state{idle_tref=undefined}};
 disconnecting(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
@@ -516,7 +520,8 @@ duration(#state{connect_time=T0}) ->
 %% @private
 buffer(Msg, State = #state{buf = Buf, idle_tref = TRef}) ->
     cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
-    Ref = erlang:start_timer(?IDLE_TIMEOUT, self(), ?IDLE_TIMEOUT_MSG),
+    TimeoutMs = logplex_app:config(tcpsyslog_drain_idle_timeout, timer:minutes(5)),
+    Ref = erlang:start_timer(TimeoutMs, self(), ?IDLE_TIMEOUT_MSG),
     {Result, NewBuf} = logplex_msg_buffer:push_ext(Msg, Buf),
     msg_stat(drain_buffered, 1, State),
     case Result of
