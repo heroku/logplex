@@ -177,7 +177,11 @@ full_stack(Config) ->
     {ok, Sock} = gen_tcp:accept(Listen, 5000),
     Logs = receive_logs(Sock, 7),
     timer:sleep(100),
-    undefined = erlang:port_info(Sock), % drain should idle out
+    %% It would make more sense here to check here if the socket is open, but
+    %% for unknown reasons the test side of the socket refuses to acknowledge
+    %% that it's been closed, so we peek at the drain process's state instead.
+    [{_, DrainPid}|_] = logplex_drain:pids(),
+    {disconnected, _} = recon:get_state(DrainPid),
     {match, _} = re:run(Logs, "mymsg1"),
     nomatch    = re:run(Logs, "mymsg2"),
     {match, _} = re:run(Logs, "L10.*1 messages? dropped"),
