@@ -37,6 +37,7 @@
          ,set_config/2
          ,start/0
          ,a_start/2
+         ,cache_os_envvars/0 % for tests
         ]).
 
 -export([elb_healthcheck/0]).

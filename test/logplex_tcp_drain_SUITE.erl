@@ -92,7 +92,8 @@ set_os_vars() ->
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
          {"LOGPLEX_COOKIE", "ct test"},
          {"LOGPLEX_TCP_DRAIN_IDLE", "50"}
-        ]].
+        ]],
+    logplex_app:cache_os_envvars().
 
 
 mock_drain_buffer() ->
