@@ -180,8 +180,7 @@ full_stack(Config) ->
     %% It would make more sense here to check here if the socket is open, but
     %% for unknown reasons the test side of the socket refuses to acknowledge
     %% that it's been closed, so we peek at the drain process's state instead.
-    [{_, DrainPid}|_] = logplex_drain:pids(),
-    {disconnected, _} = recon:get_state(DrainPid),
+    {disconnected, _} = recon:get_state(Drain),
     {match, _} = re:run(Logs, "mymsg1"),
     nomatch    = re:run(Logs, "mymsg2"),
     {match, _} = re:run(Logs, "L10.*1 messages? dropped"),
