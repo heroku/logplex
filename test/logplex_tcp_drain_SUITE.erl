@@ -90,7 +90,8 @@ set_os_vars() ->
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
-         {"LOGPLEX_COOKIE", "ct test"}
+         {"LOGPLEX_COOKIE", "ct test"},
+         {"LOGPLEX_TCP_DRAIN_IDLE", "50"}
         ]].
 
 
@@ -174,6 +175,8 @@ full_stack(Config) ->
                end),
     {ok, Sock} = gen_tcp:accept(Listen, 5000),
     Logs = receive_logs(Sock, 7),
+    timer:sleep(100),
+    undefined = erlang:port_info(Sock), % drain should idle out
     {match, _} = re:run(Logs, "mymsg1"),
     nomatch    = re:run(Logs, "mymsg2"),
     {match, _} = re:run(Logs, "L10.*1 messages? dropped"),

@@ -109,6 +109,9 @@ cache_os_envvars() ->
                       ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
                         optional, %% in bytes
                         integer}
+                     ,{tcpsyslog_drain_idle_timeout, ["LOGPLEX_TCP_DRAIN_IDLE"],
+                       optional,
+                       integer}
                      ]),
     ok.
 
