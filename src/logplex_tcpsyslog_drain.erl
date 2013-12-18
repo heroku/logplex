@@ -45,7 +45,7 @@
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
 
--type pstate() :: 'disconnected' | 'ready_to_send' | 'sending'.
+-type pstate() :: 'disconnected' | 'ready_to_send' | 'sending' | 'disconnecting'.
 
 %% ------------------------------------------------------------------
 %% API Function Exports
