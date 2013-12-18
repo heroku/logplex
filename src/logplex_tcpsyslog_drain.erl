@@ -520,7 +520,7 @@ duration(#state{connect_time=T0}) ->
 %% @private
 buffer(Msg, State = #state{buf = Buf, idle_tref = TRef}) ->
     cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
-    TimeoutMs = logplex_app:config(tcpsyslog_drain_idle_timeout, timer:minutes(5)),
+    TimeoutMs = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
     Ref = erlang:start_timer(TimeoutMs, self(), ?IDLE_TIMEOUT_MSG),
     {Result, NewBuf} = logplex_msg_buffer:push_ext(Msg, Buf),
     msg_stat(drain_buffered, 1, State),
