@@ -131,9 +131,10 @@ handlers() ->
         Body = Req:recv_body(),
         {struct, Params} = mochijson2:decode(Body),
 
-        ChannelId = logplex_channel:create_id(),
-        not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
-
+        Name = proplists:get_value(<<"name">>, Params, ""),
+        Channel = logplex_channel:new(undefined, Name),
+        logplex_channel:store(Channel),
+        ChannelId = logplex_channel:id(Channel),
         Tokens =
             case proplists:get_value(<<"tokens">>, Params) of
                 List when length(List) > 0 ->
