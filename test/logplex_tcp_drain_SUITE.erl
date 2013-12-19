@@ -176,11 +176,10 @@ full_stack(Config) ->
                end),
     {ok, Sock} = gen_tcp:accept(Listen, 5000),
     Logs = receive_logs(Sock, 7),
+    %% idle out the drain
     timer:sleep(100),
-    %% It would make more sense here to check here if the socket is open, but
-    %% for unknown reasons the test side of the socket refuses to acknowledge
-    %% that it's been closed, so we peek at the drain process's state instead.
-    {disconnected, _} = recon:get_state(Drain),
+    %% for some reason port_info won't return closed here, must attempt a read.
+    {error, closed} = gen_tcp:recv(Sock,0,100),
     {match, _} = re:run(Logs, "mymsg1"),
     nomatch    = re:run(Logs, "mymsg2"),
     {match, _} = re:run(Logs, "L10.*1 messages? dropped"),
