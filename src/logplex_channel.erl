@@ -69,18 +69,19 @@
 -export_type([id/0, name/0, flags/0]).
 
 create(Name) ->
-    Chan = new(create_id(), Name),
+    Chan = new(undefined, Name),
     store(Chan),
     Chan.
 
 destroy(Chan) ->
     delete(id(Chan)).
 
-new(Id) when is_integer(Id) ->
-    #channel{id=Id}.
-new(Id, Name) when is_integer(Id),
-                   is_binary(Name) ->
-    #channel{id=Id, name=Name}.
+new(Id) -> new(Id, <<"">>, []).
+new(Id, Name) -> new(Id, Name, []).
+
+new(undefined, Name, Flags) when is_binary(Name),
+                                 is_list(Flags) ->
+    new(new_id(), Name, Flags);
 new(Id, Name, Flags) when is_integer(Id),
                           is_binary(Name),
                           is_list(Flags) ->
@@ -128,6 +129,13 @@ create_id() ->
             end;
         Err ->
             Err
+    end.
+
+-spec new_id() -> id().
+new_id() ->
+    case redis_helper:channel_index() of
+        ChannelId when is_integer(ChannelId) ->
+            ChannelId
     end.
 
 -spec store(channel()) -> any().
