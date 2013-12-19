@@ -62,7 +62,7 @@
     ,{tcp_syslog_reconnect_min, 30} % seconds
     ,{tcp_syslog_send_loss_msg, send} % send | dont_send
     ,{tcp_syslog_send_timeout_secs, 4} % seconds
-    ,{tcp_syslog_idle_timeout, 300000} % 5 minutes
+    ,{tcp_syslog_idle_timeout, 300000} % ms
     ,{workers, 10}
    ]}
  ,{start_phases,
