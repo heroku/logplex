@@ -39,8 +39,6 @@
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
-                %% Idle timer reference
-                idle_tref = undefined :: 'undefined' | reference(),
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
@@ -179,14 +177,13 @@ ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
   when is_port(Sock) ->
     %% Stale message.
     send(State);
-ready_to_send({timeout, _Ref, ?IDLE_TIMEOUT_MSG},
-              State = #state{sock = Sock}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout "
-          "state=ready_to_send",
-          log_info(State, [])),
-    gen_tcp:close(Sock),
-    {next_state, disconnected, State#state{sock = undefined,
-                                           idle_tref = undefined}, hibernate};
+ready_to_send({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, S) ->
+    case close_if_idle(S) of
+        closed ->
+            {next_state, disconnected, S#state{sock = undefined}, hibernate};
+        ok ->
+            {next_state, ready_to_send, S}
+    end;
 ready_to_send({post, Msg}, State = #state{sock = Sock})
   when is_port(Sock) ->
     send(buffer(Msg, State));
@@ -222,9 +219,13 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
-sending({timeout, _, ?IDLE_TIMEOUT_MSG}, State = #state{idle_tref = TRef}) ->
-    cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
-    {next_state, disconnecting, State#state{idle_tref=undefined}};
+sending({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
+    case close_if_idle(State) of
+        closed ->
+            {next_state, disconnecting, State#state{sock = undefined}};
+        ok ->
+            {next_state, sending, State}
+    end;
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, sending, S, hibernate};
@@ -242,7 +243,6 @@ disconnecting({timeout, Ref, ?SEND_TIMEOUT_MSG},
           "state=disconnecting", log_info(S, [])),
     {next_state, disconnected, tcp_bad(S#state{send_tref=undefined}), hibernate};
 disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
-                                                     idle_tref = IdleTRef,
                                                      send_tref = SendTRef}) ->
     case Status of
         {error, Reason} ->
@@ -252,17 +252,15 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
         _ -> ok
     end,
     NewState = S#state{sock = undefined,
-                       send_tref = cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG),
-                       idle_tref = cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG)},
+                       send_tref = cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG)},
     {next_state, disconnected, NewState, hibernate};
 disconnecting({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
-disconnecting({timeout, _, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
-    %% Shouldn't see this because entering this state cancels the timer.
+disconnecting({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
+    %% Shouldn't see this since entering this state means the timer wasn't reset
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_idle_timeout "
           "data=~p state=disconnecting", log_info(State, [])),
-    cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
-    {next_state, disconnecting, State#state{idle_tref=undefined}};
+    {next_state, disconnecting, State};
 disconnecting(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, disconnecting, S, hibernate};
@@ -374,6 +372,9 @@ do_reconnect(State = #state{sock = undefined,
                                    send_tref = undefined,
                                    buf = maybe_resize(Buf),
                                    connect_time=os:timestamp()},
+            MaxIdle = logplex_app:config(tcp_syslog_idle_timeout,
+                                         timer:minutes(5)),
+            erlang:start_timer(MaxIdle, self(), ?IDLE_TIMEOUT_MSG),
             send(NewState);
         {error, Reason} ->
             NewState = tcp_bad(State),
@@ -518,10 +519,7 @@ duration(#state{connect_time=T0}) ->
 
 -spec buffer(any(), #state{}) -> #state{}.
 %% @private
-buffer(Msg, State = #state{buf = Buf, idle_tref = TRef}) ->
-    cancel_timeout(TRef, ?IDLE_TIMEOUT_MSG),
-    TimeoutMs = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
-    Ref = erlang:start_timer(TimeoutMs, self(), ?IDLE_TIMEOUT_MSG),
+buffer(Msg, State = #state{buf = Buf}) ->
     {Result, NewBuf} = logplex_msg_buffer:push_ext(Msg, Buf),
     msg_stat(drain_buffered, 1, State),
     case Result of
@@ -534,7 +532,7 @@ buffer(Msg, State = #state{buf = Buf, idle_tref = TRef}) ->
             end;
         insert -> ok
     end,
-    State#state{buf=NewBuf, idle_tref=Ref}.
+    State#state{buf=NewBuf}.
 
 %% @private
 %% @doc Send buffered messages.
@@ -583,6 +581,20 @@ cancel_timeout(Ref, Msg)
             %% Timer didn't fire, so no message to worry about
             undefined
       end.
+
+close_if_idle(#state{sock = Sock, last_good_time = LastGood}) ->
+    MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
+    {DayDiff, TimeDiff} = calendar:time_difference(os:timestamp(), LastGood),
+    %% technically time_to_seconds is obsolete, but not in a way that matters
+    SinceLastGood = calendar:time_to_seconds(TimeDiff) * 1000,
+    case {SinceLastGood > MaxIdle, DayDiff} of
+        {true, 0} ->
+            gen_tcp:close(Sock),
+            closed;
+        _ ->
+            erlang:start_timer(MaxIdle, self(), ?IDLE_TIMEOUT_MSG),
+            ok
+    end.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
     logplex_msg_buffer:to_pkts(Buf, BytesRemaining,
