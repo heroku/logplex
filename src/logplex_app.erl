@@ -114,6 +114,9 @@ cache_os_envvars() ->
                      ,{tcp_syslog_idle_timeout, ["LOGPLEX_TCP_IDLE_TIMEOUT"],
                        optional,
                        integer}
+                     ,{tcp_syslog_idle_fuzz, ["LOGPLEX_TCP_IDLE_FUZZ"],
+                       optional,
+                       integer}
                      ]),
     ok.
 

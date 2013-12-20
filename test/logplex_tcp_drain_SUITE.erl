@@ -31,8 +31,6 @@ groups() -> [{with_tcp_server,[],[shrink]}].
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
-                %% Idle timer reference
-                idle_tref = undefined :: 'undefined' | reference(),
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
@@ -91,7 +89,8 @@ set_os_vars() ->
          {"CLOUD_DOMAIN", "localhost"},
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
          {"LOGPLEX_COOKIE", "ct test"},
-         {"LOGPLEX_TCP_IDLE_TIMEOUT", "50"}
+         {"LOGPLEX_TCP_IDLE_TIMEOUT", "50"},
+         {"LOGPLEX_TCP_IDLE_FUZZ", "0"}
         ]],
     logplex_app:cache_os_envvars().
 
