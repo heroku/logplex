@@ -136,7 +136,8 @@ handlers() ->
 
         Tokens =
             case proplists:get_value(<<"tokens">>, Params) of
-                List when length(List) > 0 ->
+                List when length(List) > 0,
+                          length(List) < ?MAX_TOKENS_PER_CHANNEL ->
                     [{TokenName, logplex_token:create(ChannelId, TokenName)}
                      || TokenName <- List];
                 _ ->
@@ -178,21 +179,29 @@ handlers() ->
     end},
 
     {['POST', "^/channels/(\\d+)/token$"], fun(_Req, _Match, read_only) -> {503, ?API_READONLY};
-                                              (Req, [ChannelId], _) ->
+                                              (Req, [ChannelIdS], _) ->
         authorize(Req),
+        ChannelId = list_to_integer(ChannelIdS),
         {struct, Params} = mochijson2:decode(Req:recv_body()),
 
         TokenName = proplists:get_value(<<"name">>, Params),
         TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
-        {Time, Token} = timer:tc(fun logplex_token:create/2,
-                                 [list_to_integer(ChannelId), TokenName]),
-        not is_binary(Token) andalso exit({expected_binary, Token}),
+        case logplex_token:count_by_channel(ChannelId) of
+            N when N >= ?MAX_TOKENS_PER_CHANNEL ->
+                json_error(400, <<"This channel has already allocated "
+                                  "the maximum number of tokens it is "
+                                  "allowed">>);
+            _ ->
+                {Time, Token} = timer:tc(fun logplex_token:create/2,
+                                         [ChannelId, TokenName]),
+                not is_binary(Token) andalso exit({expected_binary, Token}),
 
-        ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
-            [TokenName, ChannelId, Time div 1000]),
+                ?INFO("at=create_token name=~s channel_id=~p time=~w~n",
+                      [TokenName, ChannelId, Time div 1000]),
 
-        {201, Token}
+                {201, Token}
+        end
     end},
 
     %% V2

@@ -15,3 +15,4 @@
 
 -define(LOG_HISTORY, <<"1500">>).
 -define(MAX_SPOOL_POOL_SIZE, 1000).
+-define(MAX_TOKENS_PER_CHANNEL, 100).

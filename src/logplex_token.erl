@@ -39,6 +39,7 @@
          ,new/2
          ,new_unique_token_id/0
          ,new_token_id/0
+         ,count_by_channel/1
         ]).
 
 -export([store/1
@@ -170,6 +171,10 @@ lookup_by_channel(ChannelId) ->
 lookup_ids_by_channel(ChannelId) when is_integer(ChannelId) ->
     ets:select(?CHAN_TOKEN_TAB,
                [{#token_idx{key = {ChannelId, '$1'}},[],['$1']}]).
+
+count_by_channel(ChannelId) when is_integer(ChannelId) ->
+    ets:select_count(?CHAN_TOKEN_TAB,
+                     [{#token_idx{key = {ChannelId, '_'}},[],[true]}]).
 
 index_rec(#token{id = Id, channel_id = Chan}) ->
     index_rec(Chan, Id).
