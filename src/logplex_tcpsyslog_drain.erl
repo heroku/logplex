@@ -133,7 +133,7 @@ init([State0 = #state{sock = undefined, host=H, port=P,
                       drain_id=DrainId, channel_id=ChannelId}])
   when H =/= undefined, is_integer(P) ->
     try
-        erlang:seed(os:timestamp()),
+        random:seed(os:timestamp()),
         logplex_drain:register(DrainId, ChannelId, tcpsyslog,
                                {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
@@ -375,7 +375,9 @@ do_reconnect(State = #state{sock = undefined,
                                    connect_time=os:timestamp()},
             MaxIdle = logplex_app:config(tcp_syslog_idle_timeout,
                                          timer:minutes(5)),
-            Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
+            %% TODO: config isn't getting read here
+            %% Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
+            Fuzz = 0,
             erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
             send(NewState);
         {error, Reason} ->
@@ -584,13 +586,18 @@ cancel_timeout(Ref, Msg)
             undefined
       end.
 
-close_if_idle(#state{sock = Sock, last_good_time = LastGood}) ->
+close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
-    {DayDiff, TimeDiff} = calendar:time_difference(os:timestamp(), LastGood),
+    %% TODO: we lose millisecond granularity in *_to_local_time
+    Now = calendar:now_to_local_time(os:timestamp()),
+    Then = calendar:now_to_local_time(LastGood),
+    {DayDiff, TimeDiff} = calendar:time_difference(Now, Then),
     %% technically time_to_seconds is obsolete, but not in a way that matters
     SinceLastGood = calendar:time_to_seconds(TimeDiff) * 1000,
     case {SinceLastGood > MaxIdle, DayDiff} of
         {true, 0} ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
+                  log_info(State, [])),
             gen_tcp:close(Sock),
             closed;
         _ ->
