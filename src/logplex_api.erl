@@ -131,7 +131,8 @@ handlers() ->
         Body = Req:recv_body(),
         {struct, Params} = mochijson2:decode(Body),
 
-        Name = proplists:get_value(<<"name">>, Params, ""),
+        Name = proplists:get_value(<<"name">>, Params, <<"">>),
+        is_binary(Name) orelse error_resp(400, <<"Channel name must be a string.">>),
         Channel = logplex_channel:new(undefined, Name),
         logplex_channel:store(Channel),
         ChannelId = logplex_channel:id(Channel),
