@@ -586,16 +586,15 @@ cancel_timeout(Ref, Msg)
             undefined
       end.
 
+
+now_ms({MegaSecs,Secs,MicroSecs}) ->
+	(MegaSecs*1000000 + Secs)*1000 + (MicroSecs / 1000).
+
 close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
-    %% TODO: we lose millisecond granularity in *_to_local_time
-    Now = calendar:now_to_local_time(os:timestamp()),
-    Then = calendar:now_to_local_time(LastGood),
-    {DayDiff, TimeDiff} = calendar:time_difference(Now, Then),
-    %% technically time_to_seconds is obsolete, but not in a way that matters
-    SinceLastGood = calendar:time_to_seconds(TimeDiff) * 1000,
-    case {SinceLastGood > MaxIdle, DayDiff} of
-        {true, 0} ->
+    SinceLastGood = now_ms(os:timestamp()) - now_ms(LastGood),
+    case SinceLastGood > MaxIdle of
+        true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
             gen_tcp:close(Sock),
