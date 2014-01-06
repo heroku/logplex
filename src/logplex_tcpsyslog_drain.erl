@@ -238,8 +238,7 @@ sending(Msg, State) ->
 
 %% @doc We got an idle timeout while in the sending state but haven't
 %% gotten an inet_reply yet.
-disconnecting({timeout, Ref, ?SEND_TIMEOUT_MSG},
-              S = #state{send_tref=Ref}) ->
+disconnecting({timeout, _TRef, ?SEND_TIMEOUT_MSG}, S) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s err=send_timeout "
           "state=disconnecting", log_info(S, [])),
     {next_state, disconnected, tcp_bad(S#state{send_tref=undefined}), hibernate};
