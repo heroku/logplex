@@ -374,9 +374,7 @@ do_reconnect(State = #state{sock = undefined,
                                    connect_time=os:timestamp()},
             MaxIdle = logplex_app:config(tcp_syslog_idle_timeout,
                                          timer:minutes(5)),
-            %% TODO: config isn't getting read here
-            %% Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
-            Fuzz = 0,
+            Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
             erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
             send(NewState);
         {error, Reason} ->
