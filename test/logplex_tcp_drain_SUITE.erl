@@ -13,6 +13,7 @@ groups() -> [{with_tcp_server,[],[shrink]}].
 %%% SETUP / TEADOWN %%%
 %%%%%%%%%%%%%%%%%%%%%%%
 
+%% TODO: move to .hrl file
 %% Directly copy/pastedfrom logplex_tcp_syslog_drain
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
@@ -87,8 +88,11 @@ set_os_vars() ->
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
-         {"LOGPLEX_COOKIE", "ct test"}
-        ]].
+         {"LOGPLEX_COOKIE", "ct test"},
+         {"LOGPLEX_TCP_IDLE_TIMEOUT", "50"},
+         {"LOGPLEX_TCP_IDLE_FUZZ", "1"}
+        ]],
+    logplex_app:cache_os_envvars().
 
 
 mock_drain_buffer() ->
@@ -171,6 +175,10 @@ full_stack(Config) ->
                end),
     {ok, Sock} = gen_tcp:accept(Listen, 5000),
     Logs = receive_logs(Sock, 7),
+    %% idle out the drain
+    timer:sleep(100),
+    %% for some reason port_info won't return closed here, must attempt a read.
+    {error, closed} = gen_tcp:recv(Sock,0,100),
     {match, _} = re:run(Logs, "mymsg1"),
     nomatch    = re:run(Logs, "mymsg2"),
     {match, _} = re:run(Logs, "L10.*1 messages? dropped"),
