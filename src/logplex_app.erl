@@ -39,6 +39,8 @@
          ,a_start/2
         ]).
 
+-export([cache_os_envvars/0]). % for tests
+
 -export([elb_healthcheck/0]).
 
 -include("logplex.hrl").
@@ -109,6 +111,12 @@ cache_os_envvars() ->
                       ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
                         optional, %% in bytes
                         integer}
+                     ,{tcp_syslog_idle_timeout, ["LOGPLEX_TCP_IDLE_TIMEOUT"],
+                       optional,
+                       integer}
+                     ,{tcp_syslog_idle_fuzz, ["LOGPLEX_TCP_IDLE_FUZZ"],
+                       optional,
+                       integer}
                      ]),
     ok.
 

@@ -1,0 +1,36 @@
+digraph logplex_tcpsyslog_drain {
+    esep = 50;
+
+    disconnected -> disconnected [label = "timeout"];
+    disconnected -> disconnected [label = "{timeout, _, ?IDLE_TIMEOUT_MSG}"];
+    disconnected -> reconnect [label = "{Post, Msg}"];
+
+    reconnect [style = "dashed"];
+    reconnect -> reconnect;
+    reconnect -> disconnected;
+    reconnect -> send;
+
+    send [style = "dashed"];
+    send -> ready_to_send;
+    send -> sending;
+    send -> reconnect;
+
+    sending -> reconnect [label = "{timeout, _, ?SEND_TIMEOUT_MSG}"];
+    sending -> reconnect [label = "{inet_reply, _, {error, Reason}}"];
+    sending -> sending [label = "{post, Msg}"];
+    sending -> sending [label = "timeout"];
+    sending -> send [label = "{inet_reply, Sock, ok}"];
+    sending -> disconnecting [label = "{timeout, _, ?IDLE_TIMEOUT_MSG}"]
+    
+    disconnecting -> reconnect [label = "{timeout, _, ?SEND_TIMEOUT_MSG}"];
+    disconnecting -> reconnect [label = "{inet_reply, _, {error, Reason}}"];
+    disconnecting -> sending [label = "{post, Msg}"];
+    disconnecting -> disconnecting [label = "timeout"];
+    disconnecting -> send [label = "{inet_reply, Sock, ok}"];
+    
+    ready_to_send -> disconnected [label = "{timeout, _, ?IDLE_TIMEOUT_MSG}"];
+    ready_to_send -> ready_to_send [label = "timeout"];
+    ready_to_send -> send [label = "{timeout, _, ?SEND_TIMEOUT_MSG}"];
+    ready_to_send -> send [label = "{post, Msg}"];
+    ready_to_send -> send [label = "{inet_reply, Sock, ok}"];
+}
