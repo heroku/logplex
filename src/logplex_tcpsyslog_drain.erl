@@ -372,10 +372,7 @@ do_reconnect(State = #state{sock = undefined,
                                    send_tref = undefined,
                                    buf = maybe_resize(Buf),
                                    connect_time=os:timestamp()},
-            MaxIdle = logplex_app:config(tcp_syslog_idle_timeout,
-                                         timer:minutes(5)),
-            Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
-            erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
+            start_idle_timer(),
             send(NewState);
         {error, Reason} ->
             NewState = tcp_bad(State),
@@ -585,7 +582,12 @@ cancel_timeout(Ref, Msg)
 
 
 now_ms({MegaSecs,Secs,MicroSecs}) ->
-	(MegaSecs*1000000 + Secs)*1000 + (MicroSecs / 1000).
+    (MegaSecs*1000000 + Secs)*1000 + (MicroSecs / 1000).
+
+start_idle_timer() ->
+    MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
+    Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
+    erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG).
 
 close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
@@ -597,7 +599,7 @@ close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
             gen_tcp:close(Sock),
             closed;
         _ ->
-            erlang:start_timer(MaxIdle, self(), ?IDLE_TIMEOUT_MSG),
+            start_idle_timer(),
             ok
     end.
 
