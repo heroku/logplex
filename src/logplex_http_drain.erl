@@ -162,7 +162,7 @@ connected({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, State=#state{}) ->
             {next_state, disconnected,
              State#state{client = undefined}, hibernate};
         ok ->
-            {next_state, ready_to_send, State}
+            {next_state, connected, State}
     end;
 connected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
