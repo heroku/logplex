@@ -376,6 +376,8 @@ full_stack(Config) ->
     [Failure, Success] =
       [iolist_to_binary(IoData) ||
        {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
+    %% ensure idle drain is closed
+    wait_for_mocked_call(logplex_http_client, close, '_', 1, 100),
     %% missed call
     {match, _} = re:run(Failure, "mymsg1"),
     {match, _} = re:run(Failure, "mymsg2"),
