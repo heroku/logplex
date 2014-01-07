@@ -181,7 +181,9 @@ set_os_vars() ->
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
-         {"LOGPLEX_COOKIE", "ct test"}
+         {"LOGPLEX_COOKIE", "ct test"},
+         {"LOGPLEX_HTTP_DRAIN_IDLE", "50"},
+         {"LOGPLEX_HTTP_IDLE_FUZZ", "1"}
         ]].
 
 
