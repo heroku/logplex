@@ -39,6 +39,8 @@
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
+                %% Idle timer reference
+                idle_tref :: reference() | 'undefined',
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
@@ -182,8 +184,8 @@ ready_to_send({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, S) ->
     case close_if_idle(S) of
         closed ->
             {next_state, disconnected, S#state{sock = undefined}, hibernate};
-        ok ->
-            {next_state, ready_to_send, S}
+        NewTimerState ->
+            {next_state, ready_to_send, NewTimerState}
     end;
 ready_to_send({post, Msg}, State = #state{sock = Sock})
   when is_port(Sock) ->
@@ -224,8 +226,8 @@ sending({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
     case close_if_idle(State) of
         closed ->
             {next_state, disconnecting, State#state{sock = undefined}};
-        ok ->
-            {next_state, sending, State}
+        NewTimerState ->
+            {next_state, sending, NewTimerState}
     end;
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
@@ -372,8 +374,7 @@ do_reconnect(State = #state{sock = undefined,
                                    send_tref = undefined,
                                    buf = maybe_resize(Buf),
                                    connect_time=os:timestamp()},
-            start_idle_timer(),
-            send(NewState);
+            send(start_idle_timer(NewState));
         {error, Reason} ->
             NewState = tcp_bad(State),
             case Failures of
@@ -580,14 +581,15 @@ cancel_timeout(Ref, Msg)
             undefined
       end.
 
-
 now_ms({MegaSecs,Secs,MicroSecs}) ->
     (MegaSecs*1000000 + Secs)*1000 + (MicroSecs / 1000).
 
-start_idle_timer() ->
+start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
+    cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG),
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
     Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
-    erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG).
+    NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
+    State#state{idle_tref = NewTimer}.
 
 close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
@@ -599,8 +601,7 @@ close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
             gen_tcp:close(Sock),
             closed;
         _ ->
-            start_idle_timer(),
-            ok
+            start_idle_timer(State)
     end.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
