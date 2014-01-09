@@ -225,7 +225,7 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
 sending({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
     case close_if_idle(State) of
         {closed, ClosedState} ->
-            {next_state, disconnecting, ClosedState, hibernate};
+            {next_state, disconnecting, ClosedState};
         {_, ContinueState} ->
             {next_state, sending, ContinueState}
     end;
