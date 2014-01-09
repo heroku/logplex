@@ -253,8 +253,8 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
                 log_info(S, [disconnecting, Reason, Sock, duration(S)]));
         _ -> ok
     end,
-    NewState = S#state{sock = undefined,
-                       send_tref = cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG)},
+    cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG),
+    NewState = S#state{sock = undefined, send_tref = undefined},
     {next_state, disconnected, NewState, hibernate};
 disconnecting({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
