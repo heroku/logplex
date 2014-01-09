@@ -160,7 +160,7 @@ connected({logplex_drain_buffer, Buf, new_data},
 connected(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, connected, S, hibernate};
-connected({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, State=#state{}) ->
+connected({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     close_if_idle(State);
 connected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
