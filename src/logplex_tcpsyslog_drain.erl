@@ -581,9 +581,6 @@ cancel_timeout(Ref, Msg)
             undefined
       end.
 
-now_ms({MegaSecs,Secs,MicroSecs}) ->
-    (MegaSecs*1000000 + Secs)*1000 + (MicroSecs / 1000).
-
 start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
     cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG),
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
@@ -593,7 +590,7 @@ start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
 
 close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
-    SinceLastGood = now_ms(os:timestamp()) - now_ms(LastGood),
+    SinceLastGood = timer:now_diff(os:timestamp(), LastGood) / 1000,
     case SinceLastGood > MaxIdle of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
