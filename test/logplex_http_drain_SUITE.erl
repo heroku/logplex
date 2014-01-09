@@ -18,6 +18,7 @@ groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                 client :: pid(),
                 out_q = queue:new() :: queue(),
                 reconnect_tref :: reference() | 'undefined',
+                idle_tref :: reference() | 'undefined',
                 drop_info,
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),

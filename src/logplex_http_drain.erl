@@ -41,6 +41,7 @@
                 client :: pid(),
                 out_q = queue:new() :: queue(),
                 reconnect_tref :: reference() | 'undefined',
+                idle_tref :: reference() | 'undefined',
                 drop_info :: drop_info() | 'undefined',
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
@@ -164,8 +165,8 @@ connected({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, State=#state{}) ->
         closed ->
             {next_state, disconnected,
              State#state{client = undefined}, hibernate};
-        ok ->
-            {next_state, connected, State}
+        NewTimerState ->
+            {next_state, connected, NewTimerState}
     end;
 connected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
@@ -264,13 +265,13 @@ try_connect(State = #state{uri=Uri,
                                         Scheme, Host,
                                         Port, ?CONNECT_TIMEOUT) of
         {ok, Pid} ->
-            start_idle_timer(),
             ConnectEnd = os:timestamp(),
             ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
             maybe_resize(Status, Buf),
-            ready_to_send(State#state{client=Pid, service=normal});
+            NewTimerState = start_idle_timer(State),
+            ready_to_send(NewTimerState#state{client=Pid, service=normal});
         Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
@@ -586,10 +587,12 @@ ltcy(Start, End) ->
 now_ms({MegaSecs,Secs,MicroSecs}) ->
     (MegaSecs*1000000 + Secs)*1000 + (MicroSecs / 1000).
 
-start_idle_timer() ->
+start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
+    cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG),
     MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
     Fuzz = random:uniform(logplex_app:config(http_drain_idle_fuzz, 15000)),
-    erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG).
+    NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
+    State#state{idle_tref = NewTimer}.
 
 close_if_idle(State = #state{client = Client, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
@@ -601,8 +604,7 @@ close_if_idle(State = #state{client = Client, last_good_time = LastGood}) ->
             logplex_http_client:close(Client),
             closed;
         _ ->
-            start_idle_timer(),
-            ok
+            start_idle_timer(State)
     end.
 
 start_drain_buffer(State = #state{channel_id=ChannelId,
