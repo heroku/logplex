@@ -181,12 +181,7 @@ ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
     %% Stale message.
     send(State);
 ready_to_send({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, S) ->
-    case close_if_idle(S) of
-        closed ->
-            {next_state, disconnected, S#state{sock = undefined}, hibernate};
-        NewTimerState ->
-            {next_state, ready_to_send, NewTimerState}
-    end;
+    close_if_idle(S);
 ready_to_send({post, Msg}, State = #state{sock = Sock})
   when is_port(Sock) ->
     send(buffer(Msg, State));
@@ -223,12 +218,7 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
 sending({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
-    case close_if_idle(State) of
-        closed ->
-            {next_state, disconnecting, State#state{sock = undefined}};
-        NewTimerState ->
-            {next_state, sending, NewTimerState}
-    end;
+    close_if_idle(State);
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, sending, S, hibernate};
@@ -590,15 +580,15 @@ start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
 
 close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
-    SinceLastGood = timer:now_diff(os:timestamp(), LastGood) / 1000,
-    case SinceLastGood > MaxIdle of
+    SinceLastGoodMicros = timer:now_diff(os:timestamp(), LastGood),
+    case SinceLastGoodMicros > (MaxIdle * 1000) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
             gen_tcp:close(Sock),
-            closed;
+            {next_state, disconnecting, State#state{sock=undefined}, hibernate};
         _ ->
-            start_idle_timer(State)
+            {next_state, sending, start_idle_timer(State)}
     end.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
