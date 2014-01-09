@@ -180,7 +180,7 @@ ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
   when is_port(Sock) ->
     %% Stale message.
     send(State);
-ready_to_send({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, S) ->
+ready_to_send({timeout, TRef, ?IDLE_TIMEOUT_MSG}, S=#state{idle_tref=TRef}) ->
     case close_if_idle(S) of
         {closed, ClosedState} ->
             {next_state, disconnected, ClosedState, hibernate};
@@ -222,7 +222,7 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
-sending({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
+sending({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     case close_if_idle(State) of
         {closed, ClosedState} ->
             {next_state, disconnecting, ClosedState};
@@ -258,7 +258,7 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
     {next_state, disconnected, NewState, hibernate};
 disconnecting({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
-disconnecting({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
+disconnecting({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     %% Shouldn't see this since entering this state means the timer wasn't reset
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_idle_timeout "
           "data=~p state=disconnecting", log_info(State, [])),
