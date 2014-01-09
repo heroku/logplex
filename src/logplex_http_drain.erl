@@ -130,11 +130,14 @@ init(State0 = #state{uri=URI,
 
 %% @private
 disconnected({logplex_drain_buffer, Buf, new_data},
-             State = #state{buf = Buf}) ->
-    try_connect(cancel_reconnect(State));
+             State = #state{buf = Buf, reconnect_tref = IdleTRef}) ->
+    cancel_timeout(IdleTRef, ?RECONNECT_MSG),
+    try_connect(State#state{reconnect_tref=undefined});
 disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
-             State = #state{buf = Buf}) ->
-    try_connect(cancel_reconnect(push_frame(Frame, MsgCount, Lost, State)));
+             State = #state{buf = Buf, reconnect_tref = TRef}) ->
+    NewState = push_frame(Frame, MsgCount, Lost, State),
+    cancel_timeout(TRef, ?RECONNECT_MSG),
+    try_connect(NewState#state{reconnect_tref=undefined});
 disconnected(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, disconnected, S, hibernate};
@@ -562,19 +565,20 @@ reconnect_in(MS, State = #state{}) ->
           log_info(State, [MS, Ref])),
     State#state{reconnect_tref = Ref}.
 
-cancel_reconnect(State = #state{reconnect_tref=Ref}) when is_reference(Ref) ->
+cancel_timeout(undefined, _Msg) -> undefined;
+cancel_timeout(Ref, Msg)
+  when is_reference(Ref) ->
     case erlang:cancel_timer(Ref) of
         false ->
-            %% Flush msg q.
+            %% Flush expired timer message
             receive
-                {timeout, Ref, _} -> ok
-            after 0 -> ok
+                {timeout, Ref, Msg} -> undefined
+            after 0 -> undefined
             end;
-         _Time -> ok
-    end,
-    State#state{reconnect_tref=undefined};
-cancel_reconnect(State = #state{reconnect_tref=undefined}) ->
-    State.
+        _Time ->
+            %% Timer didn't fire, so no message to worry about
+            undefined
+      end.
 
 ltcy(Start, End) ->
     timer:now_diff(End, Start).
