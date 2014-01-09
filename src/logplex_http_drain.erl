@@ -161,13 +161,7 @@ connected(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, connected, S, hibernate};
 connected({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, State=#state{}) ->
-    case close_if_idle(State) of
-        closed ->
-            {next_state, disconnected,
-             State#state{client = undefined}, hibernate};
-        NewTimerState ->
-            {next_state, connected, NewTimerState}
-    end;
+    close_if_idle(State);
 connected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=connected",
@@ -593,15 +587,15 @@ start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
 
 close_if_idle(State = #state{client = Client, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
-    SinceLastGood = timer:now_diff(os:timestamp(), LastGood) / 1000,
-    case SinceLastGood > MaxIdle of
+    SinceLastGoodMicros = timer:now_diff(os:timestamp(), LastGood),
+    case SinceLastGoodMicros > (MaxIdle * 1000) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
             logplex_http_client:close(Client),
-            closed;
+            {next_state, disconnected, State#state{client=undefined}, hibernate};
         _ ->
-            start_idle_timer(State)
+            {next_state, connected, start_idle_timer(State)}
     end.
 
 start_drain_buffer(State = #state{channel_id=ChannelId,
