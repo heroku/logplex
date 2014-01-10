@@ -471,6 +471,7 @@ tcp_good(State = #state{}) ->
 %% @private
 %% Caller must ensure sock is closed before calling this.
 tcp_bad(State = #state{send_tref=TRef}) when is_reference(TRef) ->
+    %% After the socket is closed the send-timer is irrelevant
     cancel_timeout(TRef, ?SEND_TIMEOUT_MSG),
     tcp_bad(State#state{send_tref = undefined});
 tcp_bad(State = #state{sock = Sock}) when is_port(Sock) ->
