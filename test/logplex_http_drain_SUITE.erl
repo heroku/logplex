@@ -18,6 +18,7 @@ groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                 client :: pid(),
                 out_q = queue:new() :: queue(),
                 reconnect_tref :: reference() | 'undefined',
+                idle_tref :: reference() | 'undefined',
                 drop_info,
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
@@ -181,7 +182,9 @@ set_os_vars() ->
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
-         {"LOGPLEX_COOKIE", "ct test"}
+         {"LOGPLEX_COOKIE", "ct test"},
+         {"LOGPLEX_HTTP_DRAIN_IDLE", "50"},
+         {"LOGPLEX_HTTP_IDLE_FUZZ", "1"}
         ]].
 
 
@@ -374,6 +377,8 @@ full_stack(Config) ->
     [Failure, Success] =
       [iolist_to_binary(IoData) ||
        {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
+    %% ensure idle drain is closed
+    wait_for_mocked_call(logplex_http_client, close, '_', 1, 100),
     %% missed call
     {match, _} = re:run(Failure, "mymsg1"),
     {match, _} = re:run(Failure, "mymsg2"),
