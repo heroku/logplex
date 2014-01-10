@@ -261,7 +261,7 @@ disconnecting({post, Msg}, State) ->
 disconnecting({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     %% Shouldn't see this since entering this state means the timer wasn't reset
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_idle_timeout "
-          "data=~p state=disconnecting", log_info(State, [])),
+          "state=disconnecting", log_info(State, [])),
     {next_state, disconnecting, State};
 disconnecting(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
