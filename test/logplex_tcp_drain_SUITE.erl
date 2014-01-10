@@ -31,6 +31,8 @@ groups() -> [{with_tcp_server,[],[shrink]}].
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
+                %% Idle timer reference
+                idle_tref :: reference() | 'undefined',
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).

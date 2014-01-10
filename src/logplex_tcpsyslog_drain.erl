@@ -39,6 +39,8 @@
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
+                %% Idle timer reference
+                idle_tref :: reference() | 'undefined',
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
@@ -178,12 +180,12 @@ ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
   when is_port(Sock) ->
     %% Stale message.
     send(State);
-ready_to_send({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, S) ->
+ready_to_send({timeout, TRef, ?IDLE_TIMEOUT_MSG}, S=#state{idle_tref=TRef}) ->
     case close_if_idle(S) of
-        closed ->
-            {next_state, disconnected, S#state{sock = undefined}, hibernate};
-        ok ->
-            {next_state, ready_to_send, S}
+        {closed, ClosedState} ->
+            {next_state, disconnected, ClosedState, hibernate};
+        {_, ContinueState} ->
+            {next_state, ready_to_send, ContinueState}
     end;
 ready_to_send({post, Msg}, State = #state{sock = Sock})
   when is_port(Sock) ->
@@ -220,12 +222,12 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
-sending({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
+sending({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     case close_if_idle(State) of
-        closed ->
-            {next_state, disconnecting, State#state{sock = undefined}};
-        ok ->
-            {next_state, sending, State}
+        {closed, ClosedState} ->
+            {next_state, disconnecting, ClosedState};
+        {_, ContinueState} ->
+            {next_state, sending, ContinueState}
     end;
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
@@ -251,12 +253,12 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
                 log_info(S, [disconnecting, Reason, Sock, duration(S)]));
         _ -> ok
     end,
-    NewState = S#state{sock = undefined,
-                       send_tref = cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG)},
+    cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG),
+    NewState = S#state{sock = undefined, send_tref = undefined},
     {next_state, disconnected, NewState, hibernate};
 disconnecting({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
-disconnecting({timeout, _, ?IDLE_TIMEOUT_MSG}, State) ->
+disconnecting({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     %% Shouldn't see this since entering this state means the timer wasn't reset
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_idle_timeout "
           "data=~p state=disconnecting", log_info(State, [])),
@@ -372,8 +374,7 @@ do_reconnect(State = #state{sock = undefined,
                                    send_tref = undefined,
                                    buf = maybe_resize(Buf),
                                    connect_time=os:timestamp()},
-            start_idle_timer(),
-            send(NewState);
+            send(start_idle_timer(NewState));
         {error, Reason} ->
             NewState = tcp_bad(State),
             case Failures of
@@ -469,6 +470,10 @@ tcp_good(State = #state{}) ->
 
 %% @private
 %% Caller must ensure sock is closed before calling this.
+tcp_bad(State = #state{send_tref=TRef}) when is_reference(TRef) ->
+    %% After the socket is closed the send-timer is irrelevant
+    cancel_timeout(TRef, ?SEND_TIMEOUT_MSG),
+    tcp_bad(State#state{send_tref = undefined});
 tcp_bad(State = #state{sock = Sock}) when is_port(Sock) ->
     catch gen_tcp:close(Sock),
     tcp_bad(State#state{sock = undefined});
@@ -580,27 +585,24 @@ cancel_timeout(Ref, Msg)
             undefined
       end.
 
-
-now_ms({MegaSecs,Secs,MicroSecs}) ->
-    (MegaSecs*1000000 + Secs)*1000 + (MicroSecs / 1000).
-
-start_idle_timer() ->
+start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
+    cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG),
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
     Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
-    erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG).
+    NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
+    State#state{idle_tref = NewTimer}.
 
 close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
-    SinceLastGood = now_ms(os:timestamp()) - now_ms(LastGood),
-    case SinceLastGood > MaxIdle of
+    SinceLastGoodMicros = timer:now_diff(os:timestamp(), LastGood),
+    case SinceLastGoodMicros > (MaxIdle * 1000) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
             gen_tcp:close(Sock),
-            closed;
+            {closed, State#state{sock=undefined}};
         _ ->
-            start_idle_timer(),
-            ok
+            {not_closed, start_idle_timer(State)}
     end.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
