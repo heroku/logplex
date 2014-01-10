@@ -261,7 +261,7 @@ disconnecting({post, Msg}, State) ->
 disconnecting({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
     %% Shouldn't see this since entering this state means the timer wasn't reset
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_idle_timeout "
-          "data=~p state=disconnecting", log_info(State, [])),
+          "state=disconnecting", log_info(State, [])),
     {next_state, disconnecting, State};
 disconnecting(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
@@ -592,6 +592,11 @@ start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
     NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
     State#state{idle_tref = NewTimer}.
 
+close_if_idle(State = #state{sock = Sock, last_good_time = undefined}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
+         log_info(State, [])),
+    gen_tcp:close(Sock),
+    {closed, State#state{sock=undefined}};
 close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
     SinceLastGoodMicros = timer:now_diff(os:timestamp(), LastGood),
