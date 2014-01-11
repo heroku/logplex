@@ -81,59 +81,32 @@ start_phase(listen, normal, _Args) ->
                                      logplex_logs_rest:child_spec()),
     ok.
 
+config_vars() ->
+    [%% availability_zone cached by read_availability_zone()
+     {auth_key, ["LOGPLEX_AUTH_KEY"]}
+     %% HEROKU_DOMAIN overrides LOGPLEX_CLOUD_NAME for legacy reasons.
+    ,{cloud_name, ["LOGPLEX_CLOUD_NAME"]}
+    ,{cloud_name, ["HEROKU_DOMAIN"]}
+     %% core_userpass is deprecated
+    ,{config_redis_url, ["LOGPLEX_CONFIG_REDIS_URL"]}
+    ,{cookie, ["LOGPLEX_COOKIE"]}
+     %% git_branch cached by read_git_branch()
+    ,{instance_name, ["INSTANCE_NAME"]}
+    ,{metrics_channel_id, ["METRICS_CHANNEL_ID"],
+      [{transform, integer}]}
+    ,{local_ip, ["LOCAL_IP"]}
+    ,{metrics_namespace, ["METRICS_NAMESPACE"]}
+    ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"],
+      [{default, "redis://localhost:6379"}]}
+    ,{pagerduty, ["PAGERDUTY"]}
+    ,{pagerduty_key, ["ROUTING_PAGERDUTY_SERVICE_KEY"]}
+    ,{redgrid_redis_url, ["LOGPLEX_REDGRID_REDIS_URL"]}
+    ,{stats_redis_url, ["LOGPLEX_STATS_REDIS_URL"]}
+    ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
+      [{transform, integer}]}].
+
 cache_os_envvars() ->
-    %% cache {key, EnvVarPrefList}
-    %% Last env var wins.
-    cache_os_envvars([
-                      %% availability_zone cached by read_availability_zone()
-                      {auth_key, ["LOGPLEX_AUTH_KEY"]}
-                      ,{cloud_name, ["LOGPLEX_CLOUD_NAME", "HEROKU_DOMAIN"]}
-                      %% core_userpass is deprecated
-                      ,{config_redis_url, ["LOGPLEX_CONFIG_REDIS_URL"]}
-                      ,{cookie, ["LOGPLEX_COOKIE"]}
-                      %% git_branch cached by read_git_branch()
-                      ,{instance_name, ["INSTANCE_NAME"]}
-                      ,{metrics_channel_id, ["METRICS_CHANNEL_ID"],
-                        optional,
-                        integer}
-                      ,{local_ip, ["LOCAL_IP"]}
-                      ,{metrics_namespace, ["METRICS_NAMESPACE"],
-                        optional}
-                      ,{logplex_shard_urls, ["LOGPLEX_SHARD_URLS"]}
-                      ,{pagerduty, ["PAGERDUTY"],
-                        optional}
-                      ,{pagerduty_key, ["ROUTING_PAGERDUTY_SERVICE_KEY"],
-                        optional}
-                      ,{redgrid_redis_url, ["LOGPLEX_REDGRID_REDIS_URL"]}
-                      ,{stats_redis_url, ["LOGPLEX_STATS_REDIS_URL"]}
-                      ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
-                        optional, %% in bytes
-                        integer}
-                     ]),
-    ok.
-
-cache_os_envvars(Vars) ->
-    [ cache_os_envvar(Var)
-      || Var <- Vars ],
-    ok.
-
-cache_os_envvar({Var, Keys}) ->
-    cache_os_envvar(Var, Keys, string),
-    config(Var);
-cache_os_envvar({Var, Keys, optional}) ->
-    cache_os_envvar(Var, Keys, string);
-cache_os_envvar({Var, Keys, optional, integer}) ->
-    cache_os_envvar(Var, Keys, integer).
-
-%% Read os environment for Key and write to var if set.
-%% Keys later in the list overwrite earlier values allowing multiple
-%% env keys to be the source for a single app environment variable
-%% with priority.
-cache_os_envvar(Var, Keys, Type) ->
-    [ case os:getenv(Key) of
-          false -> ok;
-          Value -> set_config(Var, set_config_value(Value, Type))
-      end || Key <- Keys ].
+    stillir:set_config(?APP, config_vars()).
 
 set_config(KeyS, Value) when is_list(KeyS) ->
     set_config(list_to_atom(KeyS), Value);
@@ -141,9 +114,6 @@ set_config(Key, Value) when is_atom(Key) ->
     ?INFO("at=update_running_config key=~p value=~1000p",
           [Key, Value]),
     application:set_env(?APP, Key, Value).
-
-set_config_value(Value, string) -> Value;
-set_config_value(Value, integer) -> list_to_integer(Value).
 
 config() ->
     application:get_all_env(logplex).
