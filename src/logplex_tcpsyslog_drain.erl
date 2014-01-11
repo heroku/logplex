@@ -347,8 +347,32 @@ terminate(Reason, StateName, State) ->
     ok.
 
 %% @private
-code_change(_OldVsn, StateName, State, _Extra) ->
-    {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
+code_change({down, _}, StateName, #state{drain_id=DrainId,
+                                         drain_tok=DrainTok,
+                                         channel_id=ChannelId,
+                                         host=Host,
+                                         port=Port,
+                                         sock=Sock,
+                                         buf=Buf,
+                                         last_good_time=LastGoodTime,
+                                         failures=Failures,
+                                         reconnect_tref=ReconnectTRef,
+                                         send_tref=SendTRef,
+                                         connect_time=ConnectTime},
+            _Extra) ->
+    Old = {state, DrainId, DrainTok, ChannelId, Host, Port, Sock, Buf,
+           LastGoodTime, Failures, ReconnectTRef, SendTRef, ConnectTime},
+    {ok, StateName, Old};
+code_change(_OldVsn, StateName, {state, DrainId, DrainTok, ChannelId, Host,
+                                 Port, Sock, Buf, LastGoodTime, Failures,
+                                 ReconnectTRef, SendTRef, ConnectTime},
+            _Extra) ->
+    New = #state{drain_id=DrainId, drain_tok=DrainTok, channel_id=ChannelId,
+                 host=Host, port=Port, sock=Sock, buf=Buf,
+                 last_good_time=LastGoodTime, failures=Failures,
+                 reconnect_tref=ReconnectTRef, send_tref=SendTRef,
+                 connect_time=ConnectTime},
+    {ok, StateName, New}.
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
