@@ -37,7 +37,7 @@ create_ets_table() ->
     ets:new(sessions, [named_table, public, set, {keypos, #session.id}]).
 
 new(Body) when is_binary(Body) ->
-    SessionId = uuid:to_binary(uuid:v4()),
+    SessionId = iolist_to_binary(uuid:uuid_to_string(uuid:get_v4())),
     #session{id=SessionId, body=Body}.
 
 publish(Body) when is_binary(Body) ->

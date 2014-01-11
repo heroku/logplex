@@ -128,7 +128,7 @@ new_unique_token_id(Retries) when is_integer(Retries),
     end.
 
 new_token_id() ->
-    iolist_to_binary(["t.", uuid:to_iolist(uuid:v4())]).
+    iolist_to_binary(["t.", uuid:uuid_to_string(uuid:get_v4())]).
 
 store(#token{id=Token,
              channel_id=ChannelId,

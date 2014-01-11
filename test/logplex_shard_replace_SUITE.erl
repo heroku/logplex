@@ -26,7 +26,7 @@ set_os_vars() ->
         [{"INSTANCE_NAME", net_adm:localhost()},
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
-         {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
+         {"LOGPLEX_AUTH_KEY", uuid:uuid_to_string(uuid:get_v4())},
          {"LOGPLEX_COOKIE", "ct test"},
          {"LOGPLEX_NODE_NAME", atom_to_list(node())}
         ]].

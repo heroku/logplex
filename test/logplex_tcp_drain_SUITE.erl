@@ -86,7 +86,7 @@ set_os_vars() ->
         [{"INSTANCE_NAME", "localhost"},
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
-         {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
+         {"LOGPLEX_AUTH_KEY", uuid:uuid_to_string(uuid:get_v4())},
          {"LOGPLEX_COOKIE", "ct test"}
         ]].
 

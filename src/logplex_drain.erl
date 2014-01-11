@@ -239,7 +239,7 @@ new_token(0) ->
     exit({error, failed_to_reserve_drain_token});
 
 new_token(Retries) ->
-    Token = list_to_binary("d." ++ uuid:to_string(uuid:v4())),
+    Token = list_to_binary("d." ++ uuid:uuid_to_string(uuid:get_v4())),
     case ets:match_object(drains, #drain{token=Token, _='_'}) of
         [#drain{}] -> new_token(Retries-1);
         [] -> Token
