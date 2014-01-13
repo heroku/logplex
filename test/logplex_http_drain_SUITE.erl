@@ -22,7 +22,8 @@ groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                 drop_info,
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
-                service = normal :: 'normal' | 'degraded'
+                service = normal :: 'normal' | 'degraded',
+                connect_time :: 'undefined' | erlang:timestamp()
                }).
 
 init_per_suite(Config) ->

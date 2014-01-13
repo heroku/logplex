@@ -45,7 +45,9 @@
                 drop_info :: drop_info() | 'undefined',
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
-                service = normal :: 'normal' | 'degraded'
+                service = normal :: 'normal' | 'degraded',
+                %% Time of last successful connection
+                connect_time :: 'undefined' | erlang:timestamp()
                }).
 
 -record(frame, {frame :: iolist(),
@@ -265,7 +267,8 @@ try_connect(State = #state{uri=Uri,
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
             maybe_resize(Status, Buf),
             NewTimerState = start_idle_timer(State),
-            ready_to_send(NewTimerState#state{client=Pid, service=normal});
+            ready_to_send(NewTimerState#state{client=Pid, service=normal,
+                                              connect_time=ConnectEnd});
         Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
@@ -585,6 +588,11 @@ start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
     NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
     State#state{idle_tref = NewTimer}.
 
+close_if_idle(State = #state{client = Client, last_good_time = undefined}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
+          log_info(State, [])),
+    logplex_http_client:close(Client),
+    {closed, State#state{client=undefined}};
 close_if_idle(State = #state{client = Client, last_good_time = LastGood}) ->
     MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
     SinceLastGoodMicros = timer:now_diff(os:timestamp(), LastGood),
