@@ -45,7 +45,9 @@
                 drop_info :: drop_info() | 'undefined',
                 %% Last time we connected or successfully sent data
                 last_good_time :: 'undefined' | erlang:timestamp(),
-                service = normal :: 'normal' | 'degraded'
+                service = normal :: 'normal' | 'degraded',
+                %% Time of last successful connection
+                connect_time :: 'undefined' | erlang:timestamp()
                }).
 
 -record(frame, {frame :: iolist(),
@@ -265,7 +267,8 @@ try_connect(State = #state{uri=Uri,
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
             maybe_resize(Status, Buf),
             NewTimerState = start_idle_timer(State),
-            ready_to_send(NewTimerState#state{client=Pid, service=normal});
+            ready_to_send(NewTimerState#state{client=Pid, service=normal,
+                                              connect_time=os:timestamp()});
         Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
