@@ -268,7 +268,7 @@ try_connect(State = #state{uri=Uri,
             maybe_resize(Status, Buf),
             NewTimerState = start_idle_timer(State),
             ready_to_send(NewTimerState#state{client=Pid, service=normal,
-                                              connect_time=os:timestamp()});
+                                              connect_time=ConnectEnd});
         Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
