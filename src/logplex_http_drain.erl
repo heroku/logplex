@@ -370,31 +370,8 @@ terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
-code_change({down, _}, StateName, #state{drain_id=DrainId,
-                                         drain_tok=DrainTok,
-                                         channel_id=ChannelId,
-                                         uri=Uri,
-                                         buf=Buf,
-                                         client=Client,
-                                         out_q=OutQ,
-                                         reconnect_tref=ReconnectTRef,
-                                         drop_info=DropInfo,
-                                         last_good_time=LastGoodTime,
-                                         service=Service},
-            _Extra) ->
-    Old = {state, DrainId, DrainTok, ChannelId, Uri, Buf, Client, OutQ,
-           ReconnectTRef, DropInfo, LastGoodTime, Service},
-    {ok, StateName, Old};
-code_change(_OldVsn, StateName, {state, DrainId, DrainTok, ChannelId, Uri,
-                                 Buf, Client, OutQ, ReconnectTRef, DropInfo,
-                                 LastGoodTime, Service},
-            _Extra) ->
-    New = #state{drain_id=DrainId, drain_tok=DrainTok,
-                 channel_id=ChannelId, uri=Uri,
-                 buf=Buf, client=Client, out_q=OutQ,
-                 reconnect_tref=ReconnectTRef, drop_info=DropInfo,
-                 last_good_time=LastGoodTime, service=Service},
-    {ok, StateName, New}.
+code_change(_OldVsn, StateName, State, _Extra) ->
+    {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=URI}, Rest)
