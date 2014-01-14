@@ -117,10 +117,16 @@ cache_os_envvars() ->
                      ,{tcp_syslog_idle_fuzz, ["LOGPLEX_TCP_IDLE_FUZZ"],
                        optional,
                        integer}
+                     ,{tcp_syslog_total_timeout, ["LOGPLEX_TCP_TOTAL_TIMEOUT"],
+                       optional,
+                       integer}
                      ,{http_drain_idle_timeout, ["LOGPLEX_HTTP_DRAIN_IDLE"],
                        optional,
                        integer}
                      ,{http_drain_idle_fuzz, ["LOGPLEX_HTTP_IDLE_FUZZ"],
+                       optional,
+                       integer}
+                     ,{http_drain_total_timeout, ["LOGPLEX_HTTP_TOTAL_TIMEOUT"],
                        optional,
                        integer}
                      ]),

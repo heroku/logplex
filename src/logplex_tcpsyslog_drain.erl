@@ -605,6 +605,19 @@ close_if_idle(State = #state{sock = Sock, last_good_time = LastGood}) ->
             gen_tcp:close(Sock),
             {closed, State#state{sock=undefined}};
         _ ->
+            close_if_old(State)
+    end.
+
+close_if_old(State = #state{sock = Sock, connect_time = ConnectTime}) ->
+    MaxTotal = logplex_app:config(tcp_syslog_total_timeout, timer:hours(5)),
+    SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
+    case SinceConnectMicros > (MaxTotal * 1000) of
+        true ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=total_timeout",
+                  log_info(State, [])),
+            gen_tcp:close(Sock),
+            {closed, State#state{sock=undefined}};
+        _ ->
             {not_closed, start_idle_timer(State)}
     end.
 
