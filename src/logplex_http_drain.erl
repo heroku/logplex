@@ -588,12 +588,14 @@ start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
     NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
     State#state{idle_tref = NewTimer}.
 
-close_if_idle(State = #state{last_good_time = undefined,
+close_if_idle(State = #state{client = Client, last_good_time = LastGood,
                              connect_time = ConnectTime}) ->
-    close_if_idle(State#state{last_good_time = ConnectTime});
-close_if_idle(State = #state{client = Client, last_good_time = LastGood}) ->
+    ComparePoint = case LastGood of
+         undefined -> ConnectTime;
+         _ -> LastGood
+    end,
     MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
-    SinceLastGoodMicros = timer:now_diff(os:timestamp(), LastGood),
+    SinceLastGoodMicros = timer:now_diff(os:timestamp(), ComparePoint),
     case SinceLastGoodMicros > (MaxIdle * 1000) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
