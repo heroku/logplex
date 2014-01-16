@@ -4,7 +4,8 @@
 -compile(export_all).
 
 all() -> [{group, overflow},
-          {group, drain_buf}].
+          {group, drain_buf},
+          close_max_ttl].
 
 groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                              full_buffer_temp_fail, full_stack]},
@@ -75,6 +76,35 @@ init_per_testcase(restart_drain_buf, Config) ->
 init_per_testcase(full_stack, Config) ->
     %% Same as any other overflow test case but with drain buffers
     %% unmocked
+    %% Drain data
+    ChannelId = 1337,
+    DrainId = 2198712,
+    DrainTok = "d.12930-321-312213-12321",
+    {ok,URI,_} = ex_uri:decode("http://example.org"),
+    %% --- Mocks ---
+    %% HTTP Client
+    meck:new(logplex_http_client, [passthrough]),
+    meck:expect(logplex_http_client, start_link,
+        fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
+            {ok, self()}
+        end),
+    meck:expect(logplex_http_client, close, fun(_Pid) -> ok end),
+    %% We make failure controleable by helper functions.
+    %% Rube goldberg-esque, but makes writing the actual test
+    %% a bit simpler. Succeeds by default
+    Tab = client_call_init(),
+    meck:expect(logplex_http_client, raw_request,
+        fun(_Pid, _Req, _Timeout) ->
+                Status = client_call_status(Tab),
+                {ok, Status, []}
+        end),
+    %% Starting the drain
+    {ok, Pid} = logplex_http_drain:start_link(ChannelId, DrainId, DrainTok, URI),
+    unlink(Pid),
+    [{channel, ChannelId}, {drain_id, DrainId}, {drain_tok, DrainTok},
+     {uri, URI}, {drain,Pid}, {client, Tab} | Config];
+%% TODO: break this up into reusable functions
+init_per_testcase(close_max_ttl, Config) ->
     %% Drain data
     ChannelId = 1337,
     DrainId = 2198712,
@@ -185,7 +215,8 @@ set_os_vars() ->
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
          {"LOGPLEX_COOKIE", "ct test"},
          {"LOGPLEX_HTTP_DRAIN_IDLE", "50"},
-         {"LOGPLEX_HTTP_IDLE_FUZZ", "1"}
+         {"LOGPLEX_HTTP_IDLE_FUZZ", "1"},
+         {"LOGPLEX_HTTP_MAX_TTL", "100"}
         ]].
 
 
@@ -441,6 +472,25 @@ shrink(Config) ->
     %% The buffer was resized
     wait_for_mocked_call(logplex_drain_buffer, resize_msg_buffer, ['_',Val], 1, 1000).
 
+close_max_ttl(Config) ->
+    ChannelId = ?config(channel, Config),
+    Client = ?config(client, Config),
+    client_call_status(Client, 200),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg1")),
+    wait_for_mocked_call(logplex_http_client, raw_request, '_', 1, 50),
+    timer:sleep(40),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg2")),
+    wait_for_mocked_call(logplex_http_client, raw_request, '_', 2, 50),
+    timer:sleep(40),
+    Hist = meck:history(logplex_http_client),
+    [First, Second] =
+      [iolist_to_binary(IoData) ||
+       {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
+    %% ensure idle drain is closed
+    wait_for_mocked_call(logplex_http_client, close, '_', 1, 20),
+    {match, _} = re:run(First, "mymsg1"),
+    {match, _} = re:run(Second, "mymsg2").
+
 %%% HELPERS
 wait_for_mocked_call(Mod, Fun, Args, NumCalls, Time) ->
     wait_for_mocked_call(Mod,Fun,Args, NumCalls, Time*1000,os:timestamp()).
@@ -463,3 +513,6 @@ wait_for_dead_proc(Pid) ->
         1000 ->
             erlang:exit("process took more than 1s to exit")
     end.
+
+fake_msg(M) ->
+    {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M}.
