@@ -92,7 +92,7 @@ set_os_vars() ->
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
          {"LOGPLEX_COOKIE", "ct test"},
          {"LOGPLEX_TCP_IDLE_TIMEOUT", "50"},
-         {"LOGPLEX_TCP_TOTAL_TIMEOUT", "100"},
+         {"LOGPLEX_TCP_MAX_TTL", "100"},
          {"LOGPLEX_TCP_IDLE_FUZZ", "1"}
         ]],
     logplex_app:cache_os_envvars().

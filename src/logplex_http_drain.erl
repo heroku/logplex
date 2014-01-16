@@ -607,11 +607,11 @@ close_if_idle(State = #state{client = Client, last_good_time = LastGood,
     end.
 
 close_if_old(State = #state{client = Client, connect_time = ConnectTime}) ->
-    MaxTotal = logplex_app:config(http_drain_total_timeout, timer:hours(5)),
+    MaxTotal = logplex_app:config(http_drain_max_ttl, timer:hours(5)),
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
     case SinceConnectMicros > (MaxTotal * 1000) of
         true ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=total_timeout",
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=max_ttl",
                   log_info(State, [])),
             logplex_http_client:close(Client),
             {next_state, disconnected, State#state{client=undefined}, hibernate};

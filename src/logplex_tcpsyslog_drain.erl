@@ -613,11 +613,11 @@ close_if_idle(State = #state{sock = Sock, last_good_time = LastGood,
 %% We can piggy-back this on the idle timer in order to avoid
 %% introducing more overhead.
 close_if_old(State = #state{sock = Sock, connect_time = ConnectTime}) ->
-    MaxTotal = logplex_app:config(tcp_syslog_total_timeout, timer:hours(5)),
+    MaxTotal = logplex_app:config(tcp_syslog_max_ttl, timer:hours(5)),
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
     case SinceConnectMicros > (MaxTotal * 1000) of
         true ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=total_timeout",
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=max_ttl",
                   log_info(State, [])),
             gen_tcp:close(Sock),
             {closed, State#state{sock=undefined}};
