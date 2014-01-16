@@ -16,7 +16,7 @@
 -define(HIBERNATE_TIMEOUT, 5000).
 -define(SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
--define(IDLE_TIMEOUT_MSG, idle_timeout).
+-define(CLOSE_TIMEOUT_MSG, close_timeout).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -39,8 +39,8 @@
                 reconnect_tref = undefined :: 'undefined' | reference(),
                 %% Send timer reference
                 send_tref = undefined :: 'undefined' | reference(),
-                %% Idle timer reference
-                idle_tref :: reference() | 'undefined',
+                %% Close timer reference
+                close_tref :: reference() | 'undefined',
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
@@ -161,7 +161,7 @@ disconnected({timeout, Received, ?RECONNECT_MSG},
     reconnect(State);
 disconnected({post, Msg}, State) ->
     reconnect(buffer(Msg, State));
-disconnected({timeout, _Ref, ?IDLE_TIMEOUT_MSG}, State) ->
+disconnected({timeout, _Ref, ?CLOSE_TIMEOUT_MSG}, State) ->
     %% Already disconnected; nothing to do here
     {next_state, disconnected, State, hibernate};
 disconnected(timeout, State) ->
@@ -180,12 +180,17 @@ ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
   when is_port(Sock) ->
     %% Stale message.
     send(State);
-ready_to_send({timeout, TRef, ?IDLE_TIMEOUT_MSG}, S=#state{idle_tref=TRef}) ->
+ready_to_send({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, S=#state{close_tref=TRef}) ->
     case close_if_idle(S) of
         {closed, ClosedState} ->
             {next_state, disconnected, ClosedState, hibernate};
-        {_, ContinueState} ->
-            {next_state, ready_to_send, ContinueState}
+        _ ->
+            case close_if_old(S) of
+                {closed, ClosedState} ->
+                    {next_state, disconnected, ClosedState, hibernate};
+                {_, ContinueState} ->
+                    {next_state, ready_to_send, ContinueState}
+            end
     end;
 ready_to_send({post, Msg}, State = #state{sock = Sock})
   when is_port(Sock) ->
@@ -222,12 +227,17 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
-sending({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
+sending({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     case close_if_idle(State) of
         {closed, ClosedState} ->
             {next_state, disconnecting, ClosedState};
-        {_, ContinueState} ->
-            {next_state, sending, ContinueState}
+        _ ->
+            case close_if_old(State) of
+                {closed, ClosedState} ->
+                    {next_state, disconnecting, ClosedState};
+                {_, ContinueState} ->
+                    {next_state, sending, ContinueState}
+            end
     end;
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
@@ -238,7 +248,7 @@ sending(Msg, State) ->
           log_info(State, [Msg])),
     {next_state, sending, State, ?HIBERNATE_TIMEOUT}.
 
-%% @doc We got an idle timeout while in the sending state but haven't
+%% @doc We got an close timeout while in the sending state but haven't
 %% gotten an inet_reply yet.
 disconnecting({timeout, _TRef, ?SEND_TIMEOUT_MSG}, S) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s err=send_timeout "
@@ -258,9 +268,9 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
     {next_state, disconnected, NewState, hibernate};
 disconnecting({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
-disconnecting({timeout, TRef, ?IDLE_TIMEOUT_MSG}, State=#state{idle_tref=TRef}) ->
+disconnecting({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     %% Shouldn't see this since entering this state means the timer wasn't reset
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_idle_timeout "
+    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_close_timeout "
           "state=disconnecting", log_info(State, [])),
     {next_state, disconnecting, State};
 disconnecting(timeout, S = #state{}) ->
@@ -374,7 +384,7 @@ do_reconnect(State = #state{sock = undefined,
                                    send_tref = undefined,
                                    buf = maybe_resize(Buf),
                                    connect_time=os:timestamp()},
-            send(start_idle_timer(NewState));
+            send(start_close_timer(NewState));
         {error, Reason} ->
             NewState = tcp_bad(State),
             case Failures of
@@ -585,12 +595,12 @@ cancel_timeout(Ref, Msg)
             undefined
       end.
 
-start_idle_timer(State=#state{idle_tref = IdleTRef}) ->
-    cancel_timeout(IdleTRef, ?IDLE_TIMEOUT_MSG),
+start_close_timer(State=#state{close_tref = CloseTRef}) ->
+    cancel_timeout(CloseTRef, ?CLOSE_TIMEOUT_MSG),
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
     Fuzz = random:uniform(logplex_app:config(tcp_syslog_idle_fuzz, 15000)),
-    NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?IDLE_TIMEOUT_MSG),
-    State#state{idle_tref = NewTimer}.
+    NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?CLOSE_TIMEOUT_MSG),
+    State#state{close_tref = NewTimer}.
 
 close_if_idle(State = #state{sock = Sock, last_good_time = LastGood,
                              connect_time = ConnectTime}) ->
@@ -607,11 +617,9 @@ close_if_idle(State = #state{sock = Sock, last_good_time = LastGood,
             gen_tcp:close(Sock),
             {closed, State#state{sock=undefined}};
         _ ->
-            close_if_old(State)
+            {not_closed, State}
     end.
 
-%% We can piggy-back this on the idle timer in order to avoid
-%% introducing more overhead.
 close_if_old(State = #state{sock = Sock, connect_time = ConnectTime}) ->
     MaxTotal = logplex_app:config(tcp_syslog_max_ttl, timer:hours(5)),
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
@@ -622,7 +630,7 @@ close_if_old(State = #state{sock = Sock, connect_time = ConnectTime}) ->
             gen_tcp:close(Sock),
             {closed, State#state{sock=undefined}};
         _ ->
-            {not_closed, start_idle_timer(State)}
+            {not_closed, start_close_timer(State)}
     end.
 
 buffer_to_pkts(Buf, BytesRemaining, DrainTok) ->
