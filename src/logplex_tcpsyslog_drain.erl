@@ -610,6 +610,8 @@ close_if_idle(State = #state{sock = Sock, last_good_time = LastGood,
             close_if_old(State)
     end.
 
+%% We can piggy-back this on the idle timer in order to avoid
+%% introducing more overhead.
 close_if_old(State = #state{sock = Sock, connect_time = ConnectTime}) ->
     MaxTotal = logplex_app:config(tcp_syslog_total_timeout, timer:hours(5)),
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),

@@ -5,7 +5,7 @@
 -define(PORT, 9601).
 -define(DRAIN_BUFFER_SIZE,5).
 
-all() -> [full_stack, {group, with_tcp_server}].
+all() -> [full_stack, {group, with_tcp_server}, close_max_ttl].
 
 groups() -> [{with_tcp_server,[],[shrink]}].
 
@@ -92,6 +92,7 @@ set_os_vars() ->
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
          {"LOGPLEX_COOKIE", "ct test"},
          {"LOGPLEX_TCP_IDLE_TIMEOUT", "50"},
+         {"LOGPLEX_TCP_TOTAL_TIMEOUT", "100"},
          {"LOGPLEX_TCP_IDLE_FUZZ", "1"}
         ]],
     logplex_app:cache_os_envvars().
@@ -155,19 +156,16 @@ full_stack(Config) ->
     Listen = ?config(port, Config),
     Drain = ?config(drain, Config),
     ChannelId = ?config(channel, Config),
-    Msg = fun(M) -> {user, debug, logplex_syslog_utils:datetime(now),
-                     "fakehost", "erlang", M}
-    end,
     %% due to an implementation detail, a disconnected tcp syslog drain
     %% has a buffer of N+1 after receiving the first message and then trying
     %% to connect while the rest accumulates in the mailbox.
-    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg1")), % not in buffer
-    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg2")),
-    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg3")),
-    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg4")),
-    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg5")),
-    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg6")),
-    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg7")),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg1")), % not in buffer
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg2")),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg3")),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg4")),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg5")),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg6")),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg7")),
     wait_until(fun() -> % all made it through, messages 2-6 or 3-7 are in the buffer
                 {_Name,#state{buf=Buf}} = get_state(Drain),
                 length(buf_entries(Buf)) =:= 5
@@ -193,15 +191,12 @@ full_stack(Config) ->
 shrink(Config) ->
     %% Use an explicitly larger default than whatever the suite sets
     application:set_env(logplex, tcp_drain_buffer_size, 1024),
-    Msg = fun(M) -> {user, debug, logplex_syslog_utils:datetime(now),
-                     "fakehost", "erlang", M}
-    end,
     {_, Ip, Port} = ?config(endpoint, Config),
     ChannelId = ?config(channel, Config),
     FullBuff = lists:foldl(
         fun(M,Buf) -> logplex_msg_buffer:push(M,Buf) end,
         logplex_msg_buffer:new(10000),
-        [Msg(integer_to_binary(N)) || N <- lists:seq(1,10000)]
+        [fake_msg(integer_to_binary(N)) || N <- lists:seq(1,10000)]
     ),
     HalfBuff = logplex_msg_buffer:resize(20000, FullBuff),
     Ref = make_ref(),
@@ -223,18 +218,18 @@ shrink(Config) ->
     %% timeout event (which would have called do_reconnect)
     %%
     %% First try, don't resize because we don't have enough failures
-    {next_state, disconnected, State1, _} = logplex_tcpsyslog_drain:disconnected({post,Msg("a")}, State0),
+    {next_state, disconnected, State1, _} = logplex_tcpsyslog_drain:disconnected({post,fake_msg("a")}, State0),
     #state{buf=Buf1} = State1,
     10000 = logplex_msg_buffer:len(Buf1),
     10000 = logplex_msg_buffer:max_size(Buf1),
     full = logplex_msg_buffer:full(Buf1),
     %% then we don't resize because the buffer isn't full/hasn't lost data
-    {next_state, disconnected, State2, _} = logplex_tcpsyslog_drain:disconnected({post,Msg("a")}, State0#state{buf=HalfBuff, failures=100}),
+    {next_state, disconnected, State2, _} = logplex_tcpsyslog_drain:disconnected({post,fake_msg("a")}, State0#state{buf=HalfBuff, failures=100}),
     #state{buf=Buf2} = State2,
     20000 = logplex_msg_buffer:max_size(Buf2),
     have_space = logplex_msg_buffer:full(Buf2),
     %% Then we lose because we have all the good criteria
-    {next_state, disconnected, State3, _} = logplex_tcpsyslog_drain:disconnected({post,Msg("a")}, State0#state{failures=100}),
+    {next_state, disconnected, State3, _} = logplex_tcpsyslog_drain:disconnected({post,fake_msg("a")}, State0#state{failures=100}),
     #state{buf=Buf3} = State3,
     10 = logplex_msg_buffer:len(Buf3),
     %% 9990 drops + the one triggered by {post, Msg}
@@ -255,12 +250,24 @@ shrink(Config) ->
     Default = logplex_msg_buffer:len(lists:foldl(
         fun(M,Buf) -> logplex_msg_buffer:push(M,Buf) end,
         Buf4,
-        [Msg(integer_to_binary(N)) || N <- lists:seq(1,10000)]
+        [fake_msg(integer_to_binary(N)) || N <- lists:seq(1,10000)]
     )).
 
-
-
-
+close_max_ttl(Config) ->
+    Listen = ?config(port, Config),
+    Drain = ?config(drain, Config),
+    ChannelId = ?config(channel, Config),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg1")),
+    {ok, Sock} = gen_tcp:accept(Listen, 5000),
+    timer:sleep(40),
+    Logs1 = receive_logs(Sock, 1),
+    {match, _} = re:run(Logs1, "mymsg1"),
+    logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg2")),
+    timer:sleep(40),
+    Logs2 = receive_logs(Sock, 1),
+    {match, _} = re:run(Logs2, "mymsg2"),
+    timer:sleep(20),
+    {error, closed} = gen_tcp:recv(Sock,0,100).
 
 %%%%%%%%%%%%%
 %%% UTILS %%%
@@ -281,6 +288,9 @@ get_state(Pid) ->
 
 buf_entries(BufState) ->
     queue:to_list(element(2,BufState)).
+
+fake_msg(M) ->
+    {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M}.
 
 wait_until(F) ->
     case F() of
