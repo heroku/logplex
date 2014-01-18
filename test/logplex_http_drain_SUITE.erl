@@ -50,9 +50,14 @@ init_per_testcase(restart_drain_buf, Config) ->
     Tab = init_http_mocks(),
     init_config(Config, Tab);
 init_per_testcase(full_stack, Config) ->
+    application:set_env(logplex, http_drain_idle_timeout, 50),
+    application:set_env(logplex, http_drain_idle_fuzz, 1),
     Tab = init_http_mocks(),
     init_config(Config, Tab);
 init_per_testcase(close_max_ttl, Config) ->
+    application:set_env(logplex, http_drain_idle_timeout, 50),
+    application:set_env(logplex, http_drain_idle_fuzz, 1),
+    application:set_env(logplex, http_drain_max_ttl, 100),
     Tab = init_http_mocks(),
     init_config(Config, Tab);
 init_per_testcase(_, Config) ->
@@ -80,10 +85,7 @@ set_os_vars() ->
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
-         {"LOGPLEX_COOKIE", "ct test"},
-         {"LOGPLEX_HTTP_DRAIN_IDLE", "50"},
-         {"LOGPLEX_HTTP_IDLE_FUZZ", "1"},
-         {"LOGPLEX_HTTP_MAX_TTL", "100"}
+         {"LOGPLEX_COOKIE", "ct test"}
         ]].
 
 

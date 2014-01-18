@@ -56,6 +56,9 @@ init_per_testcase(shrink, Config) ->
     with_tcp_server([{channel, 1337} | Config]);
 init_per_testcase(_, Config) ->
     application:set_env(logplex, tcp_drain_buffer_size, 5),
+    application:set_env(logplex, tcp_syslog_idle_timeout, 50),
+    application:set_env(logplex, tcp_syslog_idle_fuzz, 1),
+    application:set_env(logplex, tcp_syslog_max_ttl, 100),
     Port = start_server(Config),
     %% Drain data
     ChannelId = 1337,
@@ -90,10 +93,7 @@ set_os_vars() ->
          {"LOCAL_IP", "localhost"},
          {"CLOUD_DOMAIN", "localhost"},
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
-         {"LOGPLEX_COOKIE", "ct test"},
-         {"LOGPLEX_TCP_IDLE_TIMEOUT", "50"},
-         {"LOGPLEX_TCP_MAX_TTL", "100"},
-         {"LOGPLEX_TCP_IDLE_FUZZ", "1"}
+         {"LOGPLEX_COOKIE", "ct test"}
         ]],
     logplex_app:cache_os_envvars().
 

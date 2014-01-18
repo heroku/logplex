@@ -111,24 +111,6 @@ cache_os_envvars() ->
                       ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
                         optional, %% in bytes
                         integer}
-                     ,{tcp_syslog_idle_timeout, ["LOGPLEX_TCP_IDLE_TIMEOUT"],
-                       optional,
-                       integer}
-                     ,{tcp_syslog_idle_fuzz, ["LOGPLEX_TCP_IDLE_FUZZ"],
-                       optional,
-                       integer}
-                     ,{tcp_syslog_max_ttl, ["LOGPLEX_TCP_MAX_TTL"],
-                       optional,
-                       integer}
-                     ,{http_drain_idle_timeout, ["LOGPLEX_HTTP_DRAIN_IDLE"],
-                       optional,
-                       integer}
-                     ,{http_drain_idle_fuzz, ["LOGPLEX_HTTP_IDLE_FUZZ"],
-                       optional,
-                       integer}
-                     ,{http_drain_max_ttl, ["LOGPLEX_HTTP_MAX_TTL"],
-                       optional,
-                       integer}
                      ]),
     ok.
 
