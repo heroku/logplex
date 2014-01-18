@@ -598,15 +598,18 @@ start_close_timer(State=#state{close_tref = CloseTRef}) ->
     NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?CLOSE_TIMEOUT_MSG),
     State#state{close_tref = NewTimer}.
 
-close_if_idle(State = #state{sock = Sock, last_good_time = LastGood,
-                             connect_time = ConnectTime}) ->
-    ComparePoint = case LastGood of
-         undefined -> ConnectTime;
-         _ -> LastGood
-    end,
+compare_point(#state{last_good_time=undefined, connect_time=ConnectTime}) ->
+    ConnectTime;
+compare_point(#state{last_good_time=LastGood}) ->
+    LastGood.
+
+connection_idle(State) ->
     MaxIdle = logplex_app:config(tcp_syslog_idle_timeout, timer:minutes(5)),
-    SinceLastGoodMicros = timer:now_diff(os:timestamp(), ComparePoint),
-    case SinceLastGoodMicros > (MaxIdle * 1000) of
+    SinceLastGoodMicros = timer:now_diff(os:timestamp(), compare_point(State)),
+    SinceLastGoodMicros > (MaxIdle * 1000).
+
+close_if_idle(State = #state{sock = Sock}) ->
+    case connection_idle(State) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
@@ -616,10 +619,13 @@ close_if_idle(State = #state{sock = Sock, last_good_time = LastGood,
             {not_closed, State}
     end.
 
-close_if_old(State = #state{sock = Sock, connect_time = ConnectTime}) ->
+connection_too_old(#state{connect_time = ConnectTime}) ->
     MaxTotal = logplex_app:config(tcp_syslog_max_ttl, timer:hours(5)),
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
-    case SinceConnectMicros > (MaxTotal * 1000) of
+    SinceConnectMicros > (MaxTotal * 1000).
+
+close_if_old(State = #state{sock = Sock}) ->
+    case connection_too_old(State) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=max_ttl",
                   log_info(State, [])),
