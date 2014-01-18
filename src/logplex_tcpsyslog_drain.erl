@@ -228,18 +228,9 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
-sending({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
-    case close_if_idle(State) of
-        {closed, ClosedState} ->
-            {next_state, disconnecting, ClosedState};
-        {not_closed, State} ->
-            case close_if_old(State) of
-                {closed, ClosedState} ->
-                    {next_state, disconnecting, ClosedState};
-                {not_closed, ContinueState} ->
-                    {next_state, sending, ContinueState}
-            end
-    end;
+sending({timeout, _TRef, ?CLOSE_TIMEOUT_MSG}, State) ->
+    %% Assume we aren't idle if we're in this state
+    start_close_timer(State);
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, sending, S, hibernate};
