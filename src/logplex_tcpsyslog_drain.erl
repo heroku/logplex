@@ -343,6 +343,10 @@ handle_info(shutdown, StateName, State = #state{sock = Sock})
     {stop, {shutdown,call}, State#state{sock = undefined}};
 handle_info(shutdown, _StateName, State) ->
     {stop, {shutdown,call}, State};
+%% close_timeout used to be called idle_timeout; remove once we are on v72+
+%% this can be removed once we are on v72+
+handle_info({timeout, TRef, idle_timeout}, StateName, State) ->
+    apply(?MODULE, StateName, [{timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State]);
 handle_info(timeout, StateName, State) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, StateName, State, hibernate};

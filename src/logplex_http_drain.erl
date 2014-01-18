@@ -248,6 +248,10 @@ handle_info({'EXIT', ClientPid, Reason}, StateName,
           log_info(State, [StateName, ClientPid, Reason])),
     {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
 
+%% close_timeout used to be called idle_timeout; remove once we are on v72+
+handle_info({timeout, TRef, idle_timeout}, StateName, State) ->
+    apply(?MODULE, StateName, [{timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State]);
+
 handle_info(timeout, StateName, State) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, StateName, State, hibernate};
