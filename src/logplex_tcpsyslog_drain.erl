@@ -180,15 +180,16 @@ ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
   when is_port(Sock) ->
     %% Stale message.
     send(State);
-ready_to_send({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, S=#state{close_tref=TRef}) ->
-    case close_if_idle(S) of
+ready_to_send({timeout, TRef, ?CLOSE_TIMEOUT_MSG},
+              State=#state{close_tref=TRef}) ->
+    case close_if_idle(State) of
         {closed, ClosedState} ->
             {next_state, disconnected, ClosedState, hibernate};
-        _ ->
-            case close_if_old(S) of
+        {not_closed, State} ->
+            case close_if_old(State) of
                 {closed, ClosedState} ->
                     {next_state, disconnected, ClosedState, hibernate};
-                {_, ContinueState} ->
+                {not_closed, ContinueState} ->
                     {next_state, ready_to_send, ContinueState}
             end
     end;
@@ -231,11 +232,11 @@ sending({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     case close_if_idle(State) of
         {closed, ClosedState} ->
             {next_state, disconnecting, ClosedState};
-        _ ->
+        {not_closed, State} ->
             case close_if_old(State) of
                 {closed, ClosedState} ->
                     {next_state, disconnecting, ClosedState};
-                {_, ContinueState} ->
+                {not_closed, ContinueState} ->
                     {next_state, sending, ContinueState}
             end
     end;
