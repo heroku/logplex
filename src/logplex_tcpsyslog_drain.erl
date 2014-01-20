@@ -263,7 +263,7 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
     NewState = S#state{sock = undefined, send_tref = undefined},
     {next_state, disconnected, NewState, hibernate};
 disconnecting({post, Msg}, State) ->
-    {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
+    reconnect(buffer(Msg, State));
 disconnecting({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     %% Shouldn't see this since entering this state means the timer wasn't reset
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_close_timeout "
