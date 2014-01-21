@@ -255,7 +255,6 @@ shrink(Config) ->
 
 close_max_ttl(Config) ->
     Listen = ?config(port, Config),
-    Drain = ?config(drain, Config),
     ChannelId = ?config(channel, Config),
     logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg1")),
     {ok, Sock} = gen_tcp:accept(Listen, 5000),
