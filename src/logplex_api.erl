@@ -62,7 +62,7 @@ loop(Req) ->
     Method = Req:get(method),
     Path = Req:get(path),
     ChannelId = header_value(Req, "Channel", ""),
-    RequestId = header_value(Req, "Request-Id", "unknown"),
+    RequestId = erequest_id:ensure(header_value(Req, "Request-Id", undefined)),
     try
         Served = case serve(handlers(), Method, Path, Req, status()) of
                      {done,{C,D}} -> {done,{C,D}};
