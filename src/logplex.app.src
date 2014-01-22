@@ -19,6 +19,7 @@
                   ,batchio
                   ,uuid
                   ,erequest_id
+                  ,stillir
                  ]},
   {included_applications, [heroku_crashdumps]},
   {mod, {logplex_app, []}},
