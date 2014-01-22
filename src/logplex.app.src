@@ -17,6 +17,7 @@
                   ,cowboy
                   ,lager
                   ,batchio
+                  ,erequest_id
                  ]},
   {included_applications, [heroku_crashdumps]},
   {mod, {logplex_app, []}},
