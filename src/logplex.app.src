@@ -17,6 +17,7 @@
                   ,cowboy
                   ,lager
                   ,batchio
+                  ,uuid
                   ,erequest_id
                  ]},
   {included_applications, [heroku_crashdumps]},
