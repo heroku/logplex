@@ -229,11 +229,11 @@ sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
 sending({timeout, _TRef, ?CLOSE_TIMEOUT_MSG}, State) ->
-    case close_if_old(State) of
-        {closed, ClosedState} ->
-            {next_state, disconnecting, ClosedState};
-        {not_closed, ContinueState} ->
-            {next_state, sending, ContinueState}
+    case connection_too_old(State) of
+        true ->
+            {next_state, disconnecting, State};
+        _ ->
+            {next_state, sending, start_close_timer(State)}
     end;
 sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
@@ -248,8 +248,9 @@ sending(Msg, State) ->
 %% gotten an inet_reply yet.
 disconnecting({timeout, _TRef, ?SEND_TIMEOUT_MSG}, S) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s err=send_timeout "
-          "state=disconnecting", log_info(S, [])),
-    {next_state, disconnected, tcp_bad(S#state{send_tref=undefined}), hibernate};
+         "state=disconnecting", log_info(S, [])),
+    {next_state, disconnected,
+     tcp_bad(close(S#state{send_tref=undefined})), hibernate};
 disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
                                                      send_tref = SendTRef}) ->
     case Status of
@@ -261,9 +262,9 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
     end,
     cancel_timeout(SendTRef, ?SEND_TIMEOUT_MSG),
     NewState = S#state{sock = undefined, send_tref = undefined},
-    {next_state, disconnected, NewState, hibernate};
+    {next_state, disconnected, close(NewState), hibernate};
 disconnecting({post, Msg}, State) ->
-    reconnect(buffer(Msg, State));
+    {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
 disconnecting({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     %% Shouldn't see this since entering this state means the timer wasn't reset
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_close_timeout "
@@ -628,13 +629,18 @@ connection_too_old(#state{connect_time = ConnectTime}) ->
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
     SinceConnectMicros > (MaxTotal * 1000).
 
-close_if_old(State = #state{sock = Sock}) ->
+close(State = #state{sock = undefined}) ->
+    State;
+close(State = #state{sock = Sock}) ->
+    gen_tcp:close(Sock),
+    State#state{sock=undefined}.
+
+close_if_old(State) ->
     case connection_too_old(State) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=max_ttl",
                   log_info(State, [])),
-            gen_tcp:close(Sock),
-            {closed, State#state{sock=undefined}};
+            {closed, close(State)};
         _ ->
             {not_closed, start_close_timer(State)}
     end.
