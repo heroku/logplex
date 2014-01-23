@@ -135,7 +135,8 @@ init([State0 = #state{sock = undefined, host=H, port=P,
                       drain_id=DrainId, channel_id=ChannelId}])
   when H =/= undefined, is_integer(P) ->
     try
-        random:seed(os:timestamp()),
+        <<A:32, B:32, C:32>> = crypto:rand_bytes(12),
+        random:seed(A, B, C),
         logplex_drain:register(DrainId, ChannelId, tcpsyslog,
                                {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),

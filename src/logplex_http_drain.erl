@@ -120,6 +120,8 @@ init(State0 = #state{uri=URI,
                      drain_id=DrainId}) ->
     process_flag(trap_exit, true),
     try
+        <<A:32, B:32, C:32>> = crypto:rand_bytes(12),
+        random:seed(A, B, C),
         Dest = uri_to_string(URI),
         State = start_drain_buffer(State0),
         logplex_drain:register(DrainId, http, Dest),
