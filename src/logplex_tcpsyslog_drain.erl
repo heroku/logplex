@@ -626,9 +626,11 @@ close_if_idle(State = #state{sock = Sock}) ->
     end.
 
 connection_too_old(#state{connect_time = ConnectTime}) ->
-    MaxTotal = logplex_app:config(tcp_syslog_max_ttl, timer:hours(5)),
+    MaxTotal = logplex_app:config(tcp_syslog_max_ttl, timer:hours(2)),
+    Fuzz = random:uniform(logplex_app:config(tcp_syslog_max_fuzz,
+                                             timer:hours(5))),
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
-    SinceConnectMicros > (MaxTotal * 1000).
+    SinceConnectMicros > ((MaxTotal + Fuzz) * 1000).
 
 close(State = #state{sock = undefined}) ->
     State;

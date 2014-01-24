@@ -254,6 +254,7 @@ shrink(Config) ->
     )).
 
 close_max_ttl(Config) ->
+    application:set_env(logplex, tcp_syslog_max_fuzz, 1),
     Listen = ?config(port, Config),
     ChannelId = ?config(channel, Config),
     logplex_channel:post_msg({channel, ChannelId}, fake_msg("mymsg1")),

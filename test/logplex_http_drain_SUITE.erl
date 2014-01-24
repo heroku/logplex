@@ -58,6 +58,7 @@ init_per_testcase(close_max_ttl, Config) ->
     application:set_env(logplex, http_drain_idle_timeout, 50),
     application:set_env(logplex, http_drain_idle_fuzz, 1),
     application:set_env(logplex, http_drain_max_ttl, 100),
+    application:set_env(logplex, http_drain_max_fuzz, 1),
     Tab = init_http_mocks(),
     init_config(Config, Tab);
 init_per_testcase(_, Config) ->
