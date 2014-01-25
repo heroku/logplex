@@ -65,11 +65,11 @@
     ,{tcp_syslog_idle_timeout, 300000} % ms
     ,{tcp_syslog_idle_fuzz, 15000} % ms
     ,{tcp_syslog_max_ttl, 7200000} % ms
-    ,{tcp_syslog_max_fuzz, 18000000} % ms
+    ,{tcp_syslog_max_fuzz, 54000000} % ms
     ,{http_drain_idle_timeout, 300000} % ms
     ,{http_drain_idle_fuzz, 15000} % ms
     ,{http_drain_max_ttl, 7200000} % ms
-    ,{http_drain_max_fuzz, 18000000} % ms
+    ,{http_drain_max_fuzz, 54000000} % ms
     ,{workers, 10}
    ]}
  ,{start_phases,

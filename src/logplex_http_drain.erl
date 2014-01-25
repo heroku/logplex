@@ -625,10 +625,16 @@ close_if_idle(State = #state{client = Client}) ->
             {not_closed, State}
     end.
 
+%% Since we piggyback too-old timers on the same timer we use for
+%% idling, we need to fuzz the max-ttl times. Since the randomization
+%% happens many times per hour, it's best to set the baseline number
+%% fairly low and use a high level of fuzz since with so many checks
+%% it's rare that a single drain will ever even reach the median fuzz
+%% level. There's a simulation at http://p.hagelb.org/drain-sim.rkt.html
 connection_too_old(#state{connect_time = ConnectTime}) ->
     MaxTotal = logplex_app:config(http_drain_max_ttl, timer:hours(2)),
     Fuzz = random:uniform(logplex_app:config(http_drain_max_fuzz,
-                                             timer:hours(5))),
+                                             timer:hours(15))),
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
     SinceConnectMicros > ((MaxTotal + Fuzz) * 1000).
 

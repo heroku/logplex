@@ -625,10 +625,11 @@ close_if_idle(State = #state{sock = Sock}) ->
             {not_closed, State}
     end.
 
+%% See the rationale for the same function in the logplex_http_drain module
 connection_too_old(#state{connect_time = ConnectTime}) ->
     MaxTotal = logplex_app:config(tcp_syslog_max_ttl, timer:hours(2)),
     Fuzz = random:uniform(logplex_app:config(tcp_syslog_max_fuzz,
-                                             timer:hours(5))),
+                                             timer:hours(15))),
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
     SinceConnectMicros > ((MaxTotal + Fuzz) * 1000).
 
