@@ -228,7 +228,8 @@ set_os_vars() ->
          {"CLOUD_DOMAIN", "localhost"},
          {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
          {"LOGPLEX_COOKIE", "ct test"},
-         {"LOGPLEX_NODE_NAME", atom_to_list(node())}
+         {"LOGPLEX_NODE_NAME", atom_to_list(node())},
+         {"LOGPLEX_SHARD_URLS", "redis://localhost:6379"}
         ]].
 
 make_msg(Token, N) ->
