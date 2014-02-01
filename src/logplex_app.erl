@@ -215,8 +215,10 @@ setup_redis_shards() ->
                _ ->
                    [config(config_redis_url)]
            end,
-    application:set_env(logplex, logplex_shard_urls,
-                        logplex_shard:redis_sort(URLs)).
+    ?INFO("at=setup_redis_shards shards=~1000p",
+          [URLs]),
+    set_config(logplex_shard_urls,
+               logplex_shard:redis_sort(URLs)).
 
 logplex_work_queue_args() ->
     MaxLength = logplex_utils:to_int(config(queue_length)),
