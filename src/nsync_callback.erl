@@ -121,6 +121,12 @@ handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
 handle({cmd, _Cmd, [<<"stats", _/binary>>|_]}) ->
     ok;
 
+handle({cmd, Cmd, [<<"ch:", _/binary>> | _]})
+  when Cmd =:= "lpush";
+       Cmd =:= "ltrim";
+       Cmd =:= "expire" ->
+    ok;
+
 handle({cmd, "incr", [<<"channel_index", _/binary>> | _]}) ->
     %% ignore the channel_index traffic
     ok;
