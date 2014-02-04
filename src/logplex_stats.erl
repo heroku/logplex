@@ -47,7 +47,7 @@ incr(Key) ->
            #queue_stat{} | list() | atom(), integer()) ->
                   any().
 incr(Key, Incr) when is_integer(Incr) ->
-    ectr_srv:incr(?MODULE, Key, Incr).
+    ectr:incr(?MODULE, Key, Incr).
 
 unix_ts({Mega, S, _}) ->
     Mega * 1000000 + S.
