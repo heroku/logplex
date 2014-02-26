@@ -38,7 +38,6 @@
         ]).
 
 -ifdef(TEST).
--include_lib("proper/include/proper.hrl").
 -opaque binary_uuid() :: <<_:16>>.
 -type binary_string_uuid() :: <<_:36>>.
 -else.
