@@ -288,7 +288,7 @@ handlers() ->
             {tail_not_requested, _} ->
                 end_chunked_response(Socket);
             {_, no_tail} ->
-                gen_tcp:send(Socket, no_tail_warning()),
+                gen_tcp:send(Socket, format_warning(no_tail_warning)),
                 end_chunked_response(Socket);
             _ ->
                 ?INFO("at=tail_start channel_id=~p filters=~100p",
@@ -570,11 +570,11 @@ filter_and_send_chunked_logs(Resp, [Msg|Tail], Filters, Num, Acc) ->
     end.
 
 
-no_tail_warning() ->
+format_warning(Warning) ->
     logplex_utils:format(undefined,
                          logplex_utils:formatted_utc_date(),
                          <<"Logplex">>,
-                         logplex_app:config(no_tail_warning)).
+                         logplex_app:config(Warning)).
 
 tail_init(Socket, Buffer, Filters, ChannelId) ->
     inet:setopts(Socket, [{active, once}]),
