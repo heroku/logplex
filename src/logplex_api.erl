@@ -274,8 +274,8 @@ handlers() ->
 
         Socket = Req:get(socket),
         Header = case logplex_channel:lookup_flag(no_redis, ChannelId) of
-                     true -> ?HDR ++ ?NO_HISTORY;
-                     false -> ?HDR
+                     no_redis -> ?HDR ++ ?NO_HISTORY;
+                     _ -> ?HDR
                  end,
         Req:start_response({200, Header}),
 
