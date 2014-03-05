@@ -28,7 +28,6 @@
 -include("logplex_logging.hrl").
 
 -define(HDR, [{"Content-Type", "text/html"}]).
--define(NO_HISTORY, [{"Log-History", "none"}]).
 -define(JSON_CONTENT, [{"Content-Type", "application/json"}]).
 -define(API_READONLY, <<"Logplex API temporarily in read-only mode">>).
 -define(API_DISABLED, <<"Service Temporarily Disabled">>).
@@ -274,7 +273,8 @@ handlers() ->
 
         Socket = Req:get(socket),
         Header = case logplex_channel:lookup_flag(no_redis, ChannelId) of
-                     no_redis -> ?HDR ++ ?NO_HISTORY;
+                     no_redis -> ?HDR ++ [{"Tail-warning",
+                                           format_warning(no_redis_warning)}];
                      _ -> ?HDR
                  end,
         Req:start_response({200, Header}),
