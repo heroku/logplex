@@ -274,7 +274,7 @@ handlers() ->
         Socket = Req:get(socket),
         Header = case logplex_channel:lookup_flag(no_redis, ChannelId) of
                      no_redis -> ?HDR ++ [{"Tail-warning",
-                                           format_warning(no_redis_warning)}];
+                                           logplex_app:config(no_redis_warning)}];
                      _ -> ?HDR
                  end,
         Req:start_response({200, Header}),
@@ -288,7 +288,7 @@ handlers() ->
             {tail_not_requested, _} ->
                 end_chunked_response(Socket);
             {_, no_tail} ->
-                gen_tcp:send(Socket, format_warning(no_tail_warning)),
+                gen_tcp:send(Socket, no_tail_warning()),
                 end_chunked_response(Socket);
             _ ->
                 ?INFO("at=tail_start channel_id=~p filters=~100p",
@@ -570,11 +570,11 @@ filter_and_send_chunked_logs(Resp, [Msg|Tail], Filters, Num, Acc) ->
     end.
 
 
-format_warning(Warning) ->
+no_tail_warning() ->
     logplex_utils:format(undefined,
                          logplex_utils:formatted_utc_date(),
                          <<"Logplex">>,
-                         logplex_app:config(Warning)).
+                         logplex_app:config(no_tail_warning)).
 
 tail_init(Socket, Buffer, Filters, ChannelId) ->
     inet:setopts(Socket, [{active, once}]),
