@@ -272,7 +272,12 @@ handlers() ->
         not is_list(Logs) andalso exit({expected_list, Logs}),
 
         Socket = Req:get(socket),
-        Req:start_response({200, ?HDR}),
+        Header = case logplex_channel:lookup_flag(no_redis, ChannelId) of
+                     no_redis -> ?HDR ++ [{"Tail-warning",
+                                           logplex_app:config(no_redis_warning)}];
+                     _ -> ?HDR
+                 end,
+        Req:start_response({200, Header}),
 
         inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
 

@@ -45,6 +45,8 @@
     ,{no_tail_warning,
       "Error L20 (Tail sessions forbidden) "
       "Tail sessions for this app are forbidden due to log volume."} % string
+    ,{no_redis_warning,
+      "Warning: log history discarded due to excessive volume."} % string
     ,{pagerduty, "0"} % "0" = disabled
     ,{queue_length, 2000}
     ,{redgrid_redis_url, "redis://localhost:6379"}
