@@ -562,7 +562,7 @@ send(State = #state{buf = Buf, sock = Sock,
                 buffer_to_pkts(Buf, PktSize, DrainTok),
             Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
             try
-                erlang:port_command(Sock, Data, []),
+                erlang:port_command(Sock, Data, [nosuspend]),
                 msg_stat(drain_delivered, N, State),
                 logplex_realtime:incr(drain_delivered, N),
                 {next_state, sending,
