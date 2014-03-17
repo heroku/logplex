@@ -273,7 +273,7 @@ handlers() ->
 
         Socket = Req:get(socket),
         Header = case logplex_channel:lookup_flag(no_redis, ChannelId) of
-                     no_redis -> ?HDR ++ [{"Tail-warning",
+                     no_redis -> ?HDR ++ [{"X-Heroku-Warning",
                                            logplex_app:config(no_redis_warning)}];
                      _ -> ?HDR
                  end,
