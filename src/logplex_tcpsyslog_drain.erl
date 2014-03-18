@@ -560,21 +560,28 @@ send(State = #state{buf = Buf, sock = Sock,
             PktSize = target_send_size(),
             {Data, N, NewBuf} =
                 buffer_to_pkts(Buf, PktSize, DrainTok),
-            Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
             try
-                erlang:port_command(Sock, Data, []),
-                msg_stat(drain_delivered, N, State),
-                logplex_realtime:incr(drain_delivered, N),
-                {next_state, sending,
-                 State#state{buf = NewBuf,
-                             send_tref=Ref}}
+                case erlang:port_command(Sock, Data, [nosuspend]) of
+                    false -> ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+                                   "err=gen_tcp data=~p sock=~p duration=~s",
+                                   log_info(State, [send, port_dropped, Sock,
+                                                    duration(State)])),
+                             msg_stat(drain_dropped, N, State),
+                             logplex_realtime:incr(drain_dropped, N),
+                             {next_state, ready_to_send, State#state{buf=NewBuf}};
+                    _ -> Ref = erlang:start_timer(?SEND_TIMEOUT, self(),
+                                                  ?SEND_TIMEOUT_MSG),
+                         msg_stat(drain_delivered, N, State),
+                         logplex_realtime:incr(drain_delivered, N),
+                         {next_state, sending,
+                          State#state{buf = NewBuf, send_tref=Ref}}
+                end
             catch
                 error:badarg ->
                     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
                           "err=gen_tcp data=~p sock=~p duration=~s",
                           log_info(State, [send, closed, Sock,
                                            duration(State)])),
-                    erlang:cancel_timer(Ref),
                     %% Re-use old state as we know the messages we
                     %% just de-buffered are lost to tcp.
                     reconnect(tcp_bad(State))
