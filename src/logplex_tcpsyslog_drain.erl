@@ -566,14 +566,14 @@ send(State = #state{buf = Buf, sock = Sock,
                     false -> ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
                                    "err=gen_tcp data=~p sock=~p duration=~s",
                                    log_info(State, [send, port_dropped, Sock,
-                                                    duration(State)]));
-                    _ -> ok
-                end,
-                msg_stat(drain_delivered, N, State),
-                logplex_realtime:incr(drain_delivered, N),
-                {next_state, sending,
-                 State#state{buf = NewBuf,
-                             send_tref=Ref}}
+                                                    duration(State)])),
+                             erlang:cancel_timer(Ref),
+                             {next_state, ready_to_send, State#state{buf=NewBuf}};
+                    _ -> msg_stat(drain_delivered, N, State),
+                         logplex_realtime:incr(drain_delivered, N),
+                         {next_state, sending,
+                          State#state{buf = NewBuf, send_tref=Ref}}
+                end
             catch
                 error:badarg ->
                     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
