@@ -11,7 +11,7 @@ notifications:
   email: false
   hipchat:
     rooms:
-      secure: "He7izNyjirrbpNSi3KSmItOhnqyDL58t5Ig5MbMpRxOIR7Z1mHNg5ZeOaUcCxXczHXTVOO6gg+v0DHM38f4r4PLlLrqLPx/ewRUiR0gjEjK63FVQ1FyRXrQBo/2bMU2sQpcO2uK6uDdS0UK2D9/1YZp6CZ/qR2SlHua6MLiJSTM="
+      secure: "lhW7fuGo18NJq93xvMUAMgEyd/ymEa0NPsTkh8Qqm8YL/mfLdVC8gpoh7qE9n6aGSfogUgYmWHFr83R9mg4kMYHcpmWfrhyaiIruMy1UZ+pTAFlhczi8zMviwKeTEsmHtZISkNxDtakFUc4FQtJXHdGW2VcGCPu5dav1XBDSwk8="
     template:
     - ! '%{repository}#%{build_number} (%{branch} - %{commit} : %{author}): %{message}
       (<a href="%{build_url}">Details</a> | <a href="%{compare_url}">Change view</a>)'
