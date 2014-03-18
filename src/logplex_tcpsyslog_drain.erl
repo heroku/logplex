@@ -562,7 +562,13 @@ send(State = #state{buf = Buf, sock = Sock,
                 buffer_to_pkts(Buf, PktSize, DrainTok),
             Ref = erlang:start_timer(?SEND_TIMEOUT, self(), ?SEND_TIMEOUT_MSG),
             try
-                erlang:port_command(Sock, Data, [nosuspend]),
+                case erlang:port_command(Sock, Data, [nosuspend]) of
+                    false -> ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+                                   "err=gen_tcp data=~p sock=~p duration=~s",
+                                   log_info(State, [send, port_dropped, Sock,
+                                                    duration(State)]));
+                    _ -> ok
+                end,
                 msg_stat(drain_delivered, N, State),
                 logplex_realtime:incr(drain_delivered, N),
                 {next_state, sending,
