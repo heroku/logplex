@@ -29,6 +29,8 @@
 
 -export([healthcheck/0, incr/1, incr/2, cached/0]).
 
+-define(TRIGGER_TABLE, logplex_stats_triggers).
+
 -include_lib("logplex.hrl").
 
 %% API functions
@@ -44,14 +46,9 @@ incr(Key) ->
 -spec incr(#drain_stat{} | #channel_stat{} | #logplex_stat{} |
            #queue_stat{} | list() | atom(), integer()) ->
                   any().
-incr(Key, Incr) when is_integer(Incr) ->
-    try ets:update_counter(?MODULE, Key, Incr)
-    catch error:badarg ->
-            try ets:insert_new(?MODULE, {Key, Incr})
-            catch error:badarg ->
-                    catch ets:update_counter(?MODULE, Key, Incr)
-            end
-    end.
+incr(Key, Incr) ->
+    incr(?MODULE, Key, Incr).
+
 
 cached() ->
     gen_server:call(?MODULE, cached, 30000).
@@ -70,8 +67,9 @@ cached() ->
 %%--------------------------------------------------------------------
 init([]) ->
     ets:new(?MODULE, [public, named_table, set, {write_concurrency, true}]),
+    ets:new(?TRIGGER_TABLE, [private, named_table, set, {write_concurrency, true}]),
     start_timer(),
-    {ok, []}.
+    {ok, {[], unix_timestamp()}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -83,7 +81,7 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call(cached, _From, Stats) ->
+handle_call(cached, _From, {Stats, _UnixTs}) ->
     {reply, Stats, Stats};
 
 handle_call(_Msg, _From, State) ->
@@ -106,20 +104,19 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({timeout, _TimerRef, flush}, _State) ->
-
-    {Mega, S, _} = os:timestamp(),
-    UnixTS = Mega * 1000000 + S,
+handle_info({timeout, _TimerRef, flush}, {_Stats, LastUnixTS}) ->
+    UnixTS = unix_timestamp(),
     Stats = ets:tab2list(logplex_stats),
     [ begin
           log_stat(UnixTS, K, V),
+          monitor_msg_threshold(LastUnixTS, UnixTS, K, V),
           ets:update_counter(?MODULE, K, V * -1)
       end
       || {K, V} <- Stats,
          V =/= 0],
 
     start_timer(),
-    {noreply, Stats};
+    {noreply, {Stats, UnixTS}};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -146,6 +143,19 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+incr(Table, Key, Incr) when is_integer(Incr) ->
+    try ets:update_counter(Table, Key, Incr)
+    catch error:badarg ->
+            try ets:insert_new(Table, {Key, Incr}), Incr
+            catch error:badarg ->
+                    catch ets:update_counter(Table, Key, Incr)
+            end
+    end.
+
+unix_timestamp() ->
+    {Mega, S, _} = os:timestamp(),
+    Mega * 1000000 + S.
+
 start_timer() ->
     {_Mega, Secs, Micro} = now(),
     Time = 60000 - ((Secs rem 60 * 1000) + (Micro div 1000)),
@@ -173,3 +183,41 @@ log_stat(UnixTS, {Class, Key}, Val) ->
 
 log_stat(UnixTS, Key, Val) when is_atom(Key); is_list(Key) ->
     io:format("m=logplex_stats ts=~p ~p=~p~n", [UnixTS, Key, Val]).
+
+monitor_msg_threshold(LastUnixTS, UnixTS, #channel_stat{channel_id=ChannelId}, Val) ->
+    MsgThreshold = logplex_app:config(channel_flood_msg_threshold, 50),
+    TimeSpan = case UnixTS - LastUnixTS of
+                   0 -> 1;
+                   N -> N
+               end,
+    Amount = Val / TimeSpan,
+    case Amount >= MsgThreshold of
+        false ->
+            monitor_flap_threshold(ChannelId, -1);
+        true ->
+            monitor_flap_threshold(ChannelId, 1)
+    end;
+
+monitor_msg_threshold(_LastUnixTS, _UnixTs, _Key, _Val) ->
+    ok.
+
+monitor_flap_threshold(ChannelId, FlapAmount) when FlapAmount > 0 ->
+    FlapThreshold = logplex_app:config(channel_flood_flap_threshold, 3),
+    Current = incr(?TRIGGER_TABLE, ChannelId, FlapAmount),
+    case Current > FlapThreshold of
+        true ->
+            logplex_channel:set_local_flag(ChannelId, no_redis_local);
+        false -> ok
+    end;
+
+monitor_flap_threshold(ChannelId, FlapAmount) when FlapAmount < 0 ->
+    try incr(?TRIGGER_TABLE, ChannelId, FlapAmount) of
+        N when N =< 0 -> ets:delete(?TRIGGER_TABLE, ChannelId),
+            logplex_channel:unset_local_flag(ChannelId, no_redis_local);
+        _ -> ok
+    catch error:badarg -> ok
+    end;
+
+monitor_flap_threshold(_ChannelId, 0) ->
+    ok.
+

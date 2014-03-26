@@ -110,8 +110,8 @@ process_tails(ChannelId, Msg) ->
     ok.
 
 process_msg(ChannelId, State, Msg) ->
-    case logplex_channel:lookup_flag(no_redis, ChannelId) of
-        no_redis -> ok;
+    case logplex_channel:is_flagged([no_redis, no_redis_local], ChannelId) of
+        true -> ok;
         _ ->
             Expiry = logplex_app:config(redis_buffer_expiry),
             HistorySize = logplex_app:config(log_history),

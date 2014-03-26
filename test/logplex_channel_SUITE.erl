@@ -16,7 +16,7 @@
 %% a single atom.
 
 all() ->
-    [properties].
+    [properties, flags_to_binary, is_flagged].
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%% Setup/Teardown %%%
@@ -70,6 +70,23 @@ properties(_Config) ->
     ok = recv_msg({rec, {post, Msg2}}),
     %% The process should be down
     [] = logplex_channel:whereis(Channel).
+
+flags_to_binary(_Config) ->
+    Flags = ['no_redis', 'no_tail', 'no_redis_local'],
+    <<"no_redis:no_tail">> = logplex_channel:flags_to_binary(Flags).
+
+is_flagged(_Config) ->
+    ChannelId = 2189312,
+    ChannelName = <<"test">>,
+    logplex_channel:create_ets_table(),
+    logplex_channel:cache(ChannelId, ChannelName, []),
+    false = logplex_channel:is_flagged([no_redis], ChannelId),
+    logplex_channel:cache(ChannelId, ChannelName, [no_redis, no_tail]),
+    true = logplex_channel:is_flagged([no_redis], ChannelId),
+    logplex_channel:cache(ChannelId, ChannelName, [no_tail]),
+    false = logplex_channel:is_flagged([no_redis], ChannelId),
+    logplex_channel:cache(ChannelId, ChannelName, [no_redis, no_tail, no_redis_local]),
+    true = logplex_channel:is_flagged([no_redis, no_redis_local], ChannelId).
 
 %%%%%%%%%%%%%%%
 %%% PRIVATE %%%

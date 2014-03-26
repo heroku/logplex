@@ -47,9 +47,13 @@
 
 -export([lookup_flag/2
          ,lookup_flags/1
+         ,is_flagged/2
          ,store/1
          ,cache/3
+         ,set_local_flag/2
+         ,unset_local_flag/2
          ,binary_to_flags/1
+         ,flags_to_binary/1
          ,create_ets_table/0
         ]).
 
@@ -63,7 +67,7 @@
 
 -type id() :: integer().
 -type name() :: binary().
--type flag() :: 'no_tail' | 'no_redis'.
+-type flag() :: 'no_tail' | 'no_redis' | 'no_redis_local'.
 -type flags() :: [flag()].
 -type channel() :: #channel{}.
 -export_type([id/0, name/0, flags/0]).
@@ -147,7 +151,8 @@ cache(ChannelId, Name, Flags)
 
 -spec flags_to_binary(flags()) -> binary().
 flags_to_binary(Flags) when is_list(Flags) ->
-    Str = string:join([ atom_to_list(Flag) || Flag <- lists:usort(Flags) ],
+    Str = string:join([ atom_to_list(Flag) || Flag <- lists:usort(Flags),
+                                              Flag =/= 'no_redis_local' ],
                       ":"),
     iolist_to_binary(Str).
 
@@ -196,6 +201,51 @@ lookup_flags(ChannelId) when is_integer(ChannelId) ->
     catch
         error:badarg ->
             not_found
+    end.
+
+is_flagged(Flags, ChannelId) when is_list(Flags),
+                                  is_integer(ChannelId) ->
+    case lookup_flags(ChannelId) of
+        not_found -> not_found;
+        ChannelFlags ->
+            is_flagged(Flags, ChannelFlags)
+    end;
+
+is_flagged([], ChannelFlags) when is_list(ChannelFlags) ->
+    false;
+
+is_flagged([Flag | Rest], ChannelFlags) ->
+    case lists:member(Flag, ChannelFlags) of
+        true -> true;
+        false -> is_flagged(Rest, ChannelFlags)
+    end.
+
+set_local_flag(ChannelId, Flag) when is_integer(ChannelId),
+                                     Flag =:= no_redis_local ->
+    try
+        Flags =ets:lookup_element(channels, ChannelId, #channel.flags),
+        case lists:member(Flag, Flags) of
+            true -> true;
+            false ->
+                ets:update_element(channels, ChannelId, {#channel.flags, [no_redis_local | Flags]})
+        end
+    catch
+        error:badarg ->
+            false
+    end.
+
+unset_local_flag(ChannelId, Flag) when is_integer(ChannelId),
+                                       Flag =:= no_redis_local ->
+    try
+        Flags =ets:lookup_element(channels, ChannelId, #channel.flags),
+        case lists:member(Flag, Flags) of
+            false -> true;
+            true ->
+                ets:update_element(channels, ChannelId, {#channel.flags, lists:delete(no_redis_local, Flags)})
+        end
+    catch
+        error:badarg ->
+            false
     end.
 
 lookup_tokens(ChannelId) when is_integer(ChannelId) ->
