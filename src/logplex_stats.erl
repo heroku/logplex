@@ -107,7 +107,6 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({timeout, _TimerRef, flush}, _State) ->
-
     {Mega, S, _} = os:timestamp(),
     UnixTS = Mega * 1000000 + S,
     Stats = ets:tab2list(logplex_stats),
@@ -119,7 +118,7 @@ handle_info({timeout, _TimerRef, flush}, _State) ->
          V =/= 0],
 
     start_timer(),
-    {noreply, Stats};
+    {noreply, stats_disabled};
 
 handle_info(_Info, State) ->
     {noreply, State}.
