@@ -118,7 +118,7 @@ handle_info({timeout, _TimerRef, flush}, _State) ->
          V =/= 0],
 
     start_timer(),
-    {noreply, stats_disabled};
+    {noreply, stats_cache_disabled};
 
 handle_info(_Info, State) ->
     {noreply, State}.
