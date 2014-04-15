@@ -228,13 +228,14 @@ content_types_provided(Req, State) ->
 to_response(Req, State) ->
     {"OK", Req, State}.
 
+log_user_agent(_, 16721780) -> ok;
 log_user_agent(Agent, ChannelId) ->
     try
         ets:update_counter(user_agents, Agent, 1),
         case Agent of
             %% we don't need to track log-shuttle
             <<"Go 1.1", _/binary>> -> skip;
-            _ -> ets:insert_new(user_agent_channels, {Agent, ChannelId})
+            _ -> ets:insert(user_agent_channels, {Agent, ChannelId})
         end
     catch error:badarg ->
             try
