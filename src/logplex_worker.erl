@@ -89,6 +89,7 @@ route(Token, State = #state{}, RawMsg)
     case logplex_token:lookup(Token) of
         #token{channel_id=ChannelId, name=TokenName} ->
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
+            logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
             process_drains(ChannelId, CookedMsg),
             process_tails(ChannelId, CookedMsg),
             process_msg(ChannelId, State, CookedMsg);
