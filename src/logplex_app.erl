@@ -75,6 +75,7 @@ stop(_State) ->
     ok.
 
 start_phase(listen, normal, _Args) ->
+    setup_firehose(),
     {ok, _} = supervisor:start_child(logplex_sup,
                                      logplex_api:child_spec()),
     {ok, _} = supervisor:start_child(logplex_sup,
@@ -98,6 +99,10 @@ cache_os_envvars() ->
                       ,{metrics_channel_id, ["METRICS_CHANNEL_ID"],
                         optional,
                         integer}
+                      ,{firehose_channel_ids, ["FIREHOSE_CHANNEL_IDS"],
+                        optional}
+                      ,{firehose_filter_tokens, ["FIREHOSE_FILTER_TOKENS"],
+                        optional}
                       ,{local_ip, ["LOCAL_IP"]}
                       ,{metrics_namespace, ["METRICS_NAMESPACE"],
                         optional}
@@ -217,6 +222,9 @@ setup_redis_shards() ->
            end,
     application:set_env(logplex, logplex_shard_urls,
                         logplex_shard:redis_sort(URLs)).
+
+setup_firehose() ->
+    logplex_firehose:enable().
 
 logplex_work_queue_args() ->
     MaxLength = logplex_utils:to_int(config(queue_length)),
