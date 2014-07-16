@@ -243,8 +243,10 @@ populate_info_table(ReadMap, WriteMap, Urls) ->
 
 add_pool(Url) ->
     Opts = parse_redis_uri(Url),
-    {ok, Pool} = redo:start_link(undefined, Opts),
-    Pool.
+    case redo:start_link(undefined, Opts) of
+        {ok, Pool} -> Pool;
+        {error, {error, econnrefused}} -> undefined
+    end.
 
 add_buffer(Url) ->
     Opts = redis_buffer_opts(Url),

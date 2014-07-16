@@ -290,7 +290,7 @@ start_workers(WorkerSup, NumWorkers, WorkerArgs) ->
 
 start_worker(WorkerSup, WorkerArgs) ->
     case logplex_worker_sup:start_child(WorkerSup, [self() | WorkerArgs]) of
-        {ok, Pid} -> Pid;
+        {ok, Pid} when is_pid(Pid) -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->
             error_logger:error_msg("~p failed to start worker: ~p~n", [WorkerSup, Reason]),
