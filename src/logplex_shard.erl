@@ -50,7 +50,7 @@
 -define(CURRENT_WRITE_MAP, logplex_redis_buffer_map).
 -define(BACKUP_WRITE_MAP, backup_logplex_redis_buffer_map).
 
--record(state, {urls}).
+-record(state, {urls, maps}).
 
 -define(TIMEOUT, 30000).
 
@@ -88,9 +88,9 @@ init([]) ->
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
-    populate_info_table(Urls),
+    Maps = populate_info_table(Urls),
 
-    {ok, #state{urls=Urls}}.
+    {ok, #state{urls=Urls, maps=Maps}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -102,6 +102,25 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_call({register_worker, {WorkerType, Url, Reader}}, {From, _Ref}, State = #state{ maps=Maps }) ->
+    {WorkerType, Ring} = lists:keyfind(WorkerType, 1, Maps),
+    Ring1 = case lists:keyfind(Url, 1, Ring) of
+               {Url, {async, From}} ->
+                   lists:keyreplace(Url, 1, Ring, {Url, Reader});
+               _ -> Ring
+           end,
+    Ring2 = lists:map(fun ({Frag, {async, _}}) ->
+                              {Frag, undefined};
+                          ({_Frag, Pool}=Mapping) when is_pid(Pool) ->
+                              Mapping
+                      end, Ring1),
+    io:format("RING2 ~p~n", [Ring2]),
+    {ok, Map, Interval} = redis_shard:generate_map_and_interval(Ring2),
+    io:format("~p ~p ~p~n", [WorkerType, Map, Interval]),
+    logplex_shard_info:save(WorkerType, Map, Interval),
+    Maps1 = lists:keyreplace(WorkerType, 1, Maps, {WorkerType, Ring1}),
+    {reply, ok, State#state{ maps=Maps1 }};
+
 handle_call({commit, new_shard_info}, _From, State) ->
     backup_shard_info(),
     try
@@ -227,26 +246,43 @@ populate_info_table(Urls) ->
 
 populate_info_table(ReadMap, WriteMap, Urls) ->
     %% Populate Read pool
-    ReadPools = [ {Url, add_pool(Url)} || Url <- redis_sort(Urls)],
-    {ok, Map1, Interval1} =
-        redis_shard:generate_map_and_interval(ReadPools),
-    logplex_shard_info:save(ReadMap, Map1, Interval1),
-
-    %% Populate write pool
-    WritePools = [ {Url, add_buffer(Url)}
+    ReadPools = [ {Url, async_add_pool(ReadMap, Url)} || Url <- redis_sort(Urls)],
+    WritePools = [ {Url, async_add_buffer(WriteMap, Url)}
                    || Url <- redis_sort(Urls)],
-    {ok, Map2, Interval2} =
-        redis_shard:generate_map_and_interval(WritePools),
 
-    logplex_shard_info:save(WriteMap, Map2, Interval2),
-    ok.
+    [{ReadMap, ReadPools}, {WriteMap, WritePools}].
+    %%
+    %% {ok, Map1, Interval1} =
+    %%     redis_shard:generate_map_and_interval(ReadPools),
+    %% logplex_shard_info:save(ReadMap, Map1, Interval1),
+    %%
+    %% %% Populate write pool
+    %% {ok, Map2, Interval2} =
+    %%     redis_shard:generate_map_and_interval(WritePools),
+    %%
+    %% logplex_shard_info:save(WriteMap, Map2, Interval2),
+    %% ok.
+
+register_worker(WorkerType, Url, Pid) ->
+    gen_server:call(?MODULE, {register_worker, {WorkerType, Url, Pid}}).
+
+async_add_pool(ReadMap, Url) ->
+    WorkerFun = fun () ->
+                        ok = register_worker(ReadMap, Url, add_pool(Url))
+                end,
+    {async, spawn(WorkerFun)}.
 
 add_pool(Url) ->
     Opts = parse_redis_uri(Url),
     case redo:start_link(undefined, Opts) of
-        {ok, Pool} -> Pool;
+        {ok, Pid} when is_pid(Pid) -> Pid;
         {error, {error, econnrefused}} -> undefined
     end.
+
+async_add_buffer(WriteMap, Url) ->
+    {async, spawn(fun () ->
+                          ok = register_worker(WriteMap, Url, add_buffer(Url))
+                  end)}.
 
 add_buffer(Url) ->
     Opts = redis_buffer_opts(Url),
