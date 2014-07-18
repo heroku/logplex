@@ -36,7 +36,7 @@ init(Parent, BufferPid, RedisOpts) ->
     logplex_queue:register(BufferPid, self()),
     case open_socket(RedisOpts) of
         {error, Err} ->
-            timer:sleep(500),
+            timer:sleep(5000),
             exit({error, Err});
         {ok, Socket} when is_port(Socket) ->
             proc_lib:init_ack(Parent, {ok, self()}),
@@ -65,10 +65,10 @@ loop(BufferPid, Socket, RedisOpts) ->
                 {error, closed} ->
                     ?INFO("event=send result=closed", []),
                     timer:sleep(500),
-                    exit(normal);
+                    exit({error, closed});
                 Err ->
                     ?INFO("event=send result=~p", [Err]),
-                    exit(normal)
+                    exit({error, Err})
             end;
         Else ->
             ?WARN("event=queue_out result=~p", [Else]),

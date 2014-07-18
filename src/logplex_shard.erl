@@ -104,7 +104,7 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-notify_complete(State0=#state{ reply_to=Pid }) 
+notify_complete(State0=#state{ reply_to=Pid })
   when Pid =:= self; Pid =:= undefined ->
     State0#state{ reply_to=undefined };
 
@@ -137,9 +137,9 @@ save_shard_info(WorkerType, Ring0) ->
         false -> incomplete
     end.
 
-handle_call({register_worker, {WorkerType, Url, Reader}}, {From, _Ref}, State = #state{ maps=TempTable0 }) ->
+handle_call({register_worker, {WorkerType, Url, Worker}}, {From, _Ref}, State = #state{ maps=TempTable0 }) ->
     Ring = dict:fetch(WorkerType, TempTable0),
-    Ring1 = update_worker_pid(Url, From, Reader, Ring),
+    Ring1 = update_worker_pid(Url, From, Worker, Ring),
     TempTable = case save_shard_info(WorkerType, Ring1) of
                     done ->
                         dict:erase(WorkerType, TempTable0);
@@ -147,6 +147,7 @@ handle_call({register_worker, {WorkerType, Url, Reader}}, {From, _Ref}, State = 
                         dict:store(WorkerType, Ring1, TempTable0)
                 end,
     State1 = notify_complete(State#state{ maps=TempTable }),
+    erlang:monitor(process, Worker),
     {reply, ok, State1};
 
 handle_call({commit, new_shard_info}, _From, State) ->
@@ -228,12 +229,13 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({'EXIT', Pid, Reason}, State) ->
+handle_info({'DOWN', _Ref, process, Pid, Reason}, State) ->
     ?INFO("child=~p exit_reason=~p", [Pid, Reason]),
     handle_child_death(Pid),
     {noreply, State};
 
-handle_info(_Info, State) ->
+handle_info(Info, State) ->
+    ?INFO("at=handle_info unexpected=~p", [Info]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
