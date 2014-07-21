@@ -36,7 +36,7 @@ init(Parent, BufferPid, RedisOpts) ->
     logplex_queue:register(BufferPid, self()),
     case open_socket(RedisOpts) of
         {error, Err} ->
-            timer:sleep(5000),
+            timer:sleep(1000),
             exit({error, Err});
         {ok, Socket} when is_port(Socket) ->
             proc_lib:init_ack(Parent, {ok, self()}),

@@ -129,12 +129,12 @@ save_shard_info(WorkerType, Ring0) ->
                  ({_Frag, Pool}=Mapping, AccIn) when is_pid(Pool) ->
                      {Mapping, AccIn+1}
              end,
-    {Ring1, Completed} = lists:mapfoldl(MapFun, 0, Ring0),
+    {Ring1, NumCollected} = lists:mapfoldl(MapFun, 0, Ring0),
     {ok, Map, Interval} = redis_shard:generate_map_and_interval(Ring1),
     logplex_shard_info:save(WorkerType, Map, Interval),
-    case Completed =:= length(Ring1) of
-        true -> done;
-        false -> incomplete
+    case length(Ring1) of
+        NumCollected -> done;
+        _ -> incomplete
     end.
 
 handle_call({register_worker, {WorkerType, Url, Worker}}, {From, _Ref}, State = #state{ maps=TempTable0 }) ->
