@@ -19,8 +19,12 @@ UpgradeNode = fun () ->
     {module, logplex_redis_writer} = l(logplex_redis_writer),
     {module, logplex_shard} = l(logplex_shard),
 
-    exit(whereis(logplex_redis_writer_sup), kill),
+    ReadPids = logplex_shard_info:pid_list(logplex_read_pool_map),
+    BufferPids = logplex_shard_info:pid_list(logplex_redis_buffer_map),
     exit(whereis(logplex_shard), kill),
+   [ redo:shutdown(Pid) || Pid <- ReadPids ],
+   [ logplex_queue:stop(Pid) || Pid <- BufferPids ],
+
 
     io:format(whereis(user), "at=upgrade_end cur_vsn=~p~n", [NextVsn]),
     ok = application:set_env(logplex, git_branch, NextVsn),
@@ -48,8 +52,11 @@ DowngradeNode = fun () ->
     {module, logplex_redis_writer} = l(logplex_redis_writer),
     {module, logplex_shard} = l(logplex_shard),
 
-    exit(whereis(logplex_redis_writer_sup), kill),
+    ReadPids = logplex_shard_info:pid_list(logplex_read_pool_map),
+    BufferPids = logplex_shard_info:pid_list(logplex_redis_buffer_map),
     exit(whereis(logplex_shard), kill),
+   [ redo:shutdown(Pid) || Pid <- ReadPids ],
+   [ logplex_queue:stop(Pid) || Pid <- BufferPids ],
 
     io:format(whereis(user), "at=upgrade_end cur_vsn=~p~n", [NextVsn]),
     ok = application:set_env(logplex, git_branch, NextVsn),
