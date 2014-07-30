@@ -41,9 +41,25 @@ child_spec() ->
                        [{dispatch,
                          [{'_',[],
                             [{[<<"healthcheck">>], [], ?MODULE, [healthcheck]},
-                             {[<<"logs">>], [], ?MODULE, [logs]}]}]}]}]).
+                             {[<<"logs">>], [], ?MODULE, [logs]},
+                             {[<<"/v2/[...]">>], [], ?MODULE, [api]},
+                             {[<<"/channels/[...]">>], [], ?MODULE, [api]},
+                             {[<<"/sessions/[...]">>], [], ?MODULE, [api]}
+                            ]}]}]}]).
 
 
+init(_Transport, Req0, [api]) ->
+    {ok, Req} = case logplex_app:config(api_endpoint_url, undefined) of
+                     undefined ->
+                         cowboy_req:reply(404, [], "", Req0);
+                     Endpoint ->
+                        {Path, Req1} = cowboy_req:path(Req0),
+                        ?INFO("at=api_redirect path=~p", [Path]),
+                        cowboy_req:reply(302,
+                                         [{<<"Location">>, Endpoint}],
+                                         "redirecting", Req1)
+                 end,
+    {shutdown, Req, no_state};
 init(_Transport, Req, [healthcheck]) ->
     {ok, Req, undefined};
 init(_Transport, _Req, [logs]) ->
