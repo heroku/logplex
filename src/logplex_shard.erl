@@ -92,7 +92,7 @@ init([]) ->
 
     TempTable = populate_info_table(Urls),
 
-    {ok, #state{urls=Urls, maps=TempTable, reply_to=self}}.
+    {ok, #state{urls=Urls, maps=TempTable, reply_to=self()}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -105,7 +105,7 @@ init([]) ->
 %% @hidden
 %%--------------------------------------------------------------------
 notify_complete(State0=#state{ reply_to=Pid })
-  when Pid =:= self; Pid =:= undefined ->
+  when Pid =:= self(); Pid =:= undefined ->
     State0#state{ reply_to=undefined };
 
 notify_complete(State0=#state{ maps=TempTable, reply_to=Pid }) ->

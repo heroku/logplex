@@ -14,6 +14,8 @@ UpgradeNode = fun () ->
             erlang:error({wrong_version, Else})
     end,
 
+    LogplexShard = whereis(logplex_shard),
+
     %% Stateless
     {module, logplex_queue} = l(logplex_queue),
     {module, logplex_redis_writer} = l(logplex_redis_writer),
@@ -21,7 +23,7 @@ UpgradeNode = fun () ->
 
     ReadPids = logplex_shard_info:pid_list(logplex_read_pool_map),
     BufferPids = logplex_shard_info:pid_list(logplex_redis_buffer_map),
-    exit(whereis(logplex_shard), kill),
+    catch exit(LogplexShard, kill),
    [ redo:shutdown(Pid) || Pid <- ReadPids ],
    [ logplex_queue:stop(Pid) || Pid <- BufferPids ],
 
@@ -47,6 +49,8 @@ DowngradeNode = fun () ->
             erlang:error({wrong_version, Else})
     end,
 
+    LogplexShard = whereis(logplex_shard),
+
     %% Stateless
     {module, logplex_queue} = l(logplex_queue),
     {module, logplex_redis_writer} = l(logplex_redis_writer),
@@ -54,7 +58,7 @@ DowngradeNode = fun () ->
 
     ReadPids = logplex_shard_info:pid_list(logplex_read_pool_map),
     BufferPids = logplex_shard_info:pid_list(logplex_redis_buffer_map),
-    exit(whereis(logplex_shard), kill),
+    catch exit(LogplexShard, kill),
    [ redo:shutdown(Pid) || Pid <- ReadPids ],
    [ logplex_queue:stop(Pid) || Pid <- BufferPids ],
 
