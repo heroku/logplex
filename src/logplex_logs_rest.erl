@@ -7,7 +7,7 @@
 
 -include("logplex_logging.hrl").
 
--export([child_spec/0]).
+-export([child_spec/0, dispatch/0]).
 
 -export([init/3
          ,rest_init/2
@@ -33,21 +33,22 @@
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 
 child_spec() ->
-    Dispatch = cowboy_router:compile([{'_',
-                                       [{<<"/healthcheck">>, ?MODULE, [healthcheck]},
-                                        {<<"/logs">>, ?MODULE, [logs]},
-                                        % support for v2 API
-                                        {<<"/v2/[...]">>, ?MODULE, [api]},
-                                        % support for old v1 API
-                                        {<<"/channels/[...]">>, ?MODULE, [api]},
-                                        {<<"/sessions/[...]">>, ?MODULE, [api]}]}]),
     ranch:child_spec(?MODULE, 100,
                      ranch_tcp,
                      [{port, logplex_app:config(http_log_input_port)}],
                      cowboy_protocol,
                      [{env,
-                       [{dispatch, Dispatch}]}]).
+                       [{dispatch, dispatch()}]}]).
 
+dispatch() ->
+    cowboy_router:compile([{'_',
+                            [{<<"/healthcheck">>, ?MODULE, [healthcheck]},
+                             {<<"/logs">>, ?MODULE, [logs]},
+                             % support for v2 API
+                             {<<"/v2/[...]">>, ?MODULE, [api]},
+                             % support for old v1 API
+                             {<<"/channels/[...]">>, ?MODULE, [api]},
+                             {<<"/sessions/[...]">>, ?MODULE, [api]}]}]).
 
 init(_Transport, Req, [healthcheck]) ->
     {ok, Req, undefined};
