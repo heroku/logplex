@@ -116,6 +116,8 @@ cache_os_envvars() ->
                       ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
                         optional, %% in bytes
                         integer}
+                      ,{api_endpoint_url, ["LOGPLEX_API_ENDPOINT_URL"],
+                       optional}
                      ]),
     ok.
 

@@ -7,7 +7,7 @@
 
 -include("logplex_logging.hrl").
 
--export([child_spec/0]).
+-export([child_spec/0, dispatch/0]).
 
 -export([init/3
          ,rest_init/2
@@ -38,14 +38,31 @@ child_spec() ->
                      [{port, logplex_app:config(http_log_input_port)}],
                      cowboy_protocol,
                      [{env,
-                       [{dispatch,
-                         [{'_',[],
-                            [{[<<"healthcheck">>], [], ?MODULE, [healthcheck]},
-                             {[<<"logs">>], [], ?MODULE, [logs]}]}]}]}]).
+                       [{dispatch, dispatch()}]}]).
 
+dispatch() ->
+    cowboy_router:compile([{'_',
+                            [{<<"/healthcheck">>, ?MODULE, [healthcheck]},
+                             {<<"/logs">>, ?MODULE, [logs]},
+                             % support for v2 API
+                             {<<"/v2/[...]">>, ?MODULE, [api]},
+                             % support for old v1 API
+                             {<<"/channels/[...]">>, ?MODULE, [api]},
+                             {<<"/sessions/[...]">>, ?MODULE, [api]}]}]).
 
 init(_Transport, Req, [healthcheck]) ->
     {ok, Req, undefined};
+init(_Transport, Req0, [api]) ->
+    {ok, Req} = case logplex_app:config(api_endpoint_url, undefined) of
+                     undefined ->
+                         cowboy_req:reply(404, [], "", Req0);
+                     Endpoint ->
+                        {Path, Req1} = cowboy_req:path(Req0),
+                        cowboy_req:reply(302,
+                                         [{<<"Location">>, [Endpoint, Path]}],
+                                         "redirecting", Req1)
+                 end,
+    {shutdown, Req, no_state};
 init(_Transport, _Req, [logs]) ->
     {upgrade, protocol, cowboy_rest}.
 
