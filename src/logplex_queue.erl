@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -24,8 +24,8 @@
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/1, start_link/2, init/1, handle_call/3, handle_cast/2, 
-	     handle_info/2, terminate/2, code_change/3]).
+-export([start_link/1, start_link/2, init/1, handle_call/3, handle_cast/2,
+         handle_info/2, terminate/2, code_change/3]).
 
 -export([in/2, out/1, out/2, info/1, get/2, set_max_length/2, stop/1]).
 -export([register/2, all_workers/1]).
@@ -234,7 +234,7 @@ handle_info(_Info, State) ->
 %% The return value is ignored.
 %% @hidden
 %%--------------------------------------------------------------------
-terminate(_Reason, _State) -> 
+terminate(_Reason, _State) ->
     ok.
 
 %%--------------------------------------------------------------------
@@ -247,7 +247,7 @@ code_change("v69.11", #state{dict=Dict,
     NewState = list_to_tuple(lists:sublist(tuple_to_list(State), tuple_size(State)-1)),
     case dict:find(redis_url, Dict) of
         {ok, RedisUrl} ->
-            % The redis_url is not removed from the dictionary during 
+            % The redis_url is not removed from the dictionary during
             % upgrade to make the rollback easier
             {ok, NewState};
         error ->
@@ -278,7 +278,7 @@ build_stat_key(Name, Postfix) when is_list(Name), is_list(Postfix) ->
 
 build_stat_key(Name, Postfix) ->
     exit({poorly_formatted_stat_key, Name, Postfix}).
-    
+
 start_workers(WorkerSup, NumWorkers, WorkerArgs) ->
     lists:foldl(
         fun (_, Acc) ->
@@ -290,7 +290,7 @@ start_workers(WorkerSup, NumWorkers, WorkerArgs) ->
 
 start_worker(WorkerSup, WorkerArgs) ->
     case logplex_worker_sup:start_child(WorkerSup, [self() | WorkerArgs]) of
-        {ok, Pid} -> Pid;
+        {ok, Pid} when is_pid(Pid) -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->
             error_logger:error_msg("~p failed to start worker: ~p~n", [WorkerSup, Reason]),
