@@ -18,7 +18,7 @@ UpgradeNode = fun () ->
     {module, logplex_app} = l(logplex_app),
     {module, logplex_logs_rest} = l(logplex_logs_rest),
 
-    case os:get_env("LOGPLEX_API_ENDPOINT_URL") of
+    case os:getenv("LOGPLEX_API_ENDPOINT_URL") of
         false ->
             erlang:error({missing_osvar, "LOGPLEX_API_ENDPOINT_URL"});
         Value ->
