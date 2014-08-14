@@ -14,15 +14,12 @@ UpgradeNode = fun () ->
             erlang:error({wrong_version, Else})
     end,
 
-    CodeChange = fun (Pid, Mod, Vsn, Info) ->
-                 end,
-
     % reload with state changes
     Pid = whereis(logplex_shard),
     sys:suspend(Pid),
     {module, logplex_shard} = l(logplex_shard),
     sys:change_code(Pid, logplex_shard, v74, undefined),
-    sys:resume(Pid)
+    sys:resume(Pid),
 
     % reloads without state changes
     {module, logplex_queue} = l(logplex_queue),

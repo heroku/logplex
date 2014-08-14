@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -34,25 +34,29 @@ start_link(BufferPid, RedisOpts) ->
 init(Parent, BufferPid, RedisOpts) ->
     ?INFO("at=init buffer_pid=~p parent=~p~n", [BufferPid, Parent]),
     logplex_queue:register(BufferPid, self()),
+    proc_lib:init_ack(Parent, {ok, self()}),
     case open_socket(RedisOpts) of
         {error, Err} ->
-            timer:sleep(1000),
-            exit({error, Err});
+            delayed_exit(Err);
         {ok, Socket} when is_port(Socket) ->
-            proc_lib:init_ack(Parent, {ok, self()}),
             loop(BufferPid, Socket, RedisOpts)
     end.
 
-loop(BufferPid, Socket, RedisOpts) ->
-    %% verify that writer still has an open
-    %% connection to redis server
+loop(BufferPid, Socket, RedisOpts) when is_port(Socket) ->
+    verify_open_connection(Socket),
+    write_queued_logs(BufferPid, Socket),
+    check_for_stop_signal(),
+    ?MODULE:loop(BufferPid, Socket, RedisOpts).
+
+verify_open_connection(Socket) ->
     case gen_tcp:recv(Socket, 0, 0) of
         {ok, _} -> ok;
         {error, timeout} -> ok;
         {error, closed} ->
-            ?INFO("event=recv result=closed", []),
-            exit({error, closed})
-    end,
+            delayed_exit(closed)
+    end.
+
+write_queued_logs(BufferPid, Socket) ->
     case catch logplex_queue:out(BufferPid, 100) of
         {'EXIT', {noproc, _}} ->
             exit(normal);
@@ -63,9 +67,7 @@ loop(BufferPid, Socket, RedisOpts) ->
                     logplex_stats:incr(message_processed, NumItems),
                     logplex_realtime:incr(message_processed, NumItems);
                 {error, closed} ->
-                    ?INFO("event=send result=closed", []),
-                    timer:sleep(500),
-                    exit({error, closed});
+                    delayed_exit(closed);
                 Err ->
                     ?INFO("event=send result=~p", [Err]),
                     exit({error, Err})
@@ -73,9 +75,18 @@ loop(BufferPid, Socket, RedisOpts) ->
         Else ->
             ?WARN("event=queue_out result=~p", [Else]),
             exit(normal)
-    end,
-    receive stop -> exit(normal) after 0 -> ok end,
-    ?MODULE:loop(BufferPid, Socket, RedisOpts).
+    end.
+
+check_for_stop_signal() ->
+    receive stop -> exit(normal) after 0 -> ok end.
+
+delayed_exit(Reason) ->
+    delayed_exit(Reason, 5000).
+
+delayed_exit(Reason, Delay) ->
+    ?INFO("event=send result=~p exit_in=~pms", [Reason, Delay]),
+    timer:sleep(Delay),
+    exit({error, closed}).
 
 open_socket(Opts) ->
     Ip = proplists:get_value(ip, Opts),

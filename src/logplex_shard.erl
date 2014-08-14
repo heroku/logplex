@@ -138,6 +138,7 @@ save_shard_info(WorkerType, Ring0) ->
     end.
 
 handle_call({register_worker, {WorkerType, Url, Worker}}, {From, _Ref}, State = #state{ maps=TempTable0 }) ->
+    ?INFO("at=register_worker type=~p url=~p worker=~p", [WorkerType, Url, Worker]),
     Ring = dict:fetch(WorkerType, TempTable0),
     Ring1 = update_worker_pid(Url, From, Worker, Ring),
     TempTable = case save_shard_info(WorkerType, Ring1) of
@@ -185,7 +186,9 @@ handle_call({make_permanent, new_shard_info}, _From, State) ->
           || P <- logplex_shard_info:pid_list(?BACKUP_READ_MAP) ],
         logplex_shard_info:delete(?BACKUP_READ_MAP),
         logplex_shard_info:delete(?NEW_READ_MAP),
-        {reply, ok, State}
+        {NewShards, _, _} = logplex_shard_info:read(?CURRENT_READ_MAP),
+        Urls = [ Url || {_, {Url, _}} <- dict:to_list(NewShards) ],
+        {reply, ok, State#state{ urls=Urls }}
     catch
         C:E ->
             {reply, {error, {C,E}}, State}
@@ -281,6 +284,7 @@ populate_info_table(Urls) ->
     populate_info_table(?CURRENT_READ_MAP, ?CURRENT_WRITE_MAP, Urls).
 
 populate_info_table(ReadMap, WriteMap, Urls) ->
+    ?INFO("at=populate_info_table read_map=~p write_map=~p urls=~p", [ReadMap, WriteMap, Urls]),
     %% Populate Read pool
     ReadPools = [ {Url, async_add_pool(ReadMap, Url)} || Url <- redis_sort(Urls)],
     WritePools = [ {Url, async_add_buffer(WriteMap, Url)}
@@ -394,7 +398,7 @@ prepare_shard_urls(ShardUrls) ->
 -type shards_info() :: [string()].
 -spec prepare_url_update(shards_info()) -> good|{error, any()}.
 prepare_url_update(NewShardInfo) ->
-    case gen_server:call(?MODULE, {prepare, {new_shard_info, NewShardInfo}}) of
+    case gen_server:call(?MODULE, {prepare, {new_shard_info, NewShardInfo}}, 30000) of
         ok ->
             good;
         Err ->
