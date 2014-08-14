@@ -254,6 +254,8 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
+code_change(v74, {state, Urls}, _Extra) ->
+    {ok, #state{urls=Urls, maps=dict:new(), reply_to=undefined}};
 code_change(v37, State, _Extra) ->
     %% Need to link to existing redis buffer processes.
     [ begin

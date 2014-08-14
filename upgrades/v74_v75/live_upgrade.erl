@@ -14,19 +14,19 @@ UpgradeNode = fun () ->
             erlang:error({wrong_version, Else})
     end,
 
-    LogplexShard = whereis(logplex_shard),
+    CodeChange = fun (Pid, Mod, Vsn, Info) ->
+                 end,
 
-    %% Stateless
+    % reload with state changes
+    Pid = whereis(logplex_shard),
+    sys:suspend(Pid),
+    {module, logplex_shard} = l(logplex_shard),
+    sys:change_code(Pid, logplex_shard, v74, undefined),
+    sys:resume(Pid)
+
+    % reloads without state changes
     {module, logplex_queue} = l(logplex_queue),
     {module, logplex_redis_writer} = l(logplex_redis_writer),
-    {module, logplex_shard} = l(logplex_shard),
-
-    ReadPids = logplex_shard_info:pid_list(logplex_read_pool_map),
-    BufferPids = logplex_shard_info:pid_list(logplex_redis_buffer_map),
-    catch exit(LogplexShard, kill),
-   [ redo:shutdown(Pid) || Pid <- ReadPids ],
-   [ logplex_queue:stop(Pid) || Pid <- BufferPids ],
-
 
     io:format(whereis(user), "at=upgrade_end cur_vsn=~p~n", [NextVsn]),
     ok = application:set_env(logplex, git_branch, NextVsn),
