@@ -37,7 +37,7 @@ init(Parent, BufferPid, RedisOpts) ->
     proc_lib:init_ack(Parent, {ok, self()}),
     case open_socket(RedisOpts) of
         {error, Err} ->
-            delayed_exit(Err);
+            throttled_restart(Err);
         {ok, Socket} when is_port(Socket) ->
             loop(BufferPid, Socket, RedisOpts)
     end.
@@ -53,7 +53,7 @@ verify_open_connection(Socket) ->
         {ok, _} -> ok;
         {error, timeout} -> ok;
         {error, closed} ->
-            delayed_exit(closed)
+            throttled_restart(closed)
     end.
 
 write_queued_logs(BufferPid, Socket) ->
@@ -67,7 +67,7 @@ write_queued_logs(BufferPid, Socket) ->
                     logplex_stats:incr(message_processed, NumItems),
                     logplex_realtime:incr(message_processed, NumItems);
                 {error, closed} ->
-                    delayed_exit(closed);
+                    throttled_restart(closed);
                 Err ->
                     ?INFO("event=send result=~p", [Err]),
                     exit({error, Err})
@@ -80,10 +80,10 @@ write_queued_logs(BufferPid, Socket) ->
 check_for_stop_signal() ->
     receive stop -> exit(normal) after 0 -> ok end.
 
-delayed_exit(Reason) ->
-    delayed_exit(Reason, 5000).
+throttled_restart(Reason) ->
+    throttled_restart(Reason, 5000).
 
-delayed_exit(Reason, Delay) ->
+throttled_restart(Reason, Delay) ->
     ?INFO("event=send result=~p exit_in=~pms", [Reason, Delay]),
     timer:sleep(Delay),
     exit({error, closed}).
