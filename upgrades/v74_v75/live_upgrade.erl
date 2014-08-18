@@ -1,7 +1,7 @@
 f(UpgradeNode).
 UpgradeNode = fun () ->
     CurVsn = "v74",
-    NextVsn = "v75",
+    NextVsn = "v75.1",
     case logplex_app:config(git_branch) of
         CurVsn ->
             io:format(whereis(user), "at=upgrade_start cur_vsn=~p~n", [tl(CurVsn)]);
@@ -32,7 +32,7 @@ end.
 
 f(DowngradeNode).
 DowngradeNode = fun () ->
-    CurVsn = "v75",
+    CurVsn = "v75.1",
     NextVsn = "v74",
     case logplex_app:config(git_branch) of
         CurVsn ->

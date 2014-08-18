@@ -259,18 +259,6 @@ terminate(_Reason, _State) ->
 %%--------------------------------------------------------------------
 code_change(v74, {state, Urls}, _Extra) ->
     {ok, #state{urls=Urls, maps=dict:new(), reply_to=undefined}};
-code_change(v37, State, _Extra) ->
-    %% Need to link to existing redis buffer processes.
-    [ begin
-          link(Pid),
-          %% Exit(RemotePid, shutdown) will work as the supervisor
-          %% will simply delete the child and remove its spec
-          exit(Pid, shutdown)
-      end
-      || {_Id, Pid, worker, _Modules}
-             <- supervisor:which_children(logplex_redis_buffer_sup)],
-    {ok, State};
-
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
