@@ -78,6 +78,9 @@ NodesAt = fun (Vsn) ->
     [ N || {N, V, _} <- NodeVersions(), V =:= Vsn ]
 end.
 
+f(NextNodesAt).
+NextNodesAt = fun(Vsn, N) -> lists:sublist(NodesAt(Vsn), N) end.
+
 f(RollingDowngrade).
 RollingDowngrade = fun (Nodes) ->
   lists:foldl(fun (N, {good, Downgraded}) ->
