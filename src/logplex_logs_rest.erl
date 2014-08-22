@@ -164,10 +164,13 @@ content_types_accepted(Req, State) ->
 from_logplex(Req, State = #state{token = Token,
                                  channel_id = ChannelId,
                                  name = Name}) ->
-    case cowboy_req:header(<<"user-agent">>, Req) of
-        {UserAgent, _} -> log_user_agent(UserAgent, ChannelId);
-        _ -> log_user_agent(undefined, ChannelId)
-    end,
+    HostKey = case cowboy_req:header(<<"host">>, Req) of
+                  <<"east.logplex.io">> ->
+                      log_user_agent(cowboy_req:header(<<"user-agent">>, Req)),
+                      old_http_input_host;
+                  _ -> new_http_input_host
+              end,
+    logplex_stats:incr(#logplex_stat{module=?MODULE, HostKey}),
     case parse_logplex_body(Req, State) of
         {parsed, Req2, State2 = #state{msgs = Msgs}}
           when is_list(Msgs), is_binary(Token),
@@ -245,6 +248,7 @@ content_types_provided(Req, State) ->
 to_response(Req, State) ->
     {"OK", Req, State}.
 
+log_user_agent(_, 16721780) -> ok; % internal channel, don't log
 log_user_agent(Agent, ChannelId) ->
     try
         ets:update_counter(user_agents, Agent, 1),
@@ -261,6 +265,7 @@ log_user_agent(Agent, ChannelId) ->
             end
     end.
 
+%% TODO: find proper init location for this
 %% ets:new(user_agents, [public, named_table, set, {write_concurrency, true}]).
 %% ets:new(user_agent_channels, [public, named_table, bag, {write_concurrency, true}]).
 %% ets:give_away(user_agents, whereis(logplex_sup), ok).
