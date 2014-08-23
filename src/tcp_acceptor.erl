@@ -82,12 +82,12 @@ handle_info({inet_async, LSock, Ref, {ok, CSock}}, #state{listener=LSock, accept
         tcp_proxy:set_socket(Pid, CSock),
 
         %% Signal the network driver that we are ready to accept another connection
-        case prim_inet:async_accept(LSock, -1) of
-            {ok, NewRef} -> ok;
+        Acceptor = case prim_inet:async_accept(LSock, -1) of
+            {ok, NewRef} -> NewRef;
             {error, NewRef} -> exit({async_accept, inet:format_error(NewRef)})
         end,
 
-        {noreply, State#state{acceptor=NewRef}}
+        {noreply, State#state{acceptor=Acceptor}}
     catch exit:Why ->
         error_logger:error_msg("Error in async accept: ~p.\n", [Why]),
         {stop, Why, State}

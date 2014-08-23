@@ -64,7 +64,7 @@ start(_StartType, _StartArgs) ->
     set_cookie(),
     read_git_branch(),
     read_availability_zone(),
-    boot_pagerduty(),
+    logplex_alarm_handler:boot_alarm_handler(),
     setup_redgrid_vals(),
     setup_redis_shards(),
     application:start(nsync),
@@ -189,21 +189,6 @@ read_availability_zone() ->
     case httpc:request(get, {Url, []}, [{timeout, 2000}, {connect_timeout, 1000}], []) of
         {ok,{{_,200,_}, _Headers, Zone}} ->
             application:set_env(logplex, availability_zone, Zone);
-        _ ->
-            ok
-    end.
-
-boot_pagerduty() ->
-    case config(cloud_name) of
-        "heroku.com" ->
-            case config(pagerduty) of
-                "0" -> ok;
-                _ ->
-                    ok = application:load(pagerduty),
-                    application:set_env(pagerduty, service_key, config(pagerduty_key)),
-                    a_start(pagerduty, temporary),
-                    ok = error_logger:add_report_handler(logplex_report_handler)
-            end;
         _ ->
             ok
     end.
