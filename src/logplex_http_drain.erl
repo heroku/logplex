@@ -39,7 +39,7 @@
                 uri :: #ex_uri{},
                 buf :: pid(),
                 client :: pid(),
-                out_q = queue:new() :: queue(),
+                out_q = queue:new() :: queue:queue(),
                 reconnect_tref :: reference() | 'undefined',
                 close_tref :: reference() | 'undefined',
                 drop_info :: drop_info() | 'undefined',
