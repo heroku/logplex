@@ -19,6 +19,7 @@
          ,from_logplex/2
          ,content_types_provided/2
          ,to_response/2
+         ,create_ets_tables/0
         ]).
 
 %% Healthcheck exports.
@@ -270,6 +271,10 @@ log_user_agent(Agent, ChannelId) ->
 %% ets:new(user_agent_channels, [public, named_table, bag, {write_concurrency, true}]).
 %% ets:give_away(user_agents, whereis(logplex_sup), ok).
 %% ets:give_away(user_agent_channels, whereis(logplex_sup), ok).
+create_ets_tables() ->
+    ets:new(user_agents, [public, named_table, set, {write_concurrency, true}]),
+    ets:new(user_agent_channels, [public, named_table, bag,
+                                  {write_concurrency, true}]).
 
 respond(Code, Text, Req, State) ->
     Req2 = cowboy_req:set_resp_header(
