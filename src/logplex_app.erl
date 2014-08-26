@@ -117,8 +117,15 @@ cache_os_envvars() ->
                         optional, %% in bytes
                         integer}
                       ,{api_endpoint_url, ["LOGPLEX_API_ENDPOINT_URL"],
-                       optional}
-                     ]),
+                        optional}
+                      ,{legacy_input_host, ["LOGPLEX_LEGACY_INPUT_HOST"],
+                        optional, binary}
+                      ,{legacy_ignored_input_host_channel_ids,
+                        ["LOGPLEX_IGNORED_CHANNELS"],
+                        optional, integer_list}
+                      ,{legacy_input_ignored_agents,
+                        ["LOGPLEX_IGNORED_AGENTS"],
+                        optional, regex}]),
     ok.
 
 cache_os_envvars(Vars) ->
@@ -132,7 +139,13 @@ cache_os_envvar({Var, Keys}) ->
 cache_os_envvar({Var, Keys, optional}) ->
     cache_os_envvar(Var, Keys, string);
 cache_os_envvar({Var, Keys, optional, integer}) ->
-    cache_os_envvar(Var, Keys, integer).
+    cache_os_envvar(Var, Keys, integer);
+cache_os_envvar({Var, Keys, optional, integer_list}) ->
+    cache_os_envvar(Var, Keys, integer_list);
+cache_os_envvar({Var, Keys, optional, binary}) ->
+    cache_os_envvar(Var, Keys, binary);
+cache_os_envvar({Var, Keys, optional, regex}) ->
+    cache_os_envvar(Var, Keys, regex).
 
 %% Read os environment for Key and write to var if set.
 %% Keys later in the list overwrite earlier values allowing multiple
@@ -152,7 +165,11 @@ set_config(Key, Value) when is_atom(Key) ->
     application:set_env(?APP, Key, Value).
 
 set_config_value(Value, string) -> Value;
-set_config_value(Value, integer) -> list_to_integer(Value).
+set_config_value(Value, binary) -> list_to_binary(Value);
+set_config_value(Value, integer_list) -> [ list_to_integer(S) ||
+                                             S <- string:tokens(Value, ",") ];
+set_config_value(Value, integer) -> list_to_integer(Value);
+set_config_value(Value, regex) -> re:compile(Value).
 
 config() ->
     application:get_all_env(logplex).
