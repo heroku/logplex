@@ -70,6 +70,7 @@
     ,{http_drain_idle_timeout, 300000} % ms
     ,{http_drain_idle_fuzz, 15000} % ms
     ,{http_drain_max_ttl, 18000000} % ms
+    ,{legacy_input_host_gather, false} % whether to track in ets
     ,{workers, 10}
    ]}
  ,{start_phases,

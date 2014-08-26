@@ -6,6 +6,7 @@
 -module(logplex_logs_rest).
 
 -include("logplex_logging.hrl").
+-include("logplex.hrl").
 
 -export([child_spec/0, dispatch/0]).
 
@@ -165,38 +166,33 @@ content_types_accepted(Req, State) ->
 from_logplex(Req, State = #state{token = Token,
                                  channel_id = ChannelId,
                                  name = Name}) ->
-    HostKey = case cowboy_req:header(<<"host">>, Req) of
-                  <<"east.logplex.io">> ->
-                      log_user_agent(cowboy_req:header(<<"user-agent">>, Req)),
-                      old_http_input_host;
-                  _ -> new_http_input_host
-              end,
-    logplex_stats:incr(#logplex_stat{module=?MODULE, HostKey}),
-    case parse_logplex_body(Req, State) of
-        {parsed, Req2, State2 = #state{msgs = Msgs}}
-          when is_list(Msgs), is_binary(Token),
-                 is_integer(ChannelId), is_binary(Name) ->
-            logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
-            {true, Req2, State2#state{msgs = []}};
-        {parsed, Req2, State2 = #state{msgs = Msgs}}
-          when Token =:= any, ChannelId =:= any ->
-            logplex_message:process_msgs(Msgs),
-            {true, Req2, State2#state{msgs = []}};
-        {{error, msg_count_mismatch}, Req2, State2} ->
-            %% XXX - Add stat counter here?
-            respond(400, <<"Message count mismatch">>, Req2, State2);
-        {{error, malformed_messages}, Req2, State2} ->
-            %% XXX - Add stat counter here?
-            respond(400, <<"Malformed log messages">>, Req2, State2);
-        {{error, Reason}, Req2, State2} when is_integer(ChannelId) ->
-            ?WARN("at=parse_logplex_body channel_id=~p error=~p",
-                  [ChannelId, Reason]),
-            respond(400, <<"Bad request">>, Req2, State2);
-        {{error, Reason}, Req2, State2} when ChannelId =:= any ->
-            ?WARN("at=parse_logplex_body channel_id=~p error=~p",
-                  [ChannelId, Reason]),
-            respond(400, <<"Bad request">>, Req2, State2)
-    end.
+    Resp = case parse_logplex_body(Req, State) of
+               {parsed, Req2, State2 = #state{msgs = Msgs}}
+                 when is_list(Msgs), is_binary(Token),
+                      is_integer(ChannelId), is_binary(Name) ->
+                   logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
+                   {true, Req2, State2#state{msgs = []}};
+               {parsed, Req2, State2 = #state{msgs = Msgs}}
+                 when Token =:= any, ChannelId =:= any ->
+                   logplex_message:process_msgs(Msgs),
+                   {true, Req2, State2#state{msgs = []}};
+               {{error, msg_count_mismatch}, Req2, State2} ->
+                   %% XXX - Add stat counter here?
+                   respond(400, <<"Message count mismatch">>, Req2, State2);
+               {{error, malformed_messages}, Req2, State2} ->
+                   %% XXX - Add stat counter here?
+                   respond(400, <<"Malformed log messages">>, Req2, State2);
+               {{error, Reason}, Req2, State2} when is_integer(ChannelId) ->
+                   ?WARN("at=parse_logplex_body channel_id=~p error=~p",
+                         [ChannelId, Reason]),
+                   respond(400, <<"Bad request">>, Req2, State2);
+               {{error, Reason}, Req2, State2} when ChannelId =:= any ->
+                   ?WARN("at=parse_logplex_body channel_id=~p error=~p",
+                         [ChannelId, Reason]),
+                   respond(400, <<"Bad request">>, Req2, State2)
+           end,
+    track_legacy_host(Req, ChannelId),
+    Resp.
 
 parse_logplex_body(Req, State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
@@ -249,28 +245,45 @@ content_types_provided(Req, State) ->
 to_response(Req, State) ->
     {"OK", Req, State}.
 
-log_user_agent(_, 16721780) -> ok; % internal channel, don't log
+track_legacy_host(Req, ChannelId) ->
+    LegacyInputHost = logplex_app:config(legacy_input_host),
+    HostKey = case cowboy_req:header(<<"host">>, Req) of
+                  LegacyInputHost ->
+                      case logplex_app:config(legacy_input_host_gather) of
+                          true -> log_user_agent(cowboy_req:header(<<"user-agent">>, Req),
+                                                 ChannelId);
+                          _ -> ok
+                      end,
+                      old_http_input_host;
+                  _ -> new_http_input_host
+              end,
+    logplex_stats:incr(#logplex_stat{module=?MODULE, key=HostKey}).
+
 log_user_agent(Agent, ChannelId) ->
-    try
-        ets:update_counter(user_agents, Agent, 1),
-        case Agent of
-            %% we don't need to track log-shuttle
-            <<"Go 1.1", _/binary>> -> skip;
-            _ -> ets:insert(user_agent_channels, {Agent, ChannelId})
-        end
-    catch error:badarg ->
-            try
-                ets:insert_new(user_agents, {Agent, 1})
-            catch error:badarg ->
-                    ok % don't need to be super careful about race conditions
-            end
+    case ignored_channel_id(ChannelId) of
+        true -> ok;
+        _ -> try
+                 ets:update_counter(user_agents, Agent, 1),
+                 case re:run(Agent, logplex_app:config(legacy_input_ignored_agents),
+                             [{capture, none}]) of
+                     match -> ok;
+                     _ -> ets:insert(user_agent_channels, {Agent, ChannelId})
+                 end
+             catch error:badarg ->
+                     try
+                         ets:insert_new(user_agents, {Agent, 1})
+                     catch error:badarg ->
+                             %% since we're just sampling, we're OK with losing
+                             %% data in the event of a race condition
+                             dropped
+                     end
+             end
     end.
 
-%% TODO: find proper init location for this
-%% ets:new(user_agents, [public, named_table, set, {write_concurrency, true}]).
-%% ets:new(user_agent_channels, [public, named_table, bag, {write_concurrency, true}]).
-%% ets:give_away(user_agents, whereis(logplex_sup), ok).
-%% ets:give_away(user_agent_channels, whereis(logplex_sup), ok).
+ignored_channel_id(ChannelId) ->
+    lists:member(ChannelId,
+                 logplex_app:config(legacy_ignored_input_host_channel_ids, [])).
+
 create_ets_tables() ->
     ets:new(user_agents, [public, named_table, set, {write_concurrency, true}]),
     ets:new(user_agent_channels, [public, named_table, bag,
