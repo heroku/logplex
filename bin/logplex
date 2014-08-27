@@ -1,3 +1,5 @@
 #!/bin/sh
 
+cd $(dirname $0)/..
+
 erl +K true +A100 +P500000 -env ERL_MAX_PORTS 65535 -config sys -name logplex@`hostname --fqdn` -pa ebin -env ERL_LIBS deps -noshell -noinput -s logplex_app -setcookie ${LOGPLEX_COOKIE} +MBas aobf +MBlmbcs 512
