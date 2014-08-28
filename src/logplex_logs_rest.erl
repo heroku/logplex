@@ -249,7 +249,7 @@ track_legacy_host(Req, ChannelId) ->
     LegacyInputHost = logplex_app:config(legacy_input_host),
     HostKey = case cowboy_req:header(<<"host">>, Req) of
                   LegacyInputHost ->
-                      case logplex_app:config(legacy_input_host_gather) of
+                      case logplex_app:config(legacy_input_host_gather, false) of
                           true -> log_user_agent(cowboy_req:header(<<"user-agent">>, Req),
                                                  ChannelId);
                           _ -> ok
