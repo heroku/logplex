@@ -37,7 +37,7 @@
 
 -include("logplex_logging.hrl").
 
--record(state, {active=false,
+-record(state, {silent=true,
                 alarms=[]}).
 
 boot_alarm_handler() ->
@@ -61,19 +61,28 @@ init({[], _OldArgs}) ->
             ok = application:load(pagerduty),
             application:set_env(pagerduty, service_key, ServiceKey),
             logplex_app:a_start(pagerduty, temporary),
-            #state{ active=true }
+            #state{ silent=false }
     end,
-    ?INFO("at=init paging=~p", [State#state.active]),
+    ?INFO("at=init silent=~p", [State#state.silent]),
     {ok, State}.
 
-handle_event({set_alarm, Alarm}, State=#state{ alarms=Alarms0 }) ->
+handle_event({set_alarm, Alarm}, State=#state{ alarms=Alarms }) ->
     error_logger:info_report([{alarm_handler, {set, Alarm}}]),
-    State#state.active andalso trigger_page(Alarm),
-    {ok, State#state{ alarms=[Alarm | Alarms0]}};
-handle_event({clear_alarm, AlarmId}, State0=#state{ alarms=Alarms0 }) ->
+    trigger_page(State#state.silent, Alarm),
+    {ok, State#state{ alarms=[Alarm | Alarms] }};
+handle_event({clear_alarm, AlarmId}, State=#state{ alarms=Alarms }) ->
     error_logger:info_report([{alarm_handler, {clear, AlarmId}}]),
-    Alarms = resolve_page(AlarmId, lists:keydelete(AlarmId, 1, Alarms0)),
-    {ok, State0#state{ alarms=Alarms }}.
+    NewAlarms = case lists:keydelete(AlarmId, 1, Alarms) of
+                    Alarms -> Alarms;
+                    Trimmed ->
+                        case lists:keyfind(AlarmId, 1, Trimmed) of
+                            {AlarmId, _} -> skip;
+                            false ->
+                                resolve_page(State#state.silent, AlarmId)
+                        end,
+                        Trimmed
+                end,
+    {ok, State#state{ alarms=NewAlarms }}.
 
 handle_call(get_alarms, State) ->
     {ok, State#state.alarms, State}.
@@ -88,17 +97,13 @@ terminate(_Reason, _State) ->
     ok.
 
 %% private functions
-trigger_page({AlarmId, AlarmDesc}) ->
-    pagerduty:trigger("Logplex", to_bin(fmt_desc(AlarmId)), AlarmDesc).
+trigger_page(Silent, {AlarmId, AlarmDesc}) ->
+    ?ALARM("trigger silent=~p alarm_id=~p alarm_desc=~p", [Silent, AlarmId, AlarmDesc]),
+    Silent orelse pagerduty:trigger("Logplex", to_bin(fmt_desc(AlarmId)), AlarmDesc).
 
-resolve_page(AlarmId, Alarms) ->
-    case lists:keyfind(AlarmId, 1, Alarms) of
-        true -> ok;
-        false ->
-            %% pagerduty:resolve("Logplex", to_bin(fmt_desc(AlarmId)), AlarmDesc),
-            ok
-    end,
-    Alarms.
+resolve_page(SilentOnAlarm, AlarmId) ->
+    ?ALARM("resolve silent=~p alarm_id=~p", [SilentOnAlarm, AlarmId]),
+    SilentOnAlarm orelse pagerduty:resolve("Logplex", to_bin(fmt_desc(AlarmId))).
 
 fmt_desc(Format) ->
     io_lib:format("~p: " ++ Format, [instance_name()]).

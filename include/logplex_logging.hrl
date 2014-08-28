@@ -14,8 +14,8 @@
 -define(ERR(Format, Args),
         batchio:format("pid=~p m=~p ln=~p class=err " ++ Format ++ "~n",
                        [self(), ?MODULE, ?LINE | Args])).
--define(CRITICAL(Format, Args),
-        batchio:format("pid=~p m=~p ln=~p class=critical " ++ Format ++ "~n",
+-define(ALARM(Format, Args),
+        batchio:format("pid=~p m=~p ln=~p class=alarm " ++ Format ++ "~n",
                        [self(), ?MODULE, ?LINE | Args])).
 
 -endif. %logging
