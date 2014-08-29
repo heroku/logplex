@@ -274,7 +274,7 @@ build_stat_key("logplex_" ++ Name, Postfix) when is_list(Postfix) ->
     build_stat_key(Name, Postfix);
 
 build_stat_key(Name, Postfix) when is_list(Name), is_list(Postfix) ->
-    Name ++ "_" ++ Postfix;
+    list_to_atom(Name ++ "_" ++ Postfix);
 
 build_stat_key(Name, Postfix) ->
     exit({poorly_formatted_stat_key, Name, Postfix}).
