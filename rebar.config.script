@@ -1,0 +1,16 @@
+%% -*- mode: erlang;erlang-indent-level: 4;indent-tabs-mode: nil -*-
+%% ex: ts=4 sw=4 ft=erlang et
+
+ExtraDeps = [{meck, "0.8.2", {git, "https://github.com/eproxus/meck.git", {tag, "0.8.2"}}}],
+case os:getenv("LOGPLEX_TEST_DEPS") of
+    false ->
+        CONFIG;
+    _ ->
+        case lists:keysearch(deps, 1, CONFIG) of
+            {value, {deps, ODeps}} ->
+                TDeps = ODeps ++ ExtraDeps,
+                lists:keyreplace(deps, 1, CONFIG, {deps, TDeps});
+            false ->
+                CONFIG ++ [{deps, ExtraDeps}]
+        end
+end.

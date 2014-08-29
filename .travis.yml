@@ -2,9 +2,11 @@ language: erlang
 services:
   - redis-server
 before_install:
-  - ./rebar --config public.rebar.config get-deps compile
+  - ./rebar get-deps compile --config public.rebar.config
+install:
+  - LOGPLEX_TEST_DEPS=1 ./rebar get-deps compile
 script:
-  - rebar get-deps compile --config test.rebar.config ; INSTANCE_NAME=`hostname` LOGPLEX_CONFIG_REDIS_URL='redis://localhost:6379' LOGPLEX_SHARD_URLS='redis://localhost:6379' LOGPLEX_REDGRID_REDIS_URL='redis://localhost:6379' LOCAL_IP='127.0.0.1' LOGPLEX_COOKIE=123 ERL_LIBS=`pwd`/deps/:$ERL_LIBS ct_run -spec logplex.spec -pa ebin
+  - INSTANCE_NAME=`hostname` LOGPLEX_CONFIG_REDIS_URL='redis://localhost:6379' LOGPLEX_SHARD_URLS='redis://localhost:6379' LOGPLEX_REDGRID_REDIS_URL='redis://localhost:6379' LOCAL_IP='127.0.0.1' LOGPLEX_COOKIE=123 ERL_LIBS=`pwd`/deps/:$ERL_LIBS ct_run -spec logplex.spec -pa ebin
 otp_release:
   - R16B02
 notifications:
