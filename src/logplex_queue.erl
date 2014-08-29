@@ -44,7 +44,9 @@
     workers=[],
     num_dropped=0,
     accepting=true,
-    redis_url
+    redis_url,
+    max_workers,
+    worker_errors=0
 }).
 
 -define(TIMEOUT, 30000).
@@ -124,12 +126,12 @@ init([Props]) ->
         max_length = proplists:get_value(max_length, Props),
         waiting = queue:new(),
         dict = proplists:get_value(dict, Props, dict:new()),
-        redis_url = proplists:get_value(redis_url, Props)
+        redis_url = proplists:get_value(redis_url, Props),
+        max_workers= proplists:get_value(num_workers, Props)
     },
     WorkerSup = proplists:get_value(worker_sup, Props),
-    NumWorkers = proplists:get_value(num_workers, Props),
     WorkerArgs = proplists:get_value(worker_args, Props),
-    start_workers(WorkerSup, NumWorkers, WorkerArgs),
+    start_workers(WorkerSup, State#state.max_workers, WorkerArgs),
     spawn_link(fun() -> report_stats(Self) end),
     {ok, State}.
 
@@ -207,7 +209,8 @@ handle_cast(stop, State = #state{workers=Workers}) ->
     {stop, normal, State};
 
 handle_cast({register, WorkerPid}, #state{workers=Workers}=State) ->
-    {noreply, State#state{workers=[WorkerPid|Workers]}};
+    Ref = erlang:monitor(process, WorkerPid),
+    {noreply, State#state{workers=[{Ref, WorkerPid}|Workers]}};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -222,6 +225,27 @@ handle_cast(_Msg, State) ->
 handle_info(report_stats, #state{length_stat_key=StatKey, length=Length}=State) ->
     logplex_stats:incr(StatKey, Length),
     {noreply, State};
+
+handle_info({timeout, _TimerRef, {clear_alarm, redis_shard_down}}, State=#state{ worker_errors=NumErrors, max_workers=Max }) ->
+    NewState = case length(State#state.workers) of
+        Max ->
+            alarm_handler:clear_alarm(redis_shard_down),
+            State#state{ worker_errors=NumErrors-1 };
+        _ ->
+            schedule_alarm_clear()
+    end,
+    {noreply, NewState};
+
+handle_info({'DOWN', MonitorRef, process, _Pid, _Info}, State=#state{ workers=Workers }) ->
+    NewState = case lists:keydelete(MonitorRef, 1, Workers) of
+                 Workers -> State;
+                 [] ->
+                     State1 = raise_alarm(State),
+                     State1#state{workers=[]};
+                 NewList ->
+                     State#state{workers=NewList}
+             end,
+    {noreply, NewState};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -337,3 +361,13 @@ which_queue() ->
         {registered_name, Name} -> Name;
         _ -> self()
     end.
+
+raise_alarm(State=#state{ worker_errors=NumErrors }) ->
+    alarm_handler:set_alarm({redis_shard_down, [{url, State#state.redis_url},
+                                                {count, NumErrors+1}]}),
+    schedule_alarm_clear(),
+    State#state{ worker_errors=NumErrors+1 }.
+
+schedule_alarm_clear() ->
+    erlang:start_timer(10000, self(), {clear_alarm, redis_shard_down}).
+
