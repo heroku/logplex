@@ -260,13 +260,12 @@ track_legacy_host(Req, ChannelId) ->
     logplex_stats:incr(#logplex_stat{module=?MODULE, key=HostKey}).
 
 log_user_agent({Agent, Req}, ChannelId) ->
-    case ets:first(user_agents_tracked) of
+    case logplex_app:config(user_agent_track, undefined) of
         Agent ->
             case parse_logplex_body(Req, #state{}) of
                 {parsed, _Req2, _State2 = #state{msgs = Msgs}}
                   when is_list(Msgs) ->
-                    ets:delete_object(user_agents_tracked, Agent),
-                    ets:insert(user_agent_lines, {Agent, Msgs});
+                    ?INFO("at=user_agent_messages msgs=~p", [Msgs]);
                 _ -> ok
             end;
         _ -> ok
