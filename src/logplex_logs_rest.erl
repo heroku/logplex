@@ -259,7 +259,18 @@ track_legacy_host(Req, ChannelId) ->
               end,
     logplex_stats:incr(#logplex_stat{module=?MODULE, key=HostKey}).
 
-log_user_agent({Agent, _Req}, ChannelId) ->
+log_user_agent({Agent, Req}, ChannelId) ->
+    case ets:first(user_agents_tracked) of
+        Agent ->
+            case parse_logplex_body(Req, #state{}) of
+                {parsed, _Req2, _State2 = #state{msgs = Msgs}}
+                  when is_list(Msgs) ->
+                    ets:delete_object(user_agents_tracked, Agent),
+                    ets:insert(user_agent_lines, {Agent, Msgs});
+                _ -> ok
+            end;
+        _ -> ok
+    end,
     case ignored_channel_id(ChannelId) of
         true -> ok;
         _ -> try
@@ -287,7 +298,12 @@ ignored_channel_id(ChannelId) ->
 create_ets_tables() ->
     ets:new(user_agents, [public, named_table, set, {write_concurrency, true}]),
     ets:new(user_agent_channels, [public, named_table, bag,
+                                  {write_concurrency, true}]),
+    ets:new(user_agent_lines, [public, named_table, bag,
+                               {write_concurrency, true}]),
+    ets:new(user_agents_tracked, [public, named_table, set,
                                   {write_concurrency, true}]).
+
 
 respond(Code, Text, Req, State) ->
     Req2 = cowboy_req:set_resp_header(
