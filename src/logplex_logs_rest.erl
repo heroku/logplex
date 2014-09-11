@@ -171,6 +171,7 @@ from_logplex(Req, State = #state{token = Token,
                  when is_list(Msgs), is_binary(Token),
                       is_integer(ChannelId), is_binary(Name) ->
                    logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
+                   track_legacy_host(Req2, ChannelId),
                    {true, Req2, State2#state{msgs = []}};
                {parsed, Req2, State2 = #state{msgs = Msgs}}
                  when Token =:= any, ChannelId =:= any ->
@@ -191,7 +192,6 @@ from_logplex(Req, State = #state{token = Token,
                          [ChannelId, Reason]),
                    respond(400, <<"Bad request">>, Req2, State2)
            end,
-    track_legacy_host(Req, ChannelId),
     Resp.
 
 parse_logplex_body(Req, State) ->
@@ -266,7 +266,7 @@ log_user_agent({Agent, Req}, ChannelId) ->
                 {parsed, _Req2, _State2 = #state{msgs = Msgs}}
                   when is_list(Msgs) ->
                     ?INFO("at=user_agent_messages msgs=~p", [Msgs]);
-                _ -> ok
+                _ -> ?INFO("at=user_agent_messages msgs=unparseable", [])
             end;
         _ -> ok
     end,
