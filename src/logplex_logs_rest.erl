@@ -171,7 +171,7 @@ from_logplex(Req, State = #state{token = Token,
                  when is_list(Msgs), is_binary(Token),
                       is_integer(ChannelId), is_binary(Name) ->
                    logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
-                   track_legacy_host(Req2, ChannelId),
+                   track_legacy_host(Req2, ChannelId, Msgs),
                    {true, Req2, State2#state{msgs = []}};
                {parsed, Req2, State2 = #state{msgs = Msgs}}
                  when Token =:= any, ChannelId =:= any ->
@@ -245,29 +245,27 @@ content_types_provided(Req, State) ->
 to_response(Req, State) ->
     {"OK", Req, State}.
 
-track_legacy_host(Req, ChannelId) ->
+track_legacy_host(Req, ChannelId, Msgs) ->
     LegacyInputHost = logplex_app:config(legacy_input_host),
-    HostKey = case cowboy_req:header(<<"host">>, Req) of
-                  {LegacyInputHost, Req2} ->
-                      case logplex_app:config(legacy_input_host_gather, false) of
-                          true -> log_user_agent(cowboy_req:header(<<"user-agent">>, Req2),
-                                                 ChannelId);
-                          _ -> ok
-                      end,
-                      old_http_input_host;
-                  _ -> new_http_input_host
-              end,
-    logplex_stats:incr(#logplex_stat{module=?MODULE, key=HostKey}).
-
-log_user_agent({Agent, Req}, ChannelId) ->
-    case logplex_app:config(user_agent_track, undefined) of
-        Agent ->
-            case parse_logplex_body(Req, #state{}) of
-                {parsed, _Req2, _State2 = #state{msgs = Msgs}}
-                  when is_list(Msgs) ->
-                    ?INFO("at=user_agent_messages msgs=~p", [Msgs]);
-                _ -> ?INFO("at=user_agent_messages msgs=unparseable", [])
+    case cowboy_req:header(<<"host">>, Req) of
+        {LegacyInputHost, Req2} ->
+            logplex_stats:incr(#logplex_stat{module=?MODULE,
+                                             key=old_http_input_host}),
+            case logplex_app:config(legacy_input_host_gather, false) of
+                true ->
+                    {Agent, Req3} = cowboy_req:header(<<"user-agent">>, Req2),
+                    log_user_agent(Agent, ChannelId, Msgs),
+                    Req3;
+                _ -> Req2
             end;
+        {_, Req2} ->
+            logplex_stats:incr(#logplex_stat{module=?MODULE, key=new_http_input_host}),
+            Req2
+    end.
+
+log_user_agent(Agent, ChannelId, Msgs) ->
+    case logplex_app:config(user_agent_track, undefined) of
+        Agent -> ?INFO("at=user_agent_messages msgs=~p", [Msgs]);
         _ -> ok
     end,
     case ignored_channel_id(ChannelId) of
