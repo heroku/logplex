@@ -265,7 +265,8 @@ track_legacy_host(Req, ChannelId, Msgs) ->
 
 log_user_agent(Agent, ChannelId, Msgs) ->
     case logplex_app:config(user_agent_track, undefined) of
-        Agent -> ?INFO("at=user_agent_messages msgs=~p", [Msgs]);
+        Agent -> ?INFO("at=user_agent_messages channel_id=~p msgs=~p",
+                       [ChannelId, Msgs]);
         _ -> ok
     end,
     case ignored_channel_id(ChannelId) of
