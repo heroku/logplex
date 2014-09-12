@@ -171,8 +171,8 @@ from_logplex(Req, State = #state{token = Token,
                  when is_list(Msgs), is_binary(Token),
                       is_integer(ChannelId), is_binary(Name) ->
                    logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
-                   track_legacy_host(Req2, ChannelId, Msgs),
-                   {true, Req2, State2#state{msgs = []}};
+                   Req3 = track_legacy_host(Req2, ChannelId, Msgs),
+                   {true, Req3, State2#state{msgs = []}};
                {parsed, Req2, State2 = #state{msgs = Msgs}}
                  when Token =:= any, ChannelId =:= any ->
                    logplex_message:process_msgs(Msgs),
