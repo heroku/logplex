@@ -246,7 +246,7 @@ to_response(Req, State) ->
     {"OK", Req, State}.
 
 track_legacy_host(Req, ChannelId, Msgs) ->
-    LegacyInputHost = logplex_app:config(legacy_input_host),
+    LegacyInputHost = logplex_app:config(legacy_input_host, undefined),
     case cowboy_req:header(<<"host">>, Req) of
         {LegacyInputHost, Req2} ->
             logplex_stats:incr(#logplex_stat{module=?MODULE,
@@ -258,6 +258,7 @@ track_legacy_host(Req, ChannelId, Msgs) ->
                     Req3;
                 _ -> Req2
             end;
+        {undefined, Req2} -> Req2;
         {_, Req2} ->
             logplex_stats:incr(#logplex_stat{module=?MODULE, key=new_http_input_host}),
             Req2
