@@ -215,7 +215,8 @@ setup_auth_key() ->
     case Tokens of
         [_User, _Pass] ->
             Base64 = base64:encode(AuthKey),
-            application:set_env(logplex, auth_key, Base64);
+            StrBase64 = binary_to_list(Base64),
+            application:set_env(logplex, auth_key, StrBase64);
             _ -> ignored
     end.
 
