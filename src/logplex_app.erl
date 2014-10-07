@@ -65,6 +65,7 @@ start(_StartType, _StartArgs) ->
     read_git_branch(),
     read_availability_zone(),
     boot_pagerduty(),
+    setup_auth_key(),
     setup_redgrid_vals(),
     setup_redis_shards(),
     application:start(nsync),
@@ -206,6 +207,16 @@ boot_pagerduty() ->
             end;
         _ ->
             ok
+    end.
+
+setup_auth_key() ->
+    AuthKey = config(auth_key),
+    Tokens = string:tokens(AuthKey, ":"),
+    case Tokens of
+        [_User, _Pass] ->
+            Base64 = base64:encode(AuthKey),
+            application:set_env(logplex, auth_key, Base64);
+            _ -> ignored
     end.
 
 setup_redgrid_vals() ->
