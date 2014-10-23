@@ -43,6 +43,6 @@ The body of a request from a Logplex HTTP drain is a series of [RFC5424](https:/
 
 So a request body for `application/logplex-1` should be as follows:
 
-    <NumberOfBytes/ASCII encoded integer><Space character><RFC5452 message:NumberOfBytes long>
+    <NumberOfBytes/ASCII encoded integer><Space character><RFC5424 message:NumberOfBytes long>
 
 repeated `logplex-msg-count` times.
