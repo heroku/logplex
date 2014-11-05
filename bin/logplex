@@ -1,11 +1,10 @@
 #!/bin/sh
-
 erl +K true +A100 +P500000 \
     +MBas aobf \
     +MBlmbcs 512 \
     -env ERL_MAX_PORTS 65535 \
     -config sys \
-    -ehmon report_mf "${EHMON_REPORT_MF}" \
+    -ehmon report_mf "${EHMON_REPORT_MF:-"\{ehmon, stdout_report\}"}" \
     -ehmon shh_connection "\"${SHH_LISTEN}\"" \
     -name logplex@`hostname --fqdn` \
     -pa ebin \

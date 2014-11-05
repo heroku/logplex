@@ -9,13 +9,11 @@ export LOGPLEX_STATS_REDIS_URL="redis://localhost:6379"
 export LOCAL_IP="127.0.0.1"
 export LOGPLEX_COOKIE=123
 export LOGPLEX_AUTH_KEY="myfakeauthkey"
-export EHMON_REPORT_MF="{ehmon, stdout_report}"
-export SHH_LISTEN=""
 erl +K true +A100 +P500000 \
     -env ERL_MAX_PORTS 65535 \
     -env ERL_LIBS deps \
     -config sys \
-    -ehmon report_mf "${EHMON_REPORT_MF}" \
+    -ehmon report_mf "${EHMON_REPORT_MF:-"\{ehmon, stdout_report\}"}" \
     -ehmon shh_connection "\"${SHH_LISTEN}\"" \
     -name logplex@${INSTANCE_NAME} \
     -i include \
