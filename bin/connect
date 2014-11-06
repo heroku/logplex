@@ -2,7 +2,7 @@
 
 . /home/logplex/keys.sh
 
-HOST=`hostname --fqdn`
+HOST=`hostname -f`
 NODENAME=$1
 
 if [ -z "${NODENAME}" ]; then
