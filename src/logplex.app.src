@@ -17,6 +17,8 @@
                   ,cowboy
                   ,lager
                   ,batchio
+                  ,folsom
+                  ,folsom_cowboy
                  ]},
   {included_applications, [heroku_crashdumps]},
   {mod, {logplex_app, []}},
