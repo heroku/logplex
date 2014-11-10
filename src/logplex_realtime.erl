@@ -45,13 +45,13 @@ setup_metrics() ->
 %% Internal functions
 %%====================================================================
 
--type key() :: 'message_received' |
-               'message_processed' |
-               'drain_delivered' |
-               'drain_dropped'.
+-type key() :: 'message.received' |
+               'message.processed' |
+               'drain.delivered' |
+               'drain.dropped'.
 -spec keys() -> [key()].
 keys() ->
-    [message_received,
-     message_processed,
-     drain_delivered,
-     drain_dropped].
+    ['message.received',
+     'message.processed',
+     'drain.delivered',
+     'drain.dropped'].

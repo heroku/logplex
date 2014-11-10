@@ -476,16 +476,16 @@ lost_msgs(Lost, S=#state{drop_info={TS,Dropped}}) ->
 sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Drop}) ->
     State = State0#state{last_good_time=os:timestamp()},
     msg_stat(drain_delivered, Count, State),
-    logplex_realtime:incr(drain_delivered, Count),
+    logplex_realtime:incr('drain.delivered', Count),
     case {Lost,Drop} of
         {0, undefined} ->
             State;
         {_, undefined} ->
-            logplex_realtime:incr(drain_dropped, Lost),
+            logplex_realtime:incr('drain.dropped', Lost),
             msg_stat(drain_dropped, Lost, State),
             State;
         {_, {_,Dropped}} ->
-            logplex_realtime:incr(drain_dropped, Lost+Dropped),
+            logplex_realtime:incr('drain.dropped', Lost+Dropped),
             msg_stat(drain_dropped, Lost+Dropped, State),
             State#state{drop_info=undefined}
     end.

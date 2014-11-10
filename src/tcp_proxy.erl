@@ -141,7 +141,7 @@ code_change(_OldVsn, State, _Extra) ->
 process_msgs(Msgs, S = #state{cb={Mod,ModState}}) ->
     Fold = fun ({msg, Msg}, MS) ->
                    logplex_stats:incr(message_received),
-                   logplex_realtime:incr(message_received),
+                   logplex_realtime:incr('message.received'),
                    {ok, NewMS} = Mod:handle_message(Msg, MS),
                    NewMS;
                ({malformed, Msg}, MS) ->
