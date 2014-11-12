@@ -191,14 +191,21 @@ from_logplex(Req, State = #state{token = Token,
     end.
 
 parse_logplex_body(Req, State) ->
-    {ok, Body, Req2} = cowboy_req:body(Req),
+    case cowboy_req:body(Req) of
+        {ok, Body, Req2} ->
+            parse_messages_from_body(Body, Req2, State);
+        {error, Reason} ->
+            {{error, Reason}, Req, State}
+    end.
+
+parse_messages_from_body(Body, Req, State) ->
     case syslog_parser:parse(Body) of
         {ok, Msgs, _} ->
-            check_messages(Msgs, Req2, State);
+            check_messages(Msgs, Req, State);
         {{error, Reason}, _, _} ->
             ?WARN("at=parse_syslog reason=~p body=~1000p",
                   [Reason, Body]),
-            {{error, Reason}, Req2, State}
+            {{error, Reason}, Req, State}
     end.
 
 check_messages(Msgs, Req, State) ->
