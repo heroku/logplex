@@ -148,6 +148,7 @@ process_msgs(Msgs, S = #state{cb={Mod,ModState}}) ->
                    ?WARN("err=malformed_syslog_message data=\"~p\"~n",
                          [Msg]),
                    logplex_stats:incr(message_received_malformed),
+                   logplex_realtime:incr('message.received-malformed'),
                    MS
            end,
     NewModState = lists:foldl(Fold,

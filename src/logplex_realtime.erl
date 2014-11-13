@@ -24,6 +24,8 @@
 
 -export([incr/1, incr/2, setup_metrics/0]).
 
+-include("logplex_logging.hrl").
+
 %%====================================================================
 %% API functions
 %%====================================================================
@@ -33,7 +35,7 @@ incr(Key) ->
 
 -spec incr(string() | key(), integer()) -> any().
 incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
-    folsom_metrics:notify(Key, {inc, Inc}, counter);
+    folsom_metrics:notify(convert_key(Key), {inc, Inc}, counter);
 
 incr(_Key, _Inc) ->
     ok.
@@ -55,3 +57,21 @@ keys() ->
      'message.processed',
      'drain.delivered',
      'drain.dropped'].
+
+convert_key(message_received=Key) ->
+    log_deprecated_key_usage(Key),
+    'message.received';
+convert_key(message_processed=Key) ->
+    log_deprecated_key_usage(Key),
+    'message.processed';
+convert_key(drain_delivered=Key) ->
+    log_deprecated_key_usage(Key),
+    'drain.delivered';
+convert_key(drain_dropped=Key) ->
+    log_deprecated_key_usage(Key),
+    'drain.dropped';
+convert_key(Key) ->
+    Key.
+
+log_deprecated_key_usage(Key) ->
+    ?INFO("deprecated-key-usage key=~p", [Key]).
