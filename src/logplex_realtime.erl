@@ -41,7 +41,7 @@ incr(_Key, _Inc) ->
     ok.
 
 setup_metrics() ->
-    [ok = folsom_metrics:new_counter(Key) || Key <- keys()].
+    [create_counter_metric(Key) || Key <- keys()].
 
 %%====================================================================
 %% Internal functions
@@ -57,6 +57,15 @@ keys() ->
      'message.processed',
      'drain.delivered',
      'drain.dropped'].
+
+create_counter_metric(Key) ->
+    handle_new_metric_reply(folsom_metrics:new_counter(Key)).
+
+handle_new_metric_reply(ok) ->
+    ok;
+handle_new_metric_reply({error, Key, metric_already_exists}) ->
+    ?INFO("error=metric_already_exists metric=~p", [Key]),
+    ok.
 
 convert_key(message_received=Key) ->
     log_deprecated_key_usage(Key),
