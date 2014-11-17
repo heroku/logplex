@@ -1,0 +1,11 @@
+#!/bin/sh
+
+export INSTANCE_NAME=`hostname`
+export LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379"
+export LOGPLEX_SHARD_URLS="redis://localhost:6379"
+export LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379"
+export LOCAL_IP="127.0.0.1"
+export LOGPLEX_COOKIE=123
+export ERL_LIBS=`pwd`/deps/:$ERL_LIBS
+
+./rebar get-deps compile --config test.rebar.config && ct_run -spec logplex.spec -pa ebin
