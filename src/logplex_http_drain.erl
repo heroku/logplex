@@ -341,7 +341,6 @@ try_send(Frame = #frame{tries = Tries},
                 success ->
                     ready_to_send(sent_frame(Frame, State));
                 temp_fail ->
-                    logplex_http_client:close(Pid),
                     http_fail(retry_frame(Frame, State));
                 perm_fail ->
                     ready_to_send(drop_frame(Frame, State))
@@ -379,6 +378,7 @@ try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
 %% errors) are perm failures, so drop the frame and anything else is a
 %% temp failure, so retry the frame.
 status_action(N) when 200 =< N, N < 300 -> success;
+status_action(429) -> temp_fail;
 status_action(N) when 400 =< N, N < 500 -> perm_fail;
 status_action(_) -> temp_fail.
 
