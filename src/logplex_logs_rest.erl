@@ -7,8 +7,6 @@
 
 -include("logplex_logging.hrl").
 
--export([child_spec/0, dispatch/0]).
-
 -export([init/3
          ,rest_init/2
          ,allowed_methods/2
@@ -31,24 +29,6 @@
                 msgs :: list()}).
 
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
-
-child_spec() ->
-    ranch:child_spec(?MODULE, 100,
-                     ranch_tcp,
-                     [{port, logplex_app:config(http_log_input_port)}],
-                     cowboy_protocol,
-                     [{env,
-                       [{dispatch, dispatch()}]}]).
-
-dispatch() ->
-    cowboy_router:compile([{'_',
-                            [{<<"/healthcheck">>, ?MODULE, [healthcheck]},
-                             {<<"/logs">>, ?MODULE, [logs]},
-                             % support for v2 API
-                             {<<"/v2/[...]">>, ?MODULE, [api]},
-                             % support for old v1 API
-                             {<<"/channels/[...]">>, ?MODULE, [api]},
-                             {<<"/sessions/[...]">>, ?MODULE, [api]}]}]).
 
 init(_Transport, Req, [healthcheck]) ->
     {ok, Req, undefined};
@@ -106,6 +86,7 @@ is_authorized(Req, State) ->
             {{false, ?BASIC_AUTH}, Req2, State}
     end.
 
+
 token_auth(State, Req2, TokenId) ->
     case logplex_token:lookup(TokenId) of
         undefined ->
@@ -132,8 +113,8 @@ cred_auth(State, Req2, CredId, Pass) ->
                     ?INFO("at=authorization err=any_channel_not_permitted"
                           " credid=~p", [CredId]),
                     respond(403, <<"Credential not permitted "
-                                   "to write to any channel.">>,
-                            Req2, State)
+                                                "to write to any channel.">>,
+                                         Req2, State)
             end;
         {error, {incorrect_pass, _}} ->
             ?INFO("at=authorization err=invalid_credentials "
@@ -243,7 +224,6 @@ content_types_provided(Req, State) ->
 
 to_response(Req, State) ->
     {"OK", Req, State}.
-
 
 respond(Code, Text, Req, State) ->
     Req2 = cowboy_req:set_resp_header(

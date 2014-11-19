@@ -77,11 +77,11 @@ stop(_State) ->
 start_phase(listen, normal, _Args) ->
     setup_firehose(),
     {ok, _} = supervisor:start_child(logplex_sup,
-                                     logplex_api:child_spec()),
+                                     logplex_legacy_api:child_spec()),
     {ok, _} = supervisor:start_child(logplex_sup,
                                      logplex_syslog_sup:child_spec()),
     {ok, _} = supervisor:start_child(logplex_sup,
-                                     logplex_logs_rest:child_spec()),
+                                     logplex_rest:child_spec()),
     ok.
 
 cache_os_envvars() ->

@@ -20,7 +20,7 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(logplex_api).
+-module(logplex_legacy_api).
 -export([loop/1, start_link/0, child_spec/0, stop/0]).
 -export([status/0, set_status/1]).
 
@@ -39,8 +39,8 @@ start_link() ->
         {port, Port},
         {backlog, 1024},
         {max, 100000},
-        {loop, {logplex_api, loop}},
-        {name, logplex_api}
+        {loop, {?MODULE, loop}},
+        {name, ?MODULE}
     ],
 
     wait_for_nsync(),

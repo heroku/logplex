@@ -30,6 +30,7 @@
 -export([id/1
          ,channel_id/1
          ,name/1
+         ,json_encode/1
          ,cache/1
          ,load/1
          ,delete/1
@@ -207,3 +208,7 @@ num_records(tokens) ->
     ets:info(?TOKEN_TAB, size);
 num_records(token_idxs) ->
     ets:info(?CHAN_TOKEN_TAB, size).
+
+
+json_encode(#token{id=Id, channel_id=ChanId, name=Name}) ->
+    [{id, Id}, {channel_id, ChanId}, {name, Name}].
