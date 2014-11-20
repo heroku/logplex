@@ -332,23 +332,7 @@ try_send(Frame = #frame{tries = Tries},
     try logplex_http_client:raw_request(Pid, Req, ?REQUEST_TIMEOUT) of
         {ok, Status, _Headers} ->
             ReqEnd = os:timestamp(),
-            Result = status_action(Status),
-            case Result of
-                success ->
-                    ready_to_send(sent_frame(Frame, State));
-                _ ->
-                    ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
-                          "result=~p status=~p msg_count=~p req_time=~p",
-                          log_info(State, [Result, Status, Frame#frame.msg_count,
-                                           ltcy(ReqStart, ReqEnd)])),
-                    case Result of
-                        temp_fail ->
-                            logplex_http_client:close(Pid),
-                            http_fail(retry_frame(Frame, State));
-                        perm_fail ->
-                            ready_to_send(drop_frame(Frame, State))
-                    end
-            end;
+            handle_response_status(Status, Frame, State, Pid, ltcy(ReqStart, ReqEnd));
         {error, Why} ->
             ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request"
                   " tcp_err=~1000p",
@@ -381,9 +365,19 @@ try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
 %% code. Back of the napkin algorithm - 2xx is success, 4xx (client
 %% errors) are perm failures, so drop the frame and anything else is a
 %% temp failure, so retry the frame.
-status_action(N) when 200 =< N, N < 300 -> success;
-status_action(N) when 400 =< N, N < 500 -> perm_fail;
-status_action(_) -> temp_fail.
+handle_response_status(Status, Frame, State, _Pid, _Latency) when 200 =< Status, Status < 300 ->
+    ready_to_send(sent_frame(Frame, State));
+handle_response_status(Status, Frame, State, Pid, Latency) when 400 =< Status, Status < 500 ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
+          "result=~p status=~p msg_count=~p req_time=~p",
+          log_info(State, [temp_fail, Status, Frame#frame.msg_count, Latency])),
+    logplex_http_client:close(Pid),
+    http_fail(retry_frame(Frame, State));
+handle_response_status(Status, Frame, State, _Pid, Latency) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
+          "result=~p status=~p msg_count=~p req_time=~p",
+          log_info(State, [perm_fail, Status, Frame#frame.msg_count, Latency])),
+    ready_to_send(sent_frame(Frame, State)).
 
 %% @private
 terminate(_Reason, _StateName, _State) ->
