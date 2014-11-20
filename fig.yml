@@ -1,0 +1,29 @@
+config:
+  image: redis:2.6
+  volumes:
+    - ./db/config:/data
+redgrid:
+  image: redis:2.6
+  volumes:
+    - ./db/redgrid:/data
+logs:
+  image: redis:2.6
+  volumes:
+    - ./db/logs:/data
+stats:
+  image: redis:2.6
+  volumes:
+    - ./db/stats:/data
+logplex:
+  build: .
+  command: bundle exec unicorn -p 3000 -c ./config/unicorn.rb
+  volumes:
+    - .:/usr/src/app
+  ports:
+    - 8001:8001
+  links:
+    - config
+    - redgrid
+    - logs
+    - stats
+
