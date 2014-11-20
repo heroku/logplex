@@ -371,13 +371,13 @@ handle_response_status(Status, Frame, State, _Pid, Latency) when 400 =< Status, 
     ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
           "result=~p status=~p msg_count=~p req_time=~p",
           log_info(State, [perm_fail, Status, Frame#frame.msg_count, Latency])),
-    ready_to_send(drop_frame(Frame, State)).
+    ready_to_send(drop_frame(Frame, State));
 handle_response_status(Status, Frame, State, Pid, Latency) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
           "result=~p status=~p msg_count=~p req_time=~p",
           log_info(State, [temp_fail, Status, Frame#frame.msg_count, Latency])),
     logplex_http_client:close(Pid),
-    http_fail(retry_frame(Frame, State));
+    http_fail(retry_frame(Frame, State)).
 
 %% @private
 terminate(_Reason, _StateName, _State) ->
