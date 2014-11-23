@@ -32,6 +32,13 @@
 
 -type drop_info() :: {erlang:timestamp(), pos_integer()}.
 
+-ifdef(namespaced_types).
+%% queue:queue() exists starting from Erlang 17.
+-type compat_queue() :: queue:queue().
+-else.
+%% queue() has been obsoleted in Erlang 17 and deprecated in 18.
+-type compat_queue() :: queue().
+-endif.
 
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
@@ -39,7 +46,7 @@
                 uri :: #ex_uri{},
                 buf :: pid(),
                 client :: pid(),
-                out_q = queue:new() :: queue(),
+                out_q = queue:new() :: compat_queue(),
                 reconnect_tref :: reference() | 'undefined',
                 close_tref :: reference() | 'undefined',
                 drop_info :: drop_info() | 'undefined',

@@ -1,5 +1,7 @@
 #!/bin/sh
 
+cd $(dirname $0)/..
+
 export ERL_CRASH_DUMP='/dev/null'
 export INSTANCE_NAME=`hostname --fqdn`
 export LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379"
