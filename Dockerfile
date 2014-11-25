@@ -1,10 +1,13 @@
-FROM unbalancedparentheses/erlang:R16B02
+FROM voidlock/erlang-onbuild:R16B02
 
-RUN mkdir -p $HOME/app
-WORKDIR $HOME/app
+ENV ERL_CRASH_DUMP /dev/null
+ENV LOGPLEX_CONFIG_REDIS_URL redis://config:6379
+ENV LOGPLEX_SHARD_URLS redis://logs:6379/#frag1
+ENV LOGPLEX_REDGRID_REDIS_URL redis://redgrid:6379
+ENV LOGPLEX_STATS_REDIS_URL redis://stats:6379
+ENV LOGPLEX_COOKIE fig123
+ENV LOGPLEX_AUTH_KEY my fake auth key
 
-ONBUILD COPY . $HOME/logplex
+EXPOSE 8001 8601 6001 4369 49000
 
-ONBUILD RUN ./rebar -C public.rebar.config get-deps compile
-
-EXPOSE 8001
+CMD ["./bin/logplex"]
