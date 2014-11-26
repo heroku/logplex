@@ -65,7 +65,7 @@ write_queued_logs(BufferPid, Socket) ->
             case gen_tcp:send(Socket, Logs) of
                 ok ->
                     logplex_stats:incr(message_processed, NumItems),
-                    logplex_realtime:incr(message_processed, NumItems);
+                    logplex_realtime:incr('message.processed', NumItems);
                 {error, closed} ->
                     throttled_restart(closed);
                 Err ->

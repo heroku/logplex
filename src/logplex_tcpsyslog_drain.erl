@@ -542,7 +542,7 @@ buffer(Msg, State = #state{buf = Buf}) ->
             %% If socket is online, note drain dropped.
             case State#state.sock of
                 undefined -> ok;
-                _ -> logplex_realtime:incr(drain_dropped)
+                _ -> logplex_realtime:incr('drain.dropped')
             end;
         insert -> ok
     end,
@@ -567,12 +567,12 @@ send(State = #state{buf = Buf, sock = Sock,
                                    log_info(State, [send, port_dropped, Sock,
                                                     duration(State)])),
                              msg_stat(drain_dropped, N, State),
-                             logplex_realtime:incr(drain_dropped, N),
+                             logplex_realtime:incr('drain.dropped', N),
                              {next_state, ready_to_send, State#state{buf=NewBuf}};
                     _ -> Ref = erlang:start_timer(?SEND_TIMEOUT, self(),
                                                   ?SEND_TIMEOUT_MSG),
                          msg_stat(drain_delivered, N, State),
-                         logplex_realtime:incr(drain_delivered, N),
+                         logplex_realtime:incr('drain.delivered', N),
                          {next_state, sending,
                           State#state{buf = NewBuf, send_tref=Ref}}
                 end
