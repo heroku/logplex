@@ -165,11 +165,11 @@ connected(timeout, S = #state{}) ->
 connected({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     case close_if_idle(State) of
         {closed, ClosedState} ->
-            {next_state, disconnected, ClosedState, hibernate};
+            {next_state, disconnected, ClosedState, ?HIBERNATE_TIMEOUT};
         {not_closed, State} ->
             case close_if_old(State) of
                 {closed, ClosedState} ->
-                    {next_state, disconnected, ClosedState, hibernate};
+                    {next_state, disconnected, ClosedState, ?HIBERNATE_TIMEOUT};
                 {not_closed, ContinueState} ->
                     {next_state, connected, ContinueState}
             end
@@ -295,12 +295,12 @@ try_connect(State = #state{uri=Uri,
 http_fail(State = #state{client=Client}) ->
     %% Close any existing client connection.
     ClosedState = case Client of
-                   Pid when is_pid(Pid) ->
-                       logplex_http_client:close(Pid),
-                       State#state{client = undefined};
-                   undefined ->
-                       State
-               end,
+                      Pid when is_pid(Pid) ->
+                          logplex_http_client:close(Pid),
+                          State#state{client = undefined};
+                      undefined ->
+                          State
+                  end,
     NewState = maybe_shrink(ClosedState),
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
