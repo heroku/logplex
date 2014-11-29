@@ -41,6 +41,7 @@
                 client :: pid(),
                 out_q = queue:new() :: queue(),
                 reconnect_tref :: reference() | 'undefined',
+                reconnect_attempt = 0 :: pos_integer(),
                 close_tref :: reference() | 'undefined',
                 drop_info :: drop_info() | 'undefined',
                 %% Last time we connected or successfully sent data
@@ -119,6 +120,7 @@ user_agent() ->
 init(State0 = #state{uri=URI,
                      drain_id=DrainId}) ->
     process_flag(trap_exit, true),
+    random:seed(os:timestamp()),
     try
         Dest = uri_to_string(URI),
         State = start_drain_buffer(State0),
@@ -282,7 +284,8 @@ try_connect(State = #state{uri=Uri,
             maybe_resize(Status, Buf),
             NewTimerState = start_close_timer(State),
             ready_to_send(NewTimerState#state{client=Pid, service=normal,
-                                              connect_time=ConnectEnd});
+                                              connect_time=ConnectEnd,
+                                              reconnect_attempt=0});
         Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
@@ -561,17 +564,22 @@ connection_info(#ex_uri{scheme = Scheme,
      end}.
 
 set_reconnect_timer(State = #state{reconnect_tref=undefined}) ->
-    Time = timer:seconds(logplex_app:config(http_reconnect_time_s,1)),
+    Time = trunc(logplex_app:config(http_reconnect_time, 10) * backoff_slots(State#state.reconnect_attempt)),
     reconnect_in(Time, State);
 set_reconnect_timer(State = #state{}) -> State.
 
+backoff_slots(Attempt) when is_integer(Attempt), Attempt > 0 ->
+    Slot = erlang:min(logplex_app:config(http_max_retries, 10), Attempt),
+    (math:pow(2, random:uniform(Slot)) - 1) / 2;
+backoff_slots(_) ->
+    0.
 
-reconnect_in(MS, State = #state{}) ->
+reconnect_in(MS, State = #state{ reconnect_attempt=N }) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=reconnect_delay delay=~p "
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=reconnect_delay attempt=~p delay=~p "
           "ref=~p",
-          log_info(State, [MS, Ref])),
-    State#state{reconnect_tref = Ref}.
+          log_info(State, [N, MS, Ref])),
+    State#state{reconnect_tref = Ref, reconnect_attempt=N+1}.
 
 cancel_timeout(undefined, _Msg) -> undefined;
 cancel_timeout(Ref, Msg)
