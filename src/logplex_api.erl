@@ -634,9 +634,9 @@ filters([{<<"ps">>, Ps}|Tail], Filters) ->
     Size = byte_size(Ps),
     Filters1 = [
         fun(Msg) ->
-            case Msg#msg.ps of
-                Ps -> true;
-                <<Ps:Size/binary, ".", _/binary>> -> true;
+            case Msg of
+                #msg{ps=Ps} -> true;
+                #msg{ps = <<Ps:Size/binary, ".", _/binary>>} -> true;
                 _ -> false
             end
         end | Filters],
@@ -645,7 +645,10 @@ filters([{<<"ps">>, Ps}|Tail], Filters) ->
 filters([{<<"source">>, Source}|Tail], Filters) ->
     Filters1 = [
         fun(Msg) ->
-            Msg#msg.source == Source
+            case Msg of
+                #msg{source=Source} -> true;
+                _ -> false
+            end
         end | Filters],
     filters(Tail, Filters1);
 
