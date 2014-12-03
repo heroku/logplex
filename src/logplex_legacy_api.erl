@@ -98,7 +98,7 @@ handlers() ->
     [{['GET', "/healthcheck"], fun(Req, _Match, _Status) ->
         authorize(Req),
 
-        RegisteredMods = [logplex_realtime, logplex_stats, logplex_tail, logplex_shard, tcp_acceptor],
+        RegisteredMods = [logplex_stats, logplex_tail, logplex_shard, tcp_acceptor],
         [(whereis(Name) == undefined orelse not is_process_alive(whereis(Name))) andalso throw({500, io_lib:format("Process dead: ~p", [Name])}) || Name <- RegisteredMods],
 
         Count = logplex_stats:healthcheck(),
@@ -356,6 +356,8 @@ handlers() ->
                                                       (Req, [ChannelId], _) ->
         authorize(Req),
 
+        %% Drain reservation occurs in order to ensure DrainId is propgated
+        %% back to ETS.
         {ok, DrainId, Token} = logplex_drain:reserve_token(),
         logplex_drain:cache(DrainId, Token, list_to_integer(ChannelId)),
         Resp = [{id, DrainId},
@@ -375,8 +377,11 @@ handlers() ->
 
         DrainId = list_to_integer(DrainIdStr),
         ChannelId = list_to_integer(ChannelIdStr),
+        RequestId = header_value(Req, "Request-Id", ""),
         case logplex_drain:poll_token(DrainId) of
             {error, timeout} ->
+                ?INFO("drain_id=~p channel_id=~p request_id=~p at=poll_token result=timeout",
+                      [DrainId, ChannelId, RequestId]),
                 json_error(404, <<"Unknown drain.">>);
             Token when is_binary(Token) ->
                 case valid_uri(Req) of

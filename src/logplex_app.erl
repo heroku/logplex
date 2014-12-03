@@ -65,6 +65,7 @@ start(_StartType, _StartArgs) ->
     read_git_branch(),
     read_availability_zone(),
     boot_pagerduty(),
+    logplex_realtime:setup_metrics(),
     setup_redgrid_vals(),
     setup_redis_shards(),
     application:start(nsync),
@@ -112,7 +113,6 @@ cache_os_envvars() ->
                       ,{pagerduty_key, ["ROUTING_PAGERDUTY_SERVICE_KEY"],
                         optional}
                       ,{redgrid_redis_url, ["LOGPLEX_REDGRID_REDIS_URL"]}
-                      ,{stats_redis_url, ["LOGPLEX_STATS_REDIS_URL"]}
                       ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
                         optional, %% in bytes
                         integer}

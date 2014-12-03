@@ -83,10 +83,6 @@ handle_call({raw_request, Req}, _From, State) ->
     ReqStart = os:timestamp(),
     case raw_request(Req, State) of
         {ok, Status, Headers, NewState} ->
-            %% ReqEnd = os:timestamp(),
-            %% ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
-            %%       "result=success status=~p req_time=~p",
-            %%       log_info(State, [Status, ltcy(ReqStart, ReqEnd)])),
             {reply, {ok, Status, Headers}, NewState};
         {error, Why} = Err ->
             ReqEnd = os:timestamp(),
