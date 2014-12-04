@@ -267,8 +267,6 @@ handle_info(Info, StateName, State) ->
 try_connect(State = #state{uri=Uri,
                            drain_id=DrainId,
                            channel_id=ChannelId,
-                           buf=Buf,
-                           service=Status,
                            client=undefined}) ->
     {Scheme, Host, Port} = connection_info(Uri),
     ConnectStart = os:timestamp(),
@@ -281,7 +279,6 @@ try_connect(State = #state{uri=Uri,
             ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
-            maybe_resize(Status, Buf),
             NewTimerState = start_close_timer(State),
             ready_to_send(NewTimerState#state{client=Pid, service=normal,
                                               connect_time=ConnectEnd,
@@ -472,8 +469,12 @@ lost_msgs(Lost, S=#state{drop_info={TS,Dropped}}) ->
 
 %% @private
 %% if we had failures, they should have been delivered with this frame
-sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Drop}) ->
+sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Drop,
+                                                                   buf=Buf,
+                                                                   service=Status}) ->
+    maybe_resize(Status, Buf),
     State = State0#state{last_good_time=os:timestamp()},
+
     msg_stat(drain_delivered, Count, State),
     logplex_realtime:incr('drain.delivered', Count),
     case {Lost,Drop} of
