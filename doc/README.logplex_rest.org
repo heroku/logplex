@@ -1,38 +1,32 @@
-| Method | Auth Required | Path                                   | Parameters            | Returns               | Purpose                           | Module                    |
-|--------+---------------+----------------------------------------+-----------------------+-----------------------+-----------------------------------+---------------------------|
-| GET    | yes           | /healthcheck                           | none                  | 200 if healthy        |                                   |                           |
-| POST   | yes           | /v3/channels                           | json struct tokens -> | 201 on channel        | Creates logplex channels / tokens | logplex_channels_rest.erl |
-|        |               |                                        | [token_name, ...]     | creation + json       |                                   |                           |
-|        |               |                                        |                       | description of        |                                   |                           |
-|        |               |                                        |                       | channel               |                                   |                           |
-| GET    | yes           | /v3/channels/:chan_id                  | none                  | 200 + json            | Returns channel info              | logplex_channels_rest.erl |
-|        |               |                                        |                       | description of        |                                   |                           |
-|        |               |                                        |                       | channel (v3 desc)     |                                   |                           |
-| DELETE | yes           | /v3/channels/:chan_id                  | none                  | 200 on channel        | Deletes a channel                 | logplex_channels_rest.erl |
-|        |               |                                        |                       | deletion              |                                   |                           |
-| POST   | yes           | /v3/channels/:chan_id/token            | json struct of name   | 201 on token creation |                                   | logplex_channels_rest.erl |
-|        |               |                                        | -> token_name         | + json description of |                                   |                           |
-|        |               |                                        |                       | token                 |                                   |                           |
-| POST   | yes           | /v3/channels/:chan_id/drains/:drain_id | json struct: url ->   | 201 on creation, 409  |                                   | logplex_drains_rest.erl   |
-|        |               |                                        | $drainDest            | on duplicate drain,   |                                   |                           |
-|        |               |                                        |                       | 422 on invalid drain  |                                   |                           |
-|        |               |                                        |                       | url                   |                                   |                           |
-| DELETE | yes           | /v3/channels/:chan_id/drains/:drain_id | none                  | 200 on delete, 404 on |                                   | logplex_drains_rest.erl   |
-|        |               |                                        |                       | not found             |                                   |                           |
-| POST   | yes           | /v3/channels/:chan_id/drains           | json struct url ->    | 201 on create, 409 on |                                   | logplex_drains_rest.erl   |
-|        |               |                                        | $drainDest            | duplicate, 422 if     |                                   |                           |
-|        |               |                                        |                       | invalid               |                                   |                           |
-| POST   | yes           | /v3/channels/:chan_id/drains/tokens    | none                  | 201, json struct: id  |                                   | logplex_drains_rest.erl   |
-|        |               |                                        |                       | -> $drainId, token -> |                                   |                           |
-|        |               |                                        |                       | $drainToken, msg ->   |                                   |                           |
-|        |               |                                        |                       | $usertext             |                                   |                           |
-| POST   | yes           | /v3/sessions                           | json struct of        | 201 + json struct:    |                                   | logplex_sessions_rest.erl |
-|        |               |                                        | channel_id ->         | url -> $sessionURL    |                                   |                           |
-|        |               |                                        | $channelID, num ->    |                       |                                   |                           |
-|        |               |                                        | $NumberOfLogsToFetch, |                       |                                   |                           |
-|        |               |                                        | tail -> bool          |                       |                                   |                           |
-| GET    | yes           | /v3/sessions/:sess_id ($sessionURL)    | none                  | 200, logplex_tail     |                                   | logplex_sessions_rest.erl |
-|        |               |                                        |                       | data (non-http)       |                                   |                           |
+| Method | Auth Required | Path                                   | Parameters                      | Returns                                                                | Purpose              | Module                    |
+|--------+---------------+----------------------------------------+---------------------------------+------------------------------------------------------------------------+----------------------+---------------------------+
+| GET    | yes           | /healthcheck                           | none                            | 200 if healthy                                                         |                      |                           |
+| *POST  | yes           | /v3/channels                           | {"tokens": ["token_name", ...]} | 301 to /v3/channels/<channel_id>, non 301 on error                     | Create a channel     | logplex_channels_rest.erl |
+| *GET   | yes           | /v3/channels/:chan_id                  | none                            | 200 + { "channel_id": :chan_id, "tokens": [ ... ], "drains": [ ... ] } | Returns channel info | logplex_channels_rest.erl |
+| *DELETE | yes           | /v3/channels/:chan_id                  | none                            | 204 No Content on success, or non-204 otherwise                        | Deletes a channel    | logplex_channels_rest.erl |
+| ?POST  | yes           | /v3/channels/:chan_id/token            | json struct of name             | 201 on token creation                                                  |                      | logplex_channels_rest.erl |
+|        |               |                                        | -> token_name                   | + json description of                                                  |                      |                           |
+|        |               |                                        |                                 | token                                                                  |                      |                           |
+| POST   | yes           | /v3/channels/:chan_id/drains/:drain_id | json struct: url ->             | 201 on creation, 409                                                   |                      | logplex_drains_rest.erl   |
+|        |               |                                        | $drainDest                      | on duplicate drain,                                                    |                      |                           |
+|        |               |                                        |                                 | 422 on invalid drain                                                   |                      |                           |
+|        |               |                                        |                                 | url                                                                    |                      |                           |
+| DELETE | yes           | /v3/channels/:chan_id/drains/:drain_id | none                            | 200 on delete, 404 on                                                  |                      | logplex_drains_rest.erl   |
+|        |               |                                        |                                 | not found                                                              |                      |                           |
+| POST   | yes           | /v3/channels/:chan_id/drains           | json struct url ->              | 201 on create, 409 on                                                  |                      | logplex_drains_rest.erl   |
+|        |               |                                        | $drainDest                      | duplicate, 422 if                                                      |                      |                           |
+|        |               |                                        |                                 | invalid                                                                |                      |                           |
+| POST   | yes           | /v3/channels/:chan_id/drains/tokens    | none                            | 201, json struct: id                                                   |                      | logplex_drains_rest.erl   |
+|        |               |                                        |                                 | -> $drainId, token ->                                                  |                      |                           |
+|        |               |                                        |                                 | $drainToken, msg ->                                                    |                      |                           |
+|        |               |                                        |                                 | $usertext                                                              |                      |                           |
+| POST   | yes           | /v3/sessions                           | json struct of                  | 201 + json struct:                                                     |                      | logplex_sessions_rest.erl |
+|        |               |                                        | channel_id ->                   | url -> $sessionURL                                                     |                      |                           |
+|        |               |                                        | $channelID, num ->              |                                                                        |                      |                           |
+|        |               |                                        | $NumberOfLogsToFetch,           |                                                                        |                      |                           |
+|        |               |                                        | tail -> bool                    |                                                                        |                      |                           |
+| GET    | yes           | /v3/sessions/:sess_id ($sessionURL)    | none                            | 200, logplex_tail                                                      |                      | logplex_sessions_rest.erl |
+|        |               |                                        |                                 | data (non-http)                                                        |                      |                           |
 
 
 * Deprecate?

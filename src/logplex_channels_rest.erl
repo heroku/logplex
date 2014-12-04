@@ -28,7 +28,6 @@ allowed_methods(Req, State) ->
         undefined ->
             {[<<"POST">>], Req2, ChannelId};
         _ ->
-            ?INFO("In allowed_methods: Req=~w State=~w", [Req, State]),
             {[<<"GET">>, <<"DELETE">>], Req2, ChannelId}
     end.
 
@@ -40,23 +39,18 @@ content_types_accepted(Req, State) ->
      Req, State}.
 
 content_types_provided(Req, State) ->
-    ?INFO("In content_types_provided: Req=~w State=~w", [Req, State]),
     {[{<<"application/json">>, to_json}],
      Req, State}.
 
 resource_exists(Req, ChanId) ->
-    ?INFO("ChanId is ~w", [ChanId]),
     case ChanId of
         undefined ->
-            ?INFO("ChanId is UNDEFINED", []),
             {true, Req, ChanId};
         ChanId ->
             case logplex_channel:lookup(ChanId) of
                 undefined ->
-                    ?INFO("Resource DOES NOT exist", []),
                     {false, Req, not_found};
                 Channel ->
-                    ?INFO("Resource DOES exist", []),
                     {true, Req, Channel}
             end
     end.
@@ -71,11 +65,11 @@ delete_resource(Req, #channel{id=ChannelId}) ->
 
 from_json(Req, _State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
-    {struct, Params} = mochijson2:decode(Body),
+    {struct, Params} = mochijson2:decode(Body), %% TODO(apg) Don't blow up and 500 on error of this.
     ChannelId = logplex_channel:create_id(),
     case is_integer(ChannelId) of
         true ->
-            _Tokens =
+            Tokens =
                 case proplists:get_value(<<"tokens">>, Params) of
                     List when length(List) > 0 ->
                         [{TokenName, logplex_token:create(ChannelId, TokenName)}
@@ -83,11 +77,10 @@ from_json(Req, _State) ->
                     _ ->
                         []
                 end,
-            ChanIdStr = integer_to_list(ChannelId),
-            ?INFO("ChannelID=~w, ChanIdStr=~w", [ChannelId, ChanIdStr]),
-            {{true, "/v3/channels/" ++ ChanIdStr}, Req2, ok};
+            Info = mochijson2:encode({struct, [{channel_id, ChannelId}, {tokens, Tokens}]}),
+            Req3 = cowboy_req:set_resp_body(Info, Req2),
+            {true, Req3, ok};
         false ->
-            ?INFO("ChannelID=~w", [ChannelId]),
             {false, Req2, expected_integer}
     end.
 
@@ -100,11 +93,9 @@ to_json(Req, #channel{id=ChannelId}) ->
     case logplex_channel:info(ChannelId) of
         not_found ->
             to_json(Req, not_found);
-        {ChanId, Tokens, _Drains} ->
+        {ChanId, Tokens, Drains} ->
             Info = [{channel_id, ChanId},
-                    {tokens, [logplex_token:json_encode(Token) || Token <- Tokens]}],
-            Req2 = cowboy_req:set_resp_body(
-                     mochijson2:encode({struct, Info}), Req),
-            {ok, Req3} = cowboy_req:reply(<<"200 OK">>, Req2),
-            {halt, Req3, no_state}
+                    {tokens, [logplex_token:json_encode(Token) || Token <- Tokens]},
+                    {drains, [logplex_drain:json_encode(Drain) || Drain <- Drains]}],
+            {mochijson2:encode({struct, Info}), Req, no_state}
     end.

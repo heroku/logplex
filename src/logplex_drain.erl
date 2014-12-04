@@ -97,6 +97,12 @@ token(#drain{token=Token}) -> Token.
 channel_id(#drain{channel_id=CID}) -> CID.
 uri(#drain{uri=Uri}) -> Uri.
 
+json_encode(#drain{id=Id, token=Token, channel_id=ChanId, uri=Uri}) ->
+    [{id, Id},
+     {token, Token},
+     {channel_id, ChanId},
+     {uri, Uri}].
+
 start(#drain{type=Type, id=Id,
              channel_id=CID, token=Token,
              uri=Uri}) ->

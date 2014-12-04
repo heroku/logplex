@@ -20,3 +20,4 @@ log/
 test/*.beam
 .edts
 .DS_Store
+ct_run.*

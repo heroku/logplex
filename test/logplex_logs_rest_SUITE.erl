@@ -72,4 +72,3 @@ set_os_vars() ->
          {"LOGPLEX_NODE_NAME", atom_to_list(node())},
          {"LOGPLEX_API_ENDPOINT_URL", "http://localhost:8001"}
         ]].
-
