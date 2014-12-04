@@ -224,7 +224,8 @@ handlers() ->
         Body = Req:recv_body(),
         UUID = logplex_session:publish(Body),
         not is_binary(UUID) andalso exit({expected_binary, UUID}),
-        {201, api_relative_url(api_v1, UUID)}
+        {201, iolist_to_binary([logplex_app:config(api_endpoint_url, ""),
+                                <<"/sessions/">>, UUID, <<"?srv=srv">>])}
     end},
 
     %% V2
