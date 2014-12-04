@@ -45,7 +45,7 @@
                 close_tref :: reference() | 'undefined',
                 drop_info :: drop_info() | 'undefined',
                 %% Last time we connected or successfully sent data
-                last_good_time :: 'undefined' | erlang:timestamp(),
+                last_good_time = never :: 'never' | erlang:timestamp(),
                 service = normal :: 'normal' | 'degraded',
                 %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
@@ -564,15 +564,15 @@ connection_info(#ex_uri{scheme = Scheme,
      end}.
 
 set_reconnect_timer(State = #state{reconnect_tref=undefined}) ->
-    Time = trunc(logplex_app:config(http_reconnect_time, 10) * backoff_slots(State#state.reconnect_attempt)),
+    Time = logplex_app:config(http_reconnect_time, 10) * backoff_slots(State#state.reconnect_attempt),
     reconnect_in(Time, State);
 set_reconnect_timer(State = #state{}) -> State.
 
 backoff_slots(Attempt) when is_integer(Attempt), Attempt > 0 ->
     Slot = erlang:min(logplex_app:config(http_max_retries, 10), Attempt),
-    (math:pow(2, random:uniform(Slot)) - 1) / 2;
+     erlang:max(1, trunc((math:pow(2, random:uniform(Slot)) - 1) / 2));
 backoff_slots(_) ->
-    0.
+    1.
 
 reconnect_in(MS, State = #state{ reconnect_attempt=N }) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
@@ -606,7 +606,7 @@ start_close_timer(State=#state{close_tref = CloseTRef}) ->
     NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?CLOSE_TIMEOUT_MSG),
     State#state{close_tref = NewTimer}.
 
-compare_point(#state{last_good_time=undefined, connect_time=ConnectTime}) ->
+compare_point(#state{last_good_time=never, connect_time=ConnectTime}) ->
     ConnectTime;
 compare_point(#state{last_good_time=LastGood}) ->
     LastGood.
@@ -658,15 +658,24 @@ maybe_resize(Status, Buf) ->
             logplex_drain_buffer:resize_msg_buffer(Buf, default_buf_size())
     end.
 
+maybe_shrink(State = #state{last_good_time=never}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn"
+          " service=~p last_good_time=~p",
+          log_info(State, [degraded, never])),
+    State#state{service=degraded};
 maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) ->
-    case {(is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
-                     now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
-                    orelse LastGood =:= undefined,
+    case {(now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT),
                    Status} of
         {true, normal} ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn"
+                  " service=~p last_good_time=~p",
+                  log_info(State, [degraded, LastGood])),
             logplex_drain_buffer:resize_msg_buffer(Buf, ?SHRINK_BUF_SIZE),
             State#state{service=degraded};
         {_, _} ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn"
+                  " service=~p last_good_time=~p",
+                  log_info(State, [normal, LastGood])),
             State#state{service=normal}
     end.
 
