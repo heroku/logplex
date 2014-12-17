@@ -383,6 +383,24 @@ terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
+code_change("v78", StateName,
+            {DrainId, DrainTok, ChannelId, Uri, Buf, Client, OutQ,
+             ReconnectTref, CloseTref, DropInfo, LastGoodTime, Service,
+             ConnectTime} , undefined) ->
+    {ok, StateName, #state{drain_id=DrainId,
+                           drain_tok=DrainTok,
+                           channel_id=ChannelId,
+                           uri=Uri,
+                           buf=Buf,
+                           client=Client,
+                           out_q=OutQ,
+                           reconnect_tref=ReconnectTref,
+                           reconnect_attempt=0,
+                           close_tref=CloseTref,
+                           drop_info=DropInfo,
+                           last_good_time=LastGoodTime,
+                           service=Service,
+                           connect_time=ConnectTime}, ?HIBERNATE_TIMEOUT};
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
 
