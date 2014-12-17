@@ -337,8 +337,15 @@ shrink(Config) ->
         fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
             {ok, self()}
         end),
+    meck:expect(logplex_http_client, raw_request,
+                fun(_Pid, _Req, _Timeout) ->
+                        ct:pal("made it here", []),
+                        {ok, 200, []}
+                end),
     Res2 = logplex_http_drain:disconnected({logplex_drain_buffer, Buf, new_data}, State2),
-    {next_state, connected, #state{service=normal}, _} = Res2,
+    {next_state, connected, State3=#state{service=degraded}, _} = Res2,
+    Res3 = logplex_http_drain:connected({logplex_drain_buffer, Buf, {frame,<<"log lines">>, 15, 3}}, State3),
+    {next_state, connected, #state{service=normal}, _} = Res3,
     %% The buffer was resized
     wait_for_mocked_call(logplex_drain_buffer, resize_msg_buffer, ['_',Val], 1, 1000).
 
@@ -396,7 +403,7 @@ wait_for_mocked_call(Mod, Fun, Args, NumCalls, Time) ->
 wait_for_mocked_call(Mod,Fun,Args, NumCalls, Max,T0) ->
     Called = meck:num_calls(Mod, Fun, Args),
     case {Called, timer:now_diff(os:timestamp(),T0)} of
-        {N, Diff} when Diff > Max -> error({timeout,N});
+        {N, Diff} when Diff > Max -> error({timeout,N, {Mod, Fun, Args, NumCalls, Max, T0}});
         {N, _} when N >= NumCalls -> true;
         {_, _} ->
             timer:sleep(10),

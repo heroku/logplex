@@ -280,7 +280,7 @@ try_connect(State = #state{uri=Uri,
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
             NewTimerState = start_close_timer(State),
-            ready_to_send(NewTimerState#state{client=Pid, service=normal,
+            ready_to_send(NewTimerState#state{client=Pid,
                                               connect_time=ConnectEnd,
                                               reconnect_attempt=0});
         Why ->
@@ -473,7 +473,7 @@ sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Dro
                                                                    buf=Buf,
                                                                    service=Status}) ->
     maybe_resize(Status, Buf),
-    State = State0#state{last_good_time=os:timestamp()},
+    State = State0#state{last_good_time=os:timestamp(), service=normal},
 
     msg_stat(drain_delivered, Count, State),
     logplex_realtime:incr('drain.delivered', Count),
