@@ -384,25 +384,32 @@ terminate(_Reason, _StateName, _State) ->
 
 %% @private
 code_change("v78", StateName,
-            {DrainId, DrainTok, ChannelId, Uri, Buf, Client, OutQ,
+            {state, DrainId, DrainTok, ChannelId, Uri, Buf, Client, OutQ,
              ReconnectTref, CloseTref, DropInfo, LastGoodTime, Service,
-             ConnectTime} , undefined) ->
-    {ok, StateName, #state{drain_id=DrainId,
-                           drain_tok=DrainTok,
-                           channel_id=ChannelId,
-                           uri=Uri,
-                           buf=Buf,
-                           client=Client,
-                           out_q=OutQ,
-                           reconnect_tref=ReconnectTref,
-                           reconnect_attempt=0,
-                           close_tref=CloseTref,
-                           drop_info=DropInfo,
-                           last_good_time=LastGoodTime,
-                           service=Service,
-                           connect_time=ConnectTime}, ?HIBERNATE_TIMEOUT};
-code_change(_OldVsn, StateName, State, _Extra) ->
-    {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
+             ConnectTime}=State0, undefined) ->
+    State = #state{drain_id=DrainId,
+                   drain_tok=DrainTok,
+                   channel_id=ChannelId,
+                   uri=Uri,
+                   buf=Buf,
+                   client=Client,
+                   out_q=OutQ,
+                   reconnect_tref=ReconnectTref,
+                   reconnect_attempt=0,
+                   close_tref=CloseTref,
+                   drop_info=DropInfo,
+                   last_good_time=LastGoodTime,
+                   service=Service,
+                   connect_time=ConnectTime},
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=code_change "
+          "old_vsn=~p state_name=~p old_state=~p new_state=~p",
+          [DrainId, ChannelId, uri_to_string(Uri), "v78", StateName, State0, State]),
+    {ok, StateName, State};
+code_change(OldVsn, StateName, State, Extra) ->
+    ?WARN("at=code_change unexpected=code_change"
+          "old_vsn=~p state_name=~p state=~p extra=~p",
+          [OldVsn, StateName, State, Extra]),
+    {ok, StateName, State}.
 
 %% @private
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=URI}, Rest)

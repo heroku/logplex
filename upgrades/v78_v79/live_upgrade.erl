@@ -18,16 +18,16 @@ UpgradeNode = fun () ->
     Drains = [ Pid || {Pid, http} <- gproc:lookup_local_properties(drain_type)],
 
     % suspend all the http drains in preparation for a code change
-    [ sys:suspend(Pid, 30000) || Pid <- Drains ],
+    [ ok = sys:suspend(Pid, 30000) || Pid <- Drains ],
 
     % load the new version of the module
     l(logplex_http_drain),
 
     % perform the state change via code_change
-    [ sys:change_code(Pid, logplex_http_drain, OldVsn, undefined, 30000) || Pid <- Drains],
+    [ ok = sys:change_code(Pid, logplex_http_drain, OldVsn, undefined, 30000) || Pid <- Drains],
 
     % resume operation of all the http drains
-    [ sys:resume(Pid, 30000) || Pid <- Drains ],
+    [ ok = sys:resume(Pid, 30000) || Pid <- Drains ],
 
     io:format(whereis(user), "at=upgrade_end cur_vsn=~p~n", [NextVsn]),
     ok = application:set_env(logplex, git_branch, NextVsn),
