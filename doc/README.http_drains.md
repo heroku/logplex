@@ -15,18 +15,18 @@ This is an example HTTP request that logplex might make if it had ten log messag
     Logplex-Frame-Id: 09C557EAFCFB6CF2740EE62F62971098
     Logplex-Drain-Token: d.fc6b856b-3332-4546-93de-7d0ee272c3bd
     User-Agent: Logplex/v49
-    Content-Length: 771
+    Content-Length: 730
     
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 1 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 2 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 3 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 4 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 5 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 6 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 7 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 8 Hi from erlang
-    74 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 9 Hi from erlang
-    75 <174>1 2012-07-22T00:06:26+00:00 somehost erlang console 10 Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
+    70 <174>1 2012-07-22T00:06:26+00:00 host erlang console - Hi from erlang
         
     
 ### HTTP Headers
@@ -45,4 +45,4 @@ So a request body for `application/logplex-1` should be as follows:
 
     <NumberOfBytes/ASCII encoded integer><Space character><RFC5424 message:NumberOfBytes long>
 
-repeated `logplex-msg-count` times.
+repeated `logplex-msg-count` times. However, `application/logplex-` does not follow RFC5424 exactly. It does not include `STRUCTUREDDATA` and does not put a `NILVALUE` in it's place.
