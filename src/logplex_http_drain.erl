@@ -386,7 +386,7 @@ terminate(_Reason, _StateName, _State) ->
 code_change("v78", StateName,
             {state, DrainId, DrainTok, ChannelId, Uri, Buf, Client, OutQ,
              ReconnectTref, CloseTref, DropInfo, LastGoodTime, Service,
-             ConnectTime}=State0, undefined) ->
+             ConnectTime}, undefined) ->
     State = #state{drain_id=DrainId,
                    drain_tok=DrainTok,
                    channel_id=ChannelId,
@@ -401,14 +401,8 @@ code_change("v78", StateName,
                    last_good_time=LastGoodTime,
                    service=Service,
                    connect_time=ConnectTime},
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=code_change "
-          "old_vsn=~p state_name=~p old_state=~p new_state=~p",
-          [DrainId, ChannelId, uri_to_string(Uri), "v78", StateName, State0, State]),
     {ok, StateName, State};
-code_change(OldVsn, StateName, State, Extra) ->
-    ?WARN("at=code_change unexpected=code_change"
-          "old_vsn=~p state_name=~p state=~p extra=~p",
-          [OldVsn, StateName, State, Extra]),
+code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
 %% @private
