@@ -75,6 +75,7 @@
 
 -export([user_agent/0
          ,drain_buf_framing/1
+         ,backoff_slots/1
         ]).
 
 %% ------------------------------------------------------------------
@@ -592,7 +593,7 @@ backoff_slots(Attempt) when is_integer(Attempt), Attempt > 0 ->
     Slot = erlang:min(logplex_app:config(http_max_retries, 10), Attempt),
      erlang:max(1, trunc((math:pow(2, random:uniform(Slot)) - 1) / 2));
 backoff_slots(_) ->
-    1.
+    0.
 
 reconnect_in(MS, State = #state{ reconnect_attempt=N }) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
@@ -679,7 +680,7 @@ maybe_resize(Status, Buf) ->
     end.
 
 maybe_shrink(State = #state{last_good_time=never}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn"
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
           " service=~p last_good_time=~p",
           log_info(State, [degraded, never])),
     State#state{service=degraded};
@@ -687,15 +688,15 @@ maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) -
     case {(now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT),
                    Status} of
         {true, normal} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn"
-                  " service=~p last_good_time=~p",
-                  log_info(State, [degraded, LastGood])),
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
+                  " service=~p last_good_time=~s",
+                  log_info(State, [degraded, logplex_utils:format_utc_timestamp(LastGood)])),
             logplex_drain_buffer:resize_msg_buffer(Buf, ?SHRINK_BUF_SIZE),
             State#state{service=degraded};
         {_, _} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn"
-                  " service=~p last_good_time=~p",
-                  log_info(State, [normal, LastGood])),
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
+                  " service=~p last_good_time=~s",
+                  log_info(State, [normal, logplex_utils:format_utc_timestamp(LastGood)])),
             State#state{service=normal}
     end.
 

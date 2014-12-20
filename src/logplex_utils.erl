@@ -23,7 +23,7 @@
 -module(logplex_utils).
 -export([rpc/4, set_weight/1, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
-         format/4,
+         format/4, format_utc_timestamp/0, format_utc_timestamp/1,
          parse_redis_url/1, nl/1, to_int/1]).
 
 -include("logplex.hrl").
@@ -71,6 +71,15 @@ filter(Msg, [Fun|Tail]) ->
         true -> filter(Msg, Tail);
         _ -> false
     end.
+
+format_utc_timestamp() ->
+    format_utc_timestamp(os:timestamp()).
+
+format_utc_timestamp({_, _, Micro}=TS) ->
+    {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:now_to_universal_time(TS),
+    % 2012-04-23T18:25:43.511Z
+    io_lib:format("~w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w.~6..0wZ",
+                  [Year, Month, Day, Hour, Minute, Second, Micro]).
 
 formatted_utc_date() ->
     {{Year,Month,Day},{Hour,Min,Sec}} = Local = erlang:localtime(),
