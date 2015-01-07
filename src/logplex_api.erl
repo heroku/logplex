@@ -706,7 +706,7 @@ json_error(Code, Err) ->
 api_relative_url(canary, UUID) when is_binary(UUID) ->
     iolist_to_binary([<<"/v2/canary-fetch/">>, UUID]);
 api_relative_url(_APIVSN, UUID) when is_binary(UUID) ->
-    iolist_to_binary([<<"/sessions/">>, UUID]).
+    iolist_to_binary([logplex_app:config(api_endpoint_url, ""), <<"/sessions/">>, UUID]).
 
 end_chunked_response(Socket) ->
     gen_tcp:close(Socket),
