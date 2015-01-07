@@ -75,7 +75,7 @@
 
 -export([user_agent/0
          ,drain_buf_framing/1
-         ,backoff_slots/1
+         ,backoff_slot/1
         ]).
 
 %% ------------------------------------------------------------------
@@ -284,6 +284,8 @@ try_connect(State = #state{uri=Uri,
             ready_to_send(NewTimerState#state{client=Pid,
                                               connect_time=ConnectEnd,
                                               reconnect_attempt=0});
+        ignore ->
+            http_fail(State);
         Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
@@ -489,11 +491,8 @@ lost_msgs(Lost, S=#state{drop_info={TS,Dropped}}) ->
 
 %% @private
 %% if we had failures, they should have been delivered with this frame
-sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Drop,
-                                                                   buf=Buf,
-                                                                   service=Status}) ->
-    maybe_resize(Status, Buf),
-    State = State0#state{last_good_time=os:timestamp(), service=normal},
+sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Drop}) ->
+    State = maybe_resize(State0),
 
     msg_stat(drain_delivered, Count, State),
     logplex_realtime:incr('drain.delivered', Count),
@@ -585,15 +584,18 @@ connection_info(#ex_uri{scheme = Scheme,
      end}.
 
 set_reconnect_timer(State = #state{reconnect_tref=undefined}) ->
-    Time = logplex_app:config(http_reconnect_time, 10) * backoff_slots(State#state.reconnect_attempt),
-    reconnect_in(Time, State);
+    reconnect_in(backoff_time(State#state.reconnect_attempt), State);
 set_reconnect_timer(State = #state{}) -> State.
 
-backoff_slots(Attempt) when is_integer(Attempt), Attempt > 0 ->
-    Slot = erlang:min(logplex_app:config(http_max_retries, 10), Attempt),
-     erlang:max(1, trunc((math:pow(2, random:uniform(Slot)) - 1) / 2));
-backoff_slots(_) ->
+backoff_time(Attempt) when is_integer(Attempt), Attempt > 0 ->
+    Time = logplex_app:config(http_reconnect_time, 10) * backoff_slot(Attempt),
+    trunc(Time);
+backoff_time(_) ->
     0.
+
+backoff_slot(Attempt) when is_integer(Attempt), Attempt > 0 ->
+    Slot = erlang:min(logplex_app:config(http_max_retries, 10), Attempt),
+    trunc(erlang:max(0, (math:pow(2, random:uniform(Slot)) - 1) / 2)).
 
 reconnect_in(MS, State = #state{ reconnect_attempt=N }) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
@@ -671,35 +673,34 @@ start_drain_buffer(State = #state{channel_id=ChannelId,
                                                 notify, Size),
     State#state{buf = Buf}.
 
-maybe_resize(Status, Buf) ->
-    case Status of
-        normal ->
-            ok;
-        degraded ->
-            logplex_drain_buffer:resize_msg_buffer(Buf, default_buf_size())
-    end.
+maybe_resize(State0=#state{ service=normal }) ->
+    State0#state{ last_good_time=os:timestamp() };
+maybe_resize(State0=#state{ service=degraded }) ->
+    State = State0#state{last_good_time=os:timestamp(), service=normal},
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_resize"
+          " service=normal buf_size=~p",
+          log_info(State, [default_buf_size()])),
+    State.
 
 maybe_shrink(State = #state{last_good_time=never}) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
-          " service=~p last_good_time=~p",
+          " service=~p time_since_last_good=~p",
           log_info(State, [degraded, never])),
     State#state{service=degraded};
 maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) ->
-    case {(now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT),
-                   Status} of
+    MsecSinceLastGood = trunc(timer:now_diff(os:timestamp(), LastGood) / 1000),
+    case {MsecSinceLastGood > ?SHRINK_TIMEOUT, Status} of
         {true, normal} ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
-                  " service=~p last_good_time=~s",
-                  log_info(State, [degraded, logplex_utils:format_utc_timestamp(LastGood)])),
+                  " service=~p time_since_last_good=~p",
+                  log_info(State, [degraded, MsecSinceLastGood])),
             logplex_drain_buffer:resize_msg_buffer(Buf, ?SHRINK_BUF_SIZE),
             State#state{service=degraded};
-        {_, _} ->
+        {_, Status} ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
-                  " service=~p last_good_time=~s",
-                  log_info(State, [normal, logplex_utils:format_utc_timestamp(LastGood)])),
-            State#state{service=normal}
+                  " service=~p time_since_last_good=~p",
+                  log_info(State, [Status, MsecSinceLastGood])),
+            State#state{service=Status}
     end.
-
-now_to_msec({Mega,Sec,_}) -> (Mega*1000000 + Sec)*1000.
 
 default_buf_size() -> logplex_app:config(http_drain_buffer_size, 1024).
