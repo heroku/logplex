@@ -119,16 +119,23 @@ client_call_end(Tab) ->
 
 client_call_status(Tab) ->
     try
-        [{_,Val}] = ets:lookup(Tab, status),
-        Val
+        ets:update_counter(Tab, status, {3, -1, 0, 0}),
+        case ets:lookup(Tab, status) of
+            [{status, _Status, 0, Next}] ->
+                Next;
+            [{status, Status, _Num, _Next}] ->
+                Status
+        end
     catch
         E:R ->
-            ct:pal("OH THAT WENT BAD"),
+            ct:pal("OH THAT WENT BAD~n~p", [{E,R}]),
             {E,R}
     end.
 
+client_call_status(Tab, {Num, At, Then}) ->
+    true = ets:insert(Tab, {status, At, Num+1, Then});
 client_call_status(Tab, N) ->
-    true = ets:insert(Tab, {status,N}).
+    client_call_status(Tab, {0, N, N}).
 
 %%% TESTS %%%
 %% We drop a frame, but the rest is successfully delivered
@@ -204,37 +211,32 @@ full_buffer_temp_fail(Config) ->
     Drain = ?config(drain, Config),
     Client = ?config(client, Config),
 
-    Drain ! {logplex_drain_buffer, Buf, new_data},
     %% Here the drain should try connecting (and succeeding through mocks)
     %% and then set the buffer to active
-    wait_for_mocked_call(logplex_drain_buffer, set_active, '_', 1, 1000),
-    %% We send the message but expect it to fail.
-    client_call_status(Client, 500),
+    1 = logplex_app:config(http_frame_retries, 1),
+    %% We send the message but expect it to fail 3 times before finally
+    %% getting a 200 status code back.
+    client_call_status(Client, {3, 500, 200}),
     Msg = "some io data that represents 15 messages",
     Frame = {frame, Msg, 15, 3},
+    Drain ! {logplex_drain_buffer, Buf, new_data},
     Drain ! {logplex_drain_buffer, Buf, Frame},
     %% When the drain fails temp, it closes the connection before continuing and
     %% retrying again on the next frame sent
-    1 = logplex_app:config(http_frame_retries, 1),
-    wait_for_mocked_call(logplex_http_client, close, '_', 1, 1000),
     %% 1st frame: 15 queued, 3 lost (1 fail)
     %% :: 0 global lost, 1 req
     %%
     %% We can now send a second frame and expect our errors
     %% to be accumulated when the reconnection with the client is done.
     Drain ! {logplex_drain_buffer, Buf, Frame},
-    wait_for_mocked_call(logplex_http_client, close, '_', 2, 30000),
     %% 1st frame:  0 queued, 0 lost (dropped after 2 fails)
     %% 2nd frame: 15 queued, 3 lost (0 attempt)
     %% :: 18 global lost, 2 req
     Drain ! {logplex_drain_buffer, Buf, Frame},
-    wait_for_mocked_call(logplex_http_client, close, '_', 3, 30000),
     %% 2nd frame: 15 queued, 3 lost (1 fail)
     %% 3rd frame: 15 queued, 3 lost (0 attempt)
     %% :: 18 global lost, 3 req
     %%
-    %% We start making it suceed now.
-    client_call_status(Client, 200),
     Drain ! {logplex_drain_buffer, Buf, Frame},
     %% 2nd frame: delivered, 3+(15+3) lost (1 req)
     %% 3rd frame: delivered, 3 lost (1 req)
@@ -339,7 +341,6 @@ shrink(Config) ->
         end),
     meck:expect(logplex_http_client, raw_request,
                 fun(_Pid, _Req, _Timeout) ->
-                        ct:pal("made it here", []),
                         {ok, 200, []}
                 end),
     Res2 = logplex_http_drain:disconnected({logplex_drain_buffer, Buf, new_data}, State2),
@@ -390,6 +391,7 @@ init_http_mocks() ->
     %% Rube goldberg-esque, but makes writing the actual test
     %% a bit simpler. Succeeds by default
     Tab = client_call_init(),
+    client_call_status(Tab, 200),
     meck:expect(logplex_http_client, raw_request,
         fun(_Pid, _Req, _Timeout) ->
                 Status = client_call_status(Tab),

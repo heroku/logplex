@@ -588,8 +588,7 @@ set_reconnect_timer(State = #state{reconnect_tref=undefined}) ->
 set_reconnect_timer(State = #state{}) -> State.
 
 backoff_time(Attempt) when is_integer(Attempt), Attempt > 0 ->
-    Time = logplex_app:config(http_reconnect_time, 10) * backoff_slot(Attempt),
-    trunc(Time);
+    logplex_app:config(http_reconnect_time, 10) * backoff_slot(Attempt);
 backoff_time(_) ->
     0.
 
@@ -675,11 +674,13 @@ start_drain_buffer(State = #state{channel_id=ChannelId,
 
 maybe_resize(State0=#state{ service=normal }) ->
     State0#state{ last_good_time=os:timestamp() };
-maybe_resize(State0=#state{ service=degraded }) ->
+maybe_resize(State0=#state{ service=degraded, buf=Buf }) ->
     State = State0#state{last_good_time=os:timestamp(), service=normal},
+    Size = default_buf_size(),
+    logplex_drain_buffer:resize_msg_buffer(Buf, Size),
     ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_resize"
           " service=normal buf_size=~p",
-          log_info(State, [default_buf_size()])),
+          log_info(State, [Size])),
     State.
 
 maybe_shrink(State = #state{last_good_time=never}) ->
