@@ -388,7 +388,7 @@ terminate(_Reason, _StateName, _State) ->
 %% @private
 code_change("v78", StateName,
             {state, DrainId, DrainTok, ChannelId, Uri, Buf, Client, OutQ,
-             ReconnectTref, CloseTref, DropInfo, LastGoodTime, Service,
+             ReconnectTref, CloseTref, DropInfo, _LastGoodTime, Service,
              ConnectTime}, undefined) ->
     State = #state{drain_id=DrainId,
                    drain_tok=DrainTok,
@@ -401,7 +401,7 @@ code_change("v78", StateName,
                    reconnect_attempt=0,
                    close_tref=CloseTref,
                    drop_info=DropInfo,
-                   last_good_time=LastGoodTime,
+                   last_good_time=never,
                    service=Service,
                    connect_time=ConnectTime},
     {ok, StateName, State};
