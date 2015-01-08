@@ -24,7 +24,7 @@ UpgradeNode = fun () ->
     l(logplex_http_drain),
 
     % perform the state change via code_change
-    [ ok = sys:change_code(Pid, logplex_http_drain, OldVsn, undefined, 60000) || Pid <- Drins, erlang:is_process_alive(Pid) ],
+    [ ok = sys:change_code(Pid, logplex_http_drain, OldVsn, undefined, 60000) || Pid <- Drains, erlang:is_process_alive(Pid) ],
 
     % resume operation of all the http drains
     [ ok = sys:resume(Pid, 60000) || Pid <- Drains, erlang:is_process_alive(Pid) ],
