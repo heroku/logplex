@@ -38,7 +38,7 @@
     ,{http_frame_retries, 1} % #extra attempts after first
     ,{http_log_input_port, 8601} % syslog/http tcp listen port
     ,{http_port, 8001}
-    ,{http_reconnect_time_s, 1} % seconds
+    ,{http_reconnect_time, 10} % ms
     ,{http_send_loss_msg, send} % send | dont_send
     ,{log_history, 1500}
     ,{log_unknown_tokens, false} % bool

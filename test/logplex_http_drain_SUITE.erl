@@ -19,10 +19,11 @@ groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                 client :: pid(),
                 out_q = queue:new() :: queue(),
                 reconnect_tref :: reference() | 'undefined',
+                reconnect_attempt = 0 :: pos_integer(),
                 idle_tref :: reference() | 'undefined',
                 drop_info,
                 %% Last time we connected or successfully sent data
-                last_good_time :: 'undefined' | erlang:timestamp(),
+                last_good_time = never :: 'never' | erlang:timestamp(),
                 service = normal :: 'normal' | 'degraded',
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
@@ -103,7 +104,7 @@ mock_drain_buffer() ->
                 end),
     meck:expect(logplex_drain_buffer, resize_msg_buffer,
         fun(_Buf, Size) when Size > 0 ->
-      ct:pal("CALLED: (~p, ~p)", [_Buf, Size]),
+      ct:pal("Resized Drain Buffer: (~p, ~p)", [_Buf, Size]),
                 ok
         end),
     Id.
@@ -118,16 +119,23 @@ client_call_end(Tab) ->
 
 client_call_status(Tab) ->
     try
-        [{_,Val}] = ets:lookup(Tab, status),
-        Val
+        ets:update_counter(Tab, status, {3, -1, 0, 0}),
+        case ets:lookup(Tab, status) of
+            [{status, _Status, 0, Next}] ->
+                Next;
+            [{status, Status, _Num, _Next}] ->
+                Status
+        end
     catch
         E:R ->
-            ct:pal("OH THAT WENT BAD"),
+            ct:pal("OH THAT WENT BAD~n~p", [{E,R}]),
             {E,R}
     end.
 
+client_call_status(Tab, {Num, At, Then}) ->
+    true = ets:insert(Tab, {status, At, Num+1, Then});
 client_call_status(Tab, N) ->
-    true = ets:insert(Tab, {status,N}).
+    client_call_status(Tab, {0, N, N}).
 
 %%% TESTS %%%
 %% We drop a frame, but the rest is successfully delivered
@@ -202,48 +210,43 @@ full_buffer_temp_fail(Config) ->
     Buf = ?config(buffer, Config),
     Drain = ?config(drain, Config),
     Client = ?config(client, Config),
-    Drain ! {logplex_drain_buffer, Buf, new_data},
+
     %% Here the drain should try connecting (and succeeding through mocks)
     %% and then set the buffer to active
-    wait_for_mocked_call(logplex_drain_buffer, set_active, '_', 1, 1000),
-    %% We send the message but expect it to fail.
-    client_call_status(Client, 500),
+    1 = logplex_app:config(http_frame_retries, 1),
+    %% We send the message but expect it to fail 3 times before finally
+    %% getting a 200 status code back.
+    client_call_status(Client, {3, 500, 200}),
     Msg = "some io data that represents 15 messages",
     Frame = {frame, Msg, 15, 3},
+    Drain ! {logplex_drain_buffer, Buf, new_data},
     Drain ! {logplex_drain_buffer, Buf, Frame},
     %% When the drain fails temp, it closes the connection before continuing and
     %% retrying again on the next frame sent
-    1 = logplex_app:config(http_frame_retries, 1),
-    wait_for_mocked_call(logplex_http_client, close, '_', 1, 1000),
     %% 1st frame: 15 queued, 3 lost (1 fail)
     %% :: 0 global lost, 1 req
     %%
     %% We can now send a second frame and expect our errors
     %% to be accumulated when the reconnection with the client is done.
     Drain ! {logplex_drain_buffer, Buf, Frame},
-    wait_for_mocked_call(logplex_http_client, start_link, '_', 2, 1000), % reconnects
-    wait_for_mocked_call(logplex_http_client, close, '_', 2, 1000),
     %% 1st frame:  0 queued, 0 lost (dropped after 2 fails)
     %% 2nd frame: 15 queued, 3 lost (0 attempt)
     %% :: 18 global lost, 2 req
     Drain ! {logplex_drain_buffer, Buf, Frame},
-    wait_for_mocked_call(logplex_http_client, start_link, '_', 3, 1000),
-    wait_for_mocked_call(logplex_http_client, close, '_', 3, 1000),
     %% 2nd frame: 15 queued, 3 lost (1 fail)
     %% 3rd frame: 15 queued, 3 lost (0 attempt)
     %% :: 18 global lost, 3 req
     %%
-    %% We start making it suceed now.
-    client_call_status(Client, 200),
     Drain ! {logplex_drain_buffer, Buf, Frame},
     %% 2nd frame: delivered, 3+(15+3) lost (1 req)
     %% 3rd frame: delivered, 3 lost (1 req)
     %% 4th frame: delivered, 3 lost (1 req)
     %% :: 18+3+3+3 = 27 global lost, (reqs for 3fail+3succeed = 6 total), 4 reconnections
-    wait_for_mocked_call(logplex_http_client, start_link, '_', 4, 1000),
+    wait_for_mocked_call(logplex_http_client, raw_request, '_', 6, 30000),
     %% Everything is sent
     6 = meck:num_calls(logplex_http_client, raw_request, '_'), % sends
     Hist = meck:history(logplex_http_client),
+
     [Fail1, Fail2, Fail3, Success1, Success2, Success3] =
       [iolist_to_binary(IoData) || {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
     {match, _} = re:run(Fail1, Msg), % temp 1st frame
@@ -336,8 +339,14 @@ shrink(Config) ->
         fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
             {ok, self()}
         end),
+    meck:expect(logplex_http_client, raw_request,
+                fun(_Pid, _Req, _Timeout) ->
+                        {ok, 200, []}
+                end),
     Res2 = logplex_http_drain:disconnected({logplex_drain_buffer, Buf, new_data}, State2),
-    {next_state, connected, #state{service=normal}, _} = Res2,
+    {next_state, connected, State3=#state{service=degraded}, _} = Res2,
+    Res3 = logplex_http_drain:connected({logplex_drain_buffer, Buf, {frame,<<"log lines">>, 15, 3}}, State3),
+    {next_state, connected, #state{service=normal}, _} = Res3,
     %% The buffer was resized
     wait_for_mocked_call(logplex_drain_buffer, resize_msg_buffer, ['_',Val], 1, 1000).
 
@@ -382,6 +391,7 @@ init_http_mocks() ->
     %% Rube goldberg-esque, but makes writing the actual test
     %% a bit simpler. Succeeds by default
     Tab = client_call_init(),
+    client_call_status(Tab, 200),
     meck:expect(logplex_http_client, raw_request,
         fun(_Pid, _Req, _Timeout) ->
                 Status = client_call_status(Tab),
@@ -390,12 +400,12 @@ init_http_mocks() ->
     Tab.
 
 wait_for_mocked_call(Mod, Fun, Args, NumCalls, Time) ->
-    wait_for_mocked_call(Mod,Fun,Args, NumCalls, Time*1000,os:timestamp()).
+    wait_for_mocked_call(Mod,Fun,Args, NumCalls, Time*1000, os:timestamp()).
 
 wait_for_mocked_call(Mod,Fun,Args, NumCalls, Max,T0) ->
     Called = meck:num_calls(Mod, Fun, Args),
     case {Called, timer:now_diff(os:timestamp(),T0)} of
-        {N, Diff} when Diff > Max -> error({timeout,N});
+        {N, Diff} when Diff > Max -> error({timeout,N, {Mod, Fun, Args, NumCalls, Max, T0}});
         {N, _} when N >= NumCalls -> true;
         {_, _} ->
             timer:sleep(10),
