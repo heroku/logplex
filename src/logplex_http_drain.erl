@@ -168,11 +168,11 @@ connected(timeout, S = #state{}) ->
 connected({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     case close_if_idle(State) of
         {closed, ClosedState} ->
-            {next_state, disconnected, ClosedState, ?HIBERNATE_TIMEOUT};
+            {next_state, disconnected, ClosedState, hibernate};
         {not_closed, State} ->
             case close_if_old(State) of
                 {closed, ClosedState} ->
-                    {next_state, disconnected, ClosedState, ?HIBERNATE_TIMEOUT};
+                    {next_state, disconnected, ClosedState, hibernate};
                 {not_closed, ContinueState} ->
                     {next_state, connected, ContinueState}
             end
