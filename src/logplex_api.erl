@@ -278,19 +278,23 @@ handlers() ->
                                            logplex_app:config(no_redis_warning)}];
                      _ -> ?HDR
                  end,
-        Req:start_response({200, Header}),
+        Resp = Req:respond({200, Header, chunked}),
 
         inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
 
-        filter_and_send_logs(Socket, Logs, Filters, Num),
+        %% filter_and_send_logs(Socket, Logs, Filters, Num),
+        filter_and_send_chunked_logs(Resp, Logs, Filters, Num),
 
         case {proplists:get_value(<<"tail">>, Data, tail_not_requested),
               logplex_channel:lookup_flag(no_tail, ChannelId)} of
             {tail_not_requested, _} ->
-                end_chunked_response(Socket);
+                %% end_chunked_response(Socket);
+                Resp:write_chunk(<<>>);
             {_, no_tail} ->
-                gen_tcp:send(Socket, no_tail_warning()),
-                end_chunked_response(Socket);
+                %% gen_tcp:send(Socket, no_tail_warning()),
+                %% end_chunked_response(Socket);
+                Resp:write_chunk(no_tail_warning()),
+                Resp:write_chunk(<<>>);
             _ ->
                 ?INFO("at=tail_start channel_id=~p filters=~100p",
                       [ChannelId, Filters]),
@@ -298,7 +302,7 @@ handlers() ->
                 {ok, Buffer} =
                     logplex_tail_buffer:start_link(ChannelId, self()),
                 try
-                    tail_init(Socket, Buffer, Filters, ChannelId)
+                    tail_init(Socket, Resp, Buffer, Filters, ChannelId)
                 after
                     ?INFO("at=tail_end channel_id=~p",
                           [ChannelId]),
@@ -582,21 +586,21 @@ no_tail_warning() ->
                          <<"Logplex">>,
                          logplex_app:config(no_tail_warning)).
 
-tail_init(Socket, Buffer, Filters, ChannelId) ->
+tail_init(Socket, Resp, Buffer, Filters, ChannelId) ->
     inet:setopts(Socket, [{active, once}]),
-    tail_loop(Socket, Buffer, Filters, ChannelId, 0).
+    tail_loop(Socket, Resp, Buffer, Filters, ChannelId, 0).
 
-tail_loop(Socket, Buffer, Filters, ChannelId, BytesSent) ->
+tail_loop(Socket, Resp, Buffer, Filters, ChannelId, BytesSent) ->
     logplex_tail_buffer:set_active(Buffer,
                                    tail_filter(Filters)),
     receive
         {logplex_tail_data, Buffer, Data} ->
-            gen_tcp:send(Socket,
-                         Data),
-            tail_loop(Socket, Buffer, Filters, ChannelId, iolist_size(Data) + BytesSent);
+            Resp:write_chunk(Data),
+            %% gen_tcp:send(Socket, Data),
+            tail_loop(Socket, Resp, Buffer, Filters, ChannelId, iolist_size(Data) + BytesSent);
         {tcp_data, Socket, _} ->
             inet:setopts(Socket, [{active, once}]),
-            tail_loop(Socket, Buffer, Filters, ChannelId, BytesSent);
+            tail_loop(Socket, Resp, Buffer, Filters, ChannelId, BytesSent);
         {tcp_closed, Socket} ->
             ?INFO("at=tail_loop event=tail_close reason=tcp_closed channel_id=~p bytes_sent=~p", [ChannelId, BytesSent]),
             ok;
