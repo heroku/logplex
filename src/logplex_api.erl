@@ -273,11 +273,12 @@ handlers() ->
         not is_list(Logs) andalso exit({expected_list, Logs}),
 
         Socket = Req:get(socket),
-        Header = case logplex_channel:lookup_flag(no_redis, ChannelId) of
+        Header0 = case logplex_channel:lookup_flag(no_redis, ChannelId) of
                      no_redis -> ?HDR ++ [{"X-Heroku-Warning",
                                            logplex_app:config(no_redis_warning)}];
                      _ -> ?HDR
                  end,
+        Header = Header0 ++ [{"Connection", "close"}],
         Resp = Req:respond({200, Header, chunked}),
 
         inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
