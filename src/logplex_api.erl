@@ -278,22 +278,18 @@ handlers() ->
                                            logplex_app:config(no_redis_warning)}];
                      _ -> ?HDR
                  end,
-        Header = Header0 ++ [{"Connection", "close"}],
+        Header = Header0 ++ [{"connection", "close"}],
         Resp = Req:respond({200, Header, chunked}),
 
         inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
 
-        %% filter_and_send_logs(Socket, Logs, Filters, Num),
         filter_and_send_chunked_logs(Resp, Logs, Filters, Num),
 
         case {proplists:get_value(<<"tail">>, Data, tail_not_requested),
               logplex_channel:lookup_flag(no_tail, ChannelId)} of
             {tail_not_requested, _} ->
-                %% end_chunked_response(Socket);
                 Resp:write_chunk(<<>>);
             {_, no_tail} ->
-                %% gen_tcp:send(Socket, no_tail_warning()),
-                %% end_chunked_response(Socket);
                 Resp:write_chunk(no_tail_warning()),
                 Resp:write_chunk(<<>>);
             _ ->
@@ -543,25 +539,6 @@ authorize(Req) ->
 error_resp(RespCode, Body) ->
     throw({RespCode, Body}).
 
-
-%% filter_and_send_logs(Socket, Logs, [], _Num) ->
-%%     [gen_tcp:send(Socket, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
-%%
-%% filter_and_send_logs(Socket, Logs, Filters, Num) ->
-%%     filter_and_send_logs(Socket, Logs, Filters, Num, []).
-%%
-%% filter_and_send_logs(Socket, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
-%%     gen_tcp:send(Socket, Acc);
-
-%% filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
-%%     Msg1 = logplex_utils:parse_msg(Msg),
-%%     case logplex_utils:filter(Msg1, Filters) of
-%%         true ->
-%%             filter_and_send_logs(Socket, Tail, Filters, Num-1, [logplex_utils:format(Msg1)|Acc]);
-%%         false ->
-%%             filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
-%%     end.
-
 filter_and_send_chunked_logs(Resp, Logs, [], _Num) ->
     [Resp:write_chunk(logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
 
@@ -597,7 +574,6 @@ tail_loop(Socket, Resp, Buffer, Filters, ChannelId, BytesSent) ->
     receive
         {logplex_tail_data, Buffer, Data} ->
             Resp:write_chunk(Data),
-            %% gen_tcp:send(Socket, Data),
             tail_loop(Socket, Resp, Buffer, Filters, ChannelId, iolist_size(Data) + BytesSent);
         {tcp_data, Socket, _} ->
             inet:setopts(Socket, [{active, once}]),
@@ -712,10 +688,6 @@ api_relative_url(canary, UUID) when is_binary(UUID) ->
     iolist_to_binary([<<"/v2/canary-fetch/">>, UUID]);
 api_relative_url(_APIVSN, UUID) when is_binary(UUID) ->
     iolist_to_binary([logplex_app:config(api_endpoint_url, ""), <<"/sessions/">>, UUID]).
-
-%% end_chunked_response(Socket) ->
-%%     gen_tcp:close(Socket),
-%%     ok.
 
 uri_to_binary(Uri) ->
     iolist_to_binary(ex_uri:encode(Uri)).
