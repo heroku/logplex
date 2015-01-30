@@ -543,23 +543,23 @@ error_resp(RespCode, Body) ->
     throw({RespCode, Body}).
 
 
-filter_and_send_logs(Socket, Logs, [], _Num) ->
-    [gen_tcp:send(Socket, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
+%% filter_and_send_logs(Socket, Logs, [], _Num) ->
+%%     [gen_tcp:send(Socket, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
+%%
+%% filter_and_send_logs(Socket, Logs, Filters, Num) ->
+%%     filter_and_send_logs(Socket, Logs, Filters, Num, []).
+%%
+%% filter_and_send_logs(Socket, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
+%%     gen_tcp:send(Socket, Acc);
 
-filter_and_send_logs(Socket, Logs, Filters, Num) ->
-    filter_and_send_logs(Socket, Logs, Filters, Num, []).
-
-filter_and_send_logs(Socket, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
-    gen_tcp:send(Socket, Acc);
-
-filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
-    Msg1 = logplex_utils:parse_msg(Msg),
-    case logplex_utils:filter(Msg1, Filters) of
-        true ->
-            filter_and_send_logs(Socket, Tail, Filters, Num-1, [logplex_utils:format(Msg1)|Acc]);
-        false ->
-            filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
-    end.
+%% filter_and_send_logs(Socket, [Msg|Tail], Filters, Num, Acc) ->
+%%     Msg1 = logplex_utils:parse_msg(Msg),
+%%     case logplex_utils:filter(Msg1, Filters) of
+%%         true ->
+%%             filter_and_send_logs(Socket, Tail, Filters, Num-1, [logplex_utils:format(Msg1)|Acc]);
+%%         false ->
+%%             filter_and_send_logs(Socket, Tail, Filters, Num, Acc)
+%%     end.
 
 filter_and_send_chunked_logs(Resp, Logs, [], _Num) ->
     [Resp:write_chunk(logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
@@ -712,9 +712,9 @@ api_relative_url(canary, UUID) when is_binary(UUID) ->
 api_relative_url(_APIVSN, UUID) when is_binary(UUID) ->
     iolist_to_binary([logplex_app:config(api_endpoint_url, ""), <<"/sessions/">>, UUID]).
 
-end_chunked_response(Socket) ->
-    gen_tcp:close(Socket),
-    ok.
+%% end_chunked_response(Socket) ->
+%%     gen_tcp:close(Socket),
+%%     ok.
 
 uri_to_binary(Uri) ->
     iolist_to_binary(ex_uri:encode(Uri)).
