@@ -288,10 +288,10 @@ handlers() ->
         case {proplists:get_value(<<"tail">>, Data, tail_not_requested),
               logplex_channel:lookup_flag(no_tail, ChannelId)} of
             {tail_not_requested, _} ->
-                Resp:write_chunk(<<>>);
+                write_chunk(Resp, close);
             {_, no_tail} ->
-                Resp:write_chunk(no_tail_warning()),
-                Resp:write_chunk(<<>>);
+                write_chunk(Resp, no_tail_warning()),
+                write_chunk(Resp, close);
             _ ->
                 ?INFO("at=tail_start channel_id=~p filters=~100p",
                       [ChannelId, Filters]),
@@ -340,7 +340,7 @@ handlers() ->
 
         filter_and_send_chunked_logs(Resp, Logs, Filters, Num),
 
-        Resp:write_chunk(<<>>),
+        write_chunk(Resp, close),
 
         {done, {200, "<chunked>"}}
     end},
@@ -539,14 +539,23 @@ authorize(Req) ->
 error_resp(RespCode, Body) ->
     throw({RespCode, Body}).
 
+write_chunk(Resp, close) ->
+    Resp:write_chunk(<<>>);
+write_chunk(Resp, Data) ->
+    case iolist_size(Data) of
+        0 -> skip;
+        _ ->
+            Resp:write_chunk(Data)
+    end.
+
 filter_and_send_chunked_logs(Resp, Logs, [], _Num) ->
-    [Resp:write_chunk(logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
+    [write_chunk(Resp, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
 
 filter_and_send_chunked_logs(Resp, Logs, Filters, Num) ->
     filter_and_send_chunked_logs(Resp, Logs, Filters, Num, []).
 
 filter_and_send_chunked_logs(Resp, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
-    Resp:write_chunk(Acc);
+    write_chunk(Resp, Acc);
 
 filter_and_send_chunked_logs(Resp, [Msg|Tail], Filters, Num, Acc) ->
     Msg1 = logplex_utils:parse_msg(Msg),
@@ -573,7 +582,7 @@ tail_loop(Socket, Resp, Buffer, Filters, ChannelId, BytesSent) ->
                                    tail_filter(Filters)),
     receive
         {logplex_tail_data, Buffer, Data} ->
-            Resp:write_chunk(Data),
+            write_chunk(Resp, Data),
             tail_loop(Socket, Resp, Buffer, Filters, ChannelId, iolist_size(Data) + BytesSent);
         {tcp_data, Socket, _} ->
             inet:setopts(Socket, [{active, once}]),

@@ -91,7 +91,7 @@ formatted_utc_date() ->
 format(#msg{ps = Ps, time = Time, source = Source, content = Content}) ->
     format(Ps, Time, Source, Content);
 format(_Msg) ->
-    "".
+    <<>>.
 
 format(Ps, Time, Source, Content) ->
     Ps1 =
