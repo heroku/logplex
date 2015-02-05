@@ -542,6 +542,9 @@ error_resp(RespCode, Body) ->
 write_chunk(Resp, close) ->
     Resp:write_chunk(<<>>);
 write_chunk(Resp, Data) ->
+    % FIXME not sure why we would get an empty data packet
+    % but we do not want to write it, since this would tell
+    % HTTP client that the chunked response is finished
     case iolist_size(Data) of
         0 -> skip;
         _ ->
