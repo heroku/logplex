@@ -263,6 +263,7 @@ handlers() ->
         ChannelId = list_to_integer(binary_to_list(ChannelId0)),
 
         logplex_stats:incr(session_accessed),
+        logplex_realtime:incr(session_accessed),
 
         Filters = filters(Data),
         NumBin = proplists:get_value(<<"num">>, Data, <<"100">>),
@@ -296,6 +297,7 @@ handlers() ->
                 ?INFO("at=tail_start channel_id=~p filters=~100p",
                       [ChannelId, Filters]),
                 logplex_stats:incr(session_tailed),
+                logplex_realtime:incr(session_tailed),
                 {ok, Buffer} =
                     logplex_tail_buffer:start_link(ChannelId, self()),
                 try
@@ -323,8 +325,6 @@ handlers() ->
         ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
         not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
         ChannelId = list_to_integer(binary_to_list(ChannelId0)),
-
-        logplex_stats:incr(session_accessed),
 
         Filters = filters(Data),
         NumBin = proplists:get_value(<<"num">>, Data, <<"100">>),

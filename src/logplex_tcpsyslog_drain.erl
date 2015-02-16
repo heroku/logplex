@@ -17,6 +17,7 @@
 -define(SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
 -define(CLOSE_TIMEOUT_MSG, close_timeout).
+-define(DRAIN_METRIC, 'drain.tcpsyslog.count').
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -140,6 +141,7 @@ init([State0 = #state{sock = undefined, host=H, port=P,
                                {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_msg_buffer:new(DrainSize)},
+        logplex_realtime:incr(?DRAIN_METRIC),
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, disconnected,
@@ -352,6 +354,7 @@ handle_info(Info, StateName, State) ->
 
 %% @private
 terminate(Reason, StateName, State) ->
+    logplex_realtime:decr(?DRAIN_METRIC),
     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
           "at=terminate reason=~p",
           log_info(State, [StateName, Reason])),

@@ -29,6 +29,7 @@
 -define(HIBERNATE_TIMEOUT, 5000).
 -define(SHRINK_TIMEOUT, timer:minutes(5)).
 -define(SHRINK_BUF_SIZE, 10).
+-define(DRAIN_METRIC, 'drain.http.count').
 
 -type drop_info() :: {erlang:timestamp(), pos_integer()}.
 
@@ -126,6 +127,7 @@ init(State0 = #state{uri=URI,
         Dest = uri_to_string(URI),
         State = start_drain_buffer(State0),
         logplex_drain:register(DrainId, http, Dest),
+        logplex_realtime:incr(?DRAIN_METRIC),
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, disconnected,
@@ -383,6 +385,7 @@ handle_response_status(Status, Frame, State, Latency) ->
 
 %% @private
 terminate(_Reason, _StateName, _State) ->
+    logplex_realtime:decr(?DRAIN_METRIC),
     ok.
 
 %% @private

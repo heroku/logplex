@@ -14,6 +14,8 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
 
+-define(DRAIN_METRIC, 'drain.udpsyslog.count').
+
 %% API
 -export([start_link/5
          ,shutdown/1
@@ -95,6 +97,7 @@ init([State = #state{drain_id=DrainId, channel_id=ChannelId,
   when H =/= undefined, is_integer(P) ->
     try
         logplex_drain:register(DrainId, ChannelId, udpsyslog, {H,P}),
+        logplex_realtime:incr(?DRAIN_METRIC),
         ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
               log_info(State, [])),
         {ok, State, hibernate}
@@ -164,6 +167,7 @@ handle_info(Info, State) ->
 
 %% @private
 terminate(_Reason, _State) ->
+    logplex_realtime:decr(?DRAIN_METRIC),
     ok.
 
 %% @private
