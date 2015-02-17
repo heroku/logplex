@@ -23,8 +23,9 @@
 -module(logplex_realtime).
 
 -export([incr/1, incr/2,
-         decr/1, decr/2,
-         record/2,
+         incr_gauge/1, incr_gauge/2,
+         decr_gauge/1, decr_gauge/2,
+         set_gauge/2,
          setup_metrics/0]).
 
 -include("logplex_logging.hrl").
@@ -38,23 +39,38 @@ incr(Key) ->
 
 -spec incr(atom(), pos_integer()) -> any().
 incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
-    folsom_metrics:notify(convert_key(Key), {inc, Inc}, counter);
+    incr_meter(convert_key(Key), Inc);
 
 incr(_Key, _Inc) ->
     ok.
 
-decr(Key) ->
-    decr(Key, 1).
+-spec incr_gauge(atom()) -> ok.
+incr_gauge(Key) ->
+    incr_gauge(Key, 1).
 
--spec decr(atom(), pos_integer()) -> any().
-decr(Key, Dec) when is_atom(Key), is_integer(Dec) ->
-    folsom_metrics:notify(convert_key(Key), {dec, Dec}, counter);
-decr(_Key, _Dec) ->
-    ok.
+-spec incr_gauge(atom(), pos_integer()) -> ok.
+incr_gauge(Key, Inc) when is_atom(Key) ->
+    % folsom counters are not monotonically increasing, so
+    % when exporting treat them like gauges for librato
+    folsom_metrics:notify(Key, {inc, Inc}, counter).
 
--spec record(atom(), pos_integer()) -> ok.
-record(Key, Value) when is_atom(Key), is_integer(Value) ->
-    folsom_metrics:notify(Key, Value, gauge).
+-spec decr_gauge(atom()) -> ok.
+decr_gauge(Key) ->
+    decr_gauge(Key, 1).
+
+-spec decr_gauge(atom(), pos_integer()) -> ok.
+decr_gauge(Key, Dec) when is_atom(Key) ->
+    % folsom counters are not monotonically increasing, so
+    % when exporting treat them like gauges for librato
+    folsom_metrics:notify(Key, {dec, Dec}, counter).
+
+-spec set_gauge(atom(), pos_integer()) -> ok.
+set_gauge(Key, Val) when is_atom(Key) ->
+    folsom_metrics:notify(Key, Val, gauge).
+
+-spec incr_meter(atom(), pos_integer()) -> ok.
+incr_meter(Key, Inc) when is_atom(Key) ->
+    folsom_metrics:notify(Key, Inc).
 
 setup_metrics() ->
     [create_counter_metric(Key) || Key <- keys()].
@@ -62,6 +78,7 @@ setup_metrics() ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
 
 -type key() :: 'message.received' |
                'message.processed' |
@@ -75,7 +92,7 @@ keys() ->
      'drain.dropped'].
 
 create_counter_metric(Key) ->
-    handle_new_metric_reply(folsom_metrics:new_counter(Key)).
+    handle_new_metric_reply(folsom_metrics:new_meter_reader(Key)).
 
 handle_new_metric_reply(ok) ->
     ok;
@@ -95,7 +112,7 @@ convert_key(drain_delivered=Key) ->
 convert_key(drain_dropped=Key) ->
     log_deprecated_key_usage(Key),
     'drain.dropped';
-convert_key(Key) ->
+convert_key(Key) when is_atom(Key) ->
     Key.
 
 log_deprecated_key_usage(Key) ->

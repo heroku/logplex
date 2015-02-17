@@ -299,8 +299,7 @@ http_fail(State = #state{client=Client}) ->
     %% Close any existing client connection.
     ClosedState = case Client of
                       Pid when is_pid(Pid) ->
-                          logplex_http_client:close(Pid),
-                          State#state{client = undefined};
+                          close_http_connection(State);
                       undefined ->
                           State
                   end,
@@ -638,13 +637,12 @@ connection_idle(State) ->
     SinceLastGoodMicros = timer:now_diff(os:timestamp(), compare_point(State)),
     SinceLastGoodMicros > (MaxIdle * 1000).
 
-close_if_idle(State = #state{client = Client}) ->
+close_if_idle(State) ->
     case connection_idle(State) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
-            logplex_http_client:close(Client),
-            {closed, State#state{client=undefined}};
+            {close, close_http_connection(State)};
         _ ->
             {not_closed, State}
     end.
@@ -654,16 +652,20 @@ connection_too_old(#state{connect_time = ConnectTime}) ->
     SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
     SinceConnectMicros > (MaxTotal * 1000).
 
-close_if_old(State = #state{client = Client}) ->
+close_if_old(State) ->
     case connection_too_old(State) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=max_ttl",
                   log_info(State, [])),
-            logplex_http_client:close(Client),
-            {closed, State#state{client=undefined}};
+            {close, close_http_connection(State)};
         _ ->
             {not_closed, start_close_timer(State)}
     end.
+
+close_http_connection(State = #state{client = Client}) ->
+    logplex_http_client:close(Client),
+    logplex_realtime:decr_gauge('drain.http.active.count'),
+    State#state{client=undefined}.
 
 start_drain_buffer(State = #state{channel_id=ChannelId,
                                   buf = undefined}) ->
@@ -678,6 +680,7 @@ maybe_resize(State0=#state{ service=degraded, buf=Buf }) ->
     State = State0#state{last_good_time=os:timestamp(), service=normal},
     Size = default_buf_size(),
     logplex_drain_buffer:resize_msg_buffer(Buf, Size),
+    logplex_realtime:incr_gauge('drain.http.active.count'),
     ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_resize"
           " service=normal buf_size=~p",
           log_info(State, [Size])),

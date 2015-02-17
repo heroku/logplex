@@ -142,7 +142,7 @@ update_realtime_stats() ->
     [update_drain_stats(Type, Count) || {Type, Count} <- get_drain_counts() ].
 
 update_drain_stats(Type, Count) ->
-    logplex_realtime:record(to_key([drain, Type, count]), Count).
+    logplex_realtime:set_gauge(to_key([drain, Type, count]), Count).
 
 get_drain_counts() ->
     DrainTypes = [ Type || {Pid, Type} <- gproc:lookup_local_properties(drain_type),
