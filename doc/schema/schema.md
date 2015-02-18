@@ -258,6 +258,58 @@ HTTP/1.1 200 OK
 ```
 
 
+## Session
+Sessions fetch recent and real-time logs from channels.
+
+### Attributes
+| Name | Type | Description | Example |
+| ------- | ------- | ------- | ------- |
+| **url** | *string* | session URL to GET to retrieve logs | `"https://example.org/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f"` |
+### Session Create
+Create a new session.
+
+```
+POST /v2/sessions
+```
+
+#### Required Parameters
+| Name | Type | Description | Example |
+| ------- | ------- | ------- | ------- |
+| **channel_id** | *string* | unique identifier of channel (must be a string) | `"12345"` |
+
+
+#### Optional Parameters
+| Name | Type | Description | Example |
+| ------- | ------- | ------- | ------- |
+| **num** | *nullable integer* | number of log lines to fetch<br/> **default:** `100` | `null` |
+| **tail** | *nullable boolean* | if present with any value, start a live tail session | `null` |
+
+
+#### Curl Example
+```bash
+$ curl -n -X POST https://logplex.heroku.com/v2/sessions \
+  -H "Content-Type: application/json" \
+ \
+  -d '{
+  "channel_id": "12345",
+  "num": null,
+  "tail": null
+}'
+
+```
+
+
+#### Response Example
+```
+HTTP/1.1 201 Created
+```
+```json
+{
+  "url": "https://example.org/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f"
+}
+```
+
+
 ## Token
 Tokens are log producers.
 

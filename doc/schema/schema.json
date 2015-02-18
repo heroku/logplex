@@ -211,6 +211,69 @@
         "object"
       ]
     },
+    "session": {
+      "$schema": "http://json-schema.org/draft-04/hyper-schema",
+      "title": "Session",
+      "definitions": {
+        "url": {
+          "description": "session URL to GET to retrieve logs",
+          "example": "https://example.org/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f",
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "description": "Sessions fetch recent and real-time logs from channels.",
+      "links": [
+        {
+          "description": "Create a new session.",
+          "href": "/v2/sessions",
+          "method": "POST",
+          "rel": "create",
+          "schema": {
+            "properties": {
+              "channel_id": {
+                "description": "unique identifier of channel (must be a string)",
+                "example": "12345",
+                "type": [
+                  "string"
+                ]
+              },
+              "num": {
+                "description": "number of log lines to fetch",
+                "default": 100,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "tail": {
+                "description": "if present with any value, start a live tail session",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "channel_id"
+            ],
+            "type": [
+              "object"
+            ]
+          },
+          "title": "Create"
+        }
+      ],
+      "properties": {
+        "url": {
+          "$ref": "#/definitions/session/definitions/url"
+        }
+      },
+      "type": [
+        "object"
+      ]
+    },
     "token": {
       "$schema": "http://json-schema.org/draft-04/hyper-schema",
       "title": "Token",
@@ -275,6 +338,9 @@
     },
     "drain": {
       "$ref": "#/definitions/drain"
+    },
+    "session": {
+      "$ref": "#/definitions/session"
     },
     "token": {
       "$ref": "#/definitions/token"
