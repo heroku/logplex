@@ -1,0 +1,77 @@
+---
+"$schema": http://json-schema.org/draft-04/hyper-schema
+title: Channel
+definitions:
+  channel_id:
+    description: unique identifier of channel
+    example: 123456
+    type:
+    - integer
+  drains:
+    description: drains under the channel
+    items:
+      "$ref": "/schemata/drain"
+    type:
+    - array
+  identity:
+    "$ref": "/schemata/channel#/definitions/channel_id"
+  tokens:
+    description: tokens under the channel
+    items:
+      "$ref": "/schemata/token"
+    type:
+    - array
+description: A channel is a log stream.
+links:
+- description: Create a new channel.
+  href: "/channels"
+  method: POST
+  rel: create
+  schema:
+    properties:
+      name:
+        description: a name for the channel
+        example: my-channel
+        type:
+        - string
+      tokens:
+        description: tokens to create
+        example:
+          - name: my-token
+        items:
+          schema:
+            properties:
+              name:
+                description: name of the token
+                example: my-token
+                type:
+                - string
+          type:
+          - object
+        type:
+        - array
+    required:
+    - name
+    type:
+    - object
+  title: Create
+- description: Delete an existing channel.
+  href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
+  method: DELETE
+  rel: destroy
+  title: Delete
+- description: Info for existing channel.
+  href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
+  method: GET
+  rel: self
+  title: Info
+properties:
+  drains:
+    "$ref": "/schemata/channel#/definitions/drains"
+  channel_id:
+    "$ref": "/schemata/channel#/definitions/channel_id"
+  tokens:
+    "$ref": "/schemata/channel#/definitions/tokens"
+type:
+- object
+id: schemata/channel

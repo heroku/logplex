@@ -1,0 +1,295 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "definitions": {
+    "channel": {
+      "$schema": "http://json-schema.org/draft-04/hyper-schema",
+      "title": "Channel",
+      "definitions": {
+        "channel_id": {
+          "description": "unique identifier of channel",
+          "example": 123456,
+          "type": [
+            "integer"
+          ]
+        },
+        "drains": {
+          "description": "drains under the channel",
+          "items": {
+            "$ref": "#/definitions/drain"
+          },
+          "type": [
+            "array"
+          ]
+        },
+        "identity": {
+          "$ref": "#/definitions/channel/definitions/channel_id"
+        },
+        "tokens": {
+          "description": "tokens under the channel",
+          "items": {
+            "$ref": "#/definitions/token"
+          },
+          "type": [
+            "array"
+          ]
+        }
+      },
+      "description": "A channel is a log stream.",
+      "links": [
+        {
+          "description": "Create a new channel.",
+          "href": "/channels",
+          "method": "POST",
+          "rel": "create",
+          "schema": {
+            "properties": {
+              "name": {
+                "description": "a name for the channel",
+                "example": "my-channel",
+                "type": [
+                  "string"
+                ]
+              },
+              "tokens": {
+                "description": "tokens to create",
+                "example": [
+                  {
+                    "name": "my-token"
+                  }
+                ],
+                "items": {
+                  "schema": {
+                    "properties": {
+                      "name": {
+                        "description": "name of the token",
+                        "example": "my-token",
+                        "type": [
+                          "string"
+                        ]
+                      }
+                    }
+                  },
+                  "type": [
+                    "object"
+                  ]
+                },
+                "type": [
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": [
+              "object"
+            ]
+          },
+          "title": "Create"
+        },
+        {
+          "description": "Delete an existing channel.",
+          "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}",
+          "method": "DELETE",
+          "rel": "destroy",
+          "title": "Delete"
+        },
+        {
+          "description": "Info for existing channel.",
+          "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}",
+          "method": "GET",
+          "rel": "self",
+          "title": "Info"
+        }
+      ],
+      "properties": {
+        "drains": {
+          "$ref": "#/definitions/channel/definitions/drains"
+        },
+        "channel_id": {
+          "$ref": "#/definitions/channel/definitions/channel_id"
+        },
+        "tokens": {
+          "$ref": "#/definitions/channel/definitions/tokens"
+        }
+      },
+      "type": [
+        "object"
+      ]
+    },
+    "drain": {
+      "$schema": "http://json-schema.org/draft-04/hyper-schema",
+      "title": "Drain",
+      "definitions": {
+        "id": {
+          "description": "unique identifier of drain",
+          "example": 123456,
+          "type": [
+            "integer"
+          ]
+        },
+        "identity": {
+          "$ref": "#/definitions/drain/definitions/id"
+        },
+        "token": {
+          "description": "drain token",
+          "example": "d.01234567-89ab-cdef-0123-456789abcdef",
+          "type": [
+            "string"
+          ]
+        },
+        "url": {
+          "description": "drain destination",
+          "example": "https://example.org",
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "description": "Drains are log stream tee targets.",
+      "links": [
+        {
+          "description": "Create a new drain.",
+          "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}/drains",
+          "method": "POST",
+          "rel": "create",
+          "schema": {
+            "properties": {
+              "url": {
+                "$ref": "#/definitions/drain/definitions/url"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "type": [
+              "object"
+            ]
+          },
+          "title": "Create"
+        },
+        {
+          "description": "Delete an existing drain.",
+          "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}/drains/{(%23%2Fdefinitions%2Fdrain%2Fdefinitions%2Fidentity)}",
+          "method": "DELETE",
+          "rel": "destroy",
+          "title": "Delete"
+        },
+        {
+          "description": "Update an existing drain.",
+          "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}/drains/{(%23%2Fdefinitions%2Fdrain%2Fdefinitions%2Fidentity)}",
+          "method": "POST",
+          "rel": "update",
+          "schema": {
+            "properties": {
+              "url": {
+                "$ref": "#/definitions/drain/definitions/url"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "type": [
+              "object"
+            ]
+          },
+          "title": "Update"
+        }
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/drain/definitions/id"
+        },
+        "token": {
+          "$ref": "#/definitions/drain/definitions/token"
+        },
+        "url": {
+          "$ref": "#/definitions/drain/definitions/url"
+        }
+      },
+      "type": [
+        "object"
+      ]
+    },
+    "token": {
+      "$schema": "http://json-schema.org/draft-04/hyper-schema",
+      "title": "Token",
+      "definitions": {
+        "token": {
+          "description": "unique identifier of token",
+          "example": "t.01234567-89ab-cdef-0123-456789abcdef",
+          "type": [
+            "string"
+          ]
+        },
+        "identity": {
+          "$ref": "#/definitions/token/definitions/token"
+        },
+        "name": {
+          "description": "name of token",
+          "example": "my-token",
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "description": "Tokens are log producers.",
+      "links": [
+        {
+          "description": "Create a new token.",
+          "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}/tokens",
+          "method": "POST",
+          "rel": "create",
+          "schema": {
+            "properties": {
+              "name": {
+                "$ref": "#/definitions/token/definitions/name"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": [
+              "object"
+            ]
+          },
+          "title": "Create"
+        }
+      ],
+      "properties": {
+        "token": {
+          "$ref": "#/definitions/token/definitions/token"
+        },
+        "name": {
+          "$ref": "#/definitions/token/definitions/name"
+        }
+      },
+      "type": [
+        "object"
+      ]
+    }
+  },
+  "properties": {
+    "channel": {
+      "$ref": "#/definitions/channel"
+    },
+    "drain": {
+      "$ref": "#/definitions/drain"
+    },
+    "token": {
+      "$ref": "#/definitions/token"
+    }
+  },
+  "type": [
+    "object"
+  ],
+  "title": "Logplex",
+  "description": "The log router",
+  "id": "api-logplex",
+  "links": [
+    {
+      "href": "https://logplex.heroku.com",
+      "rel": "self"
+    }
+  ]
+}

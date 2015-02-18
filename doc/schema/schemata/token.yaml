@@ -1,0 +1,39 @@
+---
+"$schema": http://json-schema.org/draft-04/hyper-schema
+title: Token
+definitions:
+  token:
+    description: unique identifier of token
+    example: t.01234567-89ab-cdef-0123-456789abcdef
+    type:
+    - string
+  identity:
+    "$ref": "/schemata/token#/definitions/token"
+  name:
+    description: name of token
+    example: my-token
+    type:
+    - string
+description: Tokens are log producers.
+links:
+- description: Create a new token.
+  href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}/tokens"
+  method: POST
+  rel: create
+  schema:
+    properties:
+      name:
+        "$ref": "/schemata/token#/definitions/name"
+    required:
+    - name
+    type:
+    - object
+  title: Create
+properties:
+  token:
+    "$ref": "/schemata/token#/definitions/token"
+  name:
+    "$ref": "/schemata/token#/definitions/name"
+type:
+- object
+id: schemata/token

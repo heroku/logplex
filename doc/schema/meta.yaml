@@ -1,0 +1,9 @@
+"$schema": "http://json-schema.org/draft-04/hyper-schema"
+title: "Logplex"
+description: "The log router"
+id: api-logplex
+links:
+  - href: "https://logplex.heroku.com"
+    rel: "self"
+type:
+  "object"
