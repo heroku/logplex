@@ -23,7 +23,7 @@ POST /channels
 #### Optional Parameters
 | Name | Type | Description | Example |
 | ------- | ------- | ------- | ------- |
-| **tokens** | *array* | tokens to create | `[{"name":"my-token"}]` |
+| **tokens** | *array* | names of tokens to create | `["my-token","your-token"]` |
 
 
 #### Curl Example
@@ -34,9 +34,8 @@ $ curl -n -X POST https://logplex.heroku.com/channels \
   -d '{
   "name": "my-channel",
   "tokens": [
-    {
-      "name": "my-token"
-    }
+    "my-token",
+    "your-token"
   ]
 }'
 

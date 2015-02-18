@@ -51,26 +51,14 @@
                 ]
               },
               "tokens": {
-                "description": "tokens to create",
+                "description": "names of tokens to create",
                 "example": [
-                  {
-                    "name": "my-token"
-                  }
+                  "my-token",
+                  "your-token"
                 ],
                 "items": {
-                  "schema": {
-                    "properties": {
-                      "name": {
-                        "description": "name of the token",
-                        "example": "my-token",
-                        "type": [
-                          "string"
-                        ]
-                      }
-                    }
-                  },
                   "type": [
-                    "object"
+                    "string"
                   ]
                 },
                 "type": [
