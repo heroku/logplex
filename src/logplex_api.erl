@@ -143,7 +143,7 @@ handlers() ->
                     []
             end,
         Info = [{channel_id, ChannelId}, {tokens, Tokens}],
-        {201, iolist_to_binary(mochijson2:encode({struct, Info}))}
+        {201, ?JSON_CONTENT, iolist_to_binary(mochijson2:encode({struct, Info}))}
     end},
 
     %% V2
