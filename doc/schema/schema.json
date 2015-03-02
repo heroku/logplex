@@ -73,6 +73,20 @@
               "object"
             ]
           },
+          "targetSchema": {
+            "properties": {
+              "channel_id": {
+                "$ref": "#/definitions/channel/definitions/channel_id"
+              },
+              "tokens": {
+                "description": "created token names and tokens",
+                "example": "{\"foo\":\"t.01234567-89ab-cdef-0123-456789abcdef\"}",
+                "type": [
+                  "object"
+                ]
+              }
+            }
+          },
           "title": "Create"
         },
         {

@@ -48,20 +48,8 @@ HTTP/1.1 201 Created
 ```
 ```json
 {
-  "drains": [
-    {
-      "id": 123456,
-      "token": "d.01234567-89ab-cdef-0123-456789abcdef",
-      "url": "https://example.org"
-    }
-  ],
   "channel_id": 123456,
-  "tokens": [
-    {
-      "token": "t.01234567-89ab-cdef-0123-456789abcdef",
-      "name": "my-token"
-    }
-  ]
+  "tokens": "{\"foo\":\"t.01234567-89ab-cdef-0123-456789abcdef\"}"
 }
 ```
 

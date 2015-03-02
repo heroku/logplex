@@ -48,6 +48,15 @@ links:
     - name
     type:
     - object
+  targetSchema:
+    properties:
+      channel_id:
+        "$ref": "/schemata/channel#/definitions/channel_id"
+      tokens:
+        description: created token names and tokens
+        example: "{\"foo\":\"t.01234567-89ab-cdef-0123-456789abcdef\"}"
+        type:
+        - object
   title: Create
 - description: Delete an existing channel.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
