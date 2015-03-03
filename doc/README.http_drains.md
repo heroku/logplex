@@ -39,7 +39,7 @@ This is an example HTTP request that logplex might make if it had ten log messag
 
 ## Logplex Frame Format
 
-The body of a request from a Logplex HTTP drain is a series of [RFC5424](https://tools.ietf.org/html/rfc5424) messages. The framing format used is *byte counted*.
+The body of a request from a Logplex HTTP drain is a series of [RFC6587](https://tools.ietf.org/html/rfc6587) messages, which are octet count framed [RFC5424](https://tools.ietf.org/html/rfc5424) messages.
 
 So a request body for `application/logplex-1` should be as follows:
 
