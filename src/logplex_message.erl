@@ -29,7 +29,9 @@ process_msgs(Msgs) ->
     [ case parse_msg(RawMsg) of
           {ok, TokenId} ->
               case logplex_token:lookup(TokenId) of
-                  undefined -> {error, invalid_token};
+                  undefined ->
+                      logplex_realtime:incr(unknown_token),
+                      {error, invalid_token};
                   Token ->
                       ChannelId = logplex_token:channel_id(Token),
                       TokenName = logplex_token:name(Token),
