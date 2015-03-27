@@ -26,22 +26,31 @@ process_msgs(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
 
 process_msgs(Msgs) ->
     ShardInfo = shard_info(),
-    [ case parse_msg(RawMsg) of
-          {ok, TokenId} ->
-              case logplex_token:lookup(TokenId) of
-                  undefined ->
-                      logplex_realtime:incr(unknown_token),
-                      {error, invalid_token};
-                  Token ->
-                      ChannelId = logplex_token:channel_id(Token),
-                      TokenName = logplex_token:name(Token),
-                      process_msg(RawMsg, ChannelId, TokenId,
-                                  TokenName, ShardInfo)
-              end;
-          _ ->
-              {error, malformed_msg}
-      end
-      || {msg, RawMsg} <- Msgs ].
+    [ proces_msg(RawMsg, ShardInfo) || RawMsg <- Msgs ].
+
+proces_msg({malformed, _Msg}, _ShardInfo) ->
+    logplex_stats:incr(message_received_malformed),
+    logplex_realtime:incr('message.received-malformed'),
+    {error, malformed_msg};
+
+proces_msg({msg, RawMsg}, ShardInfo) ->
+    case parse_msg(RawMsg) of
+        {ok, TokenId} ->
+            case logplex_token:lookup(TokenId) of
+                undefined ->
+                    logplex_realtime:incr(unknown_token),
+                    {error, invalid_token};
+                Token ->
+                    ChannelId = logplex_token:channel_id(Token),
+                    TokenName = logplex_token:name(Token),
+                    process_msg(RawMsg, ChannelId, TokenId,
+                                TokenName, ShardInfo)
+            end;
+        _ ->
+            logplex_stats:incr(message_received_malformed),
+            logplex_realtime:incr('message.received-malformed'),
+            {error, malformed_msg}
+    end.
 
 process_msg(RawMsg, ChannelId, Token, TokenName) when not is_list(RawMsg) ->
     process_msg(RawMsg, ChannelId, Token, TokenName,
