@@ -57,11 +57,16 @@ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
        is_binary(TokenName) ->
     logplex_stats:incr(message_received),
     logplex_realtime:incr('message.received'),
-    CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
-    logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
-    process_drains(ChannelId, CookedMsg),
-    process_tails(ChannelId, CookedMsg),
-    process_redis(ChannelId, ShardInfo, CookedMsg).
+    case logplex_channel:lookup_flag(no_redis, ChannelId) of
+        not_found ->
+            logplex_realtime:incr('unknown_channel');
+        Flag ->
+            CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
+            logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
+            process_drains(ChannelId, CookedMsg),
+            process_tails(ChannelId, CookedMsg),
+            process_redis(ChannelId, ShardInfo, CookedMsg, Flag)
+    end.
 
 process_drains(ChannelID, Msg) ->
     logplex_channel:post_msg({channel, ChannelID}, Msg).
@@ -69,19 +74,17 @@ process_drains(ChannelID, Msg) ->
 process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg).
 
-process_redis(ChannelId, ShardInfo, Msg) ->
-    case logplex_channel:lookup_flag(no_redis, ChannelId) of
-        no_redis -> ok;
-        _ ->
-            Expiry = logplex_app:config(redis_buffer_expiry),
-            HistorySize = logplex_app:config(log_history),
-            {Map, Interval} = logplex_shard_info:map_interval(ShardInfo),
-            BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
-                                             Map, Interval),
-            Cmd = redis_helper:build_push_msg(ChannelId, HistorySize,
-                                              Msg, Expiry),
-            logplex_queue:in(BufferPid, Cmd)
-    end.
+process_redis(_ChannelId, _ShardInfo, _Msg, no_redis) ->
+    ok;
+process_redis(ChannelId, ShardInfo, Msg, _Flag) ->
+    Expiry = logplex_app:config(redis_buffer_expiry),
+    HistorySize = logplex_app:config(log_history),
+    {Map, Interval} = logplex_shard_info:map_interval(ShardInfo),
+    BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
+                                     Map, Interval),
+    Cmd = redis_helper:build_push_msg(ChannelId, HistorySize,
+                                      Msg, Expiry),
+    logplex_queue:in(BufferPid, Cmd).
 
 parse_msg(Msg) ->
     case re:split(Msg, <<" +">>,
