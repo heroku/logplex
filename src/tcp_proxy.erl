@@ -98,17 +98,9 @@ handle_info({tcp, Sock, Packet},
                       [?MODULE, Err]),
             ok
     end,
-    NewState = try logplex_message:process_msgs(Msgs) of
-                   S = #state{} -> S
-               catch
-                   Class:Ex ->
-                       ?WARN("at=process_msgs class=~p ex=~p "
-                             "msg_len=~p stack=~p",
-                             [Class, Ex, length(Msgs), erlang:get_stacktrace()]),
-                       State
-               end,
+    logplex_message:process_msgs(Msgs),
     inet:setopts(Sock, [{active, once}]),
-    {noreply, NewState#state{buffer=NewBuf}};
+    {noreply, State#state{ buffer=NewBuf }};
 
 handle_info({tcp_closed, Sock}, State = #state{sock = Sock,
                                                peername={H,P}}) ->
