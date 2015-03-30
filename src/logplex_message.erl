@@ -26,14 +26,14 @@ process_msgs(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
 
 process_msgs(Msgs) ->
     ShardInfo = shard_info(),
-    [ proces_msg(RawMsg, ShardInfo) || RawMsg <- Msgs ].
+    [ process_msg(RawMsg, ShardInfo) || RawMsg <- Msgs ].
 
-proces_msg({malformed, _Msg}, _ShardInfo) ->
+process_msg({malformed, _Msg}, _ShardInfo) ->
     logplex_stats:incr(message_received_malformed),
     logplex_realtime:incr('message.received-malformed'),
     {error, malformed_msg};
 
-proces_msg({msg, RawMsg}, ShardInfo) ->
+process_msg({msg, RawMsg}, ShardInfo) ->
     case parse_msg(RawMsg) of
         {ok, TokenId} ->
             case logplex_token:lookup(TokenId) of
