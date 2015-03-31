@@ -22,14 +22,18 @@
 -type key() :: 'logplex_read_pool_map' | 'logplex_redis_buffer_map' |
                'new_logplex_read_pool_map' | 'new_logplex_redis_buffer_map' |
                'backup_logplex_read_pool_map' | 'backup_logplex_redis_buffer_map'.
--type map() :: dict().
+-ifdef(namespaced_types).
+-type mapping() :: dict:dict().
+-else.
+-type mapping() :: dict().
+-endif.
 -type interval() :: pos_integer().
--type shard_info() :: {map(), interval(), erlang:timestamp()}.
+-type shard_info() :: {mapping(), interval(), erlang:timestamp()}.
 -type entry() :: {interval(), {Url::iolist(), pid()}}.
 
 -export_type([shard_info/0]).
 
--spec save(key(), map(), interval()) -> 'true'.
+-spec save(key(), mapping(), interval()) -> 'true'.
 save(Key, Map, Interval) ->
     TS = erlang:now(),
     ets:insert(?TABLE, [{Key, Map, Interval, TS}]).
@@ -68,7 +72,7 @@ info_outdated(Key, TS) ->
             out_of_date
     end.
 
--spec map_interval(shard_info()) -> {map(), interval()}.
+-spec map_interval(shard_info()) -> {mapping(), interval()}.
 map_interval({Map, Interval, _TS}) ->
     {Map, Interval}.
 
@@ -76,7 +80,7 @@ map_interval({Map, Interval, _TS}) ->
 -spec pid_info(pid()) ->
                       'undefined' |
                       {key(),
-                       {entry(), map(), interval()}}.
+                       {entry(), mapping(), interval()}}.
 pid_info(Pid) ->
     case pid_info(Pid, read(logplex_read_pool_map)) of
         undefined ->
