@@ -9,7 +9,8 @@ script:
   LOCAL_IP='127.0.0.1' LOGPLEX_COOKIE=123 ERL_LIBS=`pwd`/deps/:$ERL_LIBS ct_run -spec
   logplex.spec -pa ebin
 otp_release:
-- R16B02
+  - 17.4.1
+  - R16B02
 notifications:
   email: false
   hipchat:
