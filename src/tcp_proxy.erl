@@ -34,16 +34,11 @@
          terminate/2,
          code_change/3]).
 
--define(DEFAULT_MSG_CB,
-        {logplex_worker, logplex_worker:init_state()}).
-
-
 -record(state, {sock :: 'undefined' | port(),
                 buffer = syslog_parser:new(),
                 peername :: 'undefined' | {inet:ip4_address(),
                                            inet:port_number()},
-                connect_time :: 'undefined' | erlang:timestamp(),
-                cb = ?DEFAULT_MSG_CB :: {Module::atom(), State::term()}
+                connect_time :: 'undefined' | erlang:timestamp()
                }).
 
 -include("logplex_logging.hrl").
@@ -61,7 +56,7 @@ set_socket(Pid, CSock) ->
 %% gen_server callbacks
 %%====================================================================
 init([]) ->
-    {ok, #state{cb=?DEFAULT_MSG_CB}}.
+    {ok, #state{}}.
 
 handle_call(Msg, _From, State) ->
     ?WARN("err=unexpected_call data=~p", [Msg]),
