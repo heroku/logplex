@@ -100,6 +100,7 @@ route(Token, State = #state{}, RawMsg)
                   end,
             K = #logplex_stat{module=?MODULE, key=Key},
             logplex_stats:incr(K),
+            logplex_realtime:incr(unknown_token),
             ok
     end.
 
