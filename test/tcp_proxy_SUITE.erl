@@ -1,5 +1,6 @@
 -module(tcp_proxy_SUITE).
 -include_lib("common_test/include/ct.hrl").
+-include("logplex.hrl").
 -compile(export_all).
 
 all() -> [accepts_tcp_syslog_data].
@@ -26,22 +27,27 @@ end_per_testcase(_Case, Config) ->
 
 accepts_tcp_syslog_data(Config) ->
     Sock = ?config(socket, Config),
-    Logs = [<<"<134>1 2012-12-10T04:05:25Z+00:00 erlang t.d6799f88-4a77-402f-b197-2b722a02cdbc console.1 - Logsplat test message 1 from <0.72.0>.">>,
-            <<"<134>1 2012-12-10T04:05:25Z+00:00 erlang t.d6799f88-4a77-402f-b197-2b722a02cdbc console.1 - Logsplat test message 2 from <0.72.0>.">>,
-            <<"<134>1 2012-12-10T04:05:25Z+00:00 erlang t.d6799f88-4a77-402f-b197-2b722a02cdbc console.1 - Logsplat test message 3 from <0.72.0>.">>,
-            <<"<134>1 2012-12-10T04:05:25Z+00:00 erlang t.d6799f88-4a77-402f-b197-2b722a02cdbc console.1 - Logsplat test message 4 from <0.72.0>.">>,
-            <<"<134>1 2012-12-10T04:05:25Z+00:00 erlang t.d6799f88-4a77-402f-b197-2b722a02cdbc console.1 - Logsplat test message 5 from <0.72.0>.">>],
-    meck:expect(logplex_message, process_msgs, fun(_Logs) -> ok end),
+    Token = #token{id = <<"t.d6799f88-4a77-402f-b197-2b722a02cdbc">>,
+                   channel_id = 12345,
+                   name = <<"test">>},
+    meck:expect(logplex_token, lookup, fun(Id) when Id =:= Token#token.id -> Token end),
+    meck:expect(logplex_channel, lookup_flag, [no_redis, Token#token.channel_id], meck:val(no_such_flag)),
+    meck:expect(logplex_channel, post_msg, fun(_ChannelId, _Msg) -> ok end),
 
-    ok = gen_tcp:send(Sock, frame_packet(Logs)),
-    meck:wait(logplex_message, process_msgs, '_', 5000),
+    Logs = [[<<"<134>1 2012-12-10T04:05:25Z+00:00 erlang ">>, Token#token.id, <<" console.1 - Logsplat test message 1 from <0.72.0>.">>],
+            [<<"<134>1 2012-12-10T04:05:25Z+00:00 erlang ">>, Token#token.id, <<" console.1 - Logsplat test message 2 from <0.72.0>.">>],
+            [<<"<134>1 2012-12-10T04:05:25Z+00:00 erlang ">>, Token#token.id, <<" console.1 - Logsplat test message 3 from <0.72.0>.">>],
+            [<<"<134>1 2012-12-10T04:05:25Z+00:00 erlang ">>, Token#token.id, <<" console.1 - Logsplat test message 4 from <0.72.0>.">>],
+            [<<"<134>1 2012-12-10T04:05:25Z+00:00 erlang ">>, Token#token.id, <<" console.1 - Logsplat test message 5 from <0.72.0>.">>]],
 
-    Expected = [ {msg, Log} || Log <- Logs ],
-    true = meck:called(logplex_message, process_msgs, [Expected]),
-    meck:unload(logplex_message).
+    Packet = frame_packet(Logs),
+    ok = gen_tcp:send(Sock, Packet),
+
+    meck:wait(5, logplex_channel, post_msg, [{channel, Token#token.channel_id}, '_'], 5000),
+    meck:unload().
 
 frame_packet(Logs) when is_list(Logs) ->
-    iolist_to_binary([[integer_to_list(byte_size(Log)), <<" ">>, Log] || Log <- Logs]).
+    iolist_to_binary([[integer_to_list(byte_size(iolist_to_binary(Log))), <<" ">>, Log] || Log <- Logs]).
 
 set_os_vars() ->
     [os:putenv(Key,Val) || {Key,Val} <-
