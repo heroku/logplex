@@ -1,17 +1,11 @@
 data:
   image: redis:2.6
   command: true
-config:
+db:
   image: redis:2.6
   command: redis-server
   volumes_from:
     - data
-redgrid:
-  image: redis:2.6
-logs:
-  image: redis:2.6
-stats:
-  image: redis:2.6
 logplex:
   build: .
   command: ./bin/fig_logplex
@@ -22,15 +16,13 @@ logplex:
     - "8601:8601"
     - "6001:6001"
   links:
-    - config
-    - redgrid
-    - logs
-    - stats
-cli:
+    - db
+test:
   image: logplex_logplex
+  # command: ./rebar get-deps compile --config test.rebar.config && ct_run -spec logplex.spec -pa ebin
+  command: bash
   volumes:
     - .:/usr/src/app
   links:
-    - logplex
-  command: true
+    - db
 
