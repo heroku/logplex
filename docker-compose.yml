@@ -19,8 +19,7 @@ logplex:
     - db
 test:
   image: logplex_logplex
-  # command: ./rebar get-deps compile --config test.rebar.config && ct_run -spec logplex.spec -pa ebin
-  command: bash
+  command: bin/compose_test_logplex
   volumes:
     - .:/usr/src/app
   links:

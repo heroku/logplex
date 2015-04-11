@@ -1,0 +1,4 @@
+#!/bin/sh
+
+
+./rebar get-deps compile -C test.rebar.config && ERL_LIBS=$(pwd)/deps/:$ERL_LIBS ct_run -spec logplex.spec -pa ebin
