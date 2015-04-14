@@ -2,9 +2,9 @@
 
 export ERL_CRASH_DUMP='/dev/null'
 export INSTANCE_NAME=`hostname -f`
-export LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379"
-export LOGPLEX_SHARD_URLS="redis://localhost:6379#frag1"
-export LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379"
+export LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379/"
+export LOGPLEX_SHARD_URLS="redis://localhost:6379/#frag1"
+export LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379/"
 export LOCAL_IP="127.0.0.1"
 export LOGPLEX_COOKIE=123
 export LOGPLEX_AUTH_KEY="my fake auth key"
