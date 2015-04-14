@@ -13,6 +13,7 @@
         ]).
 
 -include("logplex.hrl").
+-include("logplex_logging.hrl").
 -define(SI_KEY, logplex_redis_buffer_map).
 
 shard_info() ->
@@ -39,6 +40,7 @@ process_msg({msg, RawMsg}, ShardInfo) ->
             case logplex_token:lookup(TokenId) of
                 undefined ->
                     logplex_realtime:incr(unknown_token),
+                    ?INFO("at=process_msg token_id=~p msg=unknown_token", [TokenId]),
                     {error, invalid_token};
                 Token ->
                     ChannelId = logplex_token:channel_id(Token),
@@ -68,7 +70,8 @@ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
     logplex_realtime:incr('message.received'),
     case logplex_channel:lookup_flag(no_redis, ChannelId) of
         not_found ->
-            logplex_realtime:incr('unknown_channel');
+            logplex_realtime:incr(unknown_channel),
+            ?INFO("at=process_msg channel_id=~p msg=unknown_channel", [ChannelId]);
         Flag ->
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
             logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
