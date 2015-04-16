@@ -89,31 +89,38 @@ handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
     catch logplex_session:store(UUID, Body),
     ?INFO("at=setex type=session id=~p", [UUID]);
 
-handle({cmd, "del", [<<"ch:", Rest/binary>> | _Args]}) ->
-    Id = logplex_channel:binary_to_id(parse_id(Rest)),
+handle({cmd, "del", []}) ->
+    ok;
+handle({cmd, "del", [<<"ch:", Suffix/binary>> | Args]}) ->
+    Id = logplex_channel:binary_to_id(parse_id(Suffix)),
     ?INFO("at=delete type=channel id=~p", [Id]),
-    ets:delete(channels, Id);
+    ets:delete(channels, Id),
+    handle({cmd, "del", Args});
 
-handle({cmd, "del", [<<"tok:", Rest/binary>> | _Args]}) ->
-    Id = parse_id(Rest),
+handle({cmd, "del", [<<"tok:", Suffix/binary>> | Args]}) ->
+    Id = parse_id(Suffix),
     ?INFO("at=delete type=token id=~p", [Id]),
-    logplex_token:delete_by_id(Id);
+    logplex_token:delete_by_id(Id),
+    handle({cmd, "del", Args});
 
-handle({cmd, "del", [<<"drain:", Rest/binary>> | _Args]}) ->
-    Id = drain_id(parse_id(Rest)),
+handle({cmd, "del", [<<"drain:", Suffix/binary>> | Args]}) ->
+    Id = drain_id(parse_id(Suffix)),
     ?INFO("at=delete type=drain id=~p", [Id]),
     catch logplex_drain:stop(Id),
-    ets:delete(drains, Id);
+    ets:delete(drains, Id),
+    handle({cmd, "del", Args});
 
-handle({cmd, "del", [<<"cred:", Rest/binary>> | _Args]}) ->
-    Id = logplex_cred:binary_to_id(parse_id(Rest)),
+handle({cmd, "del", [<<"cred:", Suffix/binary>> | Args]}) ->
+    Id = logplex_cred:binary_to_id(parse_id(Suffix)),
     ?INFO("at=delete type=cred id=~p", [Id]),
-    logplex_cred:delete(Id);
+    logplex_cred:delete(Id),
+    handle({cmd, "del", Args});
 
-handle({cmd, "del", [<<"session:", UUID/binary>> | _Args]})
+handle({cmd, "del", [<<"session:", UUID/binary>> | Args]})
   when byte_size(UUID) =:= 36 ->
     catch logplex_session:delete(UUID),
-    ?INFO("at=delete type=session id=~p", [UUID]);
+    ?INFO("at=delete type=session id=~p", [UUID]),
+    handle({cmd, "del", Args});
 
 handle({cmd, _Cmd, [<<"redgrid", _/binary>>|_]}) ->
     ok;
