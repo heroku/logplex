@@ -96,26 +96,22 @@ handle({cmd, "del", [<<"ch:", Suffix/binary>> | Args]}) ->
     ?INFO("at=delete type=channel id=~p", [Id]),
     ets:delete(channels, Id),
     handle({cmd, "del", Args});
-
 handle({cmd, "del", [<<"tok:", Suffix/binary>> | Args]}) ->
     Id = parse_id(Suffix),
     ?INFO("at=delete type=token id=~p", [Id]),
     logplex_token:delete_by_id(Id),
     handle({cmd, "del", Args});
-
 handle({cmd, "del", [<<"drain:", Suffix/binary>> | Args]}) ->
     Id = drain_id(parse_id(Suffix)),
     ?INFO("at=delete type=drain id=~p", [Id]),
     catch logplex_drain:stop(Id),
     ets:delete(drains, Id),
     handle({cmd, "del", Args});
-
 handle({cmd, "del", [<<"cred:", Suffix/binary>> | Args]}) ->
     Id = logplex_cred:binary_to_id(parse_id(Suffix)),
     ?INFO("at=delete type=cred id=~p", [Id]),
     logplex_cred:delete(Id),
     handle({cmd, "del", Args});
-
 handle({cmd, "del", [<<"session:", UUID/binary>> | Args]})
   when byte_size(UUID) =:= 36 ->
     catch logplex_session:delete(UUID),
