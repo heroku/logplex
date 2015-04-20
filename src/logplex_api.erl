@@ -133,8 +133,7 @@ handlers() ->
 
         Name = proplists:get_value(<<"name">>, Params, <<"">>),
         is_binary(Name) orelse error_resp(400, <<"Channel name must be a string.">>),
-        Channel = logplex_channel:new(undefined, Name),
-        logplex_channel:store(Channel),
+        Channel = logplex_channel:create(Name),
         ChannelId = logplex_channel:id(Channel),
         Tokens =
             case proplists:get_value(<<"tokens">>, Params) of
