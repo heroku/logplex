@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -24,8 +24,8 @@
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/1, start_link/2, init/1, handle_call/3, handle_cast/2, 
-	     handle_info/2, terminate/2, code_change/3]).
+-export([start_link/1, start_link/2, init/1, handle_call/3, handle_cast/2,
+         handle_info/2, terminate/2, code_change/3]).
 
 -export([in/2, out/1, out/2, info/1, get/2, set_max_length/2, stop/1]).
 -export([register/2, all_workers/1]).
@@ -43,7 +43,8 @@
     dict,
     workers=[],
     num_dropped=0,
-    accepting=true
+    accepting=true,
+    redis_url
 }).
 
 -define(TIMEOUT, 30000).
@@ -85,6 +86,8 @@ out(NameOrPid, Num) when (is_atom(NameOrPid) orelse is_pid(NameOrPid)) andalso i
             Packet
     end.
 
+-spec info(atom()|pid()) ->
+                  {pos_integer(), pos_integer()}.
 info(NameOrPid) when is_atom(NameOrPid); is_pid(NameOrPid) ->
     gen_server:call(NameOrPid, info, ?TIMEOUT).
 
@@ -120,7 +123,8 @@ init([Props]) ->
         length = 0,
         max_length = proplists:get_value(max_length, Props),
         waiting = queue:new(),
-        dict = proplists:get_value(dict, Props, dict:new())
+        dict = proplists:get_value(dict, Props, dict:new()),
+        redis_url = proplists:get_value(redis_url, Props)
     },
     WorkerSup = proplists:get_value(worker_sup, Props),
     NumWorkers = proplists:get_value(num_workers, Props),
@@ -173,9 +177,11 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Length, max_length=MaxLength, num_dropped=NumDropped}=State) when Length >= MaxLength ->
-    logplex_stats:incr(StatKey),
+handle_cast({in, _Packet}, #state{dict=Dict, dropped_stat_key=StatKey, length=Length, max_length=MaxLength, num_dropped=NumDropped,
+                                  redis_url=RedisUrl}=State) when Length >= MaxLength ->
     logplex_realtime:incr(StatKey),
+    logplex_stats:incr(#queue_stat{key=StatKey,
+                                   redis_url=RedisUrl}),
     case dict:find(producer_callback, Dict) of
         {ok, Fun} -> Fun(self(), stop_accepting);
         error -> ok
@@ -228,7 +234,7 @@ handle_info(_Info, State) ->
 %% The return value is ignored.
 %% @hidden
 %%--------------------------------------------------------------------
-terminate(_Reason, _State) -> 
+terminate(_Reason, _State) ->
     ok.
 
 %%--------------------------------------------------------------------
@@ -236,6 +242,28 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
+code_change("v69.11", #state{dict=Dict,
+                             redis_url=RedisUrl}=State, _Extra) ->
+    NewState = list_to_tuple(lists:sublist(tuple_to_list(State), tuple_size(State)-1)),
+    case dict:find(redis_url, Dict) of
+        {ok, RedisUrl} ->
+            % The redis_url is not removed from the dictionary during
+            % upgrade to make the rollback easier
+            {ok, NewState};
+        error ->
+            % No redis URL in the dictionary
+            Dict1 = dict:store(redis_url, RedisUrl, Dict),
+            NewState1 = erlang:setelement(8, NewState, Dict1),
+            {ok, NewState1}
+    end;
+code_change("v69.12", State, _Extra) when size(State) =:= 11 ->
+    Dict = element(8, State),
+    case dict:find(redis_url, Dict) of
+        {ok, Value} ->
+            {ok, State#state{redis_url=Value}};
+        error ->
+            {ok, State}
+    end;
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -250,7 +278,7 @@ build_stat_key(Name, Postfix) when is_list(Name), is_list(Postfix) ->
 
 build_stat_key(Name, Postfix) ->
     exit({poorly_formatted_stat_key, Name, Postfix}).
-    
+
 start_workers(WorkerSup, NumWorkers, WorkerArgs) ->
     lists:foldl(
         fun (_, Acc) ->
@@ -262,7 +290,7 @@ start_workers(WorkerSup, NumWorkers, WorkerArgs) ->
 
 start_worker(WorkerSup, WorkerArgs) ->
     case logplex_worker_sup:start_child(WorkerSup, [self() | WorkerArgs]) of
-        {ok, Pid} -> Pid;
+        {ok, Pid} when is_pid(Pid) -> Pid;
         {ok, Pid, _Info} -> Pid;
         {error, Reason} ->
             error_logger:error_msg("~p failed to start worker: ~p~n", [WorkerSup, Reason]),

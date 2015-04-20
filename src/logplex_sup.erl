@@ -51,9 +51,6 @@ init([]) ->
          permanent, 2000, worker, [nsync]}
        ,{redgrid, {redgrid, start_link, []},
          permanent, 2000, worker, [redgrid]}
-       ,{logplex_realtime, {logplex_realtime, start_link,
-                            [redo_config(stats_redis_url)]},
-         permanent, 2000, worker, [logplex_realtime]}
        ,{logplex_stats, {logplex_stats, start_link, []},
          permanent, 2000, worker, [logplex_stats]}
 

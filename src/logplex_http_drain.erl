@@ -30,8 +30,11 @@
 -define(SHRINK_TIMEOUT, timer:minutes(5)).
 -define(SHRINK_BUF_SIZE, 10).
 
--type drop_info() :: {erlang:timestamp(), pos_integer()}.
+-ifdef(namespaced_types).
+-type queue() :: queue:queue().
+-endif.
 
+-type drop_info() :: {erlang:timestamp(), pos_integer()}.
 
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
@@ -41,10 +44,14 @@
                 client :: pid(),
                 out_q = queue:new() :: queue(),
                 reconnect_tref :: reference() | 'undefined',
+                reconnect_attempt = 0 :: pos_integer(),
+                close_tref :: reference() | 'undefined',
                 drop_info :: drop_info() | 'undefined',
                 %% Last time we connected or successfully sent data
-                last_good_time :: 'undefined' | erlang:timestamp(),
-                service = normal :: 'normal' | 'degraded'
+                last_good_time = never :: 'never' | erlang:timestamp(),
+                service = normal :: 'normal' | 'degraded',
+                %% Time of last successful connection
+                connect_time :: 'undefined' | erlang:timestamp()
                }).
 
 -record(frame, {frame :: iolist(),
@@ -57,6 +64,7 @@
 -define(CONTENT_TYPE, <<"application/logplex-1">>).
 -define(HTTP_VERSION, 'HTTP/1.1').
 -define(RECONNECT_MSG, reconnect).
+-define(CLOSE_TIMEOUT_MSG, close_timeout).
 -define(CONNECT_TIMEOUT, 3000).
 -define(REQUEST_TIMEOUT, 5000).
 
@@ -70,6 +78,7 @@
 
 -export([user_agent/0
          ,drain_buf_framing/1
+         ,backoff_slot/1
         ]).
 
 %% ------------------------------------------------------------------
@@ -115,6 +124,7 @@ user_agent() ->
 init(State0 = #state{uri=URI,
                      drain_id=DrainId}) ->
     process_flag(trap_exit, true),
+    random:seed(os:timestamp()),
     try
         Dest = uri_to_string(URI),
         State = start_drain_buffer(State0),
@@ -129,14 +139,19 @@ init(State0 = #state{uri=URI,
 
 %% @private
 disconnected({logplex_drain_buffer, Buf, new_data},
-             State = #state{buf = Buf}) ->
-    try_connect(cancel_reconnect(State));
+             State = #state{buf = Buf, reconnect_tref = TRef}) ->
+    cancel_timeout(TRef, ?RECONNECT_MSG),
+    try_connect(State#state{reconnect_tref=undefined});
 disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
-             State = #state{buf = Buf}) ->
-    try_connect(cancel_reconnect(push_frame(Frame, MsgCount, Lost, State)));
+             State = #state{buf = Buf, reconnect_tref = TRef}) ->
+    NewState = push_frame(Frame, MsgCount, Lost, State),
+    cancel_timeout(TRef, ?RECONNECT_MSG),
+    try_connect(NewState#state{reconnect_tref=undefined});
 disconnected(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, disconnected, S, hibernate};
+disconnected({timeout, _Ref, ?CLOSE_TIMEOUT_MSG}, State) ->
+    {next_state, disconnected, State, hibernate};
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=disconnected",
@@ -153,6 +168,18 @@ connected({logplex_drain_buffer, Buf, new_data},
 connected(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, connected, S, hibernate};
+connected({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
+    case close_if_idle(State) of
+        {closed, ClosedState} ->
+            {next_state, disconnected, ClosedState, hibernate};
+        {not_closed, State} ->
+            case close_if_old(State) of
+                {closed, ClosedState} ->
+                    {next_state, disconnected, ClosedState, hibernate};
+                {not_closed, ContinueState} ->
+                    {next_state, connected, ContinueState}
+            end
+    end;
 connected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=connected",
@@ -227,6 +254,10 @@ handle_info({'EXIT', ClientPid, Reason}, StateName,
           log_info(State, [StateName, ClientPid, Reason])),
     {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
 
+%% close_timeout used to be called idle_timeout; remove once we are on v72+
+handle_info({timeout, TRef, idle_timeout}, StateName, State) ->
+    apply(?MODULE, StateName, [{timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State]);
+
 handle_info(timeout, StateName, State) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, StateName, State, hibernate};
@@ -240,8 +271,6 @@ handle_info(Info, StateName, State) ->
 try_connect(State = #state{uri=Uri,
                            drain_id=DrainId,
                            channel_id=ChannelId,
-                           buf=Buf,
-                           service=Status,
                            client=undefined}) ->
     {Scheme, Host, Port} = connection_info(Uri),
     ConnectStart = os:timestamp(),
@@ -254,8 +283,12 @@ try_connect(State = #state{uri=Uri,
             ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
-            maybe_resize(Status, Buf),
-            ready_to_send(State#state{client=Pid, service=normal});
+            NewTimerState = start_close_timer(State),
+            ready_to_send(NewTimerState#state{client=Pid,
+                                              connect_time=ConnectEnd,
+                                              reconnect_attempt=0});
+        ignore ->
+            http_fail(State);
         Why ->
             ConnectEnd = os:timestamp(),
             ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
@@ -268,12 +301,12 @@ try_connect(State = #state{uri=Uri,
 http_fail(State = #state{client=Client}) ->
     %% Close any existing client connection.
     ClosedState = case Client of
-                   Pid when is_pid(Pid) ->
-                       logplex_http_client:close(Pid),
-                       State#state{client = undefined};
-                   undefined ->
-                       State
-               end,
+                      Pid when is_pid(Pid) ->
+                          logplex_http_client:close(Pid),
+                          State#state{client = undefined};
+                      undefined ->
+                          State
+                  end,
     NewState = maybe_shrink(ClosedState),
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
@@ -304,21 +337,8 @@ try_send(Frame = #frame{tries = Tries},
     ReqStart = os:timestamp(),
     try logplex_http_client:raw_request(Pid, Req, ?REQUEST_TIMEOUT) of
         {ok, Status, _Headers} ->
-            %% ReqEnd = os:timestamp(),
-            Result = status_action(Status),
-            %% ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
-            %%       "result=~p status=~p msg_count=~p req_time=~p",
-            %%       log_info(State, [Result, Status, Frame#frame.msg_count,
-            %%                        ltcy(ReqStart, ReqEnd)])),
-            case Result of
-                success ->
-                    ready_to_send(sent_frame(Frame, State));
-                temp_fail ->
-                    logplex_http_client:close(Pid),
-                    http_fail(retry_frame(Frame, State));
-                perm_fail ->
-                    ready_to_send(drop_frame(Frame, State))
-            end;
+            ReqEnd = os:timestamp(),
+            handle_response_status(Status, Frame, State, ltcy(ReqStart, ReqEnd));
         {error, Why} ->
             ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request"
                   " tcp_err=~1000p",
@@ -351,17 +371,45 @@ try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
 %% code. Back of the napkin algorithm - 2xx is success, 4xx (client
 %% errors) are perm failures, so drop the frame and anything else is a
 %% temp failure, so retry the frame.
-status_action(N) when 200 =< N, N < 300 -> success;
-status_action(N) when 400 =< N, N < 500 -> perm_fail;
-status_action(_) -> temp_fail.
+handle_response_status(Status, Frame, State, _Latency) when 200 =< Status, Status < 300 ->
+    ready_to_send(sent_frame(Frame, State));
+handle_response_status(Status, Frame, State, Latency) when 400 =< Status, Status < 500 ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
+          "result=~p status=~p msg_count=~p req_time=~p",
+          log_info(State, [perm_fail, Status, Frame#frame.msg_count, Latency])),
+    ready_to_send(drop_frame(Frame, State));
+handle_response_status(Status, Frame, State, Latency) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
+          "result=~p status=~p msg_count=~p req_time=~p",
+          log_info(State, [temp_fail, Status, Frame#frame.msg_count, Latency])),
+    http_fail(retry_frame(Frame, State)).
 
 %% @private
 terminate(_Reason, _StateName, _State) ->
     ok.
 
 %% @private
+code_change("v78", StateName,
+            {state, DrainId, DrainTok, ChannelId, Uri, Buf, Client, OutQ,
+             ReconnectTref, CloseTref, DropInfo, _LastGoodTime, Service,
+             ConnectTime}, undefined) ->
+    State = #state{drain_id=DrainId,
+                   drain_tok=DrainTok,
+                   channel_id=ChannelId,
+                   uri=Uri,
+                   buf=Buf,
+                   client=Client,
+                   out_q=OutQ,
+                   reconnect_tref=ReconnectTref,
+                   reconnect_attempt=0,
+                   close_tref=CloseTref,
+                   drop_info=DropInfo,
+                   last_good_time=never,
+                   service=Service,
+                   connect_time=ConnectTime},
+    {ok, StateName, State};
 code_change(_OldVsn, StateName, State, _Extra) ->
-    {ok, StateName, State, ?HIBERNATE_TIMEOUT}.
+    {ok, StateName, State}.
 
 %% @private
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=URI}, Rest)
@@ -447,18 +495,19 @@ lost_msgs(Lost, S=#state{drop_info={TS,Dropped}}) ->
 %% @private
 %% if we had failures, they should have been delivered with this frame
 sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Drop}) ->
-    State = State0#state{last_good_time=os:timestamp()},
+    State = maybe_resize(State0),
+
     msg_stat(drain_delivered, Count, State),
-    logplex_realtime:incr(drain_delivered, Count),
+    logplex_realtime:incr('drain.delivered', Count),
     case {Lost,Drop} of
         {0, undefined} ->
             State;
         {_, undefined} ->
-            logplex_realtime:incr(drain_dropped, Lost),
+            logplex_realtime:incr('drain.dropped', Lost),
             msg_stat(drain_dropped, Lost, State),
             State;
         {_, {_,Dropped}} ->
-            logplex_realtime:incr(drain_dropped, Lost+Dropped),
+            logplex_realtime:incr('drain.dropped', Lost+Dropped),
             msg_stat(drain_dropped, Lost+Dropped, State),
             State#state{drop_info=undefined}
     end.
@@ -538,34 +587,86 @@ connection_info(#ex_uri{scheme = Scheme,
      end}.
 
 set_reconnect_timer(State = #state{reconnect_tref=undefined}) ->
-    Time = timer:seconds(logplex_app:config(http_reconnect_time_s,1)),
-    reconnect_in(Time, State);
+    reconnect_in(backoff_time(State#state.reconnect_attempt), State);
 set_reconnect_timer(State = #state{}) -> State.
 
+backoff_time(Attempt) when is_integer(Attempt), Attempt > 0 ->
+    logplex_app:config(http_reconnect_time, 10) * backoff_slot(Attempt);
+backoff_time(_) ->
+    0.
 
-reconnect_in(MS, State = #state{}) ->
+backoff_slot(Attempt) when is_integer(Attempt), Attempt > 0 ->
+    Slot = erlang:min(logplex_app:config(http_max_retries, 10), Attempt),
+    trunc(erlang:max(0, (math:pow(2, random:uniform(Slot)) - 1) / 2)).
+
+reconnect_in(MS, State = #state{ reconnect_attempt=N }) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=reconnect_delay delay=~p "
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=reconnect_delay attempt=~p delay=~p "
           "ref=~p",
-          log_info(State, [MS, Ref])),
-    State#state{reconnect_tref = Ref}.
+          log_info(State, [N, MS, Ref])),
+    State#state{reconnect_tref = Ref, reconnect_attempt=N+1}.
 
-cancel_reconnect(State = #state{reconnect_tref=Ref}) when is_reference(Ref) ->
+cancel_timeout(undefined, _Msg) -> undefined;
+cancel_timeout(Ref, Msg)
+  when is_reference(Ref) ->
     case erlang:cancel_timer(Ref) of
         false ->
-            %% Flush msg q.
+            %% Flush expired timer message
             receive
-                {timeout, Ref, _} -> ok
-            after 0 -> ok
+                {timeout, Ref, Msg} -> undefined
+            after 0 -> undefined
             end;
-         _Time -> ok
-    end,
-    State#state{reconnect_tref=undefined};
-cancel_reconnect(State = #state{reconnect_tref=undefined}) ->
-    State.
+        _Time ->
+            %% Timer didn't fire, so no message to worry about
+            undefined
+      end.
 
 ltcy(Start, End) ->
     timer:now_diff(End, Start).
+
+start_close_timer(State=#state{close_tref = CloseTRef}) ->
+    cancel_timeout(CloseTRef, ?CLOSE_TIMEOUT_MSG),
+    MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
+    Fuzz = random:uniform(logplex_app:config(http_drain_idle_fuzz, 15000)),
+    NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?CLOSE_TIMEOUT_MSG),
+    State#state{close_tref = NewTimer}.
+
+compare_point(#state{last_good_time=never, connect_time=ConnectTime}) ->
+    ConnectTime;
+compare_point(#state{last_good_time=LastGood}) ->
+    LastGood.
+
+connection_idle(State) ->
+    MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
+    SinceLastGoodMicros = timer:now_diff(os:timestamp(), compare_point(State)),
+    SinceLastGoodMicros > (MaxIdle * 1000).
+
+close_if_idle(State = #state{client = Client}) ->
+    case connection_idle(State) of
+        true ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
+                  log_info(State, [])),
+            logplex_http_client:close(Client),
+            {closed, State#state{client=undefined}};
+        _ ->
+            {not_closed, State}
+    end.
+
+connection_too_old(#state{connect_time = ConnectTime}) ->
+    MaxTotal = logplex_app:config(http_drain_max_ttl, timer:hours(5)),
+    SinceConnectMicros = timer:now_diff(os:timestamp(), ConnectTime),
+    SinceConnectMicros > (MaxTotal * 1000).
+
+close_if_old(State = #state{client = Client}) ->
+    case connection_too_old(State) of
+        true ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=max_ttl",
+                  log_info(State, [])),
+            logplex_http_client:close(Client),
+            {closed, State#state{client=undefined}};
+        _ ->
+            {not_closed, start_close_timer(State)}
+    end.
 
 start_drain_buffer(State = #state{channel_id=ChannelId,
                                   buf = undefined}) ->
@@ -574,26 +675,36 @@ start_drain_buffer(State = #state{channel_id=ChannelId,
                                                 notify, Size),
     State#state{buf = Buf}.
 
-maybe_resize(Status, Buf) ->
-    case Status of
-        normal ->
-            ok;
-        degraded ->
-            logplex_drain_buffer:resize_msg_buffer(Buf, default_buf_size())
-    end.
+maybe_resize(State0=#state{ service=normal }) ->
+    State0#state{ last_good_time=os:timestamp() };
+maybe_resize(State0=#state{ service=degraded, buf=Buf }) ->
+    State = State0#state{last_good_time=os:timestamp(), service=normal},
+    Size = default_buf_size(),
+    logplex_drain_buffer:resize_msg_buffer(Buf, Size),
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_resize"
+          " service=normal buf_size=~p",
+          log_info(State, [Size])),
+    State.
 
+maybe_shrink(State = #state{last_good_time=never}) ->
+    ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
+          " service=~p time_since_last_good=~p",
+          log_info(State, [degraded, never])),
+    State#state{service=degraded};
 maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) ->
-    case {(is_tuple(LastGood) andalso tuple_size(LastGood) =:= 3 andalso
-                     now_to_msec(LastGood) < now_to_msec(os:timestamp())-?SHRINK_TIMEOUT)
-                    orelse LastGood =:= undefined,
-                   Status} of
+    MsecSinceLastGood = trunc(timer:now_diff(os:timestamp(), LastGood) / 1000),
+    case {MsecSinceLastGood > ?SHRINK_TIMEOUT, Status} of
         {true, normal} ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
+                  " service=~p time_since_last_good=~p",
+                  log_info(State, [degraded, MsecSinceLastGood])),
             logplex_drain_buffer:resize_msg_buffer(Buf, ?SHRINK_BUF_SIZE),
             State#state{service=degraded};
-        {_, _} ->
-            State#state{service=normal}
+        {_, Status} ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
+                  " service=~p time_since_last_good=~p",
+                  log_info(State, [Status, MsecSinceLastGood])),
+            State#state{service=Status}
     end.
-
-now_to_msec({Mega,Sec,_}) -> (Mega*1000000 + Sec)*1000.
 
 default_buf_size() -> logplex_app:config(http_drain_buffer_size, 1024).

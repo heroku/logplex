@@ -5,6 +5,17 @@
 %% @end
 -module(logplex_msg_buffer).
 
+-type msg() :: binary() | tuple().
+-type size() :: pos_integer().
+-type loss_indication() :: {loss_indication,
+                            N::non_neg_integer(),
+                            When::erlang:timestamp()}.
+-type framing_fun()::fun (({msg, msg()} | loss_indication()) ->
+                                 {frame, iolist()} | skip).
+-ifdef(namespaced_types).
+-type queue() :: queue:queue().
+-endif.
+
 -record(lpdb, {messages = queue:new() :: queue(),
                max_size = 1024 :: size(),
                size = 0,
@@ -13,13 +24,6 @@
               }).
 -define(OLDBUF, {lpdb, _, _, _, _}).
 
--type msg() :: binary() | tuple().
--type size() :: pos_integer().
--type loss_indication() :: {loss_indication,
-                            N::non_neg_integer(),
-                            When::erlang:timestamp()}.
--type framing_fun()::fun (({msg, msg()} | loss_indication()) ->
-                                 {frame, iolist()} | skip).
 -opaque buf() :: #lpdb{}.
 -export_type([buf/0, framing_fun/0, size/0, loss_indication/0]).
 

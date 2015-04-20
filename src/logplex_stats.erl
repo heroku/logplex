@@ -42,8 +42,8 @@ incr(Key) ->
     incr(Key, 1).
 
 -spec incr(#drain_stat{} | #channel_stat{} | #logplex_stat{} |
-           list() | atom(),
-           integer()) -> any().
+           #queue_stat{} | list() | atom(), integer()) ->
+                  any().
 incr(Key, Incr) when is_integer(Incr) ->
     try ets:update_counter(?MODULE, Key, Incr)
     catch error:badarg ->
@@ -107,7 +107,6 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({timeout, _TimerRef, flush}, _State) ->
-
     {Mega, S, _} = os:timestamp(),
     UnixTS = Mega * 1000000 + S,
     Stats = ets:tab2list(logplex_stats),
@@ -119,7 +118,7 @@ handle_info({timeout, _TimerRef, flush}, _State) ->
          V =/= 0],
 
     start_timer(),
-    {noreply, Stats};
+    {noreply, stats_cache_disabled};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -162,6 +161,10 @@ log_stat(UnixTS, #channel_stat{channel_id=ChannelId, key=Key}, Val) ->
 log_stat(UnixTS, #logplex_stat{module=Mod, key=K}, Val) ->
     io:format("m=logplex_stats ts=~p system module=~p ~200p=~p~n",
         [UnixTS, Mod, K, Val]);
+
+log_stat(UnixTS, #queue_stat{redis_url=RedisUrl, key=Key}, Val) ->
+    io:format(user, "m=logplex_stats ts=~p redis_url=~p ~p=~p~n",
+              [UnixTS, RedisUrl, Key, Val]);
 
 log_stat(UnixTS, {Class, Key}, Val) ->
     io:format("m=logplex_stats ts=~p freeform class=~p key=~p count=~p~n",

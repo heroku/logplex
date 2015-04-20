@@ -4,7 +4,7 @@ Logplex is a distributed syslog log router, able to merge and redistribute multi
 
 A typical logplex installation will be a cluster of distributed Erlang nodes connected in a mesh, with one or more redis instances (which can be sharded). The cluster may or may not be sitting behind a load-balancer or proxy, but any of them may be contacted at any time for ideal scenarios.
 
-Applications sitting on their own node or server need to send their log messages either to a local syslog, or though [log shuttle](https://github.com/ryandotsmith/log-shuttle), which will then forward them to one instance of a logplex router.
+Applications sitting on their own node or server need to send their log messages either to a local syslog, or though [log shuttle](https://github.com/heroku/log-shuttle), which will then forward them to one instance of a logplex router.
 
 On the other end of the spectrum, consumers may subscribe to a logplex instance, which will then merge streams of incoming log messages and forward them to the subscriber. Alternatively, the consumer may register a given endpoint (say, a database behind the proper API) and logplex nodes will be able to push messages to that end-point as they come in.
 
@@ -138,17 +138,68 @@ A [redgrid](https://github.com/JacobVorreuter/redgrid) process that registers th
 
 ### logplex_realtime
 
-Establishes a connection to the logplex stats redis. Owns the `logplex_realtime` ETS table and flushes the contents to [tempo](https://github.com/JacobVorreuter/tempo) via redis pub/sub every second.
+Captures realtime metrics about the running logplex node. This metrics are exported using [folsom_cowboy](https:/github.com/voidlock/folsom_cowboy) and are available for consumption via HTTP.
 
-Metrics published to tempo:
-
+Memory Usage information is available:
+```shell
+> curl -s http://localhost:5565/_memory | jq '.'
+{
+  "total": 27555464,
+  "processes": 10818248,
+  "processes_used": 10818136,
+  "system": 16737216,
+  "atom": 388601,
+  "atom_used": 371948,
+  "binary": 789144,
+  "code": 9968116,
+  "ets": 789128
+}
 ```
-message_received
-message_processed
-drain_delivered
-drain_dropped
-git_branch
-availability_zone
+As is general VM statistics:
+```shell
+> curl -s http://localhost:5565/_statistics | jq '.'
+{
+  "context_switches": 40237,
+  "garbage_collection": {
+    "number_of_gcs": 7676,
+    "words_reclaimed": 20085443
+  },
+  "io": {
+    "input": 9683207,
+    "output": 2427112
+  },
+  "reductions": {
+    "total_reductions": 6584440,
+    "reductions_since_last_call": 6584440
+  },
+  "run_queue": 0,
+  "runtime": {
+    "total_run_time": 1140,
+    "time_since_last_call": 1140
+  },
+  "wall_clock": {
+    "total_wall_clock_time": 207960,
+    "wall_clock_time_since_last_call": 207748
+  }
+}
+```
+Several custom logplex metrics are also exported via a special `/_metrics` endpoint:
+```shell
+> curl -s http://localhost:5565/_metrics | jq '.'
+[
+  "drain.delivered",
+  "drain.dropped",
+  "message.processed",
+  "message.received"
+]
+```
+These can then be queried individually:
+```shell
+> curl -s http://localhost:5565/_metrics/message.received | jq '.'
+{
+  "type": "gauge",
+  "value": 1396
+}
 ```
 
 ### logplex_stats

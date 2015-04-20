@@ -50,7 +50,9 @@
 -define(CURRENT_WRITE_MAP, logplex_redis_buffer_map).
 -define(BACKUP_WRITE_MAP, backup_logplex_redis_buffer_map).
 
--record(state, {urls}).
+-record(state, {urls :: list(),
+                maps = dict:new(),
+                reply_to = undefined :: {pid(), reference()}}).
 
 -define(TIMEOUT, 30000).
 
@@ -88,9 +90,9 @@ init([]) ->
 
     ets:new(logplex_shard_info, [protected, set, named_table]),
 
-    populate_info_table(Urls),
+    TempTable = populate_info_table(Urls),
 
-    {ok, #state{urls=Urls}}.
+    {ok, #state{urls=Urls, maps=TempTable, reply_to=self()}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -102,6 +104,53 @@ init([]) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
+notify_complete(State0=#state{ reply_to=Pid })
+  when Pid =:= self(); Pid =:= undefined ->
+    State0#state{ reply_to=undefined };
+
+notify_complete(State0=#state{ maps=TempTable, reply_to=Pid }) ->
+    case dict:size(TempTable) of
+        0 ->
+            gen_server:reply(Pid, ok),
+            State0#state{ reply_to=undefined };
+        _ -> State0
+    end.
+
+update_worker_pid(Url, From, Pid, Ring) ->
+    case lists:keyfind(Url, 1, Ring) of
+        {Url, {async, From}} ->
+            lists:keyreplace(Url, 1, Ring, {Url, Pid});
+        _ -> Ring
+    end.
+
+save_shard_info(WorkerType, Ring0) ->
+    MapFun = fun ({Frag, {async, _}}, AccIn) ->
+                     {{Frag, undefined}, AccIn};
+                 ({_Frag, Pool}=Mapping, AccIn) when is_pid(Pool) ->
+                     {Mapping, AccIn+1}
+             end,
+    {Ring1, NumCollected} = lists:mapfoldl(MapFun, 0, Ring0),
+    {ok, Map, Interval} = redis_shard:generate_map_and_interval(Ring1),
+    logplex_shard_info:save(WorkerType, Map, Interval),
+    case length(Ring1) of
+        NumCollected -> done;
+        _ -> incomplete
+    end.
+
+handle_call({register_worker, {WorkerType, Url, Worker}}, {From, _Ref}, State = #state{ maps=TempTable0 }) ->
+    ?INFO("at=register_worker type=~p url=~p worker=~p", [WorkerType, Url, Worker]),
+    Ring = dict:fetch(WorkerType, TempTable0),
+    Ring1 = update_worker_pid(Url, From, Worker, Ring),
+    TempTable = case save_shard_info(WorkerType, Ring1) of
+                    done ->
+                        dict:erase(WorkerType, TempTable0);
+                    incomplete ->
+                        dict:store(WorkerType, Ring1, TempTable0)
+                end,
+    State1 = notify_complete(State#state{ maps=TempTable }),
+    erlang:monitor(process, Worker),
+    {reply, ok, State1};
+
 handle_call({commit, new_shard_info}, _From, State) ->
     backup_shard_info(),
     try
@@ -120,8 +169,12 @@ handle_call({abort, new_shard_info}, _From, State) ->
             {reply, {error, {C, E}}, State}
     end;
 
-handle_call({prepare, {new_shard_info, NewShardInfo}}, _From, State) ->
-    {reply, prepare_new_shard_info(NewShardInfo), State};
+handle_call({prepare, {new_shard_info, NewShardInfo}}, From, State=#state{ maps=TempTable0, reply_to=undefined }) ->
+    TempTable = prepare_new_shard_info(TempTable0, NewShardInfo),
+    {noreply, State#state{ maps=TempTable, reply_to=From }, 30000};
+
+handle_call({prepare, {new_shard_info, _}}, _From, State) ->
+    {reply, {error, inprogress}, State};
 
 handle_call({make_permanent, new_shard_info}, _From, State) ->
     try
@@ -133,7 +186,9 @@ handle_call({make_permanent, new_shard_info}, _From, State) ->
           || P <- logplex_shard_info:pid_list(?BACKUP_READ_MAP) ],
         logplex_shard_info:delete(?BACKUP_READ_MAP),
         logplex_shard_info:delete(?NEW_READ_MAP),
-        {reply, ok, State}
+        {NewShards, _, _} = logplex_shard_info:read(?CURRENT_READ_MAP),
+        Urls = [ Url || {_, {Url, _}} <- dict:to_list(NewShards) ],
+        {reply, ok, State#state{ urls=Urls }}
     catch
         C:E ->
             {reply, {error, {C,E}}, State}
@@ -177,12 +232,13 @@ handle_cast(_Msg, State) ->
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({'EXIT', Pid, Reason}, State) ->
+handle_info({'DOWN', _Ref, process, Pid, Reason}, State) ->
     ?INFO("child=~p exit_reason=~p", [Pid, Reason]),
     handle_child_death(Pid),
     {noreply, State};
 
-handle_info(_Info, State) ->
+handle_info(Info, State) ->
+    ?INFO("at=handle_info unexpected=~p", [Info]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -201,18 +257,8 @@ terminate(_Reason, _State) ->
 %% Description: Convert process state when code is changed
 %% @hidden
 %%--------------------------------------------------------------------
-code_change(v37, State, _Extra) ->
-    %% Need to link to existing redis buffer processes.
-    [ begin
-          link(Pid),
-          %% Exit(RemotePid, shutdown) will work as the supervisor
-          %% will simply delete the child and remove its spec
-          exit(Pid, shutdown)
-      end
-      || {_Id, Pid, worker, _Modules}
-             <- supervisor:which_children(logplex_redis_buffer_sup)],
-    {ok, State};
-
+code_change(v74, {state, Urls}, _Extra) ->
+    {ok, #state{urls=Urls, maps=dict:new(), reply_to=undefined}};
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -226,25 +272,34 @@ populate_info_table(Urls) ->
     populate_info_table(?CURRENT_READ_MAP, ?CURRENT_WRITE_MAP, Urls).
 
 populate_info_table(ReadMap, WriteMap, Urls) ->
+    ?INFO("at=populate_info_table read_map=~p write_map=~p urls=~p", [ReadMap, WriteMap, Urls]),
     %% Populate Read pool
-    ReadPools = [ {Url, add_pool(Url)} || Url <- redis_sort(Urls)],
-    {ok, Map1, Interval1} =
-        redis_shard:generate_map_and_interval(ReadPools),
-    logplex_shard_info:save(ReadMap, Map1, Interval1),
-
-    %% Populate write pool
-    WritePools = [ {Url, add_buffer(Url)}
+    ReadPools = [ {Url, async_add_pool(ReadMap, Url)} || Url <- redis_sort(Urls)],
+    WritePools = [ {Url, async_add_buffer(WriteMap, Url)}
                    || Url <- redis_sort(Urls)],
-    {ok, Map2, Interval2} =
-        redis_shard:generate_map_and_interval(WritePools),
 
-    logplex_shard_info:save(WriteMap, Map2, Interval2),
-    ok.
+    dict:from_list([{ReadMap, ReadPools}, {WriteMap, WritePools}]).
+
+register_worker(WorkerType, Url, Pid) ->
+    gen_server:call(?MODULE, {register_worker, {WorkerType, Url, Pid}}).
+
+async_add_pool(ReadMap, Url) ->
+    WorkerFun = fun () ->
+                        ok = register_worker(ReadMap, Url, add_pool(Url))
+                end,
+    {async, spawn(WorkerFun)}.
 
 add_pool(Url) ->
     Opts = parse_redis_uri(Url),
-    {ok, Pool} = redo:start_link(undefined, Opts),
-    Pool.
+    case redo:start_link(undefined, Opts) of
+        {ok, Pid} when is_pid(Pid) -> Pid;
+        {error, {error, econnrefused}} -> undefined
+    end.
+
+async_add_buffer(WriteMap, Url) ->
+    {async, spawn(fun () ->
+                          ok = register_worker(WriteMap, Url, add_buffer(Url))
+                  end)}.
 
 add_buffer(Url) ->
     Opts = redis_buffer_opts(Url),
@@ -260,9 +315,8 @@ redis_buffer_opts(Url) ->
      {num_workers, NumWorkers},
      {worker_sup, logplex_redis_writer_sup},
      {worker_args, [RedisOpts]},
-     {dict, dict:from_list([
-        {redis_url, Url}
-     ])}].
+     {redis_url, Url}
+    ].
 
 handle_child_death(Pid) ->
     case logplex_shard_info:pid_info(Pid) of
@@ -298,27 +352,8 @@ consistent(URLs) ->
 %%% Redis cluster move code
 %%--------------------------------------------------------------------
 
-%% Attempt to create new shard maps with new redo processes. Catch
-%% errors and destroy any created processes.
-prepare_new_shard_info(NewShardInfo) ->
-    {links, OldLinks} = process_info(self(), links),
-    try
-        new_shard_info(NewShardInfo)
-    catch
-        C:E ->
-            {links, NewLinks} = process_info(self(), links),
-            %% Clean up any new processes we started
-            [ erlang:exit(P, kill)
-              || P <- (NewLinks -- OldLinks),
-                 P > self()],
-            delete_new_shard_info(),
-            {error, {C,E}}
-    end.
-
-delete_new_shard_info() ->
-    logplex_shard_info:delete(?NEW_READ_MAP),
-    logplex_shard_info:delete(?NEW_WRITE_MAP),
-    ok.
+prepare_new_shard_info(_Maps0, NewShardInfo) ->
+    new_shard_info(NewShardInfo).
 
 backup_shard_info() ->
     logplex_shard_info:copy(?CURRENT_WRITE_MAP, ?BACKUP_WRITE_MAP),
@@ -341,22 +376,7 @@ make_new_shard_info_permanent() ->
 
 new_shard_info(NewUrls) ->
     populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
-                        NewUrls),
-    ok.
-
-
-%% logplex_logs_redis / logplex_shard online replacement guide:
-%% NewShardInfo = prepare_new_urls(logplex_shard:redis_sort(string:tokens(NEW_LOGPLEX_SHARD_URLS, ",")).
-%% Cluster = [node() | nodes()],
-%% prepare_url_update(Cluster, NewShardInfo).
-%% Check 'logplex_shard_info:read(new_logplex_read_pool_map).' looks sensible.
-%% If all are good:
-%%   attempt_to_commit_url_update(Cluster).
-%% If that succeeds:
-%%   make_update_permanent(Cluster).
-%%
-%% If anything goes wrong:
-%%   abort_url_update(Cluster).
+                        NewUrls).
 
 -spec prepare_shard_urls(string()) -> [string()]|[].
 prepare_shard_urls(ShardUrls) ->
@@ -366,7 +386,7 @@ prepare_shard_urls(ShardUrls) ->
 -type shards_info() :: [string()].
 -spec prepare_url_update(shards_info()) -> good|{error, any()}.
 prepare_url_update(NewShardInfo) ->
-    case gen_server:call(?MODULE, {prepare, {new_shard_info, NewShardInfo}}) of
+    case gen_server:call(?MODULE, {prepare, {new_shard_info, NewShardInfo}}, 30000) of
         ok ->
             good;
         Err ->

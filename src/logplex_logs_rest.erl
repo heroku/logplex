@@ -7,7 +7,7 @@
 
 -include("logplex_logging.hrl").
 
--export([child_spec/0]).
+-export([child_spec/0, dispatch/0]).
 
 -export([init/3
          ,rest_init/2
@@ -38,14 +38,34 @@ child_spec() ->
                      [{port, logplex_app:config(http_log_input_port)}],
                      cowboy_protocol,
                      [{env,
-                       [{dispatch,
-                         [{'_',[],
-                            [{[<<"healthcheck">>], [], ?MODULE, [healthcheck]},
-                             {[<<"logs">>], [], ?MODULE, [logs]}]}]}]}]).
+                       [{dispatch, dispatch()}]}]).
 
+dispatch() ->
+    cowboy_router:compile([{'_',
+                            [{<<"/healthcheck">>, ?MODULE, [healthcheck]},
+                             {<<"/logs">>, ?MODULE, [logs]},
+                             % support for v2 API
+                             {<<"/v2/[...]">>, ?MODULE, [api]},
+                             % support for old v1 API
+                             {<<"/channels/[...]">>, ?MODULE, [api]},
+                             {<<"/sessions/[...]">>, ?MODULE, [api]}]}]).
 
 init(_Transport, Req, [healthcheck]) ->
     {ok, Req, undefined};
+init(_Transport, Req0, [api]) ->
+    {ok, Req} = case logplex_app:config(api_endpoint_url, undefined) of
+                     undefined ->
+                         cowboy_req:reply(404, [], "", Req0);
+                     Endpoint ->
+                        {Path, Req1} = cowboy_req:path(Req0),
+                        {Query, Req2} = cowboy_req:qs(Req1),
+                        ?INFO("at=api_redirect path=~p query=~p", [Path, Query]),
+                        cowboy_req:reply(302,
+                                         [{<<"Location">>, [Endpoint, Path,
+                                                            "?", Query]}],
+                                         "redirecting", Req2)
+                 end,
+    {shutdown, Req, no_state};
 init(_Transport, _Req, [logs]) ->
     {upgrade, protocol, cowboy_rest}.
 
@@ -89,7 +109,8 @@ is_authorized(Req, State) ->
 token_auth(State, Req2, TokenId) ->
     case logplex_token:lookup(TokenId) of
         undefined ->
-            ?INFO("at=authorization err=unknown_token token=~p", [TokenId]),
+            logplex_realtime:incr(unknown_token),
+            ?INFO("at=authorization token_id=~p msg=unknown_token", [TokenId]),
             {{false, ?BASIC_AUTH}, Req2, State};
         Token ->
             Name = logplex_token:name(Token),
@@ -174,14 +195,21 @@ from_logplex(Req, State = #state{token = Token,
     end.
 
 parse_logplex_body(Req, State) ->
-    {ok, Body, Req2} = cowboy_req:body(Req),
+    case cowboy_req:body(Req) of
+        {ok, Body, Req2} ->
+            parse_messages_from_body(Body, Req2, State);
+        {error, Reason} ->
+            {{error, Reason}, Req, State}
+    end.
+
+parse_messages_from_body(Body, Req, State) ->
     case syslog_parser:parse(Body) of
         {ok, Msgs, _} ->
-            check_messages(Msgs, Req2, State);
+            check_messages(Msgs, Req, State);
         {{error, Reason}, _, _} ->
             ?WARN("at=parse_syslog reason=~p body=~1000p",
                   [Reason, Body]),
-            {{error, Reason}, Req2, State}
+            {{error, Reason}, Req, State}
     end.
 
 check_messages(Msgs, Req, State) ->

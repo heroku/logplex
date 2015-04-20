@@ -176,8 +176,9 @@ request(Method, Url, Opts) ->
             _ ->
                 {Url, Headers}
         end,
+    HttpOpts = proplists:get_value(http_opts, Opts, []),
     HttpcOpts = proplists:get_value(opts, Opts, []),
-    case httpc:request(Method, Request, [{timeout, Timeout}], HttpcOpts) of
+    case httpc:request(Method, Request, [{timeout, Timeout}| HttpOpts], HttpcOpts) of
         {ok, {{HttpVersion, StatusCode, HttpReason}, Headers0, Body}} ->
             [{status_code, StatusCode},
              {http_version, HttpVersion},
@@ -190,7 +191,9 @@ request(Method, Url, Opts) ->
         {ok, ReqId} when is_reference(ReqId) ->
             {Headers0, Body} = wait_for_http(ReqId, [], []),
             [{headers, Headers0},
-             {body, Body}]
+             {body, Body}];
+        Other -> ct:pal("~p", [Other]),
+                 exit(bad_case)
     end.
 
 wait_for_http(RequestId, Headers, Body) ->

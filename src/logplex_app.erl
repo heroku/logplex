@@ -29,8 +29,7 @@
 %% Application callbacks
 -export([start/2, start_phase/3, stop/1]).
 
--export([logplex_work_queue_args/0
-         ,nsync_opts/0
+-export([nsync_opts/0
          ,config/0
          ,config/1
          ,config/2
@@ -38,6 +37,8 @@
          ,start/0
          ,a_start/2
         ]).
+
+-export([cache_os_envvars/0]). % for tests
 
 -export([elb_healthcheck/0]).
 
@@ -63,6 +64,7 @@ start(_StartType, _StartArgs) ->
     read_git_branch(),
     read_availability_zone(),
     boot_pagerduty(),
+    logplex_realtime:setup_metrics(),
     setup_redgrid_vals(),
     setup_redis_shards(),
     application:start(nsync),
@@ -73,6 +75,7 @@ stop(_State) ->
     ok.
 
 start_phase(listen, normal, _Args) ->
+    setup_firehose(),
     {ok, _} = supervisor:start_child(logplex_sup,
                                      logplex_api:child_spec()),
     {ok, _} = supervisor:start_child(logplex_sup,
@@ -96,6 +99,10 @@ cache_os_envvars() ->
                       ,{metrics_channel_id, ["METRICS_CHANNEL_ID"],
                         optional,
                         integer}
+                      ,{firehose_channel_ids, ["FIREHOSE_CHANNEL_IDS"],
+                        optional}
+                      ,{firehose_filter_tokens, ["FIREHOSE_FILTER_TOKENS"],
+                        optional}
                       ,{local_ip, ["LOCAL_IP"]}
                       ,{metrics_namespace, ["METRICS_NAMESPACE"],
                         optional}
@@ -105,10 +112,11 @@ cache_os_envvars() ->
                       ,{pagerduty_key, ["ROUTING_PAGERDUTY_SERVICE_KEY"],
                         optional}
                       ,{redgrid_redis_url, ["LOGPLEX_REDGRID_REDIS_URL"]}
-                      ,{stats_redis_url, ["LOGPLEX_STATS_REDIS_URL"]}
                       ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
                         optional, %% in bytes
                         integer}
+                      ,{api_endpoint_url, ["LOGPLEX_API_ENDPOINT_URL"],
+                       optional}
                      ]),
     ok.
 
@@ -216,14 +224,8 @@ setup_redis_shards() ->
     application:set_env(logplex, logplex_shard_urls,
                         logplex_shard:redis_sort(URLs)).
 
-logplex_work_queue_args() ->
-    MaxLength = logplex_utils:to_int(config(queue_length)),
-    NumWorkers = logplex_utils:to_int(config(workers)),
-    [{name, "logplex_work_queue"},
-     {max_length, MaxLength},
-     {num_workers, NumWorkers},
-     {worker_sup, logplex_worker_sup},
-     {worker_args, []}].
+setup_firehose() ->
+    logplex_firehose:enable().
 
 nsync_opts() ->
     RedisUrl = config(config_redis_url),

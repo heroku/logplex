@@ -10,13 +10,16 @@
                   ,public_key
                   ,ssl
                   ,gproc
-                  ,ehmon
                   ,ex_uri
                   ,redis
                   ,ranch
                   ,cowboy
                   ,lager
                   ,batchio
+                  ,cowlib
+                  ,ranch
+                  ,folsom
+                  ,folsom_cowboy
                  ]},
   {included_applications, [heroku_crashdumps]},
   {mod, {logplex_app, []}},
@@ -35,7 +38,7 @@
     ,{http_frame_retries, 1} % #extra attempts after first
     ,{http_log_input_port, 8601} % syslog/http tcp listen port
     ,{http_port, 8001}
-    ,{http_reconnect_time_s, 1} % seconds
+    ,{http_reconnect_time, 10} % ms
     ,{http_send_loss_msg, send} % send | dont_send
     ,{log_history, 1500}
     ,{log_unknown_tokens, false} % bool
@@ -45,6 +48,8 @@
     ,{no_tail_warning,
       "Error L20 (Tail sessions forbidden) "
       "Tail sessions for this app are forbidden due to log volume."} % string
+    ,{no_redis_warning,
+      "Warning: log history discarded due to excessive volume."} % string
     ,{pagerduty, "0"} % "0" = disabled
     ,{queue_length, 2000}
     ,{redgrid_redis_url, "redis://localhost:6379"}
@@ -54,7 +59,6 @@
     ,{redis_writers, 10}
     ,{session_expiry_s, 360} % #seconds
     ,{session_lookup_timeout_s, 5} % #seconds
-    ,{stats_redis_url, "redis://localhost:6379"}
     ,{syslog_port, 6001} % syslog tcp listen port
     ,{tcp_drain_buffer_size, 1024} % #messages
     ,{tcp_drain_target_bytes, 4096} % bytes
@@ -62,6 +66,12 @@
     ,{tcp_syslog_reconnect_min, 30} % seconds
     ,{tcp_syslog_send_loss_msg, send} % send | dont_send
     ,{tcp_syslog_send_timeout_secs, 4} % seconds
+    ,{tcp_syslog_idle_timeout, 300000} % ms
+    ,{tcp_syslog_idle_fuzz, 15000} % ms
+    ,{tcp_syslog_max_ttl, 18000000} % ms
+    ,{http_drain_idle_timeout, 300000} % ms
+    ,{http_drain_idle_fuzz, 15000} % ms
+    ,{http_drain_max_ttl, 18000000} % ms
     ,{workers, 10}
    ]}
  ,{start_phases,

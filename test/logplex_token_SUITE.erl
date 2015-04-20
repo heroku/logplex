@@ -43,6 +43,7 @@ init_per_testcase(_CaseName, Config) ->
 
 %% Runs after the test case. Runs in the same process.
 end_per_testcase(_CaseName, Config) ->
+    meck:unload(),
     Config.
 
 %%%%%%%%%%%%%
@@ -58,8 +59,12 @@ by_channel(Config) ->
       || Token <- Tokens ],
     true = lists:sort(Tokens) =:=
         lists:sort(logplex_token:lookup_by_channel(Chan)),
+
+    meck:expect(redis_helper, delete_token, fun(_Tok) -> ok end),
     logplex_token:delete_by_channel(Chan),
-    [] = logplex_token:lookup_by_channel(Chan).
+    [] = logplex_token:lookup_by_channel(Chan),
+    4 = meck:num_calls(redis_helper, delete_token, '_'),
+    ok.
 
 by_id(_Config) ->
     Chan = 2,
@@ -72,8 +77,10 @@ by_id(_Config) ->
     logplex_token:cache(BobT),
     [BobT] = logplex_token:lookup_by_channel(Chan),
     [Id] = logplex_token:lookup_ids_by_channel(Chan),
+    meck:expect(redis_helper, delete_token, fun(_Tok) -> ok end),
     logplex_token:delete_by_id(Id),
     [] = logplex_token:lookup_by_channel(Chan),
     [] = logplex_token:lookup_ids_by_channel(Chan),
     undefined = logplex_token:lookup(Id),
+    1 = meck:num_calls(redis_helper, delete_token, '_'),
     ok.
