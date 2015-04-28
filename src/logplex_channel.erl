@@ -28,7 +28,7 @@
          ,post_msg/2
         ]).
 
--export([create_id/0, delete/1, lookup/1,
+-export([delete/1, lookup/1,
          lookup_tokens/1, lookup_drains/1, logs/2, info/1
          ,can_add_drain/1
         ]).
@@ -116,20 +116,6 @@ post_msg({channel, ChannelId}=Name, Msg) when is_tuple(Msg) ->
     logplex_stats:incr(#channel_stat{channel_id=ChannelId, key=channel_post}),
     gproc:send({p, l, Name}, {post, Msg}),
     ok.
-
--spec create_id() -> id() | {'error', term()}.
-create_id() ->
-    case redis_helper:channel_index() of
-        ChannelId when is_integer(ChannelId) ->
-            case redis_helper:create_channel(ChannelId) of
-                ok ->
-                    ChannelId;
-                Err ->
-                    Err
-            end;
-        Err ->
-            Err
-    end.
 
 -spec new_id() -> id().
 new_id() ->
