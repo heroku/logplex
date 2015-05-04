@@ -180,7 +180,10 @@
           "description": "Delete an existing drain.",
           "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}/drains/{(%23%2Fdefinitions%2Fdrain%2Fdefinitions%2Fidentity)}",
           "method": "DELETE",
-          "rel": "destroy",
+          "rel": "empty",
+          "response_example": {
+            "head": "HTTP/1.1 200 OK"
+          },
           "title": "Delete"
         },
         {

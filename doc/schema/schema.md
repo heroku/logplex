@@ -187,11 +187,7 @@ $ curl -n -X DELETE https://logplex.heroku.com/v2/channels/$CHANNEL_CHANNEL_ID/d
 HTTP/1.1 200 OK
 ```
 ```json
-{
-  "id": 123456,
-  "token": "d.01234567-89ab-cdef-0123-456789abcdef",
-  "url": "https://example.org"
-}
+
 ```
 
 ### Drain Update
