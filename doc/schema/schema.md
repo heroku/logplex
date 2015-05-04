@@ -49,7 +49,10 @@ HTTP/1.1 201 Created
 ```json
 {
   "channel_id": 123456,
-  "tokens": "{\"foo\":\"t.01234567-89ab-cdef-0123-456789abcdef\"}"
+  "tokens": {
+    "my-token": "t.01234567-89ab-cdef-0123-456789abcdef",
+    "your-token": "t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"
+  }
 }
 ```
 
@@ -74,22 +77,7 @@ $ curl -n -X DELETE https://logplex.heroku.com/v2/channels/$CHANNEL_CHANNEL_ID \
 HTTP/1.1 200 OK
 ```
 ```json
-{
-  "drains": [
-    {
-      "id": 123456,
-      "token": "d.01234567-89ab-cdef-0123-456789abcdef",
-      "url": "https://example.org"
-    }
-  ],
-  "channel_id": 123456,
-  "tokens": [
-    {
-      "token": "t.01234567-89ab-cdef-0123-456789abcdef",
-      "name": "my-token"
-    }
-  ]
-}
+
 ```
 
 ### Channel Info

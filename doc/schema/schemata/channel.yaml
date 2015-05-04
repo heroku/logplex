@@ -54,14 +54,16 @@ links:
         "$ref": "/schemata/channel#/definitions/channel_id"
       tokens:
         description: created token names and tokens
-        example: "{\"foo\":\"t.01234567-89ab-cdef-0123-456789abcdef\"}"
+        example: {"my-token": "t.01234567-89ab-cdef-0123-456789abcdef", "your-token":"t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"}
         type:
         - object
   title: Create
 - description: Delete an existing channel.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
   method: DELETE
-  rel: destroy
+  rel: "empty"
+  response_example:
+    head: "HTTP/1.1 200 OK"
   title: Delete
 - description: Info for existing channel.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
