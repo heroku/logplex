@@ -28,7 +28,7 @@
          ,post_msg/2
         ]).
 
--export([create_id/0, delete/1, lookup/1,
+-export([delete/1, lookup/1,
          lookup_tokens/1, lookup_drains/1, logs/2, info/1
          ,can_add_drain/1
         ]).
@@ -69,18 +69,19 @@
 -export_type([id/0, name/0, flags/0]).
 
 create(Name) ->
-    Chan = new(create_id(), Name),
+    Chan = new(undefined, Name),
     store(Chan),
     Chan.
 
 destroy(Chan) ->
     delete(id(Chan)).
 
-new(Id) when is_integer(Id) ->
-    #channel{id=Id}.
-new(Id, Name) when is_integer(Id),
-                   is_binary(Name) ->
-    #channel{id=Id, name=Name}.
+new(Id) -> new(Id, <<"">>, []).
+new(Id, Name) -> new(Id, Name, []).
+
+new(undefined, Name, Flags) when is_binary(Name),
+                                 is_list(Flags) ->
+    new(new_id(), Name, Flags);
 new(Id, Name, Flags) when is_integer(Id),
                           is_binary(Name),
                           is_list(Flags) ->
@@ -111,23 +112,16 @@ post_msg(Where, Msg) when is_binary(Msg) ->
         {error, _} = E -> E;
         ParsedMsg -> post_msg(Where, ParsedMsg)
     end;
-post_msg({channel, ChannelId} = Name, Msg) when is_tuple(Msg) ->
+post_msg({channel, ChannelId}=Name, Msg) when is_tuple(Msg) ->
     logplex_stats:incr(#channel_stat{channel_id=ChannelId, key=channel_post}),
     gproc:send({p, l, Name}, {post, Msg}),
     ok.
 
--spec create_id() -> id() | {'error', term()}.
-create_id() ->
+-spec new_id() -> id().
+new_id() ->
     case redis_helper:channel_index() of
         ChannelId when is_integer(ChannelId) ->
-            case redis_helper:create_channel(ChannelId) of
-                ok ->
-                    ChannelId;
-                Err ->
-                    Err
-            end;
-        Err ->
-            Err
+            ChannelId
     end.
 
 -spec store(channel()) -> any().

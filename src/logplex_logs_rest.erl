@@ -109,7 +109,8 @@ is_authorized(Req, State) ->
 token_auth(State, Req2, TokenId) ->
     case logplex_token:lookup(TokenId) of
         undefined ->
-            ?INFO("at=authorization err=unknown_token token=~p", [TokenId]),
+            logplex_realtime:incr(unknown_token),
+            ?INFO("at=authorization token_id=~p msg=unknown_token", [TokenId]),
             {{false, ?BASIC_AUTH}, Req2, State};
         Token ->
             Name = logplex_token:name(Token),
