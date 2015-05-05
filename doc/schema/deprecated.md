@@ -15,6 +15,13 @@ DELETE /channels/{channel_id}
 ```bash
 $ curl -v -X DELETE https://logplex.heroku.com/channels/$CHANNEL_CHANNEL_ID
 ```
+#### Response Example
+```
+HTTP/1.1 200 OK
+```
+```text
+OK
+```
 
 ## Drains
 
