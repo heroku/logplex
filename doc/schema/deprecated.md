@@ -12,7 +12,7 @@ POST /channels/{channel_channel_id}/drains/tokens
 
 #### Curl Example
 ```bash
-$ curl -v -X POST http://logplex.heroku.com/channels/$CHANNEL_CHANNEL_ID/drains/tokens
+$ curl -v -X POST https://logplex.heroku.com/channels/$CHANNEL_CHANNEL_ID/drains/tokens
 ```
 
 #### Response Example
@@ -25,4 +25,30 @@ HTTP/1.1 201 OK
   "token": "d.97da6842-57a3-4ade-b34d-097f9c83d5bb",
   "msg": "Successfully reserved drain token"
 }
+```
+
+## Sessions
+
+### Create Session
+
+Created a sesssion for a given log channel
+
+```
+POST /sessions
+```
+
+#### Curl Example
+```bash
+$ curl -n -X POST https://logplex.heroku.com/sessions \
+ -H "Content-Type: application/json" \
+ \
+ -d '{
+  name: 123456,
+  channel_id: 123456,
+}'
+```
+
+#### Response Example
+```
+/sessions/b15ca55d-4bc6-4d78-9061-20a0a18d400b
 ```
