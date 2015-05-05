@@ -2,9 +2,16 @@
 "$schema": http://json-schema.org/draft-04/hyper-schema
 title: Session
 definitions:
+  session_id:
+    description: unique identifier of a session
+    example: d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f
+    type:
+      - string
+  identity:
+    "$ref": "/schemata/session#/definitions/session_id"
   url:
     description: session URL to GET to retrieve logs
-    example: https://example.org/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f
+    example: https://logplex.heroku.com/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f
     type:
     - string
 description: Sessions fetch recent and real-time logs from channels.
@@ -22,20 +29,46 @@ links:
         - string
       num:
         description: number of log lines to fetch
-        default: 100
+        default: "100"
         type:
-        - integer
+        - string
         - "null"
       tail:
         description: if present with any value, start a live tail session
         type:
         - boolean
         - "null"
+    example:
+      channel_id: "12345"
+      num: 5
     required:
     - channel_id
     type:
     - object
   title: Create
+- description: Get the chunk encoded session log data. If tail was specified the connection is long lived.
+  href: "/sessions/{(%2Fschemata%2Fsession%23%2Fdefinitions%2Fidentity)}"
+  method: GET
+  schema:
+    properties:
+      srv:
+        description: required client version check
+        example: 1
+        type:
+          - number
+    required:
+    - srv
+  rel: "empty"
+  response_example:
+    head: |
+      HTTP/1.1 200 OK
+      Transfer-Encoding: chunked
+    body: |
+      2012-12-10T03:00:48Z+00:00 app[console.1]: test message 1
+      2012-12-10T03:00:49Z+00:00 app[console.1]: test message 2
+      2012-12-10T03:00:50Z+00:00 app[console.1]: test message 3
+      2012-12-10T03:00:51Z+00:00 app[console.1]: test message 4
+      2012-12-10T03:00:52Z+00:00 app[console.1]: test message 5
 properties:
   url:
     "$ref": "/schemata/session#/definitions/url"

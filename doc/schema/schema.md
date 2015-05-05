@@ -235,7 +235,7 @@ Sessions fetch recent and real-time logs from channels.
 ### Attributes
 | Name | Type | Description | Example |
 | ------- | ------- | ------- | ------- |
-| **url** | *string* | session URL to GET to retrieve logs | `"https://example.org/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f"` |
+| **url** | *string* | session URL to GET to retrieve logs | `"https://logplex.heroku.com/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f"` |
 ### Session Create
 Create a new session.
 
@@ -252,7 +252,7 @@ POST /v2/sessions
 #### Optional Parameters
 | Name | Type | Description | Example |
 | ------- | ------- | ------- | ------- |
-| **num** | *nullable integer* | number of log lines to fetch<br/> **default:** `100` | `null` |
+| **num** | *nullable string* | number of log lines to fetch<br/> **default:** `"100"` | `null` |
 | **tail** | *nullable boolean* | if present with any value, start a live tail session | `null` |
 
 
@@ -263,8 +263,7 @@ $ curl -n -X POST https://logplex.heroku.com/v2/sessions \
  \
   -d '{
   "channel_id": "12345",
-  "num": null,
-  "tail": null
+  "num": 5
 }'
 
 ```
@@ -276,8 +275,46 @@ HTTP/1.1 201 Created
 ```
 ```json
 {
-  "url": "https://example.org/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f"
+  "url": "https://logplex.heroku.com/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f"
 }
+```
+
+### Session 
+Get the chunk encoded session log data. If tail was specified the connection is long lived.
+
+```
+GET /sessions/{session_session_id}
+```
+
+#### Required Parameters
+| Name | Type | Description | Example |
+| ------- | ------- | ------- | ------- |
+| **srv** | *number* | required client version check | `1` |
+
+
+
+#### Curl Example
+```bash
+$ curl -n -X GET https://logplex.heroku.com/sessions/$SESSION_SESSION_ID
+ -G \
+  -d srv=1
+
+```
+
+
+#### Response Example
+```
+HTTP/1.1 200 OK
+Transfer-Encoding: chunked
+
+```
+```json
+2012-12-10T03:00:48Z+00:00 app[console.1]: test message 1
+2012-12-10T03:00:49Z+00:00 app[console.1]: test message 2
+2012-12-10T03:00:50Z+00:00 app[console.1]: test message 3
+2012-12-10T03:00:51Z+00:00 app[console.1]: test message 4
+2012-12-10T03:00:52Z+00:00 app[console.1]: test message 5
+
 ```
 
 
