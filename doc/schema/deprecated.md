@@ -1,5 +1,21 @@
 # Deprecated API Calls not found schema document that are known to still be in use by clients
 
+## Channels
+
+### Delete Channel
+
+Deletes a channel
+
+```
+DELETE /channels/{channel_id}
+```
+
+#### Curl Example
+
+```bash
+$ curl -v -X DELETE https://logplex.heroku.com/channels/$CHANNEL_CHANNEL_ID
+```
+
 ## Drains
 
 ### Drain Id Reserve
@@ -31,7 +47,7 @@ HTTP/1.1 201 OK
 
 ### Create Session
 
-Created a sesssion for a given log channel
+Create a sesssion for a given log channel
 
 ```
 POST /sessions
@@ -51,4 +67,24 @@ $ curl -n -X POST https://logplex.heroku.com/sessions \
 #### Response Example
 ```
 /sessions/b15ca55d-4bc6-4d78-9061-20a0a18d400b
+```
+
+## Tokens
+
+### Create Token
+
+Create a token for a log channel
+
+```
+POST /channels/{channel_id}/tokens
+```
+
+#### Curl Example
+```bash
+$ curl -n -X POST https://logplex.heroku.com/channels/1234/tokens \
+ -H "Content-Type: application/json" \
+ \
+ -d '{
+  name: "my new token"
+}'
 ```
