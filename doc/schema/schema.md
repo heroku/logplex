@@ -263,7 +263,7 @@ $ curl -n -X POST https://logplex.heroku.com/v2/sessions \
  \
   -d '{
   "channel_id": "12345",
-  "num": 5
+  "num": "5"
 }'
 
 ```

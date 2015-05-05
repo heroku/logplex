@@ -40,7 +40,7 @@ links:
         - "null"
     example:
       channel_id: "12345"
-      num: 5
+      num: "5"
     required:
     - channel_id
     type:
