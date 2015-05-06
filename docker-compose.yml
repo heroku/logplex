@@ -8,7 +8,7 @@ db:
     - data
 logplex:
   build: .
-  command: ./bin/fig_logplex
+  command: ./bin/compose_logplex
   volumes:
     - .:/usr/src/app
   ports:
