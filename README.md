@@ -80,7 +80,7 @@ create a log session
 
 fetch logs for session
 
-    $ curl http://local:password@localhost:8001/sessions/9d53bf70-7964-4429-a589-aaa4df86fead?srv=1
+    $ curl http://local:password@localhost:8001/sessions/9d53bf70-7964-4429-a589-aaa4df86fead
     2012-12-10T03:00:48Z+00:00 app[console.1]: test message 1
 
 # Supervision Tree

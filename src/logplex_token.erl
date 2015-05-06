@@ -43,7 +43,6 @@
 
 -export([store/1
          ,create/2
-         ,destroy/1
          ,create_ets_table/0
          ,reindex_tokens/1
          ,reindex_tokens/0
@@ -98,14 +97,6 @@ create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
             Err
     end.
 
-destroy(TokenId) when is_binary(TokenId) ->
-    case lookup(TokenId) of
-        #token{} ->
-            redis_helper:delete_token(TokenId);
-        _ ->
-            {error, not_found}
-    end.
-
 lookup(TokenId) when is_binary(TokenId) ->
     case ets:lookup(?TOKEN_TAB, TokenId) of
         [Token] when is_record(Token, token) ->
@@ -145,8 +136,13 @@ load(Token = #token{}) ->
     ets:insert(?TOKEN_TAB, Token).
 
 delete(#token{id = Id, channel_id = ChannelId}) ->
-    ets:delete(?TOKEN_TAB, Id),
-    ets:delete(?CHAN_TOKEN_TAB, index_key(ChannelId, Id)).
+    ets:delete(?CHAN_TOKEN_TAB, index_key(ChannelId, Id)),
+    case ets:delete(?TOKEN_TAB, Id) of
+        false -> false;
+        true ->
+            redis_helper:delete_token(Id),
+            true
+    end.
 
 delete_by_id(Id) ->
     case lookup(Id) of

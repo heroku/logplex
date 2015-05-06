@@ -34,16 +34,11 @@
          terminate/2,
          code_change/3]).
 
--define(DEFAULT_MSG_CB,
-        {logplex_worker, logplex_worker:init_state()}).
-
-
 -record(state, {sock :: 'undefined' | port(),
                 buffer = syslog_parser:new(),
                 peername :: 'undefined' | {inet:ip4_address(),
                                            inet:port_number()},
-                connect_time :: 'undefined' | erlang:timestamp(),
-                cb = ?DEFAULT_MSG_CB :: {Module::atom(), State::term()}
+                connect_time :: 'undefined' | erlang:timestamp()
                }).
 
 -include("logplex_logging.hrl").
@@ -61,7 +56,7 @@ set_socket(Pid, CSock) ->
 %% gen_server callbacks
 %%====================================================================
 init([]) ->
-    {ok, #state{cb=?DEFAULT_MSG_CB}}.
+    {ok, #state{}}.
 
 handle_call(Msg, _From, State) ->
     ?WARN("err=unexpected_call data=~p", [Msg]),
@@ -98,17 +93,9 @@ handle_info({tcp, Sock, Packet},
                       [?MODULE, Err]),
             ok
     end,
-    NewState = try process_msgs(Msgs, State) of
-                   S = #state{} -> S
-               catch
-                   Class:Ex ->
-                       ?WARN("at=process_msgs class=~p ex=~p "
-                             "msg_len=~p stack=~p",
-                             [Class, Ex, length(Msgs), erlang:get_stacktrace()]),
-                       State
-               end,
+    logplex_message:process_msgs(Msgs),
     inet:setopts(Sock, [{active, once}]),
-    {noreply, NewState#state{buffer=NewBuf}};
+    {noreply, State#state{ buffer=NewBuf }};
 
 handle_info({tcp_closed, Sock}, State = #state{sock = Sock,
                                                peername={H,P}}) ->
@@ -135,26 +122,6 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
--spec process_msgs([{msg, binary()} |
-                    {malformed_msg, binary()}], #state{}) -> #state{}.
-process_msgs(Msgs, S = #state{cb={Mod,ModState}}) ->
-    Fold = fun ({msg, Msg}, MS) ->
-                   logplex_stats:incr(message_received),
-                   logplex_realtime:incr('message.received'),
-                   {ok, NewMS} = Mod:handle_message(Msg, MS),
-                   NewMS;
-               ({malformed, Msg}, MS) ->
-                   ?WARN("err=malformed_syslog_message data=\"~p\"~n",
-                         [Msg]),
-                   logplex_stats:incr(message_received_malformed),
-                   logplex_realtime:incr('message.received-malformed'),
-                   MS
-           end,
-    NewModState = lists:foldl(Fold,
-                              ModState,
-                              Msgs),
-    S#state{cb={Mod,NewModState}}.
 
 duration(#state{connect_time=undefined}) ->
     "undefined";

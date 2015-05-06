@@ -131,9 +131,10 @@ handlers() ->
         Body = Req:recv_body(),
         {struct, Params} = mochijson2:decode(Body),
 
-        ChannelId = logplex_channel:create_id(),
-        not is_integer(ChannelId) andalso exit({expected_integer, ChannelId}),
-
+        Name = proplists:get_value(<<"name">>, Params, <<"">>),
+        is_binary(Name) orelse error_resp(400, <<"Channel name must be a string.">>),
+        Channel = logplex_channel:create(Name),
+        ChannelId = logplex_channel:id(Channel),
         Tokens =
             case proplists:get_value(<<"tokens">>, Params) of
                 List when length(List) > 0 ->
@@ -143,7 +144,7 @@ handlers() ->
                     []
             end,
         Info = [{channel_id, ChannelId}, {tokens, Tokens}],
-        {201, iolist_to_binary(mochijson2:encode({struct, Info}))}
+        {201, ?JSON_CONTENT, iolist_to_binary(mochijson2:encode({struct, Info}))}
     end},
 
     %% V2
@@ -249,8 +250,6 @@ handlers() ->
     end},
 
     {['GET', "^/sessions/([\\w-]+)$"], fun(Req, [Session], _) ->
-        proplists:get_value("srv", Req:parse_qs()) == undefined
-            andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version. If this error message persists then uninstall the Heroku client gem completely and re-install.\n">>),
         Timeout = timer:seconds(logplex_app:config(session_lookup_timeout_s,
                                                    5)),
         Body = logplex_session:poll(list_to_binary(Session),
@@ -311,8 +310,6 @@ handlers() ->
     end},
 
     {['GET', "^/v2/canary-fetch/([\\w-]+)$"], fun(Req, [Session], _) ->
-        proplists:get_value("srv", Req:parse_qs()) == undefined
-            andalso error_resp(400, <<"[Error]: Please update your Heroku client to the most recent version. If this error message persists then uninstall the Heroku client gem completely and re-install.\n">>),
         Timeout = timer:seconds(logplex_app:config(session_lookup_timeout_s,
                                                    5)),
         Body = logplex_session:poll(list_to_binary(Session),

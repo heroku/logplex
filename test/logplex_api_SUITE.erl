@@ -20,6 +20,7 @@ all() ->
     [{group, v2_canary}
     ,{group, read_only}
     ,{group, disabled}
+    ,channel_create_with_app_name
     ].
 
 init_per_suite(Config) ->
@@ -57,6 +58,10 @@ end_per_group(disabled, Config) ->
 end_per_group(_, _Config) ->
     ok.
 
+init_per_testcase(channel_create_with_app_name=_Case, Config) ->
+    ChannelName = <<"test-app">>,
+    Token = <<"test">>,
+    [{channel_name, ChannelName}, {channel_token, Token} | Config];
 init_per_testcase(v2_canary_session=Case, Config) ->
     Channel = logplex_channel:create(atom_to_binary(Case, latin1)),
     ChannelId = logplex_channel:id(Channel),
@@ -103,6 +108,33 @@ init_per_testcase(_Case, Config) ->
 end_per_testcase(_Case, Config) ->
     Config.
 
+channel_create_with_app_name(Config) ->
+    Api = ?config(api, Config) ++ "/channels",
+    BasicAuth = ?config(auth, Config),
+    ChannelName = ?config(channel_name, Config),
+    TokenName = ?config(channel_token, Config),
+
+    Channel = logplex_channel:create(ChannelName),
+    ChannelId = logplex_channel:id(Channel),
+    Token = logplex_token:create(ChannelId, TokenName),
+
+    meck:expect(logplex_channel, create, [{[ChannelName], Channel}]),
+    meck:expect(logplex_token, create, [{[ChannelId, TokenName], Token}]),
+
+    JsonBody = ["{\"name\":\"", ChannelName, "\","
+                "\"tokens\": [\"", TokenName, "\"]}"],
+
+    Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
+                     {body, iolist_to_binary(JsonBody)}]),
+    201 = proplists:get_value(status_code, Res),
+    {struct, Props} = mochijson2:decode(proplists:get_value(body, Res)),
+
+    ChannelId = proplists:get_value(<<"channel_id">>, Props),
+    {struct, [{TokenName, Token}]} = proplists:get_value(<<"tokens">>, Props),
+
+    meck:unload(),
+    ok.
+
 v2_canary_session(Config) ->
     Api = ?config(api, Config) ++ "/v2/canary-sessions",
     BasicAuth = ?config(auth, Config),
@@ -119,7 +151,7 @@ v2_canary_fetch(Config) ->
     {v2_canary_session, SavedConfig} = ?config(saved_config, Config),
     Session = proplists:get_value(canary_session, SavedConfig),
     Api = ?config(api, Config) ++ "/v2/canary-fetch/"
-        ++ binary_to_list(Session) ++ "?srv=ct",
+        ++ binary_to_list(Session),
     Res = get_(Api, []),
     Headers = proplists:get_value(headers, Res),
     "text/html" = proplists:get_value("content-type", Headers),
@@ -153,7 +185,7 @@ unavailable_v2_canary_session(Config) ->
 unavailable_v2_canary_fetch(Config) ->
     Session = proplists:get_value(canary_session, Config),
     Api = ?config(api, Config) ++ "/v2/canary-fetch/"
-        ++ binary_to_list(Session) ++ "?srv=ct",
+        ++ binary_to_list(Session),
     Res = get_(Api, []),
     503 = proplists:get_value(status_code, Res).
 
@@ -162,6 +194,7 @@ get_(Url, Opts) ->
     request(get, Url, Opts).
 
 post(Url, Opts) ->
+    ct:pal("POST url=~p, opts=~p", [Url, Opts]),
     request(post, Url, Opts).
 
 request(Method, Url, Opts) ->

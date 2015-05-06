@@ -1,0 +1,66 @@
+---
+"$schema": http://json-schema.org/draft-04/hyper-schema
+title: Drain
+definitions:
+  id:
+    description: unique identifier of drain
+    example: 123456
+    type:
+    - integer
+  identity:
+    "$ref": "/schemata/drain#/definitions/id"
+  token:
+    description: drain token
+    example: d.01234567-89ab-cdef-0123-456789abcdef
+    type:
+    - string
+  url:
+    description: drain destination
+    example: https://example.org
+    type:
+    - string
+description: Drains are log stream tee targets.
+links:
+- description: Create a new drain.
+  href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}/drains"
+  method: POST
+  rel: create
+  schema:
+    properties:
+      url:
+        "$ref": "/schemata/drain#/definitions/url"
+    required:
+    - url
+    type:
+    - object
+  title: Create
+- description: Delete an existing drain.
+  href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}/drains/{(%2Fschemata%2Fdrain%23%2Fdefinitions%2Fidentity)}"
+  method: DELETE
+  rel: "empty"
+  response_example:
+    head: "HTTP/1.1 200 OK"
+  title: Delete
+- description: Update an existing drain.
+  href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}/drains/{(%2Fschemata%2Fdrain%23%2Fdefinitions%2Fidentity)}"
+  method: POST
+  rel: update
+  schema:
+    properties:
+      url:
+        "$ref": "/schemata/drain#/definitions/url"
+    required:
+    - url
+    type:
+    - object
+  title: Update
+properties:
+  id:
+    "$ref": "/schemata/drain#/definitions/id"
+  token:
+    "$ref": "/schemata/drain#/definitions/token"
+  url:
+    "$ref": "/schemata/drain#/definitions/url"
+type:
+- object
+id: schemata/drain

@@ -29,8 +29,7 @@
 %% Application callbacks
 -export([start/2, start_phase/3, stop/1]).
 
--export([logplex_work_queue_args/0
-         ,nsync_opts/0
+-export([nsync_opts/0
          ,config/0
          ,config/1
          ,config/2
@@ -227,15 +226,6 @@ setup_redis_shards() ->
 
 setup_firehose() ->
     logplex_firehose:enable().
-
-logplex_work_queue_args() ->
-    MaxLength = logplex_utils:to_int(config(queue_length)),
-    NumWorkers = logplex_utils:to_int(config(workers)),
-    [{name, "logplex_work_queue"},
-     {max_length, MaxLength},
-     {num_workers, NumWorkers},
-     {worker_sup, logplex_worker_sup},
-     {worker_args, []}].
 
 nsync_opts() ->
     RedisUrl = config(config_redis_url),

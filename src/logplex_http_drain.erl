@@ -30,8 +30,11 @@
 -define(SHRINK_TIMEOUT, timer:minutes(5)).
 -define(SHRINK_BUF_SIZE, 10).
 
--type drop_info() :: {erlang:timestamp(), pos_integer()}.
+-ifdef(namespaced_types).
+-type queue() :: queue:queue().
+-endif.
 
+-type drop_info() :: {erlang:timestamp(), pos_integer()}.
 
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
