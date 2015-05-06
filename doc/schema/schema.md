@@ -286,18 +286,10 @@ Get the chunk encoded session log data. If tail was specified the connection is 
 GET /sessions/{session_session_id}
 ```
 
-#### Required Parameters
-| Name | Type | Description | Example |
-| ------- | ------- | ------- | ------- |
-| **srv** | *number* | required client version check | `1` |
-
-
 
 #### Curl Example
 ```bash
 $ curl -n -X GET https://logplex.heroku.com/sessions/$SESSION_SESSION_ID
- -G \
-  -d srv=1
 
 ```
 

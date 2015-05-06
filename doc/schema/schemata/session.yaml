@@ -49,15 +49,6 @@ links:
 - description: Get the chunk encoded session log data. If tail was specified the connection is long lived.
   href: "/sessions/{(%2Fschemata%2Fsession%23%2Fdefinitions%2Fidentity)}"
   method: GET
-  schema:
-    properties:
-      srv:
-        description: required client version check
-        example: 1
-        type:
-          - number
-    required:
-    - srv
   rel: "empty"
   response_example:
     head: |
