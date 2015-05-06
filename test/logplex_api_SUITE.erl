@@ -151,7 +151,7 @@ v2_canary_fetch(Config) ->
     {v2_canary_session, SavedConfig} = ?config(saved_config, Config),
     Session = proplists:get_value(canary_session, SavedConfig),
     Api = ?config(api, Config) ++ "/v2/canary-fetch/"
-        ++ binary_to_list(Session) ++ "?srv=ct",
+        ++ binary_to_list(Session),
     Res = get_(Api, []),
     Headers = proplists:get_value(headers, Res),
     "text/html" = proplists:get_value("content-type", Headers),
@@ -185,7 +185,7 @@ unavailable_v2_canary_session(Config) ->
 unavailable_v2_canary_fetch(Config) ->
     Session = proplists:get_value(canary_session, Config),
     Api = ?config(api, Config) ++ "/v2/canary-fetch/"
-        ++ binary_to_list(Session) ++ "?srv=ct",
+        ++ binary_to_list(Session),
     Res = get_(Api, []),
     503 = proplists:get_value(status_code, Res).
 
