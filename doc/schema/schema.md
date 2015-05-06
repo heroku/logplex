@@ -279,7 +279,7 @@ HTTP/1.1 201 Created
 }
 ```
 
-### Session 
+### Session Logs
 Get the chunk encoded session log data. If tail was specified the connection is long lived.
 
 ```

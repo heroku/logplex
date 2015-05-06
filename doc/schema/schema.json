@@ -311,7 +311,8 @@
           "response_example": {
             "head": "HTTP/1.1 200 OK\nTransfer-Encoding: chunked\n",
             "body": "2012-12-10T03:00:48Z+00:00 app[console.1]: test message 1\n2012-12-10T03:00:49Z+00:00 app[console.1]: test message 2\n2012-12-10T03:00:50Z+00:00 app[console.1]: test message 3\n2012-12-10T03:00:51Z+00:00 app[console.1]: test message 4\n2012-12-10T03:00:52Z+00:00 app[console.1]: test message 5\n"
-          }
+          },
+          "title": "Logs"
         }
       ],
       "properties": {
