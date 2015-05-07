@@ -229,6 +229,33 @@ HTTP/1.1 200 OK
 ```
 
 
+## Healthchecks
+
+
+### Healthchecks 
+Performs a health check against the API
+
+```
+GET /healthcheck
+```
+
+
+#### Curl Example
+```bash
+$ curl -n -X GET https://logplex.heroku.com/healthcheck
+
+```
+
+
+#### Response Example
+```
+HTTP/1.1 200 OK
+```
+```json
+
+```
+
+
 ## Session
 Sessions fetch recent and real-time logs from channels.
 
