@@ -1,0 +1,11 @@
+---
+"$schema": http://json-schema.org/draft-04/hyper-schema
+title: Healthchecks
+links:
+- description: Performs a health check against the API
+  href: "/healthcheck"
+  method: GET
+  rel: empty
+  response_example:
+    head: "HTTP/1.1 200 OK"
+id: schemata/health
