@@ -1,0 +1,14 @@
+#!/bin/sh
+export INSTANCE_NAME=`hostname -i`
+export LOCAL_IP=`hostname -i`
+exec erl +K true +A100 +P500000 \
+  -env ERL_MAX_PORTS 65535 \
+  -config sys \
+  -name logplex@`hostname -i` \
+  -i include \
+  -pa ebin \
+  -env ERL_LIBS deps \
+  -setcookie ${LOGPLEX_COOKIE} \
+  -noshell -noinput \
+  -kernel inet_dist_listen_min 49000 inet_dist_listen_max 49000 \
+  -s logplex_app

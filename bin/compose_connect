@@ -1,0 +1,19 @@
+#!/bin/bash
+
+while getopts ":n:h:" opt; do
+  case $opt in
+    n)
+      NODENAME=$OPTARG
+      ;;
+    h)
+      HOST=$OPTARG
+      ;;
+  esac
+done
+
+NODENAME=${NODENAME:-remsh}
+HOST=${logplex:-logplex}
+LOCAL_IP=`hostname -i`
+HOST_IP=`getent hosts ${HOST} | head -n 1 | cut -d ' ' -f 1`
+
+erl -name ${NODENAME}@${LOCAL_IP} -hidden -setcookie $LOGPLEX_COOKIE -remsh logplex@${HOST_IP}

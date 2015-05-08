@@ -12,17 +12,27 @@ For more details, you can look at stream management documentation in `doc/`.
 
 # Table of Contents
 
-1. [Build](#build)
-2. [Test](#test)
+1. [Local Build](#local-build)
+1. [Docker Build](#docker-build)
+2. [Local Test](#local-test)
+2. [Docker Test](#docker-test)
 3. [Develop](#develop)
 4. [Supervision Tree](#supervision-tree)
 5. [Processes](#processes)
 
-# Build
+# Local Build
 
     $ ./rebar --config public.rebar.config get-deps compile
 
-# Test
+# Docker Build
+
+Requires a working install of Docker (boot2docker on osx) and Docker Compose.
+Follow the [installations](https://docs.docker.com/installation/#installation)
+steps outlined docs.docker.com.
+
+    docker-compose build
+
+# Local Test
 
 Given an empty local redis (v2.6ish):
 
@@ -38,6 +48,10 @@ Given an empty local redis (v2.6ish):
 
 Runs the common test suite for logplex.
 
+# Docker Test
+
+    docker-compose run test
+
 # Develop
 
 run
@@ -51,6 +65,7 @@ run
       erl -name logplex@`hostname` -pa ebin -env ERL_LIBS deps -s logplex_app -setcookie ${LOGPLEX_COOKIE} -config sys
 
 create creds
+
 
     1> logplex_cred:store(logplex_cred:grant('full_api', logplex_cred:grant('any_channel', logplex_cred:rename(<<"Local-Test">>, logplex_cred:new(<<"local">>, <<"password">>))))).
     ok

@@ -1,0 +1,27 @@
+data:
+  image: redis:2.6
+  command: true
+db:
+  image: redis:2.6
+  command: redis-server
+  volumes_from:
+    - data
+logplex:
+  build: .
+  command: ./bin/compose_logplex
+  volumes:
+    - .:/usr/src/app
+  ports:
+    - "8001:8001"
+    - "8601:8601"
+    - "6001:6001"
+  links:
+    - db
+test:
+  image: logplex_logplex
+  command: bin/compose_test_logplex
+  volumes:
+    - .:/usr/src/app
+  links:
+    - db
+
