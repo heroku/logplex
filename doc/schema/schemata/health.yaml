@@ -13,7 +13,7 @@ links:
       HTTP/1.1 200 OK
     body: |
       OK
-  title: Health
+  title: Check
 type:
   - object
 id: schemata/health

@@ -232,7 +232,7 @@ HTTP/1.1 200 OK
 ## Healthchecks
 
 
-### Healthchecks Health
+### Healthchecks Check
 Performs a health check against the API.
 
 ```

@@ -250,7 +250,7 @@
             "head": "HTTP/1.1 200 OK\n",
             "body": "OK\n"
           },
-          "title": "Health"
+          "title": "Check"
         }
       ],
       "type": [
