@@ -6,13 +6,13 @@ definitions:
     description: unique identifier of channel
     example: 123456
     type:
-    - integer
+      - integer
   drains:
     description: drains under the channel
     items:
       "$ref": "/schemata/drain"
     type:
-    - array
+      - array
   identity:
     "$ref": "/schemata/channel#/definitions/channel_id"
   tokens:
@@ -20,7 +20,7 @@ definitions:
     items:
       "$ref": "/schemata/token"
     type:
-    - array
+      - array
 description: A channel is a log stream.
 links:
 - description: Create a new channel.
@@ -33,7 +33,7 @@ links:
         description: a name for the channel
         example: my-channel
         type:
-        - string
+          - string
       tokens:
         description: names of tokens to create
         example:
@@ -41,14 +41,16 @@ links:
           - your-token
         items:
           type:
-          - string
+            - string
         type:
-        - array
-    required:
-    - name
+          - array
     type:
-    - object
+      - object
+    required:
+      - name
   targetSchema:
+    type:
+      - object
     properties:
       channel_id:
         "$ref": "/schemata/channel#/definitions/channel_id"
@@ -56,7 +58,7 @@ links:
         description: created token names and tokens
         example: {"my-token": "t.01234567-89ab-cdef-0123-456789abcdef", "your-token":"t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"}
         type:
-        - object
+          - object
   title: Create
 - description: Delete an existing channel.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
@@ -65,11 +67,15 @@ links:
   response_example:
     head: "HTTP/1.1 200 OK"
   title: Delete
+  type:
+    - null
 - description: Info for existing channel.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
   method: GET
   rel: self
   title: Info
+  type:
+    - object
 properties:
   drains:
     "$ref": "/schemata/channel#/definitions/drains"
@@ -78,5 +84,5 @@ properties:
   tokens:
     "$ref": "/schemata/channel#/definitions/tokens"
 type:
-- object
+  - object
 id: schemata/channel

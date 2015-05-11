@@ -232,8 +232,8 @@ HTTP/1.1 200 OK
 ## Healthchecks
 
 
-### Healthchecks 
-Performs a health check against the API
+### Healthchecks Health
+Performs a health check against the API.
 
 ```
 GET /healthcheck
@@ -250,8 +250,10 @@ $ curl -n -X GET https://logplex.heroku.com/healthcheck
 #### Response Example
 ```
 HTTP/1.1 200 OK
+
 ```
 ```json
+OK
 
 ```
 

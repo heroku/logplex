@@ -20,6 +20,16 @@ definitions:
     type:
     - string
 description: Drains are log stream tee targets.
+properties:
+  id:
+    "$ref": "/schemata/drain#/definitions/id"
+  token:
+    "$ref": "/schemata/drain#/definitions/token"
+  url:
+    "$ref": "/schemata/drain#/definitions/url"
+type:
+- object
+id: schemata/drain
 links:
 - description: Create a new drain.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}/drains"
@@ -41,6 +51,8 @@ links:
   response_example:
     head: "HTTP/1.1 200 OK"
   title: Delete
+  type:
+    - null
 - description: Update an existing drain.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}/drains/{(%2Fschemata%2Fdrain%23%2Fdefinitions%2Fidentity)}"
   method: POST
@@ -54,13 +66,3 @@ links:
     type:
     - object
   title: Update
-properties:
-  id:
-    "$ref": "/schemata/drain#/definitions/id"
-  token:
-    "$ref": "/schemata/drain#/definitions/token"
-  url:
-    "$ref": "/schemata/drain#/definitions/url"
-type:
-- object
-id: schemata/drain

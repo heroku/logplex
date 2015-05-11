@@ -20,6 +20,8 @@ links:
   href: "/v2/sessions"
   method: POST
   rel: create
+  type:
+    - object
   schema:
     properties:
       channel_id:
@@ -42,14 +44,17 @@ links:
       channel_id: "12345"
       num: "5"
     required:
-    - channel_id
+      - channel_id
     type:
-    - object
+      - object
   title: Create
 - description: Get the chunk encoded session log data. If tail was specified the connection is long lived.
   href: "/sessions/{(%2Fschemata%2Fsession%23%2Fdefinitions%2Fidentity)}"
   method: GET
   rel: "empty"
+  type:
+    - null
+    - string
   response_example:
     head: |
       HTTP/1.1 200 OK
@@ -65,5 +70,5 @@ properties:
   url:
     "$ref": "/schemata/session#/definitions/url"
 type:
-- object
+  - object
 id: schemata/session

@@ -66,14 +66,17 @@
                 ]
               }
             },
-            "required": [
-              "name"
-            ],
             "type": [
               "object"
+            ],
+            "required": [
+              "name"
             ]
           },
           "targetSchema": {
+            "type": [
+              "object"
+            ],
             "properties": {
               "channel_id": {
                 "$ref": "#/definitions/channel/definitions/channel_id"
@@ -100,14 +103,20 @@
           "response_example": {
             "head": "HTTP/1.1 200 OK"
           },
-          "title": "Delete"
+          "title": "Delete",
+          "type": [
+            null
+          ]
         },
         {
           "description": "Info for existing channel.",
           "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}",
           "method": "GET",
           "rel": "self",
-          "title": "Info"
+          "title": "Info",
+          "type": [
+            "object"
+          ]
         }
       ],
       "properties": {
@@ -155,6 +164,20 @@
         }
       },
       "description": "Drains are log stream tee targets.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/drain/definitions/id"
+        },
+        "token": {
+          "$ref": "#/definitions/drain/definitions/token"
+        },
+        "url": {
+          "$ref": "#/definitions/drain/definitions/url"
+        }
+      },
+      "type": [
+        "object"
+      ],
       "links": [
         {
           "description": "Create a new drain.",
@@ -184,7 +207,10 @@
           "response_example": {
             "head": "HTTP/1.1 200 OK"
           },
-          "title": "Delete"
+          "title": "Delete",
+          "type": [
+            null
+          ]
         },
         {
           "description": "Update an existing drain.",
@@ -206,20 +232,6 @@
           },
           "title": "Update"
         }
-      ],
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/drain/definitions/id"
-        },
-        "token": {
-          "$ref": "#/definitions/drain/definitions/token"
-        },
-        "url": {
-          "$ref": "#/definitions/drain/definitions/url"
-        }
-      },
-      "type": [
-        "object"
       ]
     },
     "health": {
@@ -227,14 +239,22 @@
       "title": "Healthchecks",
       "links": [
         {
-          "description": "Performs a health check against the API",
+          "description": "Performs a health check against the API.",
           "href": "/healthcheck",
           "method": "GET",
+          "type": [
+            "string"
+          ],
           "rel": "empty",
           "response_example": {
-            "head": "HTTP/1.1 200 OK"
-          }
+            "head": "HTTP/1.1 200 OK\n",
+            "body": "OK\n"
+          },
+          "title": "Health"
         }
+      ],
+      "type": [
+        "object"
       ]
     },
     "session": {
@@ -266,6 +286,9 @@
           "href": "/v2/sessions",
           "method": "POST",
           "rel": "create",
+          "type": [
+            "object"
+          ],
           "schema": {
             "properties": {
               "channel_id": {
@@ -309,6 +332,10 @@
           "href": "/sessions/{(%23%2Fdefinitions%2Fsession%2Fdefinitions%2Fidentity)}",
           "method": "GET",
           "rel": "empty",
+          "type": [
+            null,
+            "string"
+          ],
           "response_example": {
             "head": "HTTP/1.1 200 OK\nTransfer-Encoding: chunked\n",
             "body": "2012-12-10T03:00:48Z+00:00 app[console.1]: test message 1\n2012-12-10T03:00:49Z+00:00 app[console.1]: test message 2\n2012-12-10T03:00:50Z+00:00 app[console.1]: test message 3\n2012-12-10T03:00:51Z+00:00 app[console.1]: test message 4\n2012-12-10T03:00:52Z+00:00 app[console.1]: test message 5\n"

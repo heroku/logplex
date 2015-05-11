@@ -5,5 +5,5 @@ id: api-logplex
 links:
   - href: "https://logplex.heroku.com"
     rel: "self"
-type:
-  "object"
+type: 
+  - object
