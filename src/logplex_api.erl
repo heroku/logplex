@@ -71,7 +71,7 @@ loop(Req) ->
         Time = timer:now_diff(os:timestamp(), Start) div 1000,
         case Served of
             {Code, Hdr, Body} ->
-                Req:respond({Code, Hdr, Body}),
+                Req:respond({status_io(Code), Hdr, Body}),
                 ?INFO("at=request channel_id=~s method=~p path=~s"
                     " resp_code=~w time=~w body=~s",
                     [ChannelId, Method, Path, Code, Time, Body]);
@@ -79,8 +79,7 @@ loop(Req) ->
                 ?INFO("at=request channel_id=~s method=~p path=~s "
                       "resp_code=~w time=~w body=~s",
                       [ChannelId, Method, Path, Code, Time, Details])
-        end,
-        exit(normal)
+        end
     catch
         exit:normal ->
             exit(normal);
@@ -90,8 +89,7 @@ loop(Req) ->
             ?ERR("channel_id=~s method=~p path=~s "
                  "time=~w exception=~1000p:~1000p stack=~1000p",
                  [ChannelId, Method, Path, Time1, Class, Exception,
-                  erlang:get_stacktrace()]),
-            exit(normal)
+                  erlang:get_stacktrace()])
     end.
 
 handlers() ->
@@ -151,7 +149,7 @@ handlers() ->
     {['GET', "^/v2/channels/(\\d+)$"], fun(Req, [ChannelId], _Status) ->
         authorize(Req),
         case channel_info(api_v2, ChannelId) of
-            not_found -> not_found_json();
+            not_found -> json_error(404, "Not Found");
             Info ->
                 {200, ?JSON_CONTENT, mochijson2:encode({struct, Info})}
         end
@@ -685,13 +683,9 @@ drain_info(api_v2, Drain) ->
      {token, logplex_drain:token(Drain)},
      {url, uri_to_binary(logplex_drain:uri(Drain))}].
 
-not_found_json() ->
-    Json = {struct, [{error, <<"Not found">>}]},
-    {404, iolist_to_binary(mochijson2:encode(Json))}.
-
 json_error(Code, Err) ->
-    {Code, ?JSON_CONTENT,
-     mochijson2:encode({struct, [{error, iolist_to_binary(Err)}]})}.
+    Body = mochijson2:encode({struct, [{error, iolist_to_binary(Err)}]}),
+    {Code, ?JSON_CONTENT, iolist_to_binary(Body)}.
 
 api_relative_url(canary, UUID) when is_binary(UUID) ->
     iolist_to_binary([<<"/v2/canary-fetch/">>, UUID]);
@@ -738,3 +732,62 @@ set_status(Term) ->
     logplex_app:set_config(api_status, Term),
     Old.
 
+-spec status_io(pos_integer()) -> binary().
+status_io(100) -> <<"100 Continue">>;
+status_io(101) -> <<"101 Switching Protocols">>;
+status_io(102) -> <<"102 Processing">>;
+status_io(200) -> <<"200 OK">>;
+status_io(201) -> <<"201 Created">>;
+status_io(202) -> <<"202 Accepted">>;
+status_io(203) -> <<"203 Non-Authoritative Information">>;
+status_io(204) -> <<"204 No Content">>;
+status_io(205) -> <<"205 Reset Content">>;
+status_io(206) -> <<"206 Partial Content">>;
+status_io(207) -> <<"207 Multi-Status">>;
+status_io(226) -> <<"226 IM Used">>;
+status_io(300) -> <<"300 Multiple Choices">>;
+status_io(301) -> <<"301 Moved Permanently">>;
+status_io(302) -> <<"302 Found">>;
+status_io(303) -> <<"303 See Other">>;
+status_io(304) -> <<"304 Not Modified">>;
+status_io(305) -> <<"305 Use Proxy">>;
+status_io(306) -> <<"306 Switch Proxy">>;
+status_io(307) -> <<"307 Temporary Redirect">>;
+status_io(400) -> <<"400 Bad Request">>;
+status_io(401) -> <<"401 Unauthorized">>;
+status_io(402) -> <<"402 Payment Required">>;
+status_io(403) -> <<"403 Forbidden">>;
+status_io(404) -> <<"404 Not Found">>;
+status_io(405) -> <<"405 Method Not Allowed">>;
+status_io(406) -> <<"406 Not Acceptable">>;
+status_io(407) -> <<"407 Proxy Authentication Required">>;
+status_io(408) -> <<"408 Request Timeout">>;
+status_io(409) -> <<"409 Conflict">>;
+status_io(410) -> <<"410 Gone">>;
+status_io(411) -> <<"411 Length Required">>;
+status_io(412) -> <<"412 Precondition Failed">>;
+status_io(413) -> <<"413 Request Entity Too Large">>;
+status_io(414) -> <<"414 Request-URI Too Long">>;
+status_io(415) -> <<"415 Unsupported Media Type">>;
+status_io(416) -> <<"416 Requested Range Not Satisfiable">>;
+status_io(417) -> <<"417 Expectation Failed">>;
+status_io(418) -> <<"418 I'm a teapot">>;
+status_io(422) -> <<"422 Unprocessable Entity">>;
+status_io(423) -> <<"423 Locked">>;
+status_io(424) -> <<"424 Failed Dependency">>;
+status_io(425) -> <<"425 Unordered Collection">>;
+status_io(426) -> <<"426 Upgrade Required">>;
+status_io(428) -> <<"428 Precondition Required">>;
+status_io(429) -> <<"429 Too Many Requests">>;
+status_io(431) -> <<"431 Request Header Fields Too Large">>;
+status_io(500) -> <<"500 Internal Server Error">>;
+status_io(501) -> <<"501 Not Implemented">>;
+status_io(502) -> <<"502 Bad Gateway">>;
+status_io(503) -> <<"503 Service Unavailable">>;
+status_io(504) -> <<"504 Gateway Timeout">>;
+status_io(505) -> <<"505 HTTP Version Not Supported">>;
+status_io(506) -> <<"506 Variant Also Negotiates">>;
+status_io(507) -> <<"507 Insufficient Storage">>;
+status_io(510) -> <<"510 Not Extended">>;
+status_io(511) -> <<"511 Network Authentication Required">>;
+status_io(B) when is_binary(B) -> B.
