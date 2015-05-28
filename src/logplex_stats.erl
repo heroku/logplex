@@ -27,7 +27,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
--export([healthcheck/0, incr/1, incr/2, cached/0]).
+-export([healthcheck/0, incr/1, incr/2, cached/0, update_realtime_stats/0]).
 
 -include_lib("logplex.hrl").
 
@@ -107,15 +107,8 @@ handle_cast(_Msg, State) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({timeout, _TimerRef, flush}, _State) ->
-    {Mega, S, _} = os:timestamp(),
-    UnixTS = Mega * 1000000 + S,
-    Stats = ets:tab2list(logplex_stats),
-    [ begin
-          log_stat(UnixTS, K, V),
-          ets:update_counter(?MODULE, K, V * -1)
-      end
-      || {K, V} <- Stats,
-         V =/= 0],
+    update_realtime_stats(),
+    log_stats(),
 
     start_timer(),
     {noreply, stats_cache_disabled};
@@ -145,6 +138,36 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+update_realtime_stats() ->
+    [update_drain_stats(Type, Count) || {Type, Count} <- get_drain_counts() ].
+
+update_drain_stats(Type, Count) ->
+    logplex_realtime:record(to_key([drain, Type, count]), Count).
+
+get_drain_counts() ->
+    DrainTypes = [ Type || {Pid, Type} <- gproc:lookup_local_properties(drain_type),
+                           is_process_alive(Pid) ],
+    recon_lib:count(DrainTypes).
+
+to_key(Terms) ->
+    to_key(Terms, []).
+
+to_key([], Acc) ->
+     binary_to_atom(iolist_to_binary(string:join(lists:reverse(Acc), ".")), utf8);
+to_key([Term | Rest], Acc) when is_atom(Term) ->
+    to_key(Rest, [atom_to_list(Term) | Acc]).
+
+log_stats() ->
+    {Mega, S, _} = os:timestamp(),
+    UnixTS = Mega * 1000000 + S,
+    Stats = ets:tab2list(logplex_stats),
+    [ log_and_reset(UnixTS, K, V) || {K, V} <- Stats, V =/= 0 ].
+
+log_and_reset(UnixTS, K, V) ->
+    log_stat(UnixTS, K, V),
+    ets:update_counter(?MODULE, K, V * -1).
+
+
 start_timer() ->
     {_Mega, Secs, Micro} = now(),
     Time = 60000 - ((Secs rem 60 * 1000) + (Micro div 1000)),

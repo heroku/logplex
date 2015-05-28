@@ -22,7 +22,10 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_realtime).
 
--export([incr/1, incr/2, setup_metrics/0]).
+-export([incr/1, incr/2,
+         decr/1, decr/2,
+         record/2,
+         setup_metrics/0]).
 
 -include("logplex_logging.hrl").
 
@@ -33,12 +36,25 @@
 incr(Key) ->
     incr(Key, 1).
 
--spec incr(string() | key(), integer()) -> any().
+-spec incr(atom(), pos_integer()) -> any().
 incr(Key, Inc) when is_atom(Key), is_integer(Inc) ->
     folsom_metrics:notify(convert_key(Key), {inc, Inc}, counter);
 
 incr(_Key, _Inc) ->
     ok.
+
+decr(Key) ->
+    decr(Key, 1).
+
+-spec decr(atom(), pos_integer()) -> any().
+decr(Key, Dec) when is_atom(Key), is_integer(Dec) ->
+    folsom_metrics:notify(convert_key(Key), {dec, Dec}, counter);
+decr(_Key, _Dec) ->
+    ok.
+
+-spec record(atom(), pos_integer()) -> ok.
+record(Key, Value) when is_atom(Key), is_integer(Value) ->
+    folsom_metrics:notify(Key, Value, gauge).
 
 setup_metrics() ->
     [create_counter_metric(Key) || Key <- keys()].
