@@ -22,7 +22,7 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(logplex_realtime).
 
--export([incr/1, incr/2, setup_metrics/0]).
+-export([incr/1, incr/2, setup_metrics/0, create_counter_metric/1]).
 
 -include("logplex_logging.hrl").
 
