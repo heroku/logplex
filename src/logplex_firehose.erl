@@ -69,6 +69,7 @@ post_msg(SourceId, TokenName, Msg)
         undefined -> ok; % no shards, drop
         SourceId -> ok; % do not firehose a firehose
         ChannelId when is_integer(ChannelId) ->
+            logplex_realtime:incr(metric_name(ChannelId)),
             logplex_channel:post_msg({channel, ChannelId}, Msg)
     end.
 
@@ -136,5 +137,14 @@ store_channels([]) ->
     ok;
 store_channels([Shard | Rest]) ->
     ets:insert(?SHARD_TAB, Shard),
+    create_metric(Shard),
     store_channels(Rest).
+
+create_metric(#shard{ channel_id=ChannelId }) ->
+    logplex_realtime:create_counter_metric(metric_name(ChannelId)).
+
+metric_name(ChannelId) when is_integer(ChannelId) ->
+    binary_to_atom(
+      iolist_to_binary(
+        ["firehose.post.", integer_to_list(ChannelId)]), utf8).
 

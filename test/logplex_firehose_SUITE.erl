@@ -27,10 +27,12 @@ end_per_suite(Config) ->
 
 %% Runs before the test case. Runs in the same process.
 init_per_testcase(_, Config) ->
+    application:start(folsom_metrics, transient),
     Config.
 
 %% Runs after the test case. Runs in the same process.
 end_per_testcase(_CaseName, Config) ->
+    application:stop(folsom_metrics),
     meck:unload(),
     Config.
 
@@ -68,6 +70,7 @@ post_msg(_Config) ->
     Msg1 = term_to_binary(make_ref()),
     Msg2 = term_to_binary(make_ref()),
     Msg3 = term_to_binary(make_ref()),
+    Msg4 = term_to_binary(make_ref()),
 
     meck:expect(logplex_channel, post_msg, [{[{channel, '_'}, '_'], ok}]),
 
@@ -91,6 +94,11 @@ post_msg(_Config) ->
     ok = logplex_firehose:post_msg(FirehoseChannelId, <<"heroku">>, Msg3),
     false = meck:called(logplex_channel, post_msg, [{channel, FirehoseChannelId}, Msg3]),
     
+    ok = logplex_firehose:post_msg(ChannelId, <<"heroku">>, Msg4),
+    true = meck:called(logplex_channel, post_msg, [{channel, FirehoseChannelId}, Msg4]),
+
+    ct:pal("All metrics:~n~p~n", [folsom_metrics:get_metrics()]),
+    2 = folsom_metrics:get_metric_value('firehose.post.21894100'),
     ok.
 
 distribution(_Config) ->
@@ -104,16 +112,29 @@ distribution(_Config) ->
     logplex_firehose:create_ets_tables(),
     logplex_firehose:enable(),
 
-    [ send_messages(1000, ChannelId, <<"heroku">>) || _Id <- lists:seq(1, 100) ],
+    NumPosts = 1000,
+    NumTokens = 400,
+    TotalPosts = NumPosts*NumTokens,
+    ct:pal("Sending firehose messages"),
+    [ send_messages(NumPosts, ChannelId, <<"heroku">>) || _Id <- lists:seq(1, NumTokens) ],
 
-    meck:wait(1000*100, logplex_channel, post_msg, [{channel, '_'}, '_'], 15000),
+    ct:pal("Waiting firehose channel_posts"),
+    try 
+        meck:wait(NumPosts*NumTokens, logplex_channel, post_msg, [{channel, '_'}, '_'], TotalPosts*10)
+    catch
+        error:timeout ->
+            ct:pal("Timeout waiting firehose channel_posts..."),
+            timeout
+    end,
+
     Calls1 = meck:num_calls(logplex_channel, post_msg, [{channel,21894100}, '_']),
     Calls2 = meck:num_calls(logplex_channel, post_msg, [{channel,21894101}, '_']),
-    ct:pal("~p, ~p", [Calls1, Calls2]),
+    ct:pal("channel_id=~p calls=~p", [21894100, Calls1]),
+    ct:pal("channel_id=~p calls=~p", [21894101, Calls2]),
 
     % assert random distribution with 0.5% accuracy
-    true = calls_within(Calls1, 1000*50, 0.005),
-    true = calls_within(Calls2, 1000*50, 0.005),
+    true = calls_within(Calls1, TotalPosts/2, 0.005),
+    true = calls_within(Calls2, TotalPosts/2, 0.005),
     ok.
 
 %%%--------------------------------------------------------------------
