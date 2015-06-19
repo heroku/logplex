@@ -102,7 +102,9 @@ handlers() ->
         Count = logplex_stats:healthcheck(),
         not is_integer(Count) andalso throw({500, io_lib:format("Increment healthcheck counter failed: ~p", [Count])}),
 
-        {200, <<"OK">>}
+        Info =[{status, status()}],
+
+        {200, ?JSON_CONTENT, iolist_to_binary(mochijson2:encode(Info))}
     end},
 
     {['POST', "/load$"], fun(Req, _Match, _Status) ->
