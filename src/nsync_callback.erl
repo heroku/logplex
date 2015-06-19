@@ -89,12 +89,10 @@ handle({cmd, "setex", [<<"session:", UUID/binary>>, _Expiry, Body]})
     catch logplex_session:store(UUID, Body),
     ?INFO("at=setex type=session id=~p", [UUID]);
 
-handle({cmd, "setbit", [<<"control_rod">>, <<"0">>, <<"1">>]}) ->
-    OldStatus = logplex_api:set_status(read_only),
-    ?INFO("at=setbit type=control_rod was=~p now=read_only", [OldStatus]);
-handle({cmd, "setbit", [<<"control_rod">>, <<"0">>, <<"0">>]}) ->
-    OldStatus = logplex_api:set_status(normal),
-    ?INFO("at=setbit type=control_rod was=~p now=read_only", [OldStatus]);
+handle({cmd, "setbit", [<<"control_rod">>, <<"0">>, BinValue]}) ->
+    Status = control_rod_flag(BinValue),
+    OldStatus = logplex_api:set_status(Status),
+    ?INFO("at=setbit type=control_rod was=~p now=~p", [OldStatus, Status]);
 
 handle({cmd, "del", []}) ->
     ok;
@@ -309,3 +307,6 @@ dict_find(Key, Dict, Default) ->
 
 drain_id(Bin) when is_binary(Bin) ->
     list_to_integer(binary_to_list(Bin)).
+
+control_rod_flag(<<"1">>) -> read_only;
+control_rod_flag(<<"0">>) -> normal.
