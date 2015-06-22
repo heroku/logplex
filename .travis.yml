@@ -1,16 +1,21 @@
+dist: trusty
 language: erlang
-services:
-- redis-server
-before_install:
-- "./rebar --config public.rebar.config get-deps compile"
-script:
-- rebar get-deps compile --config test.rebar.config ; INSTANCE_NAME=`hostname` LOGPLEX_CONFIG_REDIS_URL='redis://localhost:6379'
-  LOGPLEX_SHARD_URLS='redis://localhost:6379' LOGPLEX_REDGRID_REDIS_URL='redis://localhost:6379'
-  LOCAL_IP='127.0.0.1' LOGPLEX_COOKIE=123 ERL_LIBS=`pwd`/deps/:$ERL_LIBS ct_run -spec
-  logplex.spec -pa ebin
+
 otp_release:
-  - 17.4
-  - R16B02
+  - R16B03-1
+
+before_install:
+  - .travis/install_compose.sh
+
+before_script:
+  - docker pull heroku/cedar:14
+  - docker pull voidlock/erlang:R16B03-1-onbuild
+  - docker pull redis:2.6
+
+script:
+  - docker-compose build
+  - docker-compose run test
+
 notifications:
   email: false
   hipchat:
