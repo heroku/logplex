@@ -1,5 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "type": [
+    "object"
+  ],
   "definitions": {
     "channel": {
       "$schema": "http://json-schema.org/draft-04/hyper-schema",
@@ -237,24 +240,32 @@
     "health": {
       "$schema": "http://json-schema.org/draft-04/hyper-schema",
       "title": "Healthchecks",
+      "definitions": {
+        "status": {
+          "description": "API control rod status (normal, read_only)",
+          "example": "normal",
+          "type": [
+            "string"
+          ]
+        }
+      },
       "links": [
         {
           "description": "Performs a health check against the API.",
           "href": "/healthcheck",
           "method": "GET",
-          "type": [
-            "string"
-          ],
-          "rel": "empty",
-          "response_example": {
-            "head": "HTTP/1.1 200 OK\n",
-            "body": "OK\n"
-          },
-          "title": "Check"
+          "rel": "self",
+          "targetSchema": {
+            "type": [
+              "object"
+            ],
+            "properties": {
+              "status": {
+                "$ref": "#/definitions/health/definitions/status"
+              }
+            }
+          }
         }
-      ],
-      "type": [
-        "object"
       ]
     },
     "session": {
@@ -427,9 +438,6 @@
       "$ref": "#/definitions/token"
     }
   },
-  "type": [
-    "object"
-  ],
   "title": "Logplex",
   "description": "The log router",
   "id": "api-logplex",
