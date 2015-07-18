@@ -9,21 +9,21 @@
 
 -export([child_spec/0, dispatch/0]).
 
--export([init/3
-         ,rest_init/2
-         ,allowed_methods/2
-         ,is_authorized/2
-         ,known_content_type/2
-         ,content_types_accepted/2
-         ,malformed_request/2
-         ,from_logplex/2
-         ,content_types_provided/2
-         ,to_response/2
+-export([init/3,
+         rest_init/2,
+         allowed_methods/2,
+         is_authorized/2,
+         known_content_type/2,
+         content_types_accepted/2,
+         malformed_request/2,
+         from_logplex/2,
+         content_types_provided/2,
+         to_response/2
         ]).
 
 %% Healthcheck exports.
--export([handle/2
-         ,terminate/3]).
+-export([handle/2,
+         terminate/3]).
 
 -record(state, {token :: logplex_token:id() | 'any',
                 name :: logplex_token:name(),
