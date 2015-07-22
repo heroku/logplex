@@ -359,10 +359,10 @@ by_dest() ->
 by_type() ->
     gproc:lookup_local_properties(drain_type).
 
-by_type(http) ->
-    [Pid || {Pid, http} <- gproc:lookup_local_properties(drain_type)];
-by_type(tcpsyslog) ->
-    [Pid || {Pid, tcpsyslog} <- gproc:lookup_local_properties(drain_type)].
+-spec by_type('http' | 'tcpsyslog' | 'tlssyslog') -> [pid()].
+by_type(Type) when is_atom(Type) ->
+    [Pid || {Pid, DrainType} <- gproc:lookup_local_properties(drain_type),
+            DrainType =:= Type].
 
 -spec num_drains() -> non_neg_integer().
 num_drains() ->
