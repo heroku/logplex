@@ -707,7 +707,7 @@ valid_uri(Req) ->
                           {error, missing_host_param};
                       Host ->
                           logplex_tcpsyslog_drain:uri(Host, Port)
-            end;
+                  end;
               UrlString ->
                   try
                       logplex_drain:parse_url(UrlString)
