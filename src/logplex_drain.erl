@@ -262,7 +262,8 @@ parse_url(Url) when is_list(Url) ->
                        {valid, type(), #ex_uri{}} |
                        {error, term()}.
 valid_uri(#ex_uri{scheme=Syslog} = Uri) when Syslog =:= "syslog";
-                                             Syslog =:= "tcpsyslog" ->
+                                             Syslog =:= "tcpsyslog";
+                                             Syslog =:= "syslog.tcp" ->
     logplex_tcpsyslog_drain:valid_uri(Uri);
 valid_uri(#ex_uri{scheme="syslog.tls"} = Uri) ->
     logplex_tlssyslog_drain:valid_uri(Uri);
