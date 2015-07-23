@@ -263,12 +263,12 @@ parse_url(Url) when is_list(Url) ->
                        {error, term()}.
 valid_uri(#ex_uri{scheme=Syslog} = Uri) when Syslog =:= "syslog";
                                              Syslog =:= "tcpsyslog";
-                                             Syslog =:= "syslog.tcp" ->
+                                             Syslog =:= "syslog+tcp" ->
     logplex_tcpsyslog_drain:valid_uri(Uri);
-valid_uri(#ex_uri{scheme="syslog.tls"} = Uri) ->
+valid_uri(#ex_uri{scheme="syslog+tls"} = Uri) ->
     logplex_tlssyslog_drain:valid_uri(Uri);
 valid_uri(#ex_uri{scheme=UDP} = Uri) when UDP =:= "udpsyslog";
-                                          UDP =:= "syslog.udp" ->
+                                          UDP =:= "syslog+udp" ->
     logplex_udpsyslog_drain:valid_uri(Uri);
 valid_uri(#ex_uri{scheme="http" ++ _} = Uri) ->
     logplex_http_drain:valid_uri(Uri);

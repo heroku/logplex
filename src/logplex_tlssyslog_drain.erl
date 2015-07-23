@@ -83,7 +83,7 @@
 %% ------------------------------------------------------------------
 
 start_link(ChannelID, DrainID, DrainTok,
-           #ex_uri{scheme="syslog.tls",
+           #ex_uri{scheme="syslog+tls",
                    authority=#ex_uri_authority{host=Host, port=Port}}) ->
     start_link(ChannelID, DrainID, DrainTok, Host, Port).
 
@@ -96,12 +96,12 @@ start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
                                port=Port}],
                        []).
 
-valid_uri(#ex_uri{scheme="syslog.tls",
+valid_uri(#ex_uri{scheme="syslog+tls",
                   authority=#ex_uri_authority{host=Host, port=Port}} = Uri)
   when is_list(Host), is_integer(Port),
        0 < Port andalso Port =< 65535 ->
     {valid, tlssyslog, Uri};
-valid_uri(#ex_uri{scheme="syslog.tls",
+valid_uri(#ex_uri{scheme="syslog+tls",
                   authority=A=#ex_uri_authority{host=Host,
                                                 port=undefined}} = Uri)
   when is_list(Host) ->
