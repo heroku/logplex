@@ -12,6 +12,8 @@ base:
 logplex:
   image: logplex_base
   command: ./bin/compose_logplex
+  env_file:
+    - logplex.env
   volumes_from:
     - base
   ports:
