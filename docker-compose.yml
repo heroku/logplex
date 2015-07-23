@@ -1,17 +1,19 @@
 data:
   image: redis:2.6
-  command: true
+  command: /bin/true
 db:
   image: redis:2.6
   command: redis-server
   volumes_from:
     - data
 base:
-  command: true
+  command: /bin/true
   build: .
 logplex:
   image: logplex_base
   command: ./bin/compose_logplex
+  env_file:
+    - logplex.env
   volumes_from:
     - base
   ports:
