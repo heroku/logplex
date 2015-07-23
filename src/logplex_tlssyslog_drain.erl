@@ -19,6 +19,7 @@
 -define(SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
 -define(CLOSE_TIMEOUT_MSG, close_timeout).
+-define(SSL_SOCKET, {sslsocket,_,_}).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
@@ -180,8 +181,7 @@ disconnected(Msg, State) ->
 %% @doc We have a socket open and messages to send. Collect up an
 %% appropriate amount and flush them to the socket.
 ready_to_send({timeout, _Ref, ?SEND_TIMEOUT_MSG},
-              State = #state{sock = Sock})
-  when is_port(Sock) ->
+              State = #state{sock = ?SSL_SOCKET}) ->
     %% Stale message.
     send(State);
 ready_to_send({timeout, TRef, ?CLOSE_TIMEOUT_MSG},
@@ -197,8 +197,7 @@ ready_to_send({timeout, TRef, ?CLOSE_TIMEOUT_MSG},
                     {next_state, ready_to_send, ContinueState}
             end
     end;
-ready_to_send({post, Msg}, State = #state{sock = Sock})
-  when is_port(Sock) ->
+ready_to_send({post, Msg}, State = #state{sock = ?SSL_SOCKET}) ->
     send(buffer(Msg, State));
 ready_to_send({inet_reply, Sock, ok}, S = #state{sock = Sock})
   when is_port(Sock) ->
@@ -207,8 +206,7 @@ ready_to_send({inet_reply, Sock, ok}, S = #state{sock = Sock})
 ready_to_send(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, ready_to_send, S, hibernate};
-ready_to_send(Msg, State = #state{sock = Sock})
-  when is_port(Sock) ->
+ready_to_send(Msg, State = #state{sock = ?SSL_SOCKET}) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=~p state=ready_to_send",
           log_info(State, [Msg])),
