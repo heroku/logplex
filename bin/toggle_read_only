@@ -5,9 +5,9 @@
 %%% - Toggle read-only mode in the local Logplex
 
 
-main([ReadOnly]) when ReadOnly =:= "on" ->
+main(["on"]) ->
     set_api_status(read_only);
-main([ReadOnly]) when ReadOnly =:= "off" ->
+main(["off"]) ->
     set_api_status(normal);
 main(_) ->
     usage().
