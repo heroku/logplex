@@ -1,0 +1,74 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%!
+
+%%% - Toggle read-only mode in the local Logplex
+
+
+main(["on"]) ->
+    set_api_status(read_only);
+main(["off"]) ->
+    set_api_status(normal);
+main(_) ->
+    usage().
+
+%% Internal
+usage() ->
+    io:format("Usage: bin/toggle_read_only [on|off]~n").
+
+set_api_status(Status) ->
+    Cookie = getenv("LOGPLEX_COOKIE"),
+    case connect(logplex_node(), cookie(Cookie)) of
+        {error, Why} ->
+            io:format("Could not connect to node ~p~n", [Why]),
+            halt(1);
+        {connected, Node} ->
+            OldStatus = rpc:call(Node, logplex_api, set_status, [Status]),
+            io:format("Logplex API was in ~p mode, now in ~p~n", [OldStatus, Status])
+    end.
+
+connect(RemoteNode, Cookie) ->
+    MyName = caller_name(),
+    net_kernel:start([MyName, longnames]),
+    erlang:set_cookie(MyName, Cookie),
+    try_connect(RemoteNode, 5).
+
+try_connect(_RemoteNode, 0) ->
+    {error, gave_up};
+try_connect(RemoteNode, RetriesLeft) ->
+    case net_adm:ping(RemoteNode) of
+        pong ->
+            {connected, RemoteNode};
+        Error ->
+            io:format("Could not connect, retrying in 1 second, Reason ~p~n", [Error]),
+            timer:sleep(timer:seconds(1)),
+            try_connect(RemoteNode, RetriesLeft - 1)
+    end.
+
+cookie(CookieString) ->
+    list_to_atom(CookieString).
+
+logplex_node() ->
+    NodeName =
+        case os:getenv("LOGPLEX_NODE_NAME") of
+            false ->
+                string:join(["logplex", net_adm:localhost()], "@");
+            NodeName1 ->
+                NodeName1
+        end,
+    list_to_atom(NodeName).
+
+caller_name() ->
+    Me = filename:basename(escript:script_name()),
+    list_to_atom(Me ++ "_"
+                 ++ os:getpid()
+                 ++ "@" ++ net_adm:localhost()).
+
+getenv(Key) ->
+    case os:getenv(Key) of
+        false ->
+            io:format("Env variable ~s not set~n", [Key]),
+            halt(1);
+        Val ->
+            Val
+    end.
