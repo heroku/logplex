@@ -569,7 +569,7 @@ send(State = #state{buf = Buf, sock = Sock,
             {next_state, ready_to_send, State};
         not_empty ->
             PktSize = target_send_size(),
-            {Data, _N, NewBuf} =
+            {Data, N, NewBuf} =
                 buffer_to_pkts(Buf, PktSize, DrainTok),
             try
                 %% ssl:send({sslsocket, _, Pid}, Data)
