@@ -593,6 +593,8 @@ send(State = #state{buf = Buf, sock = Sock,
                              {application_data, iolist_to_binary(Data)}}),
                 TRef = erlang:start_timer(?SEND_TIMEOUT, self(),
                                           ?SEND_TIMEOUT_MSG),
+                msg_stat(drain_delivered, N, State),
+                logplex_realtime:incr('drain.delivered', N),
                 {next_state, sending,
                  State#state{buf=NewBuf, send_tref=TRef, send_mref=MRef}}
                 %%              msg_stat(drain_dropped, N, State),
