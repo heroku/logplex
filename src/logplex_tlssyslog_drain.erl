@@ -434,7 +434,7 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{keepalive, true}
                ,{packet, raw}
                ,{reuseaddr, true}
-               ,{ciphers, Ciphers}
+               ,{ciphers, Ciphers}],
     ssl:connect(HostS, Port, Options,
                 timer:seconds(SendTimeoutS));
 connect(#state{}) ->
