@@ -14,7 +14,7 @@ PORT="${PORT:-9999}"
 PROTOCOL="${PROTOCOL:-syslog}"
 
 source logplex.env
-IP_ADDRESS=`(type boot2docker >/dev/null 2>&1 && boot2docker ip) || 127.0.0.1`
+IP_ADDRESS=${IP_ADDRESS:-(type boot2docker >/dev/null 2>&1 && boot2docker ip) || 127.0.0.1}
 LOGPLEX_URL="http://${IP_ADDRESS}:8001"
 LOGPLEX_LOGS_URL="http://${IP_ADDRESS}:8601"
 
