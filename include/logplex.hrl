@@ -8,6 +8,7 @@
 -record(channel_stat, {channel_id :: logplex_channel:id(),
                        key :: atom()}).
 -record(drain_stat, {drain_id :: logplex_drain:id(),
+                     drain_type :: logplex_drain:type(),
                      channel_id :: logplex_channel:id(),
                      key :: atom()}).
 -record(logplex_stat, {module :: atom(),
