@@ -79,6 +79,7 @@
 -export([user_agent/0
          ,drain_buf_framing/1
          ,backoff_slot/1
+         ,drain_type/1
         ]).
 
 %% ------------------------------------------------------------------
@@ -516,8 +517,9 @@ sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Dro
                non_neg_integer(), #state{}) -> any().
 %% @private
 msg_stat(Key, N,
-         #state{drain_id=DrainId, channel_id=ChannelId}) ->
+         #state{drain_id=DrainId, uri=URI, channel_id=ChannelId}) ->
     logplex_stats:incr(#drain_stat{drain_id=DrainId,
+                                   drain_type=logplex_drain:drain_type(URI),
                                    channel_id=ChannelId,
                                    key=Key}, N).
 
@@ -575,6 +577,9 @@ uri_ref(#ex_uri{path=Path, q=Q}) ->
                                  _ -> Path
                              end, q=Q},
     ex_uri:encode(Ref).
+
+drain_type(#ex_uri{scheme=Scheme}) ->
+    Scheme.
 
 connection_info(#ex_uri{scheme = Scheme,
                         authority=#ex_uri_authority{host=Host,

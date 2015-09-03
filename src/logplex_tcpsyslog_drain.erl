@@ -521,6 +521,7 @@ log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
 msg_stat(Key, N,
          #state{drain_id=DrainId, channel_id=ChannelId}) ->
     logplex_stats:incr(#drain_stat{drain_id=DrainId,
+                                   drain_type=tcpsyslog,
                                    channel_id=ChannelId,
                                    key=Key}, N).
 
