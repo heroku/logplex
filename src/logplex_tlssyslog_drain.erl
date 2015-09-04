@@ -414,7 +414,7 @@ do_reconnect(State = #state{sock = undefined,
     end.
 
 %% @private
-connect(#state{sock = undefined, host=Host, port=Port})
+connect(#state{sock = undefined, host=Host, port=Port}=State)
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
     HostS = case Host of
@@ -423,19 +423,45 @@ connect(#state{sock = undefined, host=Host, port=Port})
                 T when is_tuple(T) -> T;
                 A when is_atom(A) -> A
             end,
-    Options = [binary
+
+    CertOpts = compile_cert_opts([verify, depth, certfile]),
+    ?INFO("drain_id=~p channel_id=~p dest=~s"
+          "cert_opts=~p",
+          log_info(State, [CertOpts])),
+
+    Options = CertOpts ++ [binary
                %% We don't expect data, but why not.
                ,{active, true}
                ,{exit_on_close, true}
                ,{keepalive, true}
                ,{packet, raw}
                ,{reuseaddr, true}
-               %% XXX - put ssl connection (cert validaton) options here
               ],
     ssl:connect(HostS, Port, Options,
                 timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.
+
+compile_cert_opts(OptList) ->
+    compile_cert_opts(OptList, []).
+
+compile_cert_opts([], Acc) ->
+    Acc;
+compile_cert_opts([verify | Rest], Acc) ->
+    % TODO alter this based on uri scheme
+    compile_cert_opts(Rest, [{verify, verify_peer} | Acc]);
+    %% compile_cert_opts(Rest, [{verify, verify_peer} | Acc]);
+compile_cert_opts([depth | Rest], Acc) ->
+    % TODO should this be configurable via uri scheme as well?
+    compile_cert_opts(Rest, [{depth, logplex_app:config(tls_syslog_cert_depth, 3)} | Acc]);
+compile_cert_opts([certfile | Rest], Acc) ->
+    % TODO should this be configurable via uri scheme as well?
+    CertFile = case logplex_app:config(tls_syslog_certfile, unknown) of
+                   unknown ->
+                       filename:join([code:priv_dir(?MODULE), "cacert.pem"]);
+                   Path -> Path
+               end,
+    compile_cert_opts(Rest, [{cacertfile, CertFile} | Acc]).
 
 -spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private
