@@ -406,6 +406,22 @@ do_reconnect(State = #state{sock = undefined,
                     ok;
                 _ ->
                     % inject log message
+                    Msg =  iolist_to_binary(
+                               logplex_syslog_utils:to_msg(
+                                 logplex_syslog_utils:fmt(local7,
+                                                          warning,
+                                                          now,
+                                                          "heroku", 
+                                                          "logplex",
+                                                          "Error L14 (certificate validation): "
+                                                          "error=\"~s" uri=\"~s\"",
+                                                          [error_to_human(Reason), drain_uri(State)]),
+                                 State#state.drain_tok)),
+                    logplex_message:process_msg(Msg,
+                                                State#state.channel_id,
+                                                <<"heroku">>,
+                                                <<"heroku">>,
+                                                logplex_message:shard_info()),
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
                          "err=gen_tcp data=~p try=~p last_success=~s "
                          "state=disconnected",
@@ -414,6 +430,12 @@ do_reconnect(State = #state{sock = undefined,
             end,
             reconnect(NewState)
     end.
+
+error_to_human({tls_alert, Alert}) ->
+    Alert.
+
+drain_uri(#state{ host=Host, port=Port }) ->
+    io_lib:format("syslog+tls://~s:~B/", [Host, Port]).
 
 %% @private
 connect(#state{sock = undefined, host=Host, port=Port}=State)
@@ -426,7 +448,7 @@ connect(#state{sock = undefined, host=Host, port=Port}=State)
                 A when is_atom(A) -> A
             end,
 
-    CertOpts = compile_cert_opts([verify, depth, cacertfile, certfile]),
+    CertOpts = compile_cert_opts([verify, depth, cacertfile]),
     ?INFO("drain_id=~p channel_id=~p dest=~s "
           "cert_opts=~p",
           log_info(State, [CertOpts])),
