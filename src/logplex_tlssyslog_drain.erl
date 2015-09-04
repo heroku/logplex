@@ -64,6 +64,7 @@
 -export([valid_uri/1
          ,uri/2
          ,start_link/4
+         ,ssl_cert_validation/3
         ]).
 
 %% ------------------------------------------------------------------
@@ -404,6 +405,7 @@ do_reconnect(State = #state{sock = undefined,
                     %% first failure.
                     ok;
                 _ ->
+                    % inject log message
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
                          "err=gen_tcp data=~p try=~p last_success=~s "
                          "state=disconnected",
@@ -424,8 +426,8 @@ connect(#state{sock = undefined, host=Host, port=Port}=State)
                 A when is_atom(A) -> A
             end,
 
-    CertOpts = compile_cert_opts([verify, depth, certfile]),
-    ?INFO("drain_id=~p channel_id=~p dest=~s"
+    CertOpts = compile_cert_opts([verify, depth, cacertfile, certfile]),
+    ?INFO("drain_id=~p channel_id=~p dest=~s "
           "cert_opts=~p",
           log_info(State, [CertOpts])),
 
@@ -449,19 +451,29 @@ compile_cert_opts([], Acc) ->
     Acc;
 compile_cert_opts([verify | Rest], Acc) ->
     % TODO alter this based on uri scheme
-    compile_cert_opts(Rest, [{verify, verify_peer} | Acc]);
+    compile_cert_opts(Rest, [{verify_fun, {fun ssl_cert_validation/3, []}} | Acc]);
     %% compile_cert_opts(Rest, [{verify, verify_peer} | Acc]);
 compile_cert_opts([depth | Rest], Acc) ->
     % TODO should this be configurable via uri scheme as well?
     compile_cert_opts(Rest, [{depth, logplex_app:config(tls_syslog_cert_depth, 3)} | Acc]);
-compile_cert_opts([certfile | Rest], Acc) ->
+compile_cert_opts([cacertfile | Rest], Acc) ->
     % TODO should this be configurable via uri scheme as well?
-    CertFile = case logplex_app:config(tls_syslog_certfile, unknown) of
+    CertFile = case logplex_app:config(tls_syslog_cacertfile, unknown) of
                    unknown ->
-                       filename:join([code:priv_dir(?MODULE), "cacert.pem"]);
+                       filename:join([logplex_app:priv_dir(), "cacert.pem"]);
                    Path -> Path
                end,
     compile_cert_opts(Rest, [{cacertfile, CertFile} | Acc]).
+
+ssl_cert_validation(_, {bad_cert, Reason}=BigReason, _) ->
+    ?INFO("bad_cert=~p", [Reason]),
+    {fail, BigReason};
+    ssl_cert_validation(_,{extension, _}, UserState) ->
+    {unknown, UserState};
+ssl_cert_validation(_, valid, UserState) ->
+    {valid, UserState};
+ssl_cert_validation(_, valid_peer, UserState) ->
+    {valid, UserState}.
 
 -spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private
