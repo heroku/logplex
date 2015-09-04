@@ -14,7 +14,7 @@ PORT="${PORT:-9999}"
 PROTOCOL="${PROTOCOL:-syslog}"
 
 source logplex.env
-IP_ADDRESS=`(type boot2docker >/dev/null 2>&1 && boot2docker ip) || 127.0.0.1`
+IP_ADDRESS=${IP_ADDRESS:-(type boot2docker >/dev/null 2>&1 && boot2docker ip) || 127.0.0.1}
 LOGPLEX_URL="http://${IP_ADDRESS}:8001"
 LOGPLEX_LOGS_URL="http://${IP_ADDRESS}:8601"
 
@@ -48,11 +48,15 @@ GOPATH=`pwd`/tmp/go && \
     go get github.com/ddollar/forego
 PATH=`pwd`/tmp/go/bin:$PATH
 
+TAIL_SESSION=$(curl -H "Authorization: Basic ${LOGPLEX_AUTH_KEY}" -d "{\"channel_id\": \"$CHANNEL_ID\", \"tail\": \"true\"}" $LOGPLEX_URL/v2/sessions | jq -r '.url')
+echo "Tail session is: $LOGPLEX_URL$TAIL_SESSION"
+
 # Run spew and pipe to log-shuttle, and then to logplex channel
 echo "Running spew and log-shuttle (in background)"
 cat > tmp/Procfile <<EOF
 spew: DURATION=1s spew 2>&1 | log-shuttle -logplex-token=${CHANNEL_TOKEN} -logs-url="${LOGPLEX_LOGS_URL}/logs"
 papertrail: papertrail -f -d 1 ${DRAIN_TOKEN}
+tail: curl -s -N "$LOGPLEX_URL$TAIL_SESSION"
 EOF
 set -x
 forego start -f tmp/Procfile
