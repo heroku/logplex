@@ -6,12 +6,20 @@ db:
   command: redis-server
   volumes_from:
     - data
+drain:
+  hostname: drain
+  domainname: heroku.local
+  image: 6cyx/basic-syslog-drain
+  ports:
+    - "6514:6514"
 base:
   command: /bin/true
   build: .
 logplex:
   image: logplex_base
   command: ./bin/compose_logplex
+  hostname: logplex
+  domainname: heroku.local
   env_file:
     - logplex.env
   volumes_from:
@@ -22,6 +30,7 @@ logplex:
     - "6001:6001"
   links:
     - db
+    - drain
 compile:
   command: make quick
   image: logplex_base
