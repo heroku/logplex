@@ -9,15 +9,19 @@
                   ,crypto
                   ,public_key
                   ,ssl
+                  ,redis
+                  ,mochiweb
+                  ,pagerduty
+                  ,redgrid
+                  ,redo
+                  ,nsync
+                  ,cowboy
+                  ,quoted
                   ,gproc
                   ,ex_uri
-                  ,redis
                   ,ranch
-                  ,cowboy
                   ,lager
                   ,batchio
-                  ,cowlib
-                  ,ranch
                   ,folsom
                   ,folsom_cowboy
                  ]},
