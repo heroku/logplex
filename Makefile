@@ -1,20 +1,32 @@
-.PHONY: all compile quick get-deps dist-clean
+REBAR := ./rebar3
 
-REBAR := ./rebar
+.PHONY: clean distclean test
 
-all : clean compile
+compile:
+	@$(REBAR) update
+	@$(REBAR) release
 
-compile : get-deps
-	@$(REBAR) compile
+REBAR += as prod
+dist: compile
+	@$(REBAR) tar
 
-quick :
-	@$(REBAR) compile skip_deps=true
+update:
+	@$(REBAR) update
 
-get-deps :
-	@$(REBAR) get-deps
+# dialyzer:
+# 	@./rebar3 dialyzer
+#
+# typer: $(HERMES_PLT)
+# 	typer --plt $(HERMES_PLT) -I deps/ -r src
 
-clean :
-	@$(REBAR) clean
+test:
+	@$(REBAR) ct
 
-dist-clean : clean
-	@rm -rf deps ebin
+clean:
+	$(REBAR) clean
+	rm -rf ./_build/
+	rm -f erl_crash.dump
+
+testclean: clean
+
+distclean: clean
