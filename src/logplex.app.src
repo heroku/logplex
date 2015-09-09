@@ -12,7 +12,6 @@
                   ,redis
                   ,mochiweb
                   ,pagerduty
-                  ,redgrid
                   ,redo
                   ,nsync
                   ,cowboy
@@ -25,7 +24,9 @@
                   ,folsom
                   ,folsom_cowboy
                  ]},
-  {included_applications, [heroku_crashdumps]},
+  {included_applications, [heroku_crashdumps,
+                           redgrid,
+                           backoff]},
   {mod, {logplex_app, []}},
   {env,
    [
