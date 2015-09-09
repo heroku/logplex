@@ -97,9 +97,14 @@ handle({cmd, "setbit", [<<"control_rod">>, <<"0">>, BinValue]}) ->
 handle({cmd, "del", []}) ->
     ok;
 handle({cmd, "del", [<<"ch:", Suffix/binary>> | Args]}) ->
-    Id = logplex_channel:binary_to_id(parse_id(Suffix)),
-    ?INFO("at=delete type=channel id=~p", [Id]),
-    ets:delete(channels, Id),
+    case parse_id_type(Suffix) of
+        {ChannelId, <<"data">>} ->
+            Id = logplex_channel:binary_to_id(ChannelId),
+            ?INFO("at=delete type=channel id=~p", [Id]),
+            ets:delete(channels, Id);
+        _ ->
+            ok
+    end,
     handle({cmd, "del", Args});
 handle({cmd, "del", [<<"tok:", Suffix/binary>> | Args]}) ->
     Id = parse_id(Suffix),
@@ -278,6 +283,11 @@ drain_uri(Dict) ->
 parse_id(Bin) ->
     [Id | _] = binary:split(Bin, <<":">>),
     Id.
+
+parse_id_type(Bin) ->
+    [Id | Suffix] = binary:split(Bin, <<":">>),
+    Type = binary:list_to_bin(Suffix),
+    {Id, Type}.
 
 convert_to_integer(V) when is_binary(V) ->
     list_to_integer(binary_to_list(V));
