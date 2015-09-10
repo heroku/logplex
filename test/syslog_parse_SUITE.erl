@@ -1,6 +1,6 @@
 -module(syslog_parse_SUITE).
 -include_lib("common_test/include/ct.hrl").
--include("logplex.hrl").
+-include("../include/logplex.hrl").
 -compile(export_all).
 
 all() -> [logplex_utils, logplex_syslog_utils].

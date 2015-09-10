@@ -1,4 +1,8 @@
-REBAR := ./rebar3
+REBAR ?= ./rebar3
+
+LOGPLEX_PLT=$(CURDIR)/.depsolver_plt
+
+ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 .PHONY: clean distclean test
 
@@ -6,7 +10,7 @@ compile:
 	@$(REBAR) update
 	@$(REBAR) release
 
-REBAR += as prod
+dist: REBAR += as prod
 dist: compile
 	@$(REBAR) tar
 
@@ -16,11 +20,13 @@ update:
 # dialyzer:
 # 	@./rebar3 dialyzer
 #
-# typer: $(HERMES_PLT)
+# typer: $(LOGPLEX_PLT)
 # 	typer --plt $(HERMES_PLT) -I deps/ -r src
 
+test: REBAR += as test
 test:
-	@$(REBAR) ct
+	@$(REBAR) release
+	ERL_LIBS=$(ROOT_DIR)/_build/test/lib/:${ERL_LIBS} ct_run -spec logplex.spec
 
 clean:
 	$(REBAR) clean

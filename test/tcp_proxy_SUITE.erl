@@ -1,6 +1,6 @@
 -module(tcp_proxy_SUITE).
 -include_lib("common_test/include/ct.hrl").
--include("logplex.hrl").
+-include("../include/logplex.hrl").
 -compile(export_all).
 
 all() -> [accepts_tcp_syslog_data, rejects_newline_delimited_data].
