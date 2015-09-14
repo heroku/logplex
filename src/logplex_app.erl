@@ -29,9 +29,14 @@
 %% Application callbacks
 -export([start/2, start_phase/3, stop/1]).
 
--export([nsync_opts/0, priv_dir/0,
-         config/0, config/1, config/2,
-         set_config/2, start/0, a_start/2]).
+-export([nsync_opts/0,
+         priv_dir/0,
+         config/0,
+         config/1,
+         config/2,
+         set_config/2,
+         start/0,
+         a_start/2]).
 
 -export([cache_os_envvars/0]). % for tests
 

@@ -10,7 +10,6 @@
          ,process_msgs/4
          ,process_msgs/1
          ,parse_msg/1
-         ,shard_info/0
         ]).
 
 -include("logplex.hrl").
