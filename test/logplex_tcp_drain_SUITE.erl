@@ -1,5 +1,6 @@
 -module(logplex_tcp_drain_SUITE).
 -include_lib("common_test/include/ct.hrl").
+-include("logplex_test_helpers.hrl").
 -compile(export_all).
 
 -define(PORT, 9601).
@@ -85,32 +86,6 @@ end_per_testcase(_, Config) ->
         end
     end,
     stop_server(Config).
-
-%%% Setup & teardown helpers %%%
-set_os_vars() ->
-    [os:putenv(Key,Val) || {Key,Val} <-
-        [{"INSTANCE_NAME", "localhost"},
-         {"LOCAL_IP", "localhost"},
-         {"CLOUD_DOMAIN", "localhost"},
-         {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
-         {"LOGPLEX_COOKIE", "ct test"}
-        ]],
-    logplex_app:cache_os_envvars().
-
-
-mock_drain_buffer() ->
-    Id = self(),
-    meck:new(logplex_drain_buffer, [passthrough, no_link]),
-    meck:expect(logplex_drain_buffer, start_link,
-                fun(_ChannelId, _Pid, _State, _Size) ->
-                    {ok, Id}
-                end),
-    meck:expect(logplex_drain_buffer, notify, fun(_) -> ok end),
-    meck:expect(logplex_drain_buffer, set_active,
-                fun(_Buf, _Bytes, _Fun) ->
-                    ok
-                end),
-    Id.
 
 %% start_server starts a listener and hands the port over, whereas
 %% with_tcp_server starts a real TCP server good for one request being accepted
