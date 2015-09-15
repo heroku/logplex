@@ -24,7 +24,7 @@ update:
 # 	typer --plt $(HERMES_PLT) -I deps/ -r src
 
 test: REBAR += as test
-test:
+test: testclean
 	@$(REBAR) release
 	ERL_LIBS=$(ROOT_DIR)/_build/test/lib/:${ERL_LIBS} ct_run -spec logplex.spec
 
@@ -33,6 +33,8 @@ clean:
 	rm -rf ./_build/
 	rm -f erl_crash.dump
 
-testclean: clean
+testclean:
+	$(REBAR) clean
+	rm -rf ./_build/test
 
 distclean: clean

@@ -158,7 +158,7 @@ config() ->
 
 config(Key) when is_atom(Key) ->
     case application:get_env(?APP, Key) of
-        undefined -> erlang:error({missing_config, Key});
+        undefined -> erlang:error({missing_logplex_config, Key});
         {ok, Val} -> Val
     end.
 

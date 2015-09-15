@@ -47,6 +47,7 @@ test:
   volumes:
     - ./src:/usr/src/app/src
     - ./test:/usr/src/app/test
+    - ./logs:/usr/src/app/logs
     - ./logplex.spec:/usr/src/app/logplex.spec
     - ./rebar.config:/usr/src/app/rebar.config
     - ./Makefile:/usr/src/app/Makefile
