@@ -14,12 +14,16 @@ init(Ref, Socket, Transport, Opts) ->
 
 loop(Socket, Transport, Opts) ->
   Transport:setopts(Socket, [{packet, line}, {active, false}]),
+  Pid = proplists:get_value(send_to, Opts),
   case Transport:recv(Socket, 0, 2000) of
     {ok, Data} ->
-      Pid = proplists:get_value(send_to, Opts),
-      Pid ! {msg, Data},
+      Pid ! {drain_data, Data},
       % TODO send the message out somewhere
       loop(Socket, Transport, Opts);
+    {error, closed} ->
+      Pid ! {drain_error, closed};
+    {error, timeout} ->
+      Pid ! {drain_error, timeout};
     _ ->
       ok = Transport:close(Socket)
   end.
