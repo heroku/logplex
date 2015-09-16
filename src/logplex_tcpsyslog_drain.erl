@@ -625,8 +625,7 @@ close_if_idle(State = #state{sock = Sock}) ->
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
-            gen_tcp:close(Sock),
-            {closed, State#state{sock=undefined}};
+            {closed, close(State)};
         _ ->
             {not_closed, State}
     end.
