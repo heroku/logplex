@@ -472,6 +472,9 @@ reconnect(State = #state{failures = F, buf=Buf}) ->
 
 reconnect_in(MS, State = #state{}) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
+    ?INFO("drain_id=~p channel_id=~p dest=~s "
+          "state=disconnected at=reconnect_in time=~p",
+          log_info(State, [MS])),
     State#state{reconnect_tref = Ref}.
 
 %% @private
@@ -620,7 +623,7 @@ connection_idle(State) ->
     SinceLastGoodMicros = timer:now_diff(os:timestamp(), compare_point(State)),
     SinceLastGoodMicros > (MaxIdle * 1000).
 
-close_if_idle(State = #state{sock = Sock}) ->
+close_if_idle(State = #state{}) ->
     case connection_idle(State) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",

@@ -12,7 +12,11 @@ all() -> [{group, tcp_syslog},
 groups() ->
   [{tcp_syslog, [], [{group, full_suite}]},
    {tls_syslog, [], [{group, full_suite}]},
-   {full_suite, [], [writes_to_drain, close_if_idle, close_if_old]}].
+   {full_suite, [], [writes_to_drain,
+                     close_if_idle,
+                     close_if_old,
+                     backoff,
+                     shrinks]}].
 
 init_per_suite(Config0) ->
   set_os_vars(),
@@ -34,6 +38,8 @@ init_per_group(_Group, Config0) ->
 end_per_group(_Group, _Config0) ->
   ok.
 
+init_per_testcase(shrinks, _Config0) ->
+  {skip, not_implemented};
 init_per_testcase(_TestCase, Config0) ->
   IdleTimeout = 2000,
   IdleFuzz = 1,
@@ -42,10 +48,8 @@ init_per_testcase(_TestCase, Config0) ->
   application:set_env(logplex, tcp_syslog_idle_timeout, IdleTimeout),
   application:set_env(logplex, tcp_syslog_idle_fuzz, IdleFuzz),
   application:set_env(logplex, tcp_syslog_reconnect_min, 1),
-  DrainType = ?config(drain_type, Config0),
-  Config1 = init_drain_endpoint(DrainType, Config0),
-  ranch:set_protocol_options(drain_endpoint, [{send_to, self()}]),
-  init_logplex_drain(drain_mod_for(DrainType), Config1).
+  Config1 = init_drain_endpoint(Config0),
+  init_logplex_drain(Config1).
 
 end_per_testcase(_TestCase, Config) ->
   end_drain_endpoint(),
@@ -67,6 +71,10 @@ wait_for_drain_(Prefix) ->
       {error, {no_logs_after, 5000}}
   end.
 
+init_drain_endpoint(Config) ->
+  DrainType = ?config(drain_type, Config),
+  init_drain_endpoint(DrainType, Config).
+
 init_drain_endpoint(tcp_syslog, Config) ->
   Port = 9601,
   DrainURI = "syslog://127.0.0.1:" ++ integer_to_list(Port) ++ "/",
@@ -86,7 +94,7 @@ init_drain_endpoint(Transport, TransportOpts, URI, Config0) ->
   {ok, ExURI, _} = ex_uri:decode(URI),
   {ok, _} = ranch:start_listener(drain_endpoint, 1,
                                  Transport, TransportOpts,
-                                 drain_test_protocol, []),
+                                 drain_test_protocol, [{send_to, self()}]),
   [{drain_uri, ExURI} | Config0].
 
 end_drain_endpoint() ->
@@ -96,6 +104,10 @@ drain_mod_for(tcp_syslog) ->
   logplex_tcpsyslog_drain;
 drain_mod_for(tls_syslog) ->
   logplex_tlssyslog_drain.
+
+init_logplex_drain(Config) ->
+  DrainType = ?config(drain_type, Config),
+  init_logplex_drain(drain_mod_for(DrainType), Config).
 
 init_logplex_drain(DrainMod, Config0) ->
   ChannelID = 1337,
@@ -161,6 +173,50 @@ close_if_old(Config) ->
   exit(Pid, kill),
   ok.
 
+backoff(Config) ->
+  ChannelID = ?config(channel_id, Config),
+  application:set_env(logplex, tcp_syslog_max_ttl, timer:minutes(10)),
+  application:set_env(logplex, tcp_syslog_idle_timeout, timer:minutes(5)),
+
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 1: spawn")),
+  wait_for_log(),
+
+  end_drain_endpoint(),
+  %% logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 2: detects down")),
+  timer:sleep(timer:seconds(1 bsl 1)-500),
+
+  init_drain_endpoint(Config),
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 3: detects up")),
+  {Time1, _} = timer:tc(fun wait_for_log/0),
+
+  end_drain_endpoint(),
+  %% logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 4: detects down")),
+  timer:sleep(timer:seconds(1 bsl 2)-500),
+
+  init_drain_endpoint(Config),
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 5: detects up")),
+  {Time2, _} = timer:tc(fun wait_for_log/0),
+
+  end_drain_endpoint(),
+  %% logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 6: detects down")),
+  timer:sleep(timer:seconds(1 bsl 3)-500),
+
+  init_drain_endpoint(Config),
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 7: detects up")),
+  {Time3, _} = timer:tc(fun wait_for_log/0),
+
+  ct:pal("time1=~p time2=~p time3=~p", [Time1, Time2, Time3]),
+  true = Time1 < Time2,
+  true = Time2 < Time3,
+  ok.
+
+% ----------------
+% Helper Functions
+% ----------------
+
+fake_msg(M) ->
+    {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M}.
+
 send_logs_loop(ChannelID, Timeout) when is_float(Timeout) ->
   send_logs_loop(ChannelID, trunc(Timeout), 1).
 
@@ -169,9 +225,3 @@ send_logs_loop(ChannelID, Timeout, N) ->
   timer:sleep(Timeout),
   send_logs_loop(ChannelID, Timeout, N+1).
 
-% ----------------
-% Helper Functions
-% ----------------
-
-fake_msg(M) ->
-    {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M}.

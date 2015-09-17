@@ -313,7 +313,7 @@ handle_info({inet_reply, Sock, {error, Reason}}, StateName,
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, Sock, duration(State)])),
     reconnect(tcp_bad(State));
-handle_info({tcp_closed, Sock}, StateName,
+handle_info({ssl_closed, Sock}, StateName,
             State = #state{sock = Sock}) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
           "err=gen_tcp data=~p sock=~p duration=~s",
