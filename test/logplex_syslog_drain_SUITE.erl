@@ -1,7 +1,6 @@
 -module(logplex_syslog_drain_SUITE).
 -include_lib("common_test/include/ct.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
--include("../src/logplex_tlssyslog_drain.hrl").
 -compile(export_all).
 
 -include("logplex_test_helpers.hrl").
