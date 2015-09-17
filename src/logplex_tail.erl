@@ -30,7 +30,7 @@
 -export([register/1, route/2]).
 -export([shutdown/1]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
 
 %% API functions
 start_link() ->

@@ -1,6 +1,8 @@
 -module(drain_test_protocol).
 -behaviour(ranch_protocol).
 
+-include("./../src/logplex_logging.hrl").
+
 -export([start_link/4]).
 -export([init/4]).
 
@@ -15,16 +17,20 @@ init(Ref, Socket, Transport, Opts) ->
 loop(Socket, Transport, Opts) ->
   Transport:setopts(Socket, [{packet, line}, {active, false}]),
   Pid = proplists:get_value(send_to, Opts),
-  case Transport:recv(Socket, 0, 2000) of
+  case Transport:recv(Socket, 0, 5000) of
     {ok, Data} ->
+      ?INFO("at=recv sending={ok, ~p} to=~p", [Data, Pid]),
       Pid ! {drain_data, Data},
       loop(Socket, Transport, Opts);
     {error, closed} ->
+      ?INFO("at=recv sending=~p to=~p", [closed, Pid]),
       Pid ! {drain_error, closed},
       ok = Transport:close(Socket);
     {error, timeout} ->
+      ?INFO("at=recv sending=~p to=~p", [timeout, Pid]),
       Pid ! {drain_error, timeout},
       ok = Transport:close(Socket);
-    _ ->
+    Other ->
+      ?WARN("at=recv unexpected=~p", [Other]),
       ok = Transport:close(Socket)
   end.

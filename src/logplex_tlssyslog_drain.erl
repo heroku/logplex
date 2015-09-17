@@ -408,7 +408,7 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{keepalive, true}
                ,{packet, raw}
                ,{reuseaddr, true}
-               %% XXX - put ssl connection (cert validaton) options here
+               ,{verify, verify_none}
               ],
     ssl:connect(HostS, Port, Options,
                 timer:seconds(SendTimeoutS));

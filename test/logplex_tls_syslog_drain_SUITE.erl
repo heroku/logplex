@@ -12,7 +12,7 @@ all() -> [{group, tcp_syslog},
 groups() ->
   [{tcp_syslog, [], [{group, full_suite}]},
    {tls_syslog, [], [{group, full_suite}]},
-   {full_suite, [], [ensure_drain_endpoint, close_if_idle, close_if_old]}].
+   {full_suite, [], [writes_to_drain, close_if_idle, close_if_old]}].
 
 init_per_suite(Config0) ->
   set_os_vars(),
@@ -27,32 +27,29 @@ end_per_suite(_Config) ->
 init_per_group(DrainType, Config0) 
   when DrainType =:= tcp_syslog;
        DrainType =:= tls_syslog ->
-  Config1 = init_drain_endpoint(DrainType, Config0),
-  init_logplex_drain(drain_mod_for(DrainType), Config1);
+  [{drain_type, DrainType} | Config0];
 init_per_group(_Group, Config0) ->
   Config0.
 
-end_per_group(DrainType, Config)
-  when DrainType =:= tcp_syslog;
-       DrainType =:= tls_syslog ->
-  end_drain_endpoint(),
-  end_logplex_drain(Config),
-  ok;
 end_per_group(_Group, _Config0) ->
   ok.
 
 init_per_testcase(_TestCase, Config0) ->
-  IdleTimeout = 50,
+  IdleTimeout = 2000,
   IdleFuzz = 1,
-  MaxTTL = 50,
+  MaxTTL = 5000,
   application:set_env(logplex, tcp_syslog_max_ttl, MaxTTL),
   application:set_env(logplex, tcp_syslog_idle_timeout, IdleTimeout),
   application:set_env(logplex, tcp_syslog_idle_fuzz, IdleFuzz),
   application:set_env(logplex, tcp_syslog_reconnect_min, 1),
+  DrainType = ?config(drain_type, Config0),
+  Config1 = init_drain_endpoint(DrainType, Config0),
   ranch:set_protocol_options(drain_endpoint, [{send_to, self()}]),
-  Config0.
+  init_logplex_drain(drain_mod_for(DrainType), Config1).
 
-end_per_testcase(_TestCase, _Config) ->
+end_per_testcase(_TestCase, Config) ->
+  end_drain_endpoint(),
+  end_logplex_drain(Config),
   ok.
 
 wait_for_drain_error(Error) ->
@@ -65,7 +62,7 @@ wait_for_drain_(Prefix) ->
   receive
     {Prefix, State} -> {ok, State}
   after
-    5000 ->
+    15000 ->
       ct:fail("Timeout while waiting for drain ~p", [Prefix]),
       {error, {no_logs_after, 5000}}
   end.
@@ -123,22 +120,15 @@ end_logplex_drain(Config0) ->
           end
   end.
 
-ensure_drain_endpoint(Config) ->
-  URI = ?config(drain_uri, Config),
-  {ok, Socket, Transport} = connect_to_endpoint(URI, Config),
-  ok = Transport:send(Socket, <<"ping\n">>),
-  {ok, <<"ping\n">>} = wait_for_log(),
+writes_to_drain(Config) ->
+  ChannelID = ?config(channel_id, Config),
+
+  % triggers the drain to connect
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("ping")),
+  {ok, Log} = wait_for_log(),
+
+  {match, _} = re:run(Log, "ping"),
   ok.
-
-connect_to_endpoint(#ex_uri{scheme="syslog+tls", authority=#ex_uri_authority{host=Host, port=Port}}, Config) ->
-  CertsPath = ?config(certs_path, Config),
-  connect_to_endpoint(ranch_ssl, Host, Port, [{cacertfile, filename:join([CertsPath, "cacerts.pem"])}]);
-connect_to_endpoint(#ex_uri{scheme="syslog", authority=#ex_uri_authority{host=Host, port=Port}}, _Config) ->
-  connect_to_endpoint(ranch_tcp, Host, Port, []).
-
-connect_to_endpoint(Transport, Host, Port, Opts) ->
-  {ok, Socket} = Transport:connect(Host, Port, Opts),
-  {ok, Socket, Transport}.
 
 close_if_idle(Config) ->
   ChannelID = ?config(channel_id, Config),
@@ -146,13 +136,13 @@ close_if_idle(Config) ->
   IdleFuzz = logplex_app:config(tcp_syslog_idle_fuzz),
 
   % triggers the drain to connect
-  logplex_channel:post_msg({channel, ChannelID}, fake_msg("mymsg1")),
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("idle 1")),
   {ok, _Log} = wait_for_log(),
 
   % triggers idle timeout on next log line
   timer:sleep(IdleFuzz + IdleTimeout + 10),
 
-  logplex_channel:post_msg({channel, ChannelID}, fake_msg("mymsg2")),
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("idle 2")),
   wait_for_drain_error(closed),
   ok.
 
@@ -161,20 +151,23 @@ close_if_old(Config) ->
   IdleTimeout = logplex_app:config(tcp_syslog_idle_timeout),
   MaxTTL = logplex_app:config(tcp_syslog_max_ttl),
 
-  spawn_link(?MODULE, send_logs_loop, [ChannelID, IdleTimeout/2]),
+  Pid = spawn_link(?MODULE, send_logs_loop, [ChannelID, IdleTimeout/2]),
   wait_for_log(),
 
   % triggers too old on next log line
   timer:sleep(MaxTTL + 10),
   wait_for_drain_error(closed),
+  unlink(Pid),
+  exit(Pid, kill),
   ok.
 
 send_logs_loop(ChannelID, Timeout) when is_float(Timeout) ->
-  send_logs_loop(ChannelID, trunc(Timeout));
-send_logs_loop(ChannelID, Timeout) ->
-  logplex_channel:post_msg({channel, ChannelID}, fake_msg("mymsg")),
+  send_logs_loop(ChannelID, trunc(Timeout), 1).
+
+send_logs_loop(ChannelID, Timeout, N) ->
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("logs_loop " ++ integer_to_list(N))),
   timer:sleep(Timeout),
-  send_logs_loop(ChannelID, Timeout).
+  send_logs_loop(ChannelID, Timeout, N+1).
 
 % ----------------
 % Helper Functions
