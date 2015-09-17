@@ -38,16 +38,12 @@ init_per_group(_Group, Config0) ->
 end_per_group(_Group, _Config0) ->
   ok.
 
-init_per_testcase(shrinks, _Config0) ->
-  {skip, not_implemented};
+init_per_testcase(shrinks, Config0) ->
+  MaxBufferSize = 100,
+  application:set_env(logplex, tcp_drain_buffer_size, MaxBufferSize),
+  application:set_env(logplex, tcp_syslog_shrink_after, 1),
+  init_per_testcase('_', [{max_buffer_size, MaxBufferSize} | Config0]);
 init_per_testcase(_TestCase, Config0) ->
-  IdleTimeout = 2000,
-  IdleFuzz = 1,
-  MaxTTL = 5000,
-  application:set_env(logplex, tcp_syslog_max_ttl, MaxTTL),
-  application:set_env(logplex, tcp_syslog_idle_timeout, IdleTimeout),
-  application:set_env(logplex, tcp_syslog_idle_fuzz, IdleFuzz),
-  application:set_env(logplex, tcp_syslog_reconnect_min, 1),
   Config1 = init_drain_endpoint(Config0),
   init_logplex_drain(Config1).
 
@@ -67,8 +63,7 @@ wait_for_drain_(Prefix) ->
     {Prefix, State} -> {ok, State}
   after
     15000 ->
-      ct:fail("Timeout while waiting for drain ~p", [Prefix]),
-      {error, {no_logs_after, 5000}}
+      erlang:error({wait_timeout, Prefix})
   end.
 
 init_drain_endpoint(Config) ->
@@ -143,9 +138,11 @@ writes_to_drain(Config) ->
   ok.
 
 close_if_idle(Config) ->
+  IdleTimeout = 2000,
+  IdleFuzz = 1,
   ChannelID = ?config(channel_id, Config),
-  IdleTimeout = logplex_app:config(tcp_syslog_idle_timeout),
-  IdleFuzz = logplex_app:config(tcp_syslog_idle_fuzz),
+  application:set_env(logplex, tcp_syslog_idle_timeout, IdleTimeout),
+  application:set_env(logplex, tcp_syslog_idle_fuzz, IdleFuzz),
 
   % triggers the drain to connect
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("idle 1")),
@@ -160,10 +157,10 @@ close_if_idle(Config) ->
 
 close_if_old(Config) ->
   ChannelID = ?config(channel_id, Config),
-  IdleTimeout = logplex_app:config(tcp_syslog_idle_timeout),
-  MaxTTL = logplex_app:config(tcp_syslog_max_ttl),
+  MaxTTL = 500,
+  application:set_env(logplex, tcp_syslog_max_ttl, MaxTTL),
 
-  Pid = spawn_link(?MODULE, send_logs_loop, [ChannelID, IdleTimeout/2]),
+  Pid = spawn_link(?MODULE, send_logs_loop, [ChannelID, 100]),
   wait_for_log(),
 
   % triggers too old on next log line
@@ -175,8 +172,6 @@ close_if_old(Config) ->
 
 backoff(Config) ->
   ChannelID = ?config(channel_id, Config),
-  application:set_env(logplex, tcp_syslog_max_ttl, timer:minutes(10)),
-  application:set_env(logplex, tcp_syslog_idle_timeout, timer:minutes(5)),
 
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 1: spawn")),
   wait_for_log(),
@@ -210,6 +205,42 @@ backoff(Config) ->
   true = Time2 < Time3,
   ok.
 
+shrinks(Config) ->
+  ChannelID = ?config(channel_id, Config),
+  MaxBufferSize = ?config(max_buffer_size, Config),
+
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("shrink 1: spawn")),
+  wait_for_log(),
+
+  end_drain_endpoint(),
+  timer:sleep(timer:seconds(1)),
+
+  BufFiller = fun (N) ->
+                  logplex_channel:post_msg({channel, ChannelID}, fake_msg("shrink " ++ integer_to_list(N) ++ ": filling"))
+             end,
+
+  [BufFiller(N) || N <- lists:seq(1, MaxBufferSize*2)],
+  timer:sleep(timer:seconds(1 bsl 2)+500),
+
+  init_drain_endpoint(Config),
+
+  {ok, L10Error} = wait_for_log(),
+  {match, _} = re:run(L10Error, "Error L10 "),
+
+  Logs = [wait_for_log() || _ <- lists:seq(1, 10)],
+  true = length(Logs) =:= 10,
+
+  try wait_for_log() of
+    {ok, _Log} ->
+      ct:fail("Got unexpected log, when buffer should have shrunk");
+    Other ->
+      ct:fail("Got unexpected msg (~p), when buffer should have shrunk", [Other])
+  catch
+    error:{wait_timeout, _} ->
+      % expecting no more logs, since the buffer should have shrunk
+      ok
+  end.
+
 % ----------------
 % Helper Functions
 % ----------------
@@ -218,7 +249,9 @@ fake_msg(M) ->
     {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M}.
 
 send_logs_loop(ChannelID, Timeout) when is_float(Timeout) ->
-  send_logs_loop(ChannelID, trunc(Timeout), 1).
+  send_logs_loop(ChannelID, trunc(Timeout));
+send_logs_loop(ChannelID, Timeout) when is_integer(Timeout) ->
+  send_logs_loop(ChannelID, Timeout, 1).
 
 send_logs_loop(ChannelID, Timeout, N) ->
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("logs_loop " ++ integer_to_list(N))),
