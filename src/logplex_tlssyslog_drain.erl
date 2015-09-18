@@ -424,6 +424,10 @@ connect(#state{sock = undefined, host=Host, port=Port})
                 T when is_tuple(T) -> T;
                 A when is_atom(A) -> A
             end,
+    Aes128 = fun (Cipher) when Cipher =:= aes_128_cbc; Cipher =:= aes_128_gcm -> true;
+                  (_) -> false
+              end,
+    Ciphers = [Suite || {_, Cipher,_}=Suite <- ssl:cipher_suites(), Aes128(Cipher)],
     Options = [binary
                %% We don't expect data, but why not.
                ,{active, true}
@@ -432,6 +436,7 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{packet, raw}
                ,{reuseaddr, true}
                ,{verify, verify_none}
+               ,{ciphers, Ciphers}
               ],
     ssl:connect(HostS, Port, Options,
                 timer:seconds(SendTimeoutS));
