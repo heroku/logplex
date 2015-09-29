@@ -23,7 +23,7 @@
 -module(redis_helper).
 -compile(export_all).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
 
 %%====================================================================
 %% SESSION

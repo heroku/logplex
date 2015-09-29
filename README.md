@@ -22,7 +22,7 @@ For more details, you can look at stream management documentation in `doc/`.
 
 # Local Build
 
-    $ ./rebar --config public.rebar.config get-deps compile
+    $ ./rebar3 as public compile
 
 # Docker Build
 
@@ -36,7 +36,7 @@ steps outlined docs.docker.com.
 
 Given an empty local redis (v2.6ish):
 
-    $ ./rebar get-deps compile --config test.rebar.config
+    $ ./rebar3 as public,test compile
     $ INSTANCE_NAME=`hostname` \
       LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
       LOGPLEX_SHARD_URLS="redis://localhost:6379" \

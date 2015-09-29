@@ -10,45 +10,21 @@
 
 -module(logplex_tlssyslog_drain).
 -behaviour(gen_fsm).
+
 -define(SERVER, ?MODULE).
 -define(RECONNECT_MSG, reconnect).
 -define(TARGET_SEND_SIZE, 4096).
 -define(SEND_TIMEOUT_MSG, send_timeout).
 -define(SEND_TIMEOUT, timer:seconds(4)).
 -define(HIBERNATE_TIMEOUT, 5000).
--define(SHRINK_TRIES, 10).
+-define(DEFAULT_SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
 -define(CLOSE_TIMEOUT_MSG, close_timeout).
 -define(SSL_SOCKET, {sslsocket,_,_}).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
--include_lib("eunit/include/eunit.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
-
--record(state, {drain_id :: logplex_drain:id(),
-                drain_tok :: logplex_drain:token(),
-                channel_id :: logplex_channel:id(),
-                host :: string() | inet:ip_address() | binary(),
-                port :: inet:port_number(),
-                sock = undefined :: 'undefined' | ssl:sslsocket(),
-                %% Buffer for messages while disconnected
-                buf = logplex_msg_buffer:new(default_buf_size()) :: logplex_msg_buffer:buf(),
-                %% Last time we connected or successfully sent data
-                last_good_time :: 'undefined' | erlang:timestamp(),
-                %% TCP failures since last_good_time
-                failures = 0 :: non_neg_integer(),
-                %% Reconnect timer reference
-                reconnect_tref = undefined :: 'undefined' | reference(),
-                %% Send timer reference
-                send_tref = undefined :: 'undefined' | reference(),
-                %% SSL Send connection monitor reference
-                send_mref = undefined :: 'undefined' | reference(),
-                %% Close timer reference
-                close_tref :: reference() | 'undefined',
-                %% Time of last successful connection
-                connect_time :: 'undefined' | erlang:timestamp()
-               }).
 
 -type pstate() :: 'disconnected' | 'ready_to_send' | 'sending' | 'disconnecting'.
 
@@ -78,6 +54,31 @@
 
 -export([init/1,  handle_event/3, handle_sync_event/4,
          handle_info/3, terminate/3, code_change/4]).
+
+-record(state, {drain_id :: logplex_drain:id(),
+                drain_tok :: logplex_drain:token(),
+                channel_id :: logplex_channel:id(),
+                host :: string() | inet:ip_address() | binary(),
+                port :: inet:port_number(),
+                sock = undefined :: 'undefined' | ssl:sslsocket(),
+                %% Buffer for messages while disconnected
+                buf = logplex_msg_buffer:new(default_buf_size()) :: logplex_msg_buffer:buf(),
+                %% Last time we connected or successfully sent data
+                last_good_time :: 'undefined' | erlang:timestamp(),
+                %% TCP failures since last_good_time
+                failures = 0 :: non_neg_integer(),
+                %% Reconnect timer reference
+                reconnect_tref = undefined :: 'undefined' | reference(),
+                %% Send timer reference
+                send_tref = undefined :: 'undefined' | reference(),
+                %% SSL Send connection monitor reference
+                send_mref = undefined :: 'undefined' | reference(),
+                %% Close timer reference
+                close_tref :: reference() | 'undefined',
+                %% Time of last successful connection
+                connect_time :: 'undefined' | erlang:timestamp()
+               }).
+
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -335,7 +336,7 @@ handle_info({inet_reply, Sock, {error, Reason}}, StateName,
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, Sock, duration(State)])),
     reconnect(tcp_bad(State));
-handle_info({tcp_closed, Sock}, StateName,
+handle_info({ssl_closed, Sock}, StateName,
             State = #state{sock = Sock}) ->
     ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
           "err=gen_tcp data=~p sock=~p duration=~s",
@@ -423,6 +424,10 @@ connect(#state{sock = undefined, host=Host, port=Port})
                 T when is_tuple(T) -> T;
                 A when is_atom(A) -> A
             end,
+    Aes128 = fun (Cipher) when Cipher =:= aes_128_cbc; Cipher =:= aes_128_gcm -> true;
+                  (_) -> false
+              end,
+    Ciphers = [Suite || {_, Cipher,_}=Suite <- ssl:cipher_suites(), Aes128(Cipher)],
     Options = [binary
                %% We don't expect data, but why not.
                ,{active, true}
@@ -430,7 +435,8 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{keepalive, true}
                ,{packet, raw}
                ,{reuseaddr, true}
-               %% XXX - put ssl connection (cert validaton) options here
+               ,{verify, verify_none}
+               ,{ciphers, Ciphers}
               ],
     ssl:connect(HostS, Port, Options,
                 timer:seconds(SendTimeoutS));
@@ -467,13 +473,13 @@ reconnect(State = #state{failures = 0, last_good_time=T})
         _EnoughTime ->
             do_reconnect(State)
     end;
-reconnect(State = #state{failures = F, buf=Buf}) ->
+reconnect(State = #state{failures = F}) ->
     Max = logplex_app:config(tcp_syslog_backoff_max, 300),
     BackOff = case length(integer_to_list(Max, 2)) of
                   MaxExp when F > MaxExp -> Max;
                   _ -> 1 bsl F
               end,
-    NewBuf = maybe_shrink(Buf, F),
+    NewBuf = maybe_shrink(State),
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
     %% the hibernation.
@@ -716,7 +722,7 @@ maybe_resize(Buf) ->
         false -> Buf
     end.
 
-maybe_shrink(Buf, Tries) ->
+maybe_shrink(#state{ failures=Tries, buf=Buf }=State) ->
     Max = logplex_msg_buffer:max_size(Buf),
     case Max =:= ?SHRINK_BUF_SIZE of
         true ->
@@ -725,9 +731,14 @@ maybe_shrink(Buf, Tries) ->
             %% Shrink if we have never connected before or the last update time
             %% is more than ?SHRINK_TRIES old, and if the buffer is
             %% currently full and dropping data
-            case full =:= logplex_msg_buffer:full(Buf) andalso
-                 logplex_msg_buffer:lost(Buf) > 0 andalso
-                 Tries > ?SHRINK_TRIES of
+            IsFull = full =:= logplex_msg_buffer:full(Buf),
+            NumLost = logplex_msg_buffer:lost(Buf),
+            ShrinkAfter = logplex_app:config(tcp_syslog_shrink_after, ?DEFAULT_SHRINK_TRIES),
+
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink "
+                  "is_full=~p num_lost=~p tries=~p shrink_after=~p",
+              log_info(State, [IsFull, NumLost, Tries, ShrinkAfter])),
+            case IsFull andalso NumLost > 0 andalso Tries > ShrinkAfter of
                 true ->
                     logplex_msg_buffer:resize(?SHRINK_BUF_SIZE, Buf);
                 false ->

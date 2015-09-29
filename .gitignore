@@ -1,12 +1,10 @@
-release/*.boot
-ebin/*.beam
+_build
 erl_crash.dump
 data
 channels
 tokens
 drains
 *.swp
-deps/
 *~
 ebin/logplex.app
 .eunit/

@@ -1,0 +1,6 @@
+-name logplex
+-setcookie ${LOGPLEX_COOKIE}
+
++K true
++A1000
++P 500000

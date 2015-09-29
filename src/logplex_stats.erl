@@ -29,7 +29,7 @@
 
 -export([healthcheck/0, incr/1, incr/2, cached/0]).
 
--include_lib("logplex.hrl").
+-include("logplex.hrl").
 
 %% API functions
 start_link() ->
