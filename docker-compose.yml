@@ -11,7 +11,7 @@ base:
   build: .
 logplex:
   image: logplex_base
-  command: ./bin/compose_logplex
+  command: ./_build/default/rel/logplex/bin/logplex foreground
   hostname: logplex
   domainname: docker.local
   environment:
