@@ -73,7 +73,7 @@ create creds
 hit healthcheck
 
     $ curl http://local:password@localhost:8001/healthcheck
-    OK
+    {"status":"normal"}
 
 create a channel
 
