@@ -30,9 +30,7 @@
 -define(SHRINK_TIMEOUT, timer:minutes(5)).
 -define(SHRINK_BUF_SIZE, 10).
 
--ifdef(namespaced_types).
 -type queue() :: queue:queue().
--endif.
 
 -type drop_info() :: {erlang:timestamp(), pos_integer()}.
 
