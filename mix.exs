@@ -66,7 +66,8 @@ defmodule Logplex.Mixfile do
   end
 
   defp deps do
-    [{:redis, git: "git://github.com/JacobVorreuter/redis_pool.git", branch: "master"},
+    [{:exrm, "~> 0.19"},
+     {:redis, git: "git://github.com/JacobVorreuter/redis_pool.git", branch: "master"},
      {:mochiweb, git: "git://github.com/heroku/mochiweb.git", tag: "R16B01"},
      {:pagerduty, git: "git://github.com/JacobVorreuter/pagerduty.git", branch: "master"},
      {:redgrid, git: "git://github.com/JacobVorreuter/redgrid.git", tag: "v1.0.3"},
