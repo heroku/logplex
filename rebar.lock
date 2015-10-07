@@ -32,7 +32,7 @@
   0},
  {<<"folsom_cowboy">>,
   {git,"https://github.com/voidlock/folsom_cowboy.git",
-       {ref,"feb92d7ec49dab7fb9db128da949f58bf80775c3"}},
+       {ref,"a44b0671bf1b80e4e63e19871e15e656edce0d43"}},
   0},
  {<<"goldrush">>,
   {git,"git://github.com/DeadZen/goldrush.git",
