@@ -10,6 +10,7 @@
                 socket :: any(),
                 transport :: module(),
                 send_to :: pid(),
+                delay :: pos_integer(),
                 blocked = false :: boolean()}).
 
 
@@ -22,6 +23,7 @@ init(Ref, Socket, Transport, Opts) ->
                  socket=Socket,
                  transport=Transport,
                  send_to=proplists:get_value(send_to, Opts),
+                 delay=proplists:get_value(delay, Opts, 0),
                  blocked=proplists:get_value(blocked, Opts, false)},
   accept_and_loop(Ref, State).
 
@@ -39,6 +41,7 @@ loop(#state{ socket=Socket, transport=Transport }=State0) ->
   Recv = Transport:recv(Socket, 0, 5000),
   case handle_recv(Recv, State0) of
     {ok, State1} ->
+      maybe_delay(State0),
       loop(State1);
     _ ->
       ok = Transport:close(Socket)
@@ -62,4 +65,9 @@ handle_recv(Other, _) ->
 capture(Msg, #state{ send_to=Pid }=State) ->
   ?INFO("at=recv state=~p sending=~p to=~p", [State, Msg, Pid]),
   Pid ! Msg.
+
+maybe_delay(#state{ delay=0 }) ->
+  no_delay;
+maybe_delay(#state{ delay=N }) ->
+  timer:sleep(N).
 

@@ -23,7 +23,9 @@
 -module(nsync_callback).
 -export([handle/1]).
 
+-include_lib("ex_uri/include/ex_uri.hrl").
 -include("logplex.hrl").
+-include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 
 %% nsync callbacks
@@ -39,7 +41,7 @@ handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
 
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = drain_id(parse_id(Rest)),
-    create_drain(Id, Dict);
+    create_or_update_drain(Id, Dict);
 
 handle({load, <<"cred:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = logplex_cred:binary_to_id(parse_id(Rest)),
@@ -75,7 +77,7 @@ handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
 handle({cmd, "hmset", [<<"drain:", Rest/binary>> | Args]}) ->
     Id = drain_id(parse_id(Rest)),
     Dict = dict_from_list(Args),
-    create_drain(Id, Dict),
+    create_or_update_drain(Id, Dict),
     ?INFO("at=set type=drain id=~p", [Id]);
 
 handle({cmd, "hmset", [<<"cred:", Rest/binary>> | Args]}) ->
@@ -210,7 +212,7 @@ load_token(Id, Dict) ->
             Token
     end.
 
-create_drain(Id, Dict) ->
+create_or_update_drain(Id, Dict) ->
     case dict_find(<<"ch">>, Dict) of
         undefined ->
             ?ERR("~p ~p ~p ~p",
@@ -234,7 +236,7 @@ create_drain(Id, Dict) ->
                                     Drain = logplex_drain:new(Id, Ch, Token,
                                                               Type, NewUri),
                                     ets:insert(drains, Drain),
-                                    logplex_drain:start(Drain),
+                                    maybe_update_drain(logplex_drain:start(Drain), Drain),
                                     Drain;
                                 {error, Reason} ->
                                     ?ERR("create_drain invalid_uri ~p ~p ~p",
@@ -243,6 +245,12 @@ create_drain(Id, Dict) ->
                     end
             end
     end.
+
+maybe_update_drain({ok, _Pid}, _Drain) ->
+  ok;
+maybe_update_drain({error, {already_started, _Pid}}, #drain{ id=Id }=Drain) ->
+  logplex_drain:stop(Id),
+  logplex_drain:start(Drain).
 
 create_cred(Id, Dict) ->
     try logplex_cred:from_dict(Id, Dict) of

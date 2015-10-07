@@ -12,6 +12,7 @@ groups() ->
   [{tcp_syslog, [], [{group, full_suite}]},
    {tls_syslog, [], [{group, full_suite}]},
    {full_suite, [], [writes_to_drain,
+                     flushes_on_shutdown,
                      close_if_idle,
                      close_if_old,
                      backoff,
@@ -37,6 +38,8 @@ init_per_group(_Group, Config0) ->
 end_per_group(_Group, _Config0) ->
   ok.
 
+init_per_testcase(flushes_on_shutdown, Config0) ->
+  init_per_testcase('_', [{drain_endpoint_args, [{delay, 2000}]} | Config0]);
 init_per_testcase(shrinks, Config0) ->
   MaxBufferSize = 100,
   application:set_env(logplex, tcp_drain_buffer_size, MaxBufferSize),
@@ -46,22 +49,28 @@ init_per_testcase(_TestCase, Config0) ->
   Config1 = init_drain_endpoint(Config0),
   init_logplex_drain(Config1).
 
+end_per_testcase(flushes_on_shutdown, _Config) ->
+  end_drain_endpoint(),
+  ok;
 end_per_testcase(_TestCase, Config) ->
   end_drain_endpoint(),
   end_logplex_drain(Config),
   ok.
 
 wait_for_drain_error(Error) ->
-  {ok, Error} = wait_for_drain_(drain_error).
+  {ok, Error} = wait_for_drain_(drain_error, 5000).
 
 wait_for_log() ->
-  wait_for_drain_(drain_data).
+  wait_for_log(5000).
 
-wait_for_drain_(Prefix) ->
+wait_for_log(Timeout) ->
+  wait_for_drain_(drain_data, Timeout).
+
+wait_for_drain_(Prefix, Timeout) ->
   receive
     {Prefix, State} -> {ok, State}
   after
-    15000 ->
+    Timeout ->
       erlang:error({wait_timeout, Prefix})
   end.
 
@@ -86,9 +95,10 @@ init_drain_endpoint(tls_syslog, Config) ->
 
 init_drain_endpoint(Transport, TransportOpts, URI, Config0) ->
   {ok, ExURI, _} = ex_uri:decode(URI),
+  Args = [{send_to, self()} | ct:get_config(drain_endpoint_args, Config0, [])],
   {ok, _} = ranch:start_listener(drain_endpoint, 1,
                                  Transport, TransportOpts,
-                                 drain_test_protocol, [{send_to, self()}]),
+                                 drain_test_protocol, Args),
   [{drain_uri, ExURI} | Config0].
 
 end_drain_endpoint() ->
@@ -119,7 +129,7 @@ end_logplex_drain(Config0) ->
   receive
     {'DOWN', _, _, Drain, {shutdown,call}} -> ok;
     {'DOWN', _, _, Drain, Other} -> ct:pal("DRAIN DIED OF REASON: ~p",[Other])
-  after 2000 ->
+  after 5500 ->
           case Drain of
             undefined -> ok;
             _ -> error({not_dead, sys:get_status(Drain)})
@@ -134,6 +144,24 @@ writes_to_drain(Config) ->
   {ok, Log} = wait_for_log(),
 
   {match, _} = re:run(Log, "ping"),
+  ok.
+
+flushes_on_shutdown(Config) ->
+  NumLogs = 10,
+  ChannelID = ?config(channel_id, Config),
+  Delay = ?config(delay, ?config(drain_endpoint_args, Config)),
+
+  BufFiller = fun (N) ->
+                  logplex_channel:post_msg({channel, ChannelID}, fake_msg("flushes_on_shutdown " ++ integer_to_list(N) ++ ": filling"))
+              end,
+  % triggers the drain to connect
+  [BufFiller(N) || N <- lists:seq(1, NumLogs)],
+
+  ok = end_logplex_drain(Config),
+
+  Logs = [wait_for_log(Delay+100) || _ <- lists:seq(1, NumLogs)],
+  NumLogs = length(Logs),
+
   ok.
 
 close_if_idle(Config) ->
@@ -176,28 +204,28 @@ backoff(Config) ->
   wait_for_log(),
 
   end_drain_endpoint(),
-  %% logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 2: detects down")),
-  timer:sleep(timer:seconds(1 bsl 1)-500),
+  BackoffTime1 = timer:seconds(1 bsl 1)-500,
+  timer:sleep(BackoffTime1),
 
   init_drain_endpoint(Config),
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 3: detects up")),
-  {Time1, _} = timer:tc(fun wait_for_log/0),
+  {Time1, _} = timer:tc(fun wait_for_log/1, [BackoffTime1]),
 
   end_drain_endpoint(),
-  %% logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 4: detects down")),
-  timer:sleep(timer:seconds(1 bsl 2)-500),
+  BackoffTime2 = timer:seconds(1 bsl 2)-500,
+  timer:sleep(BackoffTime2),
 
   init_drain_endpoint(Config),
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 5: detects up")),
-  {Time2, _} = timer:tc(fun wait_for_log/0),
+  {Time2, _} = timer:tc(fun wait_for_log/1, [BackoffTime2]),
 
   end_drain_endpoint(),
-  %% logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 6: detects down")),
-  timer:sleep(timer:seconds(1 bsl 3)-500),
+  BackoffTime3 = timer:seconds(1 bsl 3)-500,
+  timer:sleep(BackoffTime3),
 
   init_drain_endpoint(Config),
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 7: detects up")),
-  {Time3, _} = timer:tc(fun wait_for_log/0),
+  {Time3, _} = timer:tc(fun wait_for_log/1, [BackoffTime3]),
 
   ct:pal("time1=~p time2=~p time3=~p", [Time1, Time2, Time3]),
   true = Time1 < Time2,
