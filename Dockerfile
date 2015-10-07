@@ -10,7 +10,7 @@ ENV ERL_CRASH_DUMP=/dev/null \
 
 EXPOSE 8001 8601 6001 4369 49000
 
-VOLUME /usr/src/app/deps
-VOLUME /usr/src/app/ebin
+VOLUME /root/.cache
+VOLUME /usr/src/app/_build
 
 CMD ["./bin/logplex"]
