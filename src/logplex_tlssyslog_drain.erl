@@ -342,14 +342,21 @@ handle_info({ssl_closed, Sock}, StateName,
           "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, closed, Sock, duration(State)])),
     reconnect(tcp_bad(State));
-handle_info(shutdown, StateName, State = #state{sock = Sock})
-  when is_port(Sock) ->
-    catch ssl:close(Sock),
-    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
-          "err=gen_tcp data=~p sock=~p duration=~s",
-          log_info(State, [StateName, shutdown, Sock, duration(State)])),
-    {stop, {shutdown,call}, State#state{sock = undefined}};
-handle_info(shutdown, _StateName, State) ->
+handle_info(shutdown, StateName, State0 = #state{sock = ?SSL_SOCKET}) ->
+    case send(State0) of
+      {next_state, ready_to_send, State1} ->
+        catch ssl:close(State1#state.sock),
+        ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+              "err=gen_tcp data=~p sock=~p duration=~s",
+              log_info(State1, [StateName, shutdown, State1#state.sock, duration(State1)])),
+        {stop, {shutdown,call}, State1#state{sock = undefined}};
+      {next_state, sending, State1} ->
+        handle_info(shutdown, StateName, State1)
+    end;
+handle_info(shutdown, StateName, State) ->
+        ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+              "err=gen_tcp data=~p duration=~s",
+              log_info(State, [StateName, shutdown, duration(State)])),
     {stop, {shutdown,call}, State};
 %% close_timeout used to be called idle_timeout; remove once we are on v72+
 %% this can be removed once we are on v72+
