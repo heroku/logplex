@@ -22,3 +22,4 @@ test/*.beam
 # Elixir work
 deps
 dump.rdb
+/rel

@@ -11,7 +11,7 @@ base:
   build: .
 console:
   image: logplex_base
-  command: ./_build/default/rel/logplex/bin/logplex console
+  command: ./rel/logplex/bin/logplex console
   hostname: logplex
   domainname: docker.local
   environment:
@@ -29,7 +29,7 @@ console:
     - db
 logplex:
   image: logplex_base
-  command: ./_build/default/rel/logplex/bin/logplex foreground
+  command: ./rel/logplex/bin/logplex foreground
   hostname: logplex
   domainname: docker.local
   environment:

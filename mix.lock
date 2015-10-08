@@ -8,7 +8,7 @@
   "cowlib": {:git, "git://github.com/ninenines/cowlib.git", "d544a494af4dbc810fc9c15eaf5cc050cced1501", [ref: "1.0.0"]},
   "erlware_commons": {:hex, :erlware_commons, "0.15.0"},
   "ex_uri": {:git, "git://github.com/heroku/ex_uri.git", "16f26db7026493d2934f615f8884fad42675f00e", [branch: "master"]},
-  "exrm": {:hex, :exrm, "0.19.6"},
+  "exrm": {:git, "https://github.com/bitwalker/exrm.git", "e05826a92f3d7cb78278f8ba9eec174de1990ab6", [tag: "0.19.6"]},
   "folsom": {:git, "https://github.com/boundary/folsom.git", "38e2cce7c64ce1f0a3a918d90394cfc0a940b1ba", [tag: "0.8.2"]},
   "folsom_cowboy": {:git, "https://github.com/evanmcc/folsom_cowboy.git", "26f85d4b5658a264f328b15cce506ef7f2b484a1", [ref: "26f85d4b5658a264f328b15cce506ef7f2b484a1"]},
   "getopt": {:hex, :getopt, "0.8.2"},

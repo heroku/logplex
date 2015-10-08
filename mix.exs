@@ -66,7 +66,7 @@ defmodule Logplex.Mixfile do
   end
 
   defp deps do
-    [{:exrm, "~> 0.19"},
+    [{:exrm, github: "bitwalker/exrm", tag: "0.19.6"},
      {:redis, git: "git://github.com/JacobVorreuter/redis_pool.git", branch: "master"},
      {:mochiweb, git: "git://github.com/heroku/mochiweb.git", tag: "R16B01"},
      {:pagerduty, git: "git://github.com/JacobVorreuter/pagerduty.git", branch: "master"},

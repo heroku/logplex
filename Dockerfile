@@ -1,4 +1,4 @@
-FROM voidlock/erlang:17.5-onbuild
+FROM voidlock/elixir:1.1
 
 ENV ERL_CRASH_DUMP=/dev/null \
     LOGPLEX_CONFIG_REDIS_URL="redis://db:6379/" \
@@ -11,6 +11,17 @@ ENV ERL_CRASH_DUMP=/dev/null \
 EXPOSE 8001 8601 6001 4369 49000
 
 VOLUME /root/.cache
-VOLUME /usr/src/app/_build
 
-CMD ["./bin/logplex"]
+# Explicitly install these here as `mix deps.get` doesn't have a --force option
+# to auto-confirm.
+RUN mix local.hex --force
+RUN mix local.rebar --force
+
+WORKDIR /usr/src/app
+ADD mix.exs /usr/src/app/mix.exs
+ADD mix.lock /usr/src/app/mix.lock
+RUN mix deps.get
+RUn mix compile
+
+ADD . /usr/src/app
+RUN mix release
