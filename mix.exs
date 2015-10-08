@@ -12,6 +12,7 @@ defmodule Logplex.Mixfile do
     [applications: [:kernel ,:stdlib ,:sasl ,:inets ,:crypto ,:public_key ,:ssl ,:redis ,:mochiweb ,:pagerduty ,:redo ,:nsync ,:cowboy ,:quoted ,:gproc ,:ex_uri ,:ranch ,:lager ,:batchio ,:folsom ,:folsom_cowboy],
      included_applications: [:heroku_crashdumps, :redgrid, :backoff],
      mod: {:logplex_app, []},
+     start_phases: [listen: []],
      env: env
     ]
   end
