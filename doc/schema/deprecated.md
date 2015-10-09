@@ -54,7 +54,7 @@ HTTP/1.1 201 OK
 
 ### Create Session
 
-Create a sesssion for a given log channel
+Create a session for a given log channel
 
 ```
 POST /sessions
