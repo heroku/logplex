@@ -4,7 +4,7 @@ defmodule Logplex.Mixfile do
   def project do
     [app: :logplex,
      version: "1.0.0",
-     compilers: [:erlang, :app],
+     compilers: [:erlang, :elixir, :app],
      deps: deps]
   end
 
