@@ -30,7 +30,7 @@
 -export([poll/2]).
 
 -include("logplex_logging.hrl").
--include_lib("logplex.hrl").
+-include("logplex.hrl").
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).

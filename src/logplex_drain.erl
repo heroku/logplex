@@ -81,7 +81,7 @@
 
 -type id() :: integer().
 -type token() :: binary().
--type type() :: 'tcpsyslog' | 'http' | 'udpsyslog'.
+-type type() :: 'tcpsyslog' | 'http' | 'udpsyslog' | 'tlssyslog'.
 -type deprecated_types() :: 'tcpsyslog2' | 'tcpsyslog_old'.
 
 -export_type([id/0
@@ -121,6 +121,7 @@ start_mod({error, _} = Err, _Drain, _Args) ->
     Err.
 
 -spec mod(type() | deprecated_types()) -> atom() | {'error', term()}.
+mod(tlssyslog) -> logplex_tlssyslog_drain;
 mod(tcpsyslog) -> logplex_tcpsyslog_drain;
 mod(udpsyslog) -> logplex_udpsyslog_drain;
 mod(http) -> logplex_http_drain;
@@ -261,9 +262,13 @@ parse_url(Url) when is_list(Url) ->
                        {valid, type(), #ex_uri{}} |
                        {error, term()}.
 valid_uri(#ex_uri{scheme=Syslog} = Uri) when Syslog =:= "syslog";
-                                             Syslog =:= "tcpsyslog" ->
+                                             Syslog =:= "tcpsyslog";
+                                             Syslog =:= "syslog+tcp" ->
     logplex_tcpsyslog_drain:valid_uri(Uri);
-valid_uri(#ex_uri{scheme="udpsyslog"} = Uri) ->
+valid_uri(#ex_uri{scheme="syslog+tls"} = Uri) ->
+    logplex_tlssyslog_drain:valid_uri(Uri);
+valid_uri(#ex_uri{scheme=UDP} = Uri) when UDP =:= "udpsyslog";
+                                          UDP =:= "syslog+udp" ->
     logplex_udpsyslog_drain:valid_uri(Uri);
 valid_uri(#ex_uri{scheme="http" ++ _} = Uri) ->
     logplex_http_drain:valid_uri(Uri);
@@ -356,10 +361,10 @@ by_dest() ->
 by_type() ->
     gproc:lookup_local_properties(drain_type).
 
-by_type(http) ->
-    [Pid || {Pid, http} <- gproc:lookup_local_properties(drain_type)];
-by_type(tcpsyslog) ->
-    [Pid || {Pid, tcpsyslog} <- gproc:lookup_local_properties(drain_type)].
+-spec by_type('http' | 'tcpsyslog' | 'tlssyslog') -> [pid()].
+by_type(Type) when is_atom(Type) ->
+    [Pid || {Pid, DrainType} <- gproc:lookup_local_properties(drain_type),
+            DrainType =:= Type].
 
 -spec num_drains() -> non_neg_integer().
 num_drains() ->

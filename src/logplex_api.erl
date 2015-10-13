@@ -390,24 +390,18 @@ handlers() ->
                                             [What]),
                         json_error(422, Err);
                     {valid, _, URI} ->
-                        case logplex_channel:can_add_drain(ChannelId) of
-                            cannot_add_drain ->
-                                logplex_drain:delete_partial_drain(DrainId, Token),
-                                json_error(422, <<"You have already added the maximum number of drains allowed">>);
-                            can_add_drain ->
-                                case logplex_drain:create(DrainId, Token, ChannelId, URI) of
-                                    {error, already_exists} ->
-                                        json_error(409, <<"Already exists">>);
-                                    {drain, _Id, Token} ->
-                                        Resp = [
-                                                {id, DrainId},
-                                                {token, Token},
-                                                {url, uri_to_binary(URI)}
-                                               ],
-                                        {201,?JSON_CONTENT,
-                                         mochijson2:encode({struct, Resp})}
-                                end
-                        end
+                    case logplex_drain:create(DrainId, Token, ChannelId, URI) of
+                      {error, already_exists} ->
+                        json_error(409, <<"Already exists">>);
+                      {drain, _Id, Token} ->
+                        Resp = [
+                                {id, DrainId},
+                                {token, Token},
+                                {url, uri_to_binary(URI)}
+                               ],
+                        {201,?JSON_CONTENT,
+                         mochijson2:encode({struct, Resp})}
+                    end
                 end
         end
     end},
@@ -707,7 +701,7 @@ valid_uri(Req) ->
                           {error, missing_host_param};
                       Host ->
                           logplex_tcpsyslog_drain:uri(Host, Port)
-            end;
+                  end;
               UrlString ->
                   try
                       logplex_drain:parse_url(UrlString)
