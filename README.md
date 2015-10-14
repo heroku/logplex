@@ -12,6 +12,7 @@ For more details, you can look at stream management documentation in `doc/`.
 
 # Table of Contents
 
+1. [Mix Docker Build](#mix-docker-build)
 1. [Local Build](#local-build)
 1. [Docker Build](#docker-build)
 2. [Local Test](#local-test)
@@ -20,25 +21,26 @@ For more details, you can look at stream management documentation in `doc/`.
 4. [Supervision Tree](#supervision-tree)
 5. [Processes](#processes)
 
-# Mix build (work in progress):
+# Mix Docker build
+
+THIS IS WORK IN PROGRESS.
 
 Docker setup already uses mix instead of rebar. After running `docker-compose up` to build the images, you can spawn a Mix shell using:
 
 ```
-docker-compose run console iex --name $(hostname -s) -S mix
+docker-compose run console
 ```
 
 There is also a sample Elixir module under the lib/ directory that you can poke around from this shell:
 
 ```
-iex(ratnakumar-ltm4@logplex.docker.local)1> Logplex.Hello.sayHello "earth"
+iex(logplex@127.0.0.1)2> Logplex.Hello.sayHello "earth"
 Hello, earth!
 :ok
-iex(ratnakumar-ltm4@logplex.docker.local)2>
+iex(logplex@127.0.0.1)3>
 ```
 
 This is merely a first step to pave way to writing actual Elixir modules; the point is to prepare the tooling to compile future Elixir modules.
-
 
 # Local Build
 

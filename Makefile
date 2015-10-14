@@ -23,17 +23,21 @@ update:
 # typer: $(LOGPLEX_PLT)
 # 	typer --plt $(HERMES_PLT) -I deps/ -r src
 
-test: REBAR := $(REBAR),test
-test: testclean
+oldtest: REBAR := $(REBAR),test
+oldtest: oldtestclean
 	$(REBAR) release
 	ERL_LIBS=$(ROOT_DIR)/_build/public+test/lib/:${ERL_LIBS} ct_run -spec logplex.spec
+
+# `mix ct` invokes the test as https://github.com/alco/mix-erlang-tasks/blob/master/lib/mix/tasks/ct.ex
+test:
+	elixir --name logplex@testnode -S mix ct
 
 clean:
 	$(REBAR) clean
 	rm -rf ./_build/
 	rm -f erl_crash.dump
 
-testclean:
+oldtestclean:
 	$(REBAR) clean
 	rm -rf ./_build/test
 

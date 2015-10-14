@@ -2,11 +2,22 @@ defmodule Logplex.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :logplex,
+   [app: :logplex,
      version: "1.0.0",
      compilers: [:erlang, :elixir, :app],
-     deps: deps]
+     erlc_paths: erlc_paths(Mix.env),
+     deps: deps(Mix.env),
+    ]
   end
+
+  def erlc_paths(:test) do
+    erlc_paths(:_) ++ ["ctest"]
+  end
+
+  def erlc_paths(_env) do
+    ["src"]
+  end
+
 
   def application do
     [applications: [:kernel ,:stdlib ,:sasl ,:inets ,:crypto ,:public_key ,:ssl ,:redis ,:mochiweb ,:pagerduty ,:redo ,:nsync ,:cowboy ,:quoted ,:gproc ,:ex_uri ,:ranch ,:lager ,:batchio ,:folsom ,:folsom_cowboy],
@@ -66,7 +77,7 @@ defmodule Logplex.Mixfile do
     ]
   end
 
-  defp deps do
+  defp deps(_) do
     [{:exrm, github: "bitwalker/exrm", tag: "0.19.6"},
      {:redis, git: "git://github.com/JacobVorreuter/redis_pool.git", branch: "master"},
      {:mochiweb, git: "git://github.com/heroku/mochiweb.git", tag: "R16B01"},
@@ -85,8 +96,9 @@ defmodule Logplex.Mixfile do
      {:folsom, git: "https://github.com/boundary/folsom.git", tag: "0.8.2", override: true},
      {:jsx, git: "https://github.com/talentdeficit/jsx.git", tag: "v1.3.1", override: true},
      {:folsom_cowboy, git: "https://github.com/evanmcc/folsom_cowboy.git", ref: "26f85d4b5658a264f328b15cce506ef7f2b484a1"},
-     # TODO: move to test env
-     {:meck, git: "https://github.com/eproxus/meck.git", tag: "0.8.2", override: true}
+     {:mix_erlang_tasks, "0.1.0"},
+     {:meck, "~> 0.8.2", override: true},
     ]
   end
+
 end

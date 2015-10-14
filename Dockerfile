@@ -21,7 +21,8 @@ WORKDIR /usr/src/app
 ADD mix.exs /usr/src/app/mix.exs
 ADD mix.lock /usr/src/app/mix.lock
 RUN mix deps.get
-RUn mix compile
+RUN mix compile
 
 ADD . /usr/src/app
+RUN ln -s /usr/src/app/test /usr/src/app/ctest  # https://github.com/alco/mix-erlang-tasks/issues/2
 RUN mix release

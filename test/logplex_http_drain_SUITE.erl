@@ -3,6 +3,8 @@
 -include_lib("ex_uri/include/ex_uri.hrl").
 -compile(export_all).
 
+-type queue() :: queue:queue().
+
 all() -> [{group, overflow},
           {group, drain_buf},
           close_max_ttl].
