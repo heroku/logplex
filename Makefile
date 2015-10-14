@@ -32,6 +32,9 @@ oldtest: oldtestclean
 test:
 	elixir --name logplex@testnode -S mix ct
 
+release:
+	mix release
+
 clean:
 	$(REBAR) clean
 	rm -rf ./_build/

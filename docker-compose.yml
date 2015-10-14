@@ -54,6 +54,11 @@ compile:
     - ./Makefile:/usr/src/app/Makefile
   volumes_from:
     - base
+release:
+  image: logplex_base
+  command: make release
+  environment:
+    - MIX_ENV=prod
 test:
   image: logplex_base
   command: make test
