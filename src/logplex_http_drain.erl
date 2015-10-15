@@ -519,7 +519,7 @@ sent_frame(#frame{msg_count=Count, loss_count=Lost}, State0=#state{drop_info=Dro
 msg_stat(Key, N,
          #state{drain_id=DrainId, uri=URI, channel_id=ChannelId}) ->
     logplex_stats:incr(#drain_stat{drain_id=DrainId,
-                                   drain_type=logplex_drain:drain_type(URI),
+                                   drain_type=drain_type(URI),
                                    channel_id=ChannelId,
                                    key=Key}, N).
 
