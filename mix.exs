@@ -3,11 +3,13 @@ defmodule Logplex.Mixfile do
 
   def project do
    [app: :logplex,
-     version: "1.0.0",
-     compilers: [:erlang, :elixir, :app],
-     erlc_paths: erlc_paths(Mix.env),
-     deps: deps(Mix.env),
-    ]
+    deps_path: "../../deps",
+    lockfile: "../../mix.lock",
+    version: "1.0.0",
+    compilers: [:erlang, :elixir, :app],
+    erlc_paths: erlc_paths(Mix.env),
+    deps: deps(Mix.env),
+   ]
   end
 
   def erlc_paths(:test) do
@@ -96,7 +98,6 @@ defmodule Logplex.Mixfile do
      {:folsom, git: "https://github.com/boundary/folsom.git", tag: "0.8.2", override: true},
      {:jsx, git: "https://github.com/talentdeficit/jsx.git", tag: "v1.3.1", override: true},
      {:folsom_cowboy, git: "https://github.com/evanmcc/folsom_cowboy.git", ref: "26f85d4b5658a264f328b15cce506ef7f2b484a1"},
-     {:mix_erlang_tasks, "0.1.0"},
      {:meck, "~> 0.8.2", override: true},
     ]
   end
