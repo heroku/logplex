@@ -110,9 +110,7 @@ handle_info({timeout, _TimerRef, flush}, _State) ->
     {Mega, S, _} = os:timestamp(),
     UnixTS = Mega * 1000000 + S,
     Stats = ets:tab2list(logplex_stats),
-    [ begin
-          log_stat(UnixTS, K, V),
-          ets:update_counter(?MODULE, K, V * -1)
+    [ handle_stat(UnixTS, K, V)
       end
       || {K, V} <- Stats,
          V =/= 0],
@@ -145,11 +143,22 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+handle_stat(UnixTS, {drain_stat, _DrainId, _ChannelId, _Key}=EtsKey, 0) ->
+  ets:delete(?MODULE, EtsKey);
+handle_stat(UnixTS, _Key, 0) ->
+  ok;
+handle_stat(UnixTS, Key, Val) ->
+  log_stat(UnixTS, K, V),
+  ets:update_counter(?MODULE, K, V * -1).
+
 start_timer() ->
     {_Mega, Secs, Micro} = now(),
     Time = 60000 - ((Secs rem 60 * 1000) + (Micro div 1000)),
     erlang:start_timer(Time, ?MODULE, flush).
 
+log_stat(UnixTS, {drain_stat, DrainId, ChannelId, Key}, Val) ->
+    io:format("m=logplex_stats ts=~p channel_id=~p drain_id=~p drain_type=~p ~p=~p~n",
+        [UnixTS, ChannelId, DrainId, DrainType, Key, Val]);
 log_stat(UnixTS, #drain_stat{drain_id=DrainId, drain_type=DrainType, channel_id=ChannelId, key=Key}, Val) ->
     io:format("m=logplex_stats ts=~p channel_id=~p drain_id=~p drain_type=~p ~p=~p~n",
         [UnixTS, ChannelId, DrainId, DrainType, Key, Val]);
