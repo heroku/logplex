@@ -415,6 +415,7 @@ handlers() ->
     %% V2
     {['POST', "^/v2/channels/(\\d+)/drains$"], fun(_Req, _Match, read_only) -> {503, ?API_READONLY};
                                                   (Req, [ChannelIdStr], _) ->
+        authorize(Req),
         ChannelId = list_to_integer(ChannelIdStr),
         case valid_uri(Req) of
             {error, What} ->
