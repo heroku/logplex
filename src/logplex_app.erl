@@ -29,14 +29,14 @@
 %% Application callbacks
 -export([start/2, start_phase/3, stop/1]).
 
--export([nsync_opts/0
-         ,config/0
-         ,config/1
-         ,config/2
-         ,set_config/2
-         ,start/0
-         ,a_start/2
-        ]).
+-export([nsync_opts/0,
+         priv_dir/0,
+         config/0,
+         config/1,
+         config/2,
+         set_config/2,
+         start/0,
+         a_start/2]).
 
 -export([cache_os_envvars/0]). % for tests
 
@@ -152,6 +152,10 @@ set_config(Key, Value) when is_atom(Key) ->
 
 set_config_value(Value, string) -> Value;
 set_config_value(Value, integer) -> list_to_integer(Value).
+
+priv_dir() ->
+    Ebin = filename:dirname(code:which(?MODULE)),
+    filename:join(filename:dirname(Ebin), "priv").
 
 config() ->
     application:get_all_env(logplex).
