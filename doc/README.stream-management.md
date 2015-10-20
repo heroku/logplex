@@ -18,7 +18,7 @@ order to build a short backlog when necessary.
 ## Where requests come from ##
 
 The typical application using logplex will pipe syslog messages from a
-local syslog over TCP, or from an applicaiton such as [log
+local syslog over TCP, or from an application such as [log
 shuttle](https://github.com/ryandotsmith/log-shuttle), which will send
 them over HTTP. It is recommended to go with HTTP if possible, as it
 allows better control of streams: authentication (over HTTP), SSL, and
@@ -51,7 +51,7 @@ except they're able to fetch logs globally all at once.
 
 A user can start a drain by contacting the logplex HTTP API with the
 correct credentials. It doesn't matter which instance is used. The
-logplex router will automatically spawna  *tail process*, to be
+logplex router will automatically spawn a  *tail process*, to be
 registered as an endpoint over all nodes.
 
 As soon as the registration takes place, every message that is received

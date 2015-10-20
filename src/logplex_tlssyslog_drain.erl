@@ -40,6 +40,7 @@
 -export([valid_uri/1
          ,uri/2
          ,start_link/4
+         ,ssl_cert_validation/3
         ]).
 
 %% ------------------------------------------------------------------
@@ -412,6 +413,8 @@ do_reconnect(State = #state{sock = undefined,
                     %% first failure.
                     ok;
                 _ ->
+                    % inject log message
+                    inject_cert_valiation_error(Reason, State),
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
                          "err=gen_tcp data=~p try=~p last_success=~s "
                          "state=disconnected",
@@ -421,8 +424,30 @@ do_reconnect(State = #state{sock = undefined,
             reconnect(NewState)
     end.
 
+inject_cert_valiation_error({tls_alert, _}=Reason, State) ->
+  Msg =  iolist_to_binary(
+           logplex_syslog_utils:to_msg(
+             logplex_syslog_utils:fmt(local7,
+                                      warning,
+                                      now,
+                                      "heroku", 
+                                      "logplex",
+                                      "Error L14 (certificate validation): "
+                                      "error=\"~s\" uri=\"~s\"",
+                                      [error_to_human(Reason), drain_uri(State)]),
+             State#state.drain_tok)),
+  logplex:post_to_channel(State#state.channel_id, Msg, <<"heroku">>, <<"heroku">>);
+inject_cert_valiation_error(_Reason, _State) ->
+  ok.
+
+error_to_human({tls_alert, Alert}) ->
+    Alert.
+
+drain_uri(#state{ host=Host, port=Port }) ->
+    io_lib:format("syslog+tls://~s:~B/", [Host, Port]).
+
 %% @private
-connect(#state{sock = undefined, host=Host, port=Port})
+connect(#state{sock = undefined, host=Host, port=Port}=State)
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
     HostS = case Host of
@@ -431,11 +456,17 @@ connect(#state{sock = undefined, host=Host, port=Port})
                 T when is_tuple(T) -> T;
                 A when is_atom(A) -> A
             end,
+
+    CertOpts = compile_cert_opts([verify, depth, cacertfile]),
+    ?INFO("drain_id=~p channel_id=~p dest=~s "
+          "cert_opts=~p",
+          log_info(State, [CertOpts])),
+
     Aes128 = fun (Cipher) when Cipher =:= aes_128_cbc; Cipher =:= aes_128_gcm -> true;
                   (_) -> false
               end,
     Ciphers = [Suite || {_, Cipher,_}=Suite <- ssl:cipher_suites(), Aes128(Cipher)],
-    Options = [binary
+    Options = CertOpts ++ [binary
                %% We don't expect data, but why not.
                ,{active, true}
                ,{exit_on_close, true}
@@ -449,6 +480,37 @@ connect(#state{sock = undefined, host=Host, port=Port})
                 timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.
+
+compile_cert_opts(OptList) ->
+    compile_cert_opts(OptList, []).
+
+compile_cert_opts([], Acc) ->
+    Acc;
+compile_cert_opts([verify | Rest], Acc) ->
+    % TODO alter this based on uri scheme
+    compile_cert_opts(Rest, [{verify_fun, {fun ssl_cert_validation/3, []}} | Acc]);
+    %% compile_cert_opts(Rest, [{verify, verify_peer} | Acc]);
+compile_cert_opts([depth | Rest], Acc) ->
+    % TODO should this be configurable via uri scheme as well?
+    compile_cert_opts(Rest, [{depth, logplex_app:config(tls_syslog_cert_depth, 3)} | Acc]);
+compile_cert_opts([cacertfile | Rest], Acc) ->
+    % TODO should this be configurable via uri scheme as well?
+    CertFile = case logplex_app:config(tls_syslog_cacertfile, unknown) of
+                   unknown ->
+                       filename:join([logplex_app:priv_dir(), "cacert.pem"]);
+                   Path -> Path
+               end,
+    compile_cert_opts(Rest, [{cacertfile, CertFile} | Acc]).
+
+ssl_cert_validation(_, {bad_cert, Reason}=BigReason, _) ->
+    ?INFO("bad_cert=~p", [Reason]),
+    {fail, BigReason};
+    ssl_cert_validation(_,{extension, _}, UserState) ->
+    {unknown, UserState};
+ssl_cert_validation(_, valid, UserState) ->
+    {valid, UserState};
+ssl_cert_validation(_, valid_peer, UserState) ->
+    {valid, UserState}.
 
 -spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private
@@ -537,6 +599,7 @@ log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
 msg_stat(Key, N,
          #state{drain_id=DrainId, channel_id=ChannelId}) ->
     logplex_stats:incr(#drain_stat{drain_id=DrainId,
+                                   drain_type=tlssyslog,
                                    channel_id=ChannelId,
                                    key=Key}, N).
 

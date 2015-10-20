@@ -26,7 +26,7 @@ For more details, you can look at stream management documentation in `doc/`.
 
 # Docker Build
 
-Requires a working install of Docker (boot2docker on osx) and Docker Compose.
+Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
 Follow the [installations](https://docs.docker.com/installation/#installation)
 steps outlined docs.docker.com.
 
@@ -73,7 +73,7 @@ create creds
 hit healthcheck
 
     $ curl http://local:password@localhost:8001/healthcheck
-    OK
+    {"status":"normal"}
 
 create a channel
 
