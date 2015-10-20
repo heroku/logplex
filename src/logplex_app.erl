@@ -162,7 +162,7 @@ config() ->
 
 config(Key) when is_atom(Key) ->
     case application:get_env(?APP, Key) of
-        undefined -> erlang:error({missing_config, Key});
+        undefined -> erlang:error({missing_logplex_config, Key});
         {ok, Val} -> Val
     end.
 
@@ -180,7 +180,7 @@ set_cookie() ->
 
 read_git_branch() ->
     GitOutput = hd(string:tokens(os:cmd("git status"), "\n")),
-    case re:run(GitOutput, "\# On branch (\\S+)", [{capture, all_but_first, list}]) of
+    case re:run(GitOutput, "On branch (\\S+)", [{capture, all_but_first, list}]) of
         {match,[Branch]} ->
             set_config(git_branch, Branch);
         _ ->

@@ -1,20 +1,40 @@
-.PHONY: all compile quick get-deps dist-clean
+REBAR?=./rebar3 as public
 
-REBAR := ./rebar
+LOGPLEX_PLT=$(CURDIR)/.depsolver_plt
 
-all : clean compile
+ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-compile : get-deps
-	@$(REBAR) compile
+.PHONY: clean distclean test
 
-quick :
-	@$(REBAR) compile skip_deps=true
+compile:
+	$(REBAR) update
+	$(REBAR) release
 
-get-deps :
-	@$(REBAR) get-deps
+dist: REBAR := $(REBAR),prod
+dist: compile
+	$(REBAR) tar
 
-clean :
-	@$(REBAR) clean
+update:
+	$(REBAR) update
 
-dist-clean : clean
-	@rm -rf deps ebin
+# dialyzer:
+# 	@./rebar3 dialyzer
+#
+# typer: $(LOGPLEX_PLT)
+# 	typer --plt $(HERMES_PLT) -I deps/ -r src
+
+test: REBAR := $(REBAR),test
+test: testclean
+	$(REBAR) release
+	ERL_LIBS=$(ROOT_DIR)/_build/public+test/lib/:${ERL_LIBS} ct_run -spec logplex.spec
+
+clean:
+	$(REBAR) clean
+	rm -rf ./_build/
+	rm -f erl_crash.dump
+
+testclean:
+	$(REBAR) clean
+	rm -rf ./_build/test
+
+distclean: clean

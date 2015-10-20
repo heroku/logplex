@@ -14,7 +14,7 @@
 -define(SEND_TIMEOUT_MSG, send_timeout).
 -define(SEND_TIMEOUT, timer:seconds(4)).
 -define(HIBERNATE_TIMEOUT, 5000).
--define(SHRINK_TRIES, 10).
+-define(DEFAULT_SHRINK_TRIES, 10).
 -define(SHRINK_BUF_SIZE, 10).
 -define(CLOSE_TIMEOUT_MSG, close_timeout).
 
@@ -331,13 +331,18 @@ handle_info({tcp_closed, Sock}, StateName,
           "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, closed, Sock, duration(State)])),
     reconnect(tcp_bad(State));
-handle_info(shutdown, StateName, State = #state{sock = Sock})
+handle_info(shutdown, StateName, State0 = #state{sock = Sock})
   when is_port(Sock) ->
-    catch gen_tcp:close(Sock),
-    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
-          "err=gen_tcp data=~p sock=~p duration=~s",
-          log_info(State, [StateName, shutdown, Sock, duration(State)])),
-    {stop, {shutdown,call}, State#state{sock = undefined}};
+    case send(State0) of
+      {next_state, ready_to_send, State1} ->
+        catch gen_tcp:close(Sock),
+        ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+              "err=gen_tcp data=~p sock=~p duration=~s",
+              log_info(State1, [StateName, shutdown, Sock, duration(State1)])),
+        {stop, {shutdown,call}, State1#state{sock = undefined}};
+      {next_state, sending, State1} ->
+        handle_info(shutdown, StateName, State1)
+    end;
 handle_info(shutdown, _StateName, State) ->
     {stop, {shutdown,call}, State};
 %% close_timeout used to be called idle_timeout; remove once we are on v72+
@@ -456,13 +461,13 @@ reconnect(State = #state{failures = 0, last_good_time=T})
         _EnoughTime ->
             do_reconnect(State)
     end;
-reconnect(State = #state{failures = F, buf=Buf}) ->
+reconnect(State = #state{failures = F}) ->
     Max = logplex_app:config(tcp_syslog_backoff_max, 300),
     BackOff = case length(integer_to_list(Max, 2)) of
                   MaxExp when F > MaxExp -> Max;
                   _ -> 1 bsl F
               end,
-    NewBuf = maybe_shrink(Buf, F),
+    NewBuf = maybe_shrink(State),
     %% We hibernate only when we need to reconnect with a timer. The timer
     %% acts as a rate limiter! If you remove the timer, you must re-think
     %% the hibernation.
@@ -472,6 +477,9 @@ reconnect(State = #state{failures = F, buf=Buf}) ->
 
 reconnect_in(MS, State = #state{}) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
+    ?INFO("drain_id=~p channel_id=~p dest=~s "
+          "state=disconnected at=reconnect_in time=~p",
+          log_info(State, [MS])),
     State#state{reconnect_tref = Ref}.
 
 %% @private
@@ -513,6 +521,7 @@ log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
 msg_stat(Key, N,
          #state{drain_id=DrainId, channel_id=ChannelId}) ->
     logplex_stats:incr(#drain_stat{drain_id=DrainId,
+                                   drain_type=tcpsyslog,
                                    channel_id=ChannelId,
                                    key=Key}, N).
 
@@ -539,11 +548,7 @@ buffer(Msg, State = #state{buf = Buf}) ->
     case Result of
         displace ->
             msg_stat(drain_dropped, 1, State),
-            %% If socket is online, note drain dropped.
-            case State#state.sock of
-                undefined -> ok;
-                _ -> logplex_realtime:incr('drain.dropped')
-            end;
+            logplex_realtime:incr('drain.dropped');
         insert -> ok
     end,
     State#state{buf=NewBuf}.
@@ -620,13 +625,12 @@ connection_idle(State) ->
     SinceLastGoodMicros = timer:now_diff(os:timestamp(), compare_point(State)),
     SinceLastGoodMicros > (MaxIdle * 1000).
 
-close_if_idle(State = #state{sock = Sock}) ->
+close_if_idle(State = #state{}) ->
     case connection_idle(State) of
         true ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
-            gen_tcp:close(Sock),
-            {closed, State#state{sock=undefined}};
+            {closed, close(State)};
         _ ->
             {not_closed, State}
     end.
@@ -690,7 +694,7 @@ maybe_resize(Buf) ->
         false -> Buf
     end.
 
-maybe_shrink(Buf, Tries) ->
+maybe_shrink(#state{ failures=Tries, buf=Buf }=State) ->
     Max = logplex_msg_buffer:max_size(Buf),
     case Max =:= ?SHRINK_BUF_SIZE of
         true ->
@@ -699,9 +703,14 @@ maybe_shrink(Buf, Tries) ->
             %% Shrink if we have never connected before or the last update time
             %% is more than ?SHRINK_TRIES old, and if the buffer is
             %% currently full and dropping data
-            case full =:= logplex_msg_buffer:full(Buf) andalso
-                 logplex_msg_buffer:lost(Buf) > 0 andalso
-                 Tries > ?SHRINK_TRIES of
+            IsFull = full =:= logplex_msg_buffer:full(Buf),
+            NumLost = logplex_msg_buffer:lost(Buf),
+            ShrinkAfter = logplex_app:config(tcp_syslog_shrink_after, ?DEFAULT_SHRINK_TRIES),
+
+            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink "
+                  "is_full=~p num_lost=~p tries=~p shrink_after=~p",
+              log_info(State, [IsFull, NumLost, Tries, ShrinkAfter])),
+            case IsFull andalso NumLost > 0 andalso Tries > ShrinkAfter of
                 true ->
                     logplex_msg_buffer:resize(?SHRINK_BUF_SIZE, Buf);
                 false ->

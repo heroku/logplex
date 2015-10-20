@@ -9,9 +9,32 @@ db:
 base:
   command: /bin/true
   build: .
+console:
+  image: logplex_base
+  command: ./_build/default/rel/logplex/bin/logplex console
+  hostname: logplex
+  domainname: docker.local
+  environment:
+    - INSTANCE_NAME=logplex.docker.local
+    - LOCAL_IP=127.0.0.1
+  env_file:
+    - logplex.env
+  volumes_from:
+    - base
+  ports:
+    - "8001:8001"
+    - "8601:8601"
+    - "6001:6001"
+  links:
+    - db
 logplex:
   image: logplex_base
-  command: ./bin/compose_logplex
+  command: ./_build/default/rel/logplex/bin/logplex foreground
+  hostname: logplex
+  domainname: docker.local
+  environment:
+    - INSTANCE_NAME=logplex.docker.local
+    - LOCAL_IP=127.0.0.1
   env_file:
     - logplex.env
   volumes_from:
@@ -23,19 +46,29 @@ logplex:
   links:
     - db
 compile:
-  command: make quick
+  command: env REBAR=rebar3 make compile
   image: logplex_base
   volumes:
     - ./src:/usr/src/app/src
+    - ./rebar.config:/usr/src/app/rebar.config
+    - ./Makefile:/usr/src/app/Makefile
   volumes_from:
     - base
 test:
   image: logplex_base
-  command: bin/compose_test_logplex
+  command: make test
+  hostname: logplex
+  domainname: docker.local
+  environment:
+    - INSTANCE_NAME=logplex.docker.local
+    - LOCAL_IP=127.0.0.1
   volumes:
     - ./src:/usr/src/app/src
     - ./test:/usr/src/app/test
+    - ./logs:/usr/src/app/logs
     - ./logplex.spec:/usr/src/app/logplex.spec
+    - ./rebar.config:/usr/src/app/rebar.config
+    - ./Makefile:/usr/src/app/Makefile
   volumes_from:
     - base
   links:

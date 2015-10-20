@@ -1,6 +1,6 @@
 # Logplex HTTP Drains
 
-Drains are the machine-oriented ouput abstraction for Logplex. They receive copies of every log message passing through a channel and are responsible for delivering them, as a client, to a user defined URL.
+Drains are the machine-oriented output abstraction for Logplex. They receive copies of every log message passing through a channel and are responsible for delivering them, as a client, to a user defined URL.
 
 Logplex HTTP drains collect log message into batches and then POST them to the `http://` or `https://` URL configured during drain setup. Every part of the URL is supported, including basic authentication, host and port, path, query string and fragment. The POST itself will be a simple file-upload with a content type of "application/logplex-<FormatVersion>".
 

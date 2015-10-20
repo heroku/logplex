@@ -1,4 +1,4 @@
-FROM voidlock/erlang:R16B03-1-onbuild
+FROM voidlock/erlang:17.5-onbuild
 
 ENV ERL_CRASH_DUMP=/dev/null \
     LOGPLEX_CONFIG_REDIS_URL="redis://db:6379/" \
@@ -10,7 +10,7 @@ ENV ERL_CRASH_DUMP=/dev/null \
 
 EXPOSE 8001 8601 6001 4369 49000
 
-VOLUME /usr/src/app/deps
-VOLUME /usr/src/app/ebin
+VOLUME /root/.cache
+VOLUME /usr/src/app/_build
 
 CMD ["./bin/logplex"]

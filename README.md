@@ -22,11 +22,11 @@ For more details, you can look at stream management documentation in `doc/`.
 
 # Local Build
 
-    $ ./rebar --config public.rebar.config get-deps compile
+    $ ./rebar3 as public compile
 
 # Docker Build
 
-Requires a working install of Docker (boot2docker on osx) and Docker Compose.
+Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
 Follow the [installations](https://docs.docker.com/installation/#installation)
 steps outlined docs.docker.com.
 
@@ -36,7 +36,7 @@ steps outlined docs.docker.com.
 
 Given an empty local redis (v2.6ish):
 
-    $ ./rebar get-deps compile --config test.rebar.config
+    $ ./rebar3 as public,test compile
     $ INSTANCE_NAME=`hostname` \
       LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
       LOGPLEX_SHARD_URLS="redis://localhost:6379" \
@@ -73,7 +73,7 @@ create creds
 hit healthcheck
 
     $ curl http://local:password@localhost:8001/healthcheck
-    OK
+    {"status":"normal"}
 
 create a channel
 
@@ -105,6 +105,7 @@ fetch logs for session
                           <tr><td></td><td></td><td> <a href="#config_redis">config_redis</a> (redo)</td><td></td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#logplex_drain_sup">logplex_drain_sup</a></td><td> logplex_http_drain</td><td></td></tr>
                                                                                 <tr><td></td><td></td><td></td><td> logplex_tcpsyslog_drain</td><td></td></tr>
+                                                                                <tr><td></td><td></td><td></td><td> logplex_tlssyslog_drain</td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#nsync">nsync</a></td><td></td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#redgrid">redgrid</a></td><td></td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#logplex_realtime">logplex_realtime</a></td><td> redo</td><td></td></tr>
@@ -139,11 +140,14 @@ A [redo](https://github.com/JacobVorreuter/redo) redis client process connected 
 
 ### logplex_drain_sup
 
-An empty one_for_one supervisor. Supervises [HTTP](https://github.com/heroku/logplex/blob/jake-docs/src/logplex_http_drain.erl) and [TCP](https://github.com/heroku/logplex/blob/jake-docs/src/logplex_tcpsyslog_drain.erl) drain processes.
+An empty one_for_one supervisor. Supervises
+[HTTP](./src/logplex_http_drain.erl),
+[TCP Syslog](./src/logplex_tcpsyslog_drain.erl) and
+[TLS Syslog](./src/logplex_tcpsyslog_drain.erl) drain processes.
 
 ### nsync
 
-An [nsync](https://github.com/JacobVorreuter/nsync) process connected to the logplex config redis. Callback module is [nsync_callback](https://github.com/heroku/logplex/blob/jake-docs/src/nsync_callback.erl).
+An [nsync](https://github.com/JacobVorreuter/nsync) process connected to the logplex config redis. Callback module is [nsync_callback](./src/nsync_callback.erl).
 
 Nsync is an Erlang redis replication client. It allows the logplex node to act as a redis slave and sync the logplex config redis data into memory.
 
@@ -227,11 +231,11 @@ Maintains the `logplex_tail` ETS table that is used to register tail sessions.
 
 ### logplex_redis_writer_sup
 
-Starts a [logplex_worker_sup](https://github.com/heroku/logplex/blob/master/src/logplex_worker_sup.erl) process, registered as `logplex_redis_writer_sup`, that supervises [logplex_redis_writer](https://github.com/heroku/logplex/blob/master/src/logplex_redis_writer.erl) processes.
+Starts a [logplex_worker_sup](./src/logplex_worker_sup.erl) process, registered as `logplex_redis_writer_sup`, that supervises [logplex_redis_writer](./src/logplex_redis_writer.erl) processes.
 
 ### logplex_read_queue_sup
 
-Starts a [logplex_queue_sup](https://github.com/heroku/logplex/blob/master/src/logplex_queue_sup.erl) process, registered as `logplex_read_queue_sup`, that supervises [logplex_queue](https://github.com/heroku/logplex/blob/master/src/logplex_queue.erl) processes.
+Starts a [logplex_queue_sup](./src/logplex_queue_sup.erl) process, registered as `logplex_read_queue_sup`, that supervises [logplex_queue](./src/logplex_queue.erl) processes.
 
 ### logplex_reader_sup
 
@@ -247,7 +251,7 @@ Blocks waiting for nsync to finish replicating data into memory before starting 
 
 ### logplex_syslog_sup
 
-Supervises a [tcp_proxy_sup](https://github.com/heroku/logplex/blob/master/src/tcp_proxy_sup.erl) process that supervises a [tcp_proxy](https://github.com/heroku/logplex/blob/master/src/tcp_proxy.erl) process that accepts syslog messages over TCP.
+Supervises a [tcp_proxy_sup](./src/tcp_proxy_sup.erl) process that supervises a [tcp_proxy](./src/tcp_proxy.erl) process that accepts syslog messages over TCP.
 
 ### logplex_logs_rest
 
