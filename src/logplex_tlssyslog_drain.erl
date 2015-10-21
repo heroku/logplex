@@ -425,8 +425,9 @@ do_reconnect(State = #state{sock = undefined,
 connect(#state{sock = undefined, host=Host, port=Port})
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
-    Options = logplex_tls:connect_opts() ++ socket_opts(),
-    ssl:connect(Host, Port, Options,
+    TLSOpts = logplex_tls:connect_opts(),
+    SocketOpts = socket_opts(),
+    ssl:connect(Host, Port, TLSOpts ++ SocketOpts,
                 timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.

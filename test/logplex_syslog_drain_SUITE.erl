@@ -18,11 +18,12 @@ groups() ->
                      backoff,
                      shrinks]}].
 
-init_per_suite(Config0) ->
+init_per_suite(Config) ->
   set_os_vars(),
+  CertsPath = filename:join([?config(data_dir, Config), "client"]),
   ok = logplex_app:a_start(logplex, temporary),
-  CertsPath = filename:join([code:lib_dir(ssl), "examples", "certs", "etc", "server"]),
-  [{certs_path, CertsPath} | Config0].
+  application:set_env(logplex, tls_cacertfile, filename:join([CertsPath, "cacerts.pem"])),
+  Config.
 
 end_per_suite(_Config) ->
   application:stop(logplex),
@@ -85,9 +86,10 @@ init_drain_endpoint(tcp_syslog, Config) ->
 init_drain_endpoint(tls_syslog, Config) ->
   Port = 9601,
   DrainURI = "syslog+tls://127.0.0.1:" ++ integer_to_list(Port) ++ "/",
-  CertsPath = ?config(certs_path, Config),
+  CertsPath = filename:join([?config(data_dir, Config), "server"]),
   init_drain_endpoint(ranch_ssl,
                       [{port, Port},
+                       {cacertfile, filename:join([CertsPath, "cacerts.pem"])},
                        {certfile, filename:join([CertsPath, "cert.pem"])},
                        {keyfile, filename:join([CertsPath, "key.pem"])},
                        {reuseaddr, true}],
