@@ -412,12 +412,6 @@ do_reconnect(State = #state{sock = undefined,
 connect(#state{sock = undefined, host=Host, port=Port})
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
-    HostS = case Host of
-                B when is_binary(B) -> binary_to_list(B);
-                L when is_list(L) -> L;
-                T when is_tuple(T) -> T;
-                A when is_atom(A) -> A
-            end,
     Options = [binary
                %% We don't expect data, but why not.
                ,{active, true}
@@ -426,7 +420,7 @@ connect(#state{sock = undefined, host=Host, port=Port})
                ,{packet, raw}
                ,{reuseaddr, true}
               ],
-    gen_tcp:connect(HostS, Port, Options,
+    gen_tcp:connect(Host, Port, Options,
                     timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.

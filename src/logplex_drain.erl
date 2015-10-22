@@ -102,6 +102,8 @@ start(#drain{type=Type, id=Id,
              uri=Uri}) ->
     start(Type, Id, [CID, Id, Token, Uri]).
 
+whereis(DrainId) when is_integer(DrainId) ->
+  whereis({drain, DrainId});
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 

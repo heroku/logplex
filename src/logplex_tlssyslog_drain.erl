@@ -425,30 +425,21 @@ do_reconnect(State = #state{sock = undefined,
 connect(#state{sock = undefined, host=Host, port=Port})
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
-    HostS = case Host of
-                B when is_binary(B) -> binary_to_list(B);
-                L when is_list(L) -> L;
-                T when is_tuple(T) -> T;
-                A when is_atom(A) -> A
-            end,
-    Aes128 = fun (Cipher) when Cipher =:= aes_128_cbc; Cipher =:= aes_128_gcm -> true;
-                  (_) -> false
-              end,
-    Ciphers = [Suite || {_, Cipher,_}=Suite <- ssl:cipher_suites(), Aes128(Cipher)],
-    Options = [binary
-               %% We don't expect data, but why not.
-               ,{active, true}
-               ,{exit_on_close, true}
-               ,{keepalive, true}
-               ,{packet, raw}
-               ,{reuseaddr, true}
-               ,{verify, verify_none}
-               ,{ciphers, Ciphers}
-              ],
-    ssl:connect(HostS, Port, Options,
+    TLSOpts = logplex_tls:connect_opts(),
+    SocketOpts = socket_opts(),
+    ssl:connect(Host, Port, TLSOpts ++ SocketOpts,
                 timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.
+
+socket_opts() ->
+  [binary
+   %% We don't expect data, but why not.
+   ,{active, true}
+   ,{exit_on_close, true}
+   ,{keepalive, true}
+   ,{packet, raw}
+   ,{reuseaddr, true}].
 
 -spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private
