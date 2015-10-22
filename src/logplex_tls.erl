@@ -15,13 +15,23 @@
          approved_ciphers/0]).
 
 % Internal API
--export([is_128_aes/1]).
+-export([is_128_aes/1,
+         verify/3]).
 
 connect_opts() ->
-  [{verify, verify_peer},
+  [{verify_fun, {fun verify/3, []}},
    {depth, max_depth()},
    {cacertfile, cacertfile()},
    {ciphers, approved_ciphers()}]. 
+
+verify(_Cert,{bad_cert, _} = Reason, _) ->
+  {fail, Reason};
+verify(_Cert,{extension, _}, UserState) ->
+  {unknown, UserState};
+verify(_Cert, valid, UserState) ->
+  {valid, UserState};
+verify(_Cert, valid_peer, UserState) ->
+  {valid, UserState}.
 
 max_depth() ->
   % OpenSSL defaults to a max depth of 100, it used to use 9.

@@ -10,7 +10,7 @@ all() -> [{group, tcp_syslog},
 
 groups() ->
   [{tcp_syslog, [], [{group, full_suite}]},
-   {tls_syslog, [], [{group, full_suite}]},
+   {tls_syslog, [], [{group, full_suite}, searches_to_max_depth]},
    {full_suite, [], [writes_to_drain,
                      flushes_on_shutdown,
                      close_if_idle,
@@ -47,6 +47,9 @@ init_per_testcase(shrinks, Config0) ->
   application:set_env(logplex, tcp_syslog_shrink_after, 1),
   init_per_testcase('_', [{max_buffer_size, MaxBufferSize} | Config0]);
 init_per_testcase(_TestCase, Config0) ->
+  % flushes session cache between runs
+  ssl:stop(),
+  ssl:start(),
   Config1 = init_drain_endpoint(Config0),
   init_logplex_drain(Config1).
 
@@ -146,6 +149,27 @@ writes_to_drain(Config) ->
   {ok, Log} = wait_for_log(),
 
   {match, _} = re:run(Log, "ping"),
+  ok.
+
+searches_to_max_depth(Config) ->
+  ct:pal("CT_TESTCASE at=searches_to_max_depth"),
+  ChannelID = ?config(channel_id, Config),
+  DrainID = ?config(drain_id, Config),
+
+  %% expects root ca
+  application:set_env(logplex, tls_max_depth, 0),
+
+  % triggers the drain to connect
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("tls_max_depth")),
+
+  try
+    wait_for_log(1000)
+  catch
+    error:{wait_timeout, _} -> expected
+  end,
+
+  Pid = logplex_drain:whereis(DrainID),
+  {disconnected, _} = recon:get_state(Pid),
   ok.
 
 flushes_on_shutdown(Config) ->
