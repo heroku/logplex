@@ -55,6 +55,7 @@
          ,valid_uri/1
          ,has_valid_uri/1
          ,uri_schemes/0
+         ,uri_to_binary/1
         ]).
 
 -export([register/4
