@@ -102,7 +102,7 @@ uri_for_testcase(TestCase, Config) ->
                tls_syslog -> "syslog+tls://"
            end,
   Fragment = case TestCase of
-                 insecure_drain -> "#insecure=true";
+                 insecure_drain -> "#insecure";
                  _              -> ""
              end,
   Scheme ++ "127.0.0.1:" ++ integer_to_list(Port) ++ "/" ++ Fragment.

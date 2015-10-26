@@ -41,7 +41,7 @@
          ,start_link/4
         ]).
 
--export([unpack_uri/1, parse_fragment/1]).
+-export([unpack_uri/1]).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
@@ -101,30 +101,12 @@ start_link(ChannelID, DrainID, DrainTok, Uri) ->
 
 unpack_uri(#ex_uri{scheme="syslog+tls",
                   authority=#ex_uri_authority{host=Host, port=Port},
-                  fragment=Fragment}) ->
-    Opts =  parse_fragment(Fragment),
-    Insecure = case proplists:lookup("insecure", Opts) of
-                   {"insecure", "true"} -> true;
-                   _ -> false
-               end,
-    {Host, Port, Insecure}.
+                  fragment="insecure"}) ->
+    {Host, Port, true};
+unpack_uri(#ex_uri{scheme="syslog+tls",
+                  authority=#ex_uri_authority{host=Host, port=Port}}) ->
+    {Host, Port, false}.
 
-parse_fragment(undefined) ->
-    [];
-parse_fragment(Fragment) ->
-    lists:map(fun (KeyValue) -> [K, V] = string:tokens(KeyValue, "="), {K,V} end,
-              string:tokens(Fragment, "&")).
-
-valid_uri(#ex_uri{scheme="syslog+tls",
-                  fragment=Fragment} = Uri)
-  when Fragment =/= undefined ->
-    try parse_fragment(Fragment) of
-        _ ->
-        valid_uri(Uri#ex_uri{fragment=undefined})
-    catch
-        error:_ ->
-            {error, invalid_tlssyslog_uri}
-    end;
 valid_uri(#ex_uri{scheme="syslog+tls",
                   authority=#ex_uri_authority{host=Host, port=Port}} = Uri)
   when is_list(Host), is_integer(Port),
