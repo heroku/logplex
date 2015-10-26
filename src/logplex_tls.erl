@@ -7,7 +7,7 @@
 -module(logplex_tls).
 
 % Public API
--export([connect_opts/0,
+-export([connect_opts/1,
          max_depth/0,
          max_depth/1,
          cacertfile/0,
@@ -18,11 +18,15 @@
 -export([is_128_aes/1,
          verify/3]).
 
-connect_opts() ->
-  [{verify_fun, {fun verify/3, []}},
-   {depth, max_depth()},
-   {cacertfile, cacertfile()},
-   {ciphers, approved_ciphers()}]. 
+connect_opts(Insecure) ->
+    VerifyOpts = case Insecure of
+        true -> {verify, verify_none};
+        _    -> {verify_fun, {fun verify/3, []}}
+             end,
+    [VerifyOpts,
+     {depth, max_depth()},
+     {cacertfile, cacertfile()},
+     {ciphers, approved_ciphers()}].
 
 verify(_Cert,{bad_cert, _} = Reason, _) ->
   {fail, Reason};

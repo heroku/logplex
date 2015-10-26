@@ -10,7 +10,7 @@ all() -> [{group, tcp_syslog},
 
 groups() ->
   [{tcp_syslog, [], [{group, full_suite}]},
-   {tls_syslog, [], [{group, full_suite}, searches_to_max_depth]},
+   {tls_syslog, [], [{group, full_suite}, searches_to_max_depth, insecure_drain]},
    {full_suite, [], [writes_to_drain,
                      flushes_on_shutdown,
                      close_if_idle,
@@ -32,7 +32,7 @@ end_per_suite(_Config) ->
 init_per_group(DrainType, Config0) 
   when DrainType =:= tcp_syslog;
        DrainType =:= tls_syslog ->
-  [{drain_type, DrainType} | Config0];
+  [{drain_type, DrainType}, {port, 9071} | Config0];
 init_per_group(_Group, Config0) ->
   Config0.
 
@@ -46,12 +46,13 @@ init_per_testcase(shrinks, Config0) ->
   application:set_env(logplex, tcp_drain_buffer_size, MaxBufferSize),
   application:set_env(logplex, tcp_syslog_shrink_after, 1),
   init_per_testcase('_', [{max_buffer_size, MaxBufferSize} | Config0]);
-init_per_testcase(_TestCase, Config0) ->
+init_per_testcase(TestCase, Config0) ->
   % flushes session cache between runs
   ssl:stop(),
   ssl:start(),
-  Config1 = init_drain_endpoint(Config0),
+  Config1 = init_drain_endpoint(TestCase, Config0),
   init_logplex_drain(Config1).
+
 
 end_per_testcase(flushes_on_shutdown, _Config) ->
   end_drain_endpoint(),
@@ -78,25 +79,10 @@ wait_for_drain_(Prefix, Timeout) ->
       erlang:error({wait_timeout, Prefix})
   end.
 
-init_drain_endpoint(Config) ->
-  DrainType = ?config(drain_type, Config),
-  init_drain_endpoint(DrainType, Config).
-
-init_drain_endpoint(tcp_syslog, Config) ->
-  Port = 9601,
-  DrainURI = "syslog://127.0.0.1:" ++ integer_to_list(Port) ++ "/",
-  init_drain_endpoint(ranch_tcp, [{port, Port}], DrainURI, Config);
-init_drain_endpoint(tls_syslog, Config) ->
-  Port = 9601,
-  DrainURI = "syslog+tls://127.0.0.1:" ++ integer_to_list(Port) ++ "/",
-  CertsPath = filename:join([?config(data_dir, Config), "server"]),
-  init_drain_endpoint(ranch_ssl,
-                      [{port, Port},
-                       {cacertfile, filename:join([CertsPath, "cacerts.pem"])},
-                       {certfile, filename:join([CertsPath, "cert.pem"])},
-                       {keyfile, filename:join([CertsPath, "key.pem"])},
-                       {reuseaddr, true}],
-                      DrainURI, Config).
+init_drain_endpoint(TestCase, Config) ->
+  {Transport, TransportOpts} = transport_for_testcase(Config),
+  DrainURI = uri_for_testcase(TestCase, Config),
+  init_drain_endpoint(Transport, TransportOpts, DrainURI, Config).
 
 init_drain_endpoint(Transport, TransportOpts, URI, Config0) ->
   {ok, ExURI, _} = ex_uri:decode(URI),
@@ -108,6 +94,32 @@ init_drain_endpoint(Transport, TransportOpts, URI, Config0) ->
 
 end_drain_endpoint() ->
   ranch:stop_listener(drain_endpoint).
+
+uri_for_testcase(TestCase, Config) ->
+  Port = ?config(port, Config),
+  Scheme = case ?config(drain_type, Config) of
+               tcp_syslog -> "syslog://";
+               tls_syslog -> "syslog+tls://"
+           end,
+  Fragment = case TestCase of
+                 insecure_drain -> "#insecure";
+                 _              -> ""
+             end,
+  Scheme ++ "127.0.0.1:" ++ integer_to_list(Port) ++ "/" ++ Fragment.
+
+transport_for_testcase(Config) ->
+    transport_for_testcase(?config(drain_type, Config), Config).
+
+transport_for_testcase(tcp_syslog, Config) ->
+    {ranch_tcp, [{port, ?config(port, Config)}]};
+transport_for_testcase(tls_syslog, Config) ->
+    CertsPath = filename:join([?config(data_dir, Config), "server"]),
+    {ranch_ssl, [{port, ?config(port, Config)},
+                 {cacertfile, filename:join([CertsPath, "cacerts.pem"])},
+                 {certfile, filename:join([CertsPath, "cert.pem"])},
+                 {keyfile, filename:join([CertsPath, "key.pem"])},
+                 {reuseaddr, true}]}.
+
 
 drain_mod_for(tcp_syslog) ->
   logplex_tcpsyslog_drain;
@@ -152,7 +164,6 @@ writes_to_drain(Config) ->
   ok.
 
 searches_to_max_depth(Config) ->
-  ct:pal("CT_TESTCASE at=searches_to_max_depth"),
   ChannelID = ?config(channel_id, Config),
   DrainID = ?config(drain_id, Config),
 
@@ -170,6 +181,19 @@ searches_to_max_depth(Config) ->
 
   Pid = logplex_drain:whereis(DrainID),
   {disconnected, _} = recon:get_state(Pid),
+  ok.
+
+insecure_drain(Config) ->
+  ChannelID = ?config(channel_id, Config),
+
+  %% expects root ca
+  application:set_env(logplex, tls_max_depth, 0),
+
+  % triggers the drain to connect
+  logplex_channel:post_msg({channel, ChannelID}, fake_msg("ping")),
+  {ok, Log} = wait_for_log(),
+
+  {match, _} = re:run(Log, "ping"),
   ok.
 
 flushes_on_shutdown(Config) ->
@@ -233,7 +257,7 @@ backoff(Config) ->
   BackoffTime1 = timer:seconds(1 bsl 1)-500,
   timer:sleep(BackoffTime1),
 
-  init_drain_endpoint(Config),
+  init_drain_endpoint(backoff, Config),
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 3: detects up")),
   {Time1, _} = timer:tc(fun wait_for_log/1, [BackoffTime1]),
 
@@ -241,7 +265,7 @@ backoff(Config) ->
   BackoffTime2 = timer:seconds(1 bsl 2)-500,
   timer:sleep(BackoffTime2),
 
-  init_drain_endpoint(Config),
+  init_drain_endpoint(backoff, Config),
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 5: detects up")),
   {Time2, _} = timer:tc(fun wait_for_log/1, [BackoffTime2]),
 
@@ -249,7 +273,7 @@ backoff(Config) ->
   BackoffTime3 = timer:seconds(1 bsl 3)-500,
   timer:sleep(BackoffTime3),
 
-  init_drain_endpoint(Config),
+  init_drain_endpoint(backoff, Config),
   logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 7: detects up")),
   {Time3, _} = timer:tc(fun wait_for_log/1, [BackoffTime3]),
 
@@ -275,7 +299,7 @@ shrinks(Config) ->
   [BufFiller(N) || N <- lists:seq(1, MaxBufferSize*2)],
   timer:sleep(timer:seconds(1 bsl 2)+500),
 
-  init_drain_endpoint(Config),
+  init_drain_endpoint(shrinks, Config),
 
   {ok, L10Error} = wait_for_log(),
   {match, _} = re:run(L10Error, "Error L10 "),

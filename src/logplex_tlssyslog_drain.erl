@@ -32,8 +32,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/5
-         ,resize_msg_buffer/2
+-export([resize_msg_buffer/2
          ,set_target_send_size/2
         ]).
 
@@ -41,6 +40,8 @@
          ,uri/2
          ,start_link/4
         ]).
+
+-export([unpack_uri/1]).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
@@ -58,8 +59,10 @@
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
                 channel_id :: logplex_channel:id(),
+                uri :: #ex_uri{},
                 host :: string() | inet:ip_address() | binary(),
                 port :: inet:port_number(),
+                insecure :: boolean(),
                 sock = undefined :: 'undefined' | ssl:sslsocket(),
                 %% Buffer for messages while disconnected
                 buf = logplex_msg_buffer:new(default_buf_size()) :: logplex_msg_buffer:buf(),
@@ -84,19 +87,25 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(ChannelID, DrainID, DrainTok,
-           #ex_uri{scheme="syslog+tls",
-                   authority=#ex_uri_authority{host=Host, port=Port}}) ->
-    start_link(ChannelID, DrainID, DrainTok, Host, Port).
-
-start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
+start_link(ChannelID, DrainID, DrainTok, Uri) ->
+    {Host, Port, Insecure} = unpack_uri(Uri),
     gen_fsm:start_link(?MODULE,
                        [#state{drain_id=DrainID,
                                drain_tok=DrainTok,
                                channel_id=ChannelID,
+                               uri=Uri,
                                host=Host,
-                               port=Port}],
+                               port=Port,
+                               insecure=Insecure}],
                        []).
+
+unpack_uri(#ex_uri{scheme="syslog+tls",
+                  authority=#ex_uri_authority{host=Host, port=Port},
+                  fragment="insecure"}) ->
+    {Host, Port, true};
+unpack_uri(#ex_uri{scheme="syslog+tls",
+                  authority=#ex_uri_authority{host=Host, port=Port}}) ->
+    {Host, Port, false}.
 
 valid_uri(#ex_uri{scheme="syslog+tls",
                   authority=#ex_uri_authority{host=Host, port=Port}} = Uri)
@@ -146,8 +155,8 @@ init([State0 = #state{sock = undefined, host=H, port=P,
                                {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_msg_buffer:new(DrainSize)},
-        ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
-              log_info(State, [])),
+        ?INFO("drain_id=~p channel_id=~p dest=~s insecure=~p at=spawn",
+              log_info(State, [State0#state.insecure])),
         {ok, disconnected,
          State, hibernate}
     catch
@@ -422,10 +431,10 @@ do_reconnect(State = #state{sock = undefined,
     end.
 
 %% @private
-connect(#state{sock = undefined, host=Host, port=Port})
+connect(#state{sock = undefined, host=Host, port=Port, insecure=Insecure})
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
-    TLSOpts = logplex_tls:connect_opts(),
+    TLSOpts = logplex_tls:connect_opts(Insecure),
     SocketOpts = socket_opts(),
     ssl:connect(Host, Port, TLSOpts ++ SocketOpts,
                 timer:seconds(SendTimeoutS));
@@ -518,9 +527,9 @@ time_failed(_, #state{last_good_time=undefined}) ->
     "".
 
 %% @private
-log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
+log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=Uri}, Rest)
   when is_list(Rest) ->
-    [DrainId, ChannelId, logplex_logging:dest(H,P) | Rest].
+    [DrainId, ChannelId, logplex_drain:uri_to_binary(Uri) | Rest].
 
 -spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered' |
                'requests_sent',
