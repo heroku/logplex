@@ -433,7 +433,7 @@ do_reconnect(State = #state{sock = undefined,
     end.
 
 handle_error({tls_alert, Alert}, #state{ channel_id=ChannelID, uri=URI, drain_tok=DrainToken }) ->
-    logplex_message:process_error(ChannelID, DrainToken, ?L14, "error=\"~s\" uri=\"~s\"", [Alert, URI]);
+    logplex_message:process_error(ChannelID, DrainToken, ?L14, "error=\"~s\" uri=\"~s\"", [Alert, logplex_drain:uri_to_binary(URI)]);
 handle_error(_, _) ->
     ok.
 

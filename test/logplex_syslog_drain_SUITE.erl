@@ -60,6 +60,7 @@ end_per_testcase(flushes_on_shutdown, _Config) ->
 end_per_testcase(_TestCase, Config) ->
     end_drain_endpoint(),
     end_logplex_drain(Config),
+    meck:unload(),
     ok.
 
 wait_for_drain_error(Error) ->
@@ -170,6 +171,14 @@ searches_to_max_depth(Config) ->
     %% expects root ca
     application:set_env(logplex, tls_max_depth, 0),
 
+    %% Since we don't have the channel created, we mock things here to deal with
+    %% channel not existing condition.
+    meck:expect(logplex_token, lookup_heroku_token, ['_'], <<"t.mocked.token">>),
+    meck:expect(logplex_channel, lookup_flag, [no_redis, ChannelID], no_such_flag),
+
+    meck:expect(logplex_firehose, post_msg, ['_', '_', '_'], ok),
+    meck:expect(logplex_tail, route, ['_', '_'], ok),
+
     %% triggers the drain to connect
     logplex_channel:post_msg({channel, ChannelID}, fake_msg("tls_max_depth")),
 
@@ -181,6 +190,18 @@ searches_to_max_depth(Config) ->
 
     Pid = logplex_drain:whereis(DrainID),
     {disconnected, _} = recon:get_state(Pid),
+    
+    meck:wait(logplex_firehose, post_msg, '_', 5000),
+    FirehoseMsg = meck:capture(first, logplex_firehose, post_msg, '_', 3),
+    {match, _} = re:run(FirehoseMsg, "L14 \\(certificate validation\\)"),
+    
+    meck:wait(logplex_tail, route, ['_', '_'], 5000),
+    TailMsg = meck:capture(first, logplex_tail, route, ['_', '_'], 2),
+    {match, _} = re:run(TailMsg, "L14 \\(certificate validation\\)"),
+    
+    %% Look in the redis buffer
+    [BufferMsg]= logplex_channel:logs(ChannelID, 1),
+    {match, _} = re:run(BufferMsg, "L14 \\(certificate validation\\)"),
     ok.
 
 insecure_drain(Config) ->

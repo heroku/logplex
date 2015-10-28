@@ -89,12 +89,15 @@ process_error(ChannelID, Origin, ?L14, Fmt, Args) ->
 process_error(ChannelID, Origin, Fmt, Args) when is_list(Fmt), is_list(Args) ->
     HerokuToken = logplex_token:lookup_heroku_token(ChannelID),
     HerokuOrigin = <<"heroku">>,
+    do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args).
+
+do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args) when is_binary(HerokuToken) ->
     Msg = logplex_syslog_utils:fmt(local7,
                                    warning,
                                    now,
                                    HerokuToken,
                                    "logplex",
-                                   Fmt,
+                                   iolist_to_binary(Fmt),
                                    Args),
     RawMsg =  iolist_to_binary(logplex_syslog_utils:to_msg(Msg, Origin)),
     logplex_firehose:post_msg(ChannelID, HerokuOrigin, RawMsg),
@@ -107,7 +110,13 @@ process_error(ChannelID, Origin, Fmt, Args) when is_list(Fmt), is_list(Args) ->
             ShardInfo = shard_info(),
             process_tails(ChannelID, CookedMsg),
             process_redis(ChannelID, ShardInfo, CookedMsg, Flag)
-    end.
+    end;
+
+do_process_error({false, _HerokuOrigin}, _ChannelID, _Origin, Fmt, Args) ->
+    ErrMsg = io_lib:format(iolist_to_binary(Fmt), Args),
+    ?INFO("at=process_error channel_id=~s err=\"~s\"",
+          [channel_id, ErrMsg]),
+    ignored.
 
 process_drains(ChannelID, Msg) ->
     logplex_channel:post_msg({channel, ChannelID}, Msg).
