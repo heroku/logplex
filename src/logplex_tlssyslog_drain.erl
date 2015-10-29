@@ -449,13 +449,13 @@ connect(#state{}) ->
     {error, bogus_port_number}.
 
 socket_opts() ->
-  [binary
-   %% We don't expect data, but why not.
-   ,{active, true}
-   ,{exit_on_close, true}
-   ,{keepalive, true}
-   ,{packet, raw}
-   ,{reuseaddr, true}].
+    [binary
+     %% We don't expect data, but why not.
+    ,{active, true}
+    ,{exit_on_close, true}
+    ,{keepalive, true}
+    ,{packet, raw}
+    ,{reuseaddr, true}].
 
 -spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private
