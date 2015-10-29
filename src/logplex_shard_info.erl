@@ -31,7 +31,7 @@
 
 -spec save(key(), mapping(), interval()) -> 'true'.
 save(Key, Map, Interval) ->
-    TS = erlang:now(),
+    TS = erlang:timestamp(),
     ets:insert(?TABLE, [{Key, Map, Interval, TS}]).
 
 -spec read(key()) -> shard_info() | 'no_such_key'.
