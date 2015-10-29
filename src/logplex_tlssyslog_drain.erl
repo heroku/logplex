@@ -441,7 +441,7 @@ handle_error(_, _) ->
 connect(#state{sock = undefined, host=Host, port=Port, insecure=Insecure})
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
-    TLSOpts = logplex_tls:connect_opts(Insecure),
+    TLSOpts = logplex_tls:connect_opts(Host, Insecure),
     SocketOpts = socket_opts(),
     ssl:connect(Host, Port, TLSOpts ++ SocketOpts,
                 timer:seconds(SendTimeoutS));
