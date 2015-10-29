@@ -536,7 +536,7 @@ push_frame(FrameData, MsgCount, Lost, State = #state{out_q = Q})
     State#state{out_q = NewQ}.
 
 frame_id() ->
-    crypto:hash(md5, term_to_binary({self(), now()})).
+    crypto:hash(md5, term_to_binary({node(), self(), erlang:timestamp()})).
 
 frame_id_to_iolist(ID) when is_binary(ID) ->
     [ hd(integer_to_list(I, 16)) || <<I:4>> <= ID ].
