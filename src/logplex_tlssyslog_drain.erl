@@ -23,6 +23,7 @@
 -define(SSL_SOCKET, {sslsocket,_,_}).
 
 -include("logplex.hrl").
+-include("logplex_error.hrl").
 -include("logplex_logging.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
 
@@ -421,6 +422,7 @@ do_reconnect(State = #state{sock = undefined,
                     %% first failure.
                     ok;
                 _ ->
+                    handle_error(Reason, State),
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
                          "err=gen_tcp data=~p try=~p last_success=~s "
                          "state=disconnected",
@@ -429,6 +431,11 @@ do_reconnect(State = #state{sock = undefined,
             end,
             reconnect(NewState)
     end.
+
+handle_error({tls_alert, Alert}, #state{ channel_id=ChannelID, uri=URI, drain_tok=DrainToken }) ->
+    logplex_message:process_error(ChannelID, DrainToken, ?L14, "error=\"~s\" uri=\"~s\"", [Alert, logplex_drain:uri_to_binary(URI)]);
+handle_error(_, _) ->
+    ok.
 
 %% @private
 connect(#state{sock = undefined, host=Host, port=Port, insecure=Insecure})

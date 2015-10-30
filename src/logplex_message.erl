@@ -9,10 +9,13 @@
          ,process_msg/5
          ,process_msgs/4
          ,process_msgs/1
+         ,process_error/5
+         ,process_error/4
          ,parse_msg/1
         ]).
 
 -include("logplex.hrl").
+-include("logplex_error.hrl").
 -include("logplex_logging.hrl").
 -define(SI_KEY, logplex_redis_buffer_map).
 
@@ -79,6 +82,41 @@ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
             process_tails(ChannelId, CookedMsg),
             process_redis(ChannelId, ShardInfo, CookedMsg, Flag)
     end.
+
+process_error(ChannelID, Origin, ?L14, Fmt, Args) ->
+    process_error(ChannelID, Origin, ["Error L14 (certificate validation): ", Fmt], Args).
+
+process_error(ChannelID, Origin, Fmt, Args) when is_list(Fmt), is_list(Args) ->
+    HerokuToken = logplex_token:lookup_heroku_token(ChannelID),
+    HerokuOrigin = <<"heroku">>,
+    do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args).
+
+do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args) when is_binary(HerokuToken) ->
+    Msg = logplex_syslog_utils:fmt(local7,
+                                   warning,
+                                   now,
+                                   HerokuToken,
+                                   "logplex",
+                                   iolist_to_binary(Fmt),
+                                   Args),
+    RawMsg =  iolist_to_binary(logplex_syslog_utils:to_msg(Msg, Origin)),
+    logplex_firehose:post_msg(ChannelID, HerokuOrigin, RawMsg),
+
+    case logplex_channel:lookup_flag(no_redis, ChannelID) of
+        not_found ->
+            ignore;
+        Flag ->
+            CookedMsg = iolist_to_binary(re:replace(RawMsg, HerokuToken, HerokuOrigin)),
+            ShardInfo = shard_info(),
+            process_tails(ChannelID, CookedMsg),
+            process_redis(ChannelID, ShardInfo, CookedMsg, Flag)
+    end;
+
+do_process_error({false, _HerokuOrigin}, _ChannelID, _Origin, Fmt, Args) ->
+    ErrMsg = io_lib:format(iolist_to_binary(Fmt), Args),
+    ?INFO("at=process_error channel_id=~s err=\"~s\"",
+          [channel_id, ErrMsg]),
+    ignored.
 
 process_drains(ChannelID, Msg) ->
     logplex_channel:post_msg({channel, ChannelID}, Msg).
