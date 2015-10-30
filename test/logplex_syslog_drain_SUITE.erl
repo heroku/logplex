@@ -106,7 +106,7 @@ uri_for_testcase(TestCase, Config) ->
                    insecure_drain -> "#insecure";
                    _              -> ""
                end,
-    Scheme ++ "127.0.0.1:" ++ integer_to_list(Port) ++ "/" ++ Fragment.
+    Scheme ++ "server:" ++ integer_to_list(Port) ++ "/" ++ Fragment.
 
 transport_for_testcase(Config) ->
     transport_for_testcase(?config(drain_type, Config), Config).
