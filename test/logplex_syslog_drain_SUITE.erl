@@ -204,7 +204,7 @@ searches_to_max_depth(Config) ->
     {match, _} = re:run(TailMsg, "L14 \\(certificate validation\\)"),
     
     %% Look in the redis buffer
-    [BufferMsg]= logplex_channel:logs(ChannelID, 1),
+    [BufferMsg]= logplex_channel:logs(ChannelID, 0),
     {match, _} = re:run(BufferMsg, "L14 \\(certificate validation\\)"),
     ok.
 
