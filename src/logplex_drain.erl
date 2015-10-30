@@ -49,6 +49,7 @@
          ,token/1
          ,channel_id/1
          ,uri/1
+         ,unpack_uri/1
         ]).
 
 -export([parse_url/1
@@ -97,6 +98,14 @@ id(#drain{id=Id}) -> Id.
 token(#drain{token=Token}) -> Token.
 channel_id(#drain{channel_id=CID}) -> CID.
 uri(#drain{uri=Uri}) -> Uri.
+
+unpack_uri(#ex_uri{scheme="syslog+tls",
+                  authority=#ex_uri_authority{host=Host, port=Port},
+                  fragment="insecure"}) ->
+    {Host, Port, insecure};
+unpack_uri(#ex_uri{scheme="syslog+tls",
+                  authority=#ex_uri_authority{host=Host, port=Port}}) ->
+    {Host, Port, secure}.
 
 start(#drain{type=Type, id=Id,
              channel_id=CID, token=Token,
