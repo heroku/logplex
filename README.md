@@ -12,6 +12,7 @@ For more details, you can look at stream management documentation in `doc/`.
 
 # Table of Contents
 
+1. [Erlang Version Reqirements](#erlang-version-requirements)
 1. [Local Build](#local-build)
 1. [Docker Build](#docker-build)
 2. [Local Test](#local-test)
@@ -19,6 +20,12 @@ For more details, you can look at stream management documentation in `doc/`.
 3. [Develop](#develop)
 4. [Supervision Tree](#supervision-tree)
 5. [Processes](#processes)
+
+# Erlang Version Requirements
+
+As of Logplex v93, Logplex requires Erlang 18. Logplex is currently tested againts OTP-18.1.3.
+
+Prior versions of Logplex are designed to run on R16B03 and 17.x.
 
 # Local Build
 
