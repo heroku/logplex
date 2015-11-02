@@ -149,7 +149,7 @@ handle_stat(UnixTS, Key, Val) ->
   ets:update_counter(?MODULE, Key, Val * -1).
 
 start_timer() ->
-    {_Mega, Secs, Micro} = now(),
+    {_Mega, Secs, Micro} = erlang:timestamp(),
     Time = 60000 - ((Secs rem 60 * 1000) + (Micro div 1000)),
     erlang:start_timer(Time, ?MODULE, flush).
 

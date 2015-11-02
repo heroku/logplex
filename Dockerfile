@@ -1,4 +1,4 @@
-FROM voidlock/erlang:17.5-onbuild
+FROM voidlock/erlang:18.1.3-onbuild
 
 ENV ERL_CRASH_DUMP=/dev/null \
     LOGPLEX_CONFIG_REDIS_URL="redis://db:6379/" \
