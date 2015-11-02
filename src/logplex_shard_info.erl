@@ -22,11 +22,7 @@
 -type key() :: 'logplex_read_pool_map' | 'logplex_redis_buffer_map' |
                'new_logplex_read_pool_map' | 'new_logplex_redis_buffer_map' |
                'backup_logplex_read_pool_map' | 'backup_logplex_redis_buffer_map'.
--ifdef(namespaced_types).
 -type mapping() :: dict:dict().
--else.
--type mapping() :: dict().
--endif.
 -type interval() :: pos_integer().
 -type shard_info() :: {mapping(), interval(), erlang:timestamp()}.
 -type entry() :: {interval(), {Url::iolist(), pid()}}.
@@ -35,7 +31,7 @@
 
 -spec save(key(), mapping(), interval()) -> 'true'.
 save(Key, Map, Interval) ->
-    TS = erlang:now(),
+    TS = erlang:timestamp(),
     ets:insert(?TABLE, [{Key, Map, Interval, TS}]).
 
 -spec read(key()) -> shard_info() | 'no_such_key'.

@@ -10,7 +10,7 @@ all() -> [{group, tcp_syslog},
 
 groups() ->
     [{tcp_syslog, [], [{group, full_suite}]},
-     {tls_syslog, [], [{group, full_suite}, searches_to_max_depth, insecure_drain]},
+     {tls_syslog, [], [{group, full_suite}, hostname_verification, searches_to_max_depth, insecure_drain]},
      {full_suite, [], [writes_to_drain,
                        flushes_on_shutdown,
                        close_if_idle,
@@ -106,7 +106,11 @@ uri_for_testcase(TestCase, Config) ->
                    insecure_drain -> "#insecure";
                    _              -> ""
                end,
-    Scheme ++ "127.0.0.1:" ++ integer_to_list(Port) ++ "/" ++ Fragment.
+    Hostname = case TestCase of
+                   hostname_verification -> "evilserver";
+                   _                     -> "server"
+               end,
+    Scheme ++ Hostname ++ ":" ++ integer_to_list(Port) ++ "/" ++ Fragment.
 
 transport_for_testcase(Config) ->
     transport_for_testcase(?config(drain_type, Config), Config).
@@ -200,9 +204,48 @@ searches_to_max_depth(Config) ->
     {match, _} = re:run(TailMsg, "L14 \\(certificate validation\\)"),
     
     %% Look in the redis buffer
-    [BufferMsg]= logplex_channel:logs(ChannelID, 1),
+    [BufferMsg]= logplex_channel:logs(ChannelID, 0),
     {match, _} = re:run(BufferMsg, "L14 \\(certificate validation\\)"),
     ok.
+
+
+hostname_verification(Config) ->
+    ChannelID = ?config(channel_id, Config),
+    DrainID = ?config(drain_id, Config),
+
+    %% Since we don't have the channel created, we mock things here to deal with
+    %% channel not existing condition.
+    meck:expect(logplex_token, lookup_heroku_token, ['_'], <<"t.mocked.token">>),
+    meck:expect(logplex_channel, lookup_flag, [no_redis, ChannelID], no_such_flag),
+
+    meck:expect(logplex_firehose, post_msg, ['_', '_', '_'], ok),
+    meck:expect(logplex_tail, route, ['_', '_'], ok),
+
+    %% triggers the drain to connect
+    logplex_channel:post_msg({channel, ChannelID}, fake_msg("mismatched_hostname")),
+
+    try
+        wait_for_log(1000)
+    catch
+        error:{wait_timeout, _} -> expected
+    end,
+
+    Pid = logplex_drain:whereis(DrainID),
+    {disconnected, _} = recon:get_state(Pid),
+    
+    meck:wait(logplex_firehose, post_msg, '_', 5000),
+    FirehoseMsg = meck:capture(first, logplex_firehose, post_msg, '_', 3),
+    {match, _} = re:run(FirehoseMsg, "L14 \\(certificate validation\\)"),
+    
+    meck:wait(logplex_tail, route, ['_', '_'], 5000),
+    TailMsg = meck:capture(first, logplex_tail, route, ['_', '_'], 2),
+    {match, _} = re:run(TailMsg, "L14 \\(certificate validation\\)"),
+    
+    %% Look in the redis buffer
+    [BufferMsg] = logplex_channel:logs(ChannelID, 0),
+    {match, _} = re:run(BufferMsg, "L14 \\(certificate validation\\)"),
+    ok.
+
 
 insecure_drain(Config) ->
     ChannelID = ?config(channel_id, Config),

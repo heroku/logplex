@@ -88,11 +88,7 @@ pass() ->
 bytes_to_iolist(Bytes) ->
     << <<(hd(integer_to_list(Nib, 16))):8>> || <<Nib:4>> <= Bytes >>.
 
--ifdef(namespaced_types).
 -spec from_dict(id(), dict:dict()) -> #cred{}.
--else.
--spec from_dict(id(), dict()) -> #cred{}.
--endif.
 from_dict(Id, Dict) ->
     dict:fold(fun cred_from_dict/3, new(Id), Dict).
 

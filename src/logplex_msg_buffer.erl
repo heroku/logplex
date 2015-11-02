@@ -12,9 +12,7 @@
                             When::erlang:timestamp()}.
 -type framing_fun()::fun (({msg, msg()} | loss_indication()) ->
                                  {frame, iolist()} | skip).
--ifdef(namespaced_types).
 -type queue() :: queue:queue().
--endif.
 
 -record(lpdb, {messages = queue:new() :: queue(),
                max_size = 1024 :: size(),

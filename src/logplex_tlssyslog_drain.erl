@@ -42,8 +42,6 @@
          ,start_link/4
         ]).
 
--export([unpack_uri/1]).
-
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
 %% ------------------------------------------------------------------
@@ -89,7 +87,7 @@
 %% ------------------------------------------------------------------
 
 start_link(ChannelID, DrainID, DrainTok, Uri) ->
-    {Host, Port, Insecure} = unpack_uri(Uri),
+    {Host, Port, Insecure} = logplex_drain:unpack_uri(Uri),
     gen_fsm:start_link(?MODULE,
                        [#state{drain_id=DrainID,
                                drain_tok=DrainTok,
@@ -99,14 +97,6 @@ start_link(ChannelID, DrainID, DrainTok, Uri) ->
                                port=Port,
                                insecure=Insecure}],
                        []).
-
-unpack_uri(#ex_uri{scheme="syslog+tls",
-                  authority=#ex_uri_authority{host=Host, port=Port},
-                  fragment="insecure"}) ->
-    {Host, Port, true};
-unpack_uri(#ex_uri{scheme="syslog+tls",
-                  authority=#ex_uri_authority{host=Host, port=Port}}) ->
-    {Host, Port, false}.
 
 valid_uri(#ex_uri{scheme="syslog+tls",
                   authority=#ex_uri_authority{host=Host, port=Port}} = Uri)
@@ -438,10 +428,10 @@ handle_error(_, _) ->
     ok.
 
 %% @private
-connect(#state{sock = undefined, host=Host, port=Port, insecure=Insecure})
+connect(#state{sock = undefined, channel_id=ChannelID, drain_id=DrainID, uri=Dest, host=Host, port=Port})
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
-    TLSOpts = logplex_tls:connect_opts(Insecure),
+    TLSOpts = logplex_tls:connect_opts(ChannelID, DrainID, Dest),
     SocketOpts = socket_opts(),
     ssl:connect(Host, Port, TLSOpts ++ SocketOpts,
                 timer:seconds(SendTimeoutS));
@@ -449,13 +439,13 @@ connect(#state{}) ->
     {error, bogus_port_number}.
 
 socket_opts() ->
-  [binary
-   %% We don't expect data, but why not.
-   ,{active, true}
-   ,{exit_on_close, true}
-   ,{keepalive, true}
-   ,{packet, raw}
-   ,{reuseaddr, true}].
+    [binary
+     %% We don't expect data, but why not.
+    ,{active, true}
+    ,{exit_on_close, true}
+    ,{keepalive, true}
+    ,{packet, raw}
+    ,{reuseaddr, true}].
 
 -spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private

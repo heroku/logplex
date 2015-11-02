@@ -59,6 +59,9 @@ test:
   command: make test
   hostname: logplex
   domainname: docker.local
+  extra_hosts:
+    - "server:127.0.0.1"
+    - "evilserver:127.0.0.1"
   environment:
     - INSTANCE_NAME=logplex.docker.local
     - LOCAL_IP=127.0.0.1

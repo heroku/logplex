@@ -30,9 +30,7 @@
 -define(SHRINK_TIMEOUT, timer:minutes(5)).
 -define(SHRINK_BUF_SIZE, 10).
 
--ifdef(namespaced_types).
 -type queue() :: queue:queue().
--endif.
 
 -type drop_info() :: {erlang:timestamp(), pos_integer()}.
 
@@ -538,7 +536,7 @@ push_frame(FrameData, MsgCount, Lost, State = #state{out_q = Q})
     State#state{out_q = NewQ}.
 
 frame_id() ->
-    crypto:hash(md5, term_to_binary({self(), now()})).
+    crypto:hash(md5, term_to_binary({node(), self(), erlang:timestamp()})).
 
 frame_id_to_iolist(ID) when is_binary(ID) ->
     [ hd(integer_to_list(I, 16)) || <<I:4>> <= ID ].
