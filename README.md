@@ -20,6 +20,7 @@ For more details, you can look at stream management documentation in `doc/`.
 3. [Develop](#develop)
 4. [Supervision Tree](#supervision-tree)
 5. [Processes](#processes)
+6. [Realtime Metrics](#realtime-metrics)
 
 # Erlang Version Requirements
 
