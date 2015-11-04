@@ -38,12 +38,12 @@ connect_opts(ChannelID, DrainID, Dest) ->
      {ciphers, approved_ciphers()}].
 
 user_state(ChannelID, DrainID, Dest) ->
-    {Host, _Port, Mode} = logplex_drain:unpack_uri(Dest),
+    {Host, _Port, _Mode} = logplex_drain:unpack_uri(Dest),
     #user_state{channel_id=ChannelID,
                 drain_id=DrainID,
                 dest=Dest,
                 host=Host,
-                mode=Mode}.
+                mode=insecure}.
 
 verify_fun_and_data(#user_state{ mode=insecure }) ->
     {fun verify_none/3, []};
@@ -86,7 +86,6 @@ verify_host(_Cert, {bad_cert, _}=Reason, UserState) ->
     log_error(Reason, UserState),
     {fail, Reason};
 verify_host(_Cert, {extension, _}=Reason, UserState) ->
-    log_error(Reason, UserState),
     {unknown, UserState};
 verify_host(_Cert, valid, UserState) ->
     {valid, UserState};
