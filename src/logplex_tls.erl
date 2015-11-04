@@ -34,16 +34,17 @@ connect_opts(ChannelID, DrainID, Dest) ->
     UserState = user_state(ChannelID, DrainID, Dest),
     [{verify_fun, verify_fun_and_data(UserState)},
      {depth, max_depth()},
+     {reuse_sessions, false},
      {cacertfile, cacertfile()},
      {ciphers, approved_ciphers()}].
 
 user_state(ChannelID, DrainID, Dest) ->
-    {Host, _Port, _Mode} = logplex_drain:unpack_uri(Dest),
+    {Host, _Port, Mode} = logplex_drain:unpack_uri(Dest),
     #user_state{channel_id=ChannelID,
                 drain_id=DrainID,
                 dest=Dest,
                 host=Host,
-                mode=insecure}.
+                mode=Mode}.
 
 verify_fun_and_data(#user_state{ mode=insecure }) ->
     {fun verify_none/3, []};
@@ -64,7 +65,7 @@ cacertfile(Path) ->
     application:set_env(logplex, tls_cacertfile, Path).
 
 approved_ciphers() ->
-                                                % TODO use a static list of ciphers
+    %% TODO use a static list of ciphers
     lists:filter(fun is_128_aes/1, ssl:cipher_suites()).
 
 %% Internal API

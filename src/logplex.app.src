@@ -23,6 +23,7 @@
                   ,batchio
                   ,folsom
                   ,folsom_cowboy
+                  ,ssl_verify_hostname
                  ]},
   {included_applications, [heroku_crashdumps,
                            redgrid,
