@@ -105,7 +105,10 @@ unpack_uri(#ex_uri{scheme="syslog+tls",
     {Host, Port, insecure};
 unpack_uri(#ex_uri{scheme="syslog+tls",
                   authority=#ex_uri_authority{host=Host, port=Port}}) ->
-    {Host, Port, secure}.
+    {Host, Port, secure};
+unpack_uri(#ex_uri{scheme="syslog",
+                  authority=#ex_uri_authority{host=Host, port=Port}}) ->
+    {Host, Port, insecure}.
 
 start(#drain{type=Type, id=Id,
              channel_id=CID, token=Token,
