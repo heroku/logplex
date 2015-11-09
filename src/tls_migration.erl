@@ -32,7 +32,6 @@ migrate_drain_maybe(Drain) ->
 
 handle_failed_drain(Drain, Reason) ->
     write_csv_row(Drain, Reason),
-    % TODO: only do this on ssl errors (not all kinds of errors)
     toggle_insecure_and_save(Drain).
 
 attempt_connection(#drain{id=DrainID, channel_id=ChannelID, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} = URI}) ->
@@ -40,20 +39,27 @@ attempt_connection(#drain{id=DrainID, channel_id=ChannelID, uri=#ex_uri{authorit
     case logplex_tlssyslog_drain:do_connect(Host, Port, URI, DrainID, ChannelID) of
         {ok, _SslSocket} ->
             ok;
-        {error, {tls_alert, Alert}=Reason} ->
+        {error, {tls_alert, _Alert}=Reason} ->
             {error, Reason};
         {error, OtherReason} ->
             io:format("Non-TLS error ~p~n", [OtherReason]),
             ok
     end.
 
-toggle_insecure_and_save(Drain) ->
-    % TODO: toggle insecure and save to redis
-    skip.
-
 should_migrate_drain(#drain{id=_DrainId, type=DrainType, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} }) ->
+    % TODO: filter out #insecure drains.
     (DrainType =:= 'tlssyslog') and (Host =:= "logs.papertrailapp.com").
 
+toggle_insecure_and_save(#drain{id=DrainID, channel_id=ChannelID, token=Token, uri=URI}) ->
+    NewURI = erlang:iolist_to_binary([logplex_drain:uri_to_binary(URI), <<"#insecure">>]),
+    io:format("Changing drain ~p URI to ~p~n", [DrainID, NewURI]),
+    case redis_helper:create_url_drain(DrainID, ChannelID, Token, NewURI) of
+        ok ->
+            ok;
+        Err ->
+            io:format("REDIS ERROR updating drain ~p: ~p~n", [DrainID, Err])
+    end.
+ 
 write_csv_row(#drain{id=DrainID, channel_id=ChannelID, uri=DrainURI}=Drain, FailureReason) ->
     % We just dump CSV rows interleaved with regular logging line, and as such
     % hackily distinguish them using the CSV prefix (we expect the runner to
