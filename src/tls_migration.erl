@@ -21,7 +21,6 @@ main(_) ->
                               ok
                       end
               end, notused, drains),
-    heroku_apps_sync(),
     ok.
 
 migrate_drain(Drain) ->
@@ -46,9 +45,5 @@ toggle_insecure_and_save(Drain) ->
     % TODO: toggle insecure and save to redis
     skip.
 
-heroku_apps_sync() ->
-    % TODO: run `heroku apps:sync`
-    skip.
-
 should_migrate_drain(#drain{id=_DrainId, type=DrainType, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} }) ->
-    (DrainType =:= 'tcpsyslog') and (Host =:= "logs.papertrailapp.com").
+    (DrainType =:= 'tlssyslog') and (Host =:= "logs.papertrailapp.com").
