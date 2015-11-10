@@ -93,9 +93,15 @@ attempt_connection({default, #drain{id=DrainID, channel_id=ChannelID, uri=#ex_ur
             {error, OtherReason}
     end.
 
-should_migrate_drain(#drain{type=DrainType, uri=#ex_uri{authority=#ex_uri_authority{host=Host}}}) ->
-    % TODO: filter out #insecure drains.
-    (DrainType =:= 'tlssyslog') and (Host =:= "logs.papertrailapp.com").
+should_migrate_drain(#drain{type=DrainType,
+                            uri=#ex_uri{authority=#ex_uri_authority{host=Host},
+                                        fragment=Fragment}})
+  when Fragment =/= "insecure",
+       (DrainType =:= 'tlssyslog'),
+       (Host =:= "logs.papertrailapp.com") ->
+    true;
+should_migrate_drain(#drain{}) ->
+    false.
 
 mark_drain_as_insecure(#drain{uri=URI}=Drain) ->
     update_drain_uri(Drain, new_uri_with_insecure(logplex_drain:uri_to_binary(URI))).
