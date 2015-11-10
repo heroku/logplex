@@ -18,7 +18,7 @@
 
 % TODO support --dry-run option
 main(_) ->
-    migrate_all_drains().
+    dict_from_list(migrate_all_drains()).
 
 %% Returns a list of tuple of the form:
 %%    {Action, Drain, Reason}
@@ -33,10 +33,10 @@ migrate_all_drains() ->
                           true ->
                               % TODO: sleep before connections to not overload papertrail
                               case migrate_drain_maybe(Drain) of
-                                  {migrate, Drain, _Reason}=Result ->
+                                  {migrate, {Drain, _Reason}}=Result ->
                                       mark_drain_as_insecure(Drain),
                                       [Result | Results];
-                                  {_State, _Drain, _Reason}=Result ->
+                                  {_State, {_Drain, _Reason}}=Result ->
                                       [Result | Results]
                               end;
                           _ ->
@@ -48,7 +48,7 @@ migrate_drain_maybe(Drain) ->
     case attempt_connection({insecure, Drain}) of
         {error, Reason} ->
             % Drain never connects in the first place.
-            {unhealthy, Drain, Reason};
+            {unhealthy, {Drain, Reason} };
         ok ->
             % Drains works, so let's try migrating it.
             migrate_drain(Drain)
@@ -58,9 +58,9 @@ migrate_drain(Drain) ->
     case attempt_connection({default, Drain}) of
         {error, {tls_alert, _Alert}=Reason} ->
             % Verification failed. Make this insecure.
-            {migrate, Drain, Reason};
+            {migrate, {Drain, Reason} };
         {error, Reason} ->
-            {unhealthy_if_tls, Drain, Reason};
+            {unhealthy_if_tls, {Drain, Reason} };
         ok ->
             % Connects fine, so leave as is.
             {healthy, Drain}
@@ -116,6 +116,13 @@ update_drain_uri(#drain{id=DrainID, channel_id=ChannelID, token=Token}, NewURI) 
         Err ->
             io:format("REDIS ERROR updating drain ~p: ~p~n", [DrainID, Err])
     end.
+
+dict_from_list(Items) when is_list(Items) ->
+    lists:foldl(fun({Key, Value}, Dict) ->
+                        dict:append_list(Key, Value, Dict)
+                end,
+                dict:new(),
+                Items).
 
 % ~~ Code that follows below are for testing only ~~
 
