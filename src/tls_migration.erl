@@ -18,15 +18,26 @@
 
 % TODO support --dry-run option
 main(_) ->
+    migrate_all_drains().
+
+%% Returns a list of tuple of the form:
+%%    {Action, Drain, Reason}
+%% where Action is one of:
+%%    - migrate :: drain was migrated
+%%    - unhealthy :: drain doesn't even connect in insecure
+%%    - unhealthy_if_tls :: connects in insecure, but fails to verify
+%%    - healthy :: connects fine, no need to migrate
+migrate_all_drains() ->
     ets:foldl(fun(Drain, Results) ->
                       case should_migrate_drain(Drain) of
                           true ->
                               % TODO: sleep before connections to not overload papertrail
                               case migrate_drain_maybe(Drain) of
-                                  {Action, Drain, Reason} ->
-                                      [{Action, Drain, Reason} | Results];
-                                  _ ->
-                                      Results
+                                  {migrate, Drain, _Reason}=Result ->
+                                      mark_drain_as_insecure(Drain),
+                                      [Result | Results];
+                                  {_State, _Drain, _Reason}=Result ->
+                                      [Result | Results]
                               end;
                           _ ->
                               Results
@@ -34,18 +45,34 @@ main(_) ->
               end, [], drains).
 
 migrate_drain_maybe(Drain) ->
-    case attempt_connection(Drain) of
+    case attempt_connection({insecure, Drain}) of
         {error, Reason} ->
-            handle_failed_drain(Drain, Reason);
-        _ ->
-            skip
+            % Drain never connects in the first place.
+            {unhealthy, Drain, Reason};
+        ok ->
+            % Drains works, so let's try migrating it.
+            migrate_drain(Drain)
     end.
 
-handle_failed_drain(Drain, Reason) ->
-    mark_drain_as_insecure(Drain),
-    {migrated, Drain, Reason}.
+migrate_drain(Drain) ->
+    case attempt_connection({default, Drain}) of
+        {error, {tls_alert, _Alert}=Reason} ->
+            % Verification failed. Make this insecure.
+            {migrate, Drain, Reason};
+        {error, Reason} ->
+            {unhealthy_if_tls, Drain, Reason};
+        ok ->
+            % Connects fine, so leave as is.
+            {healthy, Drain}
+    end.
 
-attempt_connection(#drain{id=DrainID, channel_id=ChannelID, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} = URI}) ->
+% TODO: have this take a force_insecure option.
+attempt_connection({insecure, #drain{uri=URI}=Drain}) ->
+    NewURI = logplex_drain:parse_url(
+              new_uri_with_insecure(
+               logplex_drain:uri_to_binary(URI))),
+    attempt_connection({default, Drain#drain{uri=NewURI}});
+attempt_connection({default, #drain{id=DrainID, channel_id=ChannelID, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} = URI}}) ->
     io:format("Attempting connection to ~p:~p for drain ~p~n", [Host, Port, DrainID]),
     case logplex_tlssyslog_drain:do_connect(Host, Port, URI, DrainID, ChannelID) of
         {ok, _SslSocket} ->
@@ -58,24 +85,28 @@ attempt_connection(#drain{id=DrainID, channel_id=ChannelID, uri=#ex_uri{authorit
             % TODO: what to do with this? timeouts should be retried.
             %  maybe return 'other' failed drains in the accumulator
             io:format("Non-TLS error ~p~n", [OtherReason]),
-            ok
+            {error, OtherReason}
     end.
 
-should_migrate_drain(#drain{id=_DrainId, type=DrainType, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} }) ->
+should_migrate_drain(#drain{type=DrainType, uri=#ex_uri{authority=#ex_uri_authority{host=Host}}}) ->
     % TODO: filter out #insecure drains.
     (DrainType =:= 'tlssyslog') and (Host =:= "logs.papertrailapp.com").
 
 mark_drain_as_insecure(#drain{uri=URI}=Drain) ->
-    NewURI = erlang:iolist_to_binary([logplex_drain:uri_to_binary(URI), <<"#insecure">>]),
-    update_drain_uri(Drain, NewURI).
+    update_drain_uri(Drain, new_uri_with_insecure(logplex_drain:uri_to_binary(URI))).
 
 unmark_drain_as_insecure(#drain{uri=URI}=Drain) ->
-    NewURI = erlang:iolist_to_binary(
-               re:replace(logplex_drain:uri_to_binary(URI),
-                          "#insecure",
-                          "",
-                          [{return,list}])),
-    update_drain_uri(Drain, NewURI).
+    update_drain_uri(Drain, new_uri_without_insecure(logplex_drain:uri_to_binary(URI))).
+
+new_uri_with_insecure(URI) ->
+    erlang:iolist_to_binary([URI, <<"#insecure">>]).
+
+new_uri_without_insecure(URI) ->
+    erlang:iolist_to_binary(
+      re:replace(URI,
+                 "#insecure",
+                 "",
+                 [{return,list}])).
 
 update_drain_uri(#drain{id=DrainID, channel_id=ChannelID, token=Token}, NewURI) ->
     io:format("Changing drain ~p URI to ~p~n", [DrainID, NewURI]),
@@ -96,4 +127,4 @@ unflag_all_insecure_drains() ->
 
 test() ->
     unflag_all_insecure_drains(),
-    R=main(unused).
+    main(unused).
