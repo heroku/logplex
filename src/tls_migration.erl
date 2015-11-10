@@ -16,9 +16,15 @@
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 
-% TODO support --dry-run option
-main(_) ->
-    dict_from_list(migrate_all_drains()).
+main(DryRun)
+  when is_boolean(DryRun) ->
+    MigrateHandlerFun = case DryRun of
+        true ->
+            fun (_Drain) -> ok end;
+        false ->
+            fun mark_drain_as_insecure/1
+    end,
+    dict_from_list(migrate_all_drains(MigrateHandlerFun)).
 
 %% Returns a list of tuple of the form:
 %%    {Action, Drain, Reason}
@@ -27,14 +33,14 @@ main(_) ->
 %%    - unhealthy :: drain doesn't even connect in insecure
 %%    - unhealthy_if_tls :: connects in insecure, but fails to verify
 %%    - healthy :: connects fine, no need to migrate
-migrate_all_drains() ->
+migrate_all_drains(MigrateHandlerFun) ->
     ets:foldl(fun(Drain, Results) ->
                       case should_migrate_drain(Drain) of
                           true ->
                               % TODO: sleep before connections to not overload papertrail
                               case migrate_drain_maybe(Drain) of
                                   {migrate, {Drain, _Reason}}=Result ->
-                                      mark_drain_as_insecure(Drain),
+                                      MigrateHandlerFun(Drain),
                                       [Result | Results];
                                   {_State, {_Drain, _Reason}}=Result ->
                                       [Result | Results]
@@ -66,7 +72,6 @@ migrate_drain(Drain) ->
             {healthy, Drain}
     end.
 
-% TODO: have this take a force_insecure option.
 attempt_connection({insecure, #drain{uri=URI}=Drain}) ->
     NewURI = logplex_drain:parse_url(
               new_uri_with_insecure(
@@ -119,7 +124,7 @@ update_drain_uri(#drain{id=DrainID, channel_id=ChannelID, token=Token}, NewURI) 
 
 dict_from_list(Items) when is_list(Items) ->
     lists:foldl(fun({Key, Value}, Dict) ->
-                        dict:append_list(Key, Value, Dict)
+                        dict:append(Key, Value, Dict)
                 end,
                 dict:new(),
                 Items).
@@ -134,4 +139,4 @@ unflag_all_insecure_drains() ->
 
 test() ->
     unflag_all_insecure_drains(),
-    main(unused).
+    main(true).
