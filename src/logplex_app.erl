@@ -117,6 +117,8 @@ cache_os_envvars() ->
                         integer}
                       ,{api_endpoint_url, ["LOGPLEX_API_ENDPOINT_URL"],
                        optional}
+                      ,{tls_cacertfile, ["LOGPLEX_TLS_CACERTFILE"]}
+                      ,{tls_pinned_certfile, ["LOGPLEX_TLS_PINNED_CERTFILE"]}
                      ]),
     ok.
 
