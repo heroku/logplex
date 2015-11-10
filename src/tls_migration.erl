@@ -11,37 +11,47 @@
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 
+% TODO support --dry-run option
 main(_) ->
-    ets:foldl(fun(Drain, _Acc) ->
+    ets:foldl(fun(Drain, Results) ->
                       case should_migrate_drain(Drain) of
                           true ->
-                              migrate_drain_maybe(Drain);
+                              % TODO: sleep before connections to not overload papertrail
+                              case migrate_drain_maybe(Drain) of
+                                  skip ->
+                                      Results;
+                                  {Drain, Reason} ->
+                                      [{Drain, Reason} | Results]
+                              end;
                           _ ->
-                              ok
+                              Results
                       end
-              end, notused, drains),
-    ok.
+              end, [], drains).
 
 migrate_drain_maybe(Drain) ->
     case attempt_connection(Drain) of
         {error, Reason} ->
             handle_failed_drain(Drain, Reason);
         _ ->
-            ok
+            skip
     end.
 
 handle_failed_drain(Drain, Reason) ->
-    write_csv_row(Drain, Reason),
-    toggle_insecure_and_save(Drain).
+    toggle_insecure_and_save(Drain),
+    {Drain, Reason}.
 
 attempt_connection(#drain{id=DrainID, channel_id=ChannelID, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} = URI}) ->
     io:format("Attempting connection to ~p:~p for drain ~p~n", [Host, Port, DrainID]),
     case logplex_tlssyslog_drain:do_connect(Host, Port, URI, DrainID, ChannelID) of
         {ok, _SslSocket} ->
+            io:format("OK"),
             ok;
         {error, {tls_alert, _Alert}=Reason} ->
+            io:format("TLS error ~p~n", [Reason]),
             {error, Reason};
         {error, OtherReason} ->
+            % TODO: what do do with this? timeouts should be retried.
+            %  maybe return 'other' failed drains in the accumulator
             io:format("Non-TLS error ~p~n", [OtherReason]),
             ok
     end.
@@ -59,9 +69,3 @@ toggle_insecure_and_save(#drain{id=DrainID, channel_id=ChannelID, token=Token, u
         Err ->
             io:format("REDIS ERROR updating drain ~p: ~p~n", [DrainID, Err])
     end.
- 
-write_csv_row(#drain{id=DrainID, channel_id=ChannelID, uri=DrainURI}=Drain, FailureReason) ->
-    % We just dump CSV rows interleaved with regular logging line, and as such
-    % hackily distinguish them using the CSV prefix (we expect the runner to
-    % filter using `| grep '^CSV'` for processing the CSV data)
-    io:format("CSV ~p, ~p, ~p, ~p~n", [ChannelID, DrainID, DrainURI, FailureReason]).
