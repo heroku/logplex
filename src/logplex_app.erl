@@ -117,6 +117,9 @@ cache_os_envvars() ->
                         integer}
                       ,{api_endpoint_url, ["LOGPLEX_API_ENDPOINT_URL"],
                        optional}
+                      ,{tls_mode, ["LOGPLEX_TLS_MODE"],
+                        optional,
+                        atom}
                       ,{tls_cacertfile, ["LOGPLEX_TLS_CACERTFILE"],
                         optional}
                       ,{tls_pinned_certfile, ["LOGPLEX_TLS_PINNED_CERTFILE"],
@@ -155,6 +158,7 @@ set_config(Key, Value) when is_atom(Key) ->
     application:set_env(?APP, Key, Value).
 
 set_config_value(Value, string) -> Value;
+set_config_value(Value, atom) -> list_to_atom(Value, latin1);
 set_config_value(Value, integer) -> list_to_integer(Value).
 
 priv_dir() ->
