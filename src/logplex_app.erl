@@ -137,8 +137,8 @@ cache_os_envvar({Var, Keys}) ->
     config(Var);
 cache_os_envvar({Var, Keys, optional}) ->
     cache_os_envvar(Var, Keys, string);
-cache_os_envvar({Var, Keys, optional, integer}) ->
-    cache_os_envvar(Var, Keys, integer).
+cache_os_envvar({Var, Keys, optional, Type}) ->
+    cache_os_envvar(Var, Keys, Type).
 
 %% Read os environment for Key and write to var if set.
 %% Keys later in the list overwrite earlier values allowing multiple
