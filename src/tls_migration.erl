@@ -5,11 +5,12 @@
 
 -module(tls_migration).
 
--export([main/1]).
+-export([main/2]).
 
 -export([should_migrate_drain/1,
          assess_drain_condition/1,
          unflag_all_insecure_drains/0,
+         do_migrate/1,
          test/0]).
 
 -include_lib("ex_uri/include/ex_uri.hrl").
@@ -19,8 +20,8 @@
 
 %% Mode can be dryrun (for --dry-run). Returns the conditions dict per the list
 %% returned by get_drain_conditions.
-main(Mode) ->
-    Conditions = dict_from_list(get_drain_conditions()),
+main(Mode, Drains) ->
+    Conditions = dict_from_list(get_drain_conditions(Drains)),
     case dict:is_key(needs_migrate, Conditions) of
         true ->
             MigrateList = dict:fetch(needs_migrate, Conditions),
@@ -46,19 +47,22 @@ do_migrate({_, [{Drain, _Reason} | Rest]}) ->
 %%    - unhealthy        :: drain doesn't even connect in insecure        (!insecure ...)
 %%    - unhealthy_if_tls :: connects in insecure, but fails to verify     (insecure && !secure && !tlserror) eg: timeout
 %%    - healthy          :: connects fine, no need to migrate             (insecure && secure)
-get_drain_conditions() ->
-    {_Index, Results} = ets:foldl(
-                          fun(Drain, {Index, Results}=Acc) ->
-                                  case should_migrate_drain(Drain) of
-                                      true ->
-                                          Result = assess_drain_condition(Drain),
-                                          print_condition(Index, Result),
-                                          {Index +1, [Result | Results]};
-                                      _ ->
-                                          Acc
-                                  end
-                          end, {1, []}, drains),
+get_drain_conditions(all) ->
+    {_Index, Results} = ets:foldl(fun fold_drains/2, {1, []}, drains),
+    Results;
+get_drain_conditions(Drains) when is_list(Drains) ->
+    {_Index, Results} = lists:foldl(fun fold_drains/2, {1, []}, Drains),
     Results.
+
+fold_drains(Drain, {Index, Results}=Acc) ->
+    case should_migrate_drain(Drain) of
+        true ->
+            Result = assess_drain_condition(Drain),
+            print_condition(Index, Result),
+            {Index +1, [Result | Results]};
+        _ ->
+            Acc
+    end.
 
 assess_drain_condition(Drain) ->
     case attempt_connection({insecure, Drain}) of
@@ -160,4 +164,4 @@ unflag_all_insecure_drains() ->
 
 test() ->
     unflag_all_insecure_drains(),
-    main(ok).
+    main(ok, all).
