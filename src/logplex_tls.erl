@@ -142,7 +142,11 @@ verify_host(_Cert, valid, UserState0) ->
     {valid, incr_depth(UserState0)};
 verify_host(Cert, valid_peer, #user_state{ host=Host }=UserState) ->
     try ssl_verify_hostname:verify_cert_hostname(Cert, Host) of
-        Reply -> handle_reply(Reply, UserState)
+        {valid, Host} -> {valid, incr_depth(UserState)};
+        {fail, Reason}=Error ->
+            ?ERR("channel_id=~p drain_id=~p dest=~s depth=~b at=verify_host failure=Reason",
+                 log_args(UserState, [Reason])),
+            Error
     catch
         Error:Reason ->
             ?ERR("channel_id=~p drain_id=~p dest=~s depth=~b at=verify_host err=~p reason=~p trace=~p",
@@ -151,15 +155,6 @@ verify_host(Cert, valid_peer, #user_state{ host=Host }=UserState) ->
     end.
 
 %% Private Functions
-
-handle_reply({valid, Host}, #user_state{ host=Host }=UserState) ->
-    ?INFO("channel_id=~p drain_id=~p dest=~s depth=~b at=verify_host valid_peer=~p",
-         log_args(UserState, [Host])),
-    {valid, incr_depth(UserState)};
-handle_reply({fail, Reason}=Error, UserState) ->
-    ?ERR("channel_id=~p drain_id=~p dest=~s depth=~b at=verify_host failure=Reason",
-         log_args(UserState, [Reason])),
-    Error.
 
 log_args(#user_state{ channel_id=ChannelID, drain_id=DrainID, dest=Dest, depth=Depth }, Rest) ->
     [ChannelID, DrainID, logplex_drain:uri_to_binary(Dest), Depth | Rest].
