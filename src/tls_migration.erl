@@ -100,8 +100,8 @@ should_migrate_drain(#drain{type=DrainType,
                             uri=#ex_uri{authority=#ex_uri_authority{host=Host},
                                         fragment=Fragment}})
   when Fragment =/= "insecure",
-       (DrainType =:= 'tlssyslog'),
-       (Host =:= "logs.papertrailapp.com") ->
+       DrainType =:= 'tlssyslog',
+       Host =:= "logs.papertrailapp.com" ->
     true;
 should_migrate_drain(#drain{}) ->
     false.
@@ -140,7 +140,7 @@ dict_from_list(Items) when is_list(Items) ->
                 Items).
 
 
-&% ~~ Code that follows below are for testing only ~~
+%% ~~ Code that follows below are for testing only ~~
 
 % To undo the effects of running this script.
 unflag_all_insecure_drains() ->
