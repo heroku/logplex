@@ -23,7 +23,9 @@ main(Mode) ->
     Conditions = dict_from_list(get_drain_conditions()),
     case dict:is_key(needs_migrate, Conditions) of
         true ->
-            do_migrate({Mode, dict:fetch(needs_migrate, Conditions)});
+            MigrateList = dict:fetch(needs_migrate, Conditions),
+            io:format("Updating ~p number of drains", [length(MigrateList)]),
+            do_migrate({Mode, MigrateList});
         false ->
             io:format("No drains found worthy of migrating to insecure")
     end,
@@ -82,23 +84,18 @@ attempt_connection({insecure, #drain{uri=URI}=Drain}) ->
                logplex_drain:uri_to_binary(URI))),
     attempt_connection({default, Drain#drain{uri=NewURI}});
 attempt_connection({default, #drain{id=DrainID, channel_id=ChannelID, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} = URI}}) ->
-    io:format("Attempting delayed connection to ~p:~p for drain ~p~n", [Host, Port, DrainID]),
+    %% io:format("Attempting delayed connection to ~p:~p for drain ~p~n", [Host, Port, DrainID]),
     timer:sleep(1000),
     case logplex_tlssyslog_drain:do_connect(Host, Port, URI, DrainID, ChannelID) of
         {ok, _SslSocket} ->
-            io:format("OK"),
             ok;
         {error, {tls_alert, _Alert}=Reason} ->
-            io:format("TLS error ~p~n", [Reason]),
             {error, Reason};
         {error, OtherReason} ->
-            io:format("Non-TLS error ~p~n", [OtherReason]),
             {error, OtherReason}
     end.
 
-should_migrate_drain(#drain{type=DrainType,
-                            uri=#ex_uri{authority=#ex_uri_authority{host=Host},
-                                        fragment=Fragment}})
+should_migrate_drain(#drain{type=DrainType, uri=#ex_uri{fragment=Fragment}})
   when Fragment =/= "insecure",
        DrainType =:= 'tlssyslog' ->
     true;
@@ -122,7 +119,8 @@ new_uri_without_insecure(URI) ->
                  [{return,list}])).
 
 update_drain_uri_in_redis(#drain{id=DrainID, channel_id=ChannelID, token=Token}, NewURI) ->
-    io:format("Changing drain ~p URI to ~p~n", [DrainID, NewURI]),
+    %% io:format("Changing drain ~p URI to ~p~n", [DrainID, NewURI]),
+    timer:sleep(100),
     case redis_helper:create_url_drain(DrainID, ChannelID, Token, NewURI) of
         ok ->
             ok;
