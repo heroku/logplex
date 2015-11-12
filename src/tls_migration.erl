@@ -40,10 +40,10 @@ do_migrate({_, [{Drain, _Reason} | Rest]}) ->
 %% Returns a list of tuple of the form:
 %%    {Condition, Drain, Reason}
 %% where Condition is one of:
-%%    - needs_migrate    :: drain was migrated
-%%    - unhealthy        :: drain doesn't even connect in insecure
-%%    - unhealthy_if_tls :: connects in insecure, but fails to verify
-%%    - healthy          :: connects fine, no need to migrate
+%%    - needs_migrate    :: drain was migrated                            (insecure && !secure && tlserror)
+%%    - unhealthy        :: drain doesn't even connect in insecure        (!insecure ...)
+%%    - unhealthy_if_tls :: connects in insecure, but fails to verify     (insecure && !secure && !tlserror) eg: timeout
+%%    - healthy          :: connects fine, no need to migrate             (insecure && secure)
 get_drain_conditions() ->
     ets:foldl(fun(Drain, Results) ->
                       case should_migrate_drain(Drain) of
@@ -82,8 +82,8 @@ attempt_connection({insecure, #drain{uri=URI}=Drain}) ->
                logplex_drain:uri_to_binary(URI))),
     attempt_connection({default, Drain#drain{uri=NewURI}});
 attempt_connection({default, #drain{id=DrainID, channel_id=ChannelID, uri=#ex_uri{authority=#ex_uri_authority{host=Host, port=Port}} = URI}}) ->
-    %% TODO: sleep before connections to not overload papertrail
-    io:format("Attempting connection to ~p:~p for drain ~p~n", [Host, Port, DrainID]),
+    io:format("Attempting delayed connection to ~p:~p for drain ~p~n", [Host, Port, DrainID]),
+    timer:sleep(1000),
     case logplex_tlssyslog_drain:do_connect(Host, Port, URI, DrainID, ChannelID) of
         {ok, _SslSocket} ->
             io:format("OK"),
