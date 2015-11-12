@@ -47,14 +47,18 @@ do_migrate({_, [{Drain, _Reason} | Rest]}) ->
 %%    - unhealthy_if_tls :: connects in insecure, but fails to verify     (insecure && !secure && !tlserror) eg: timeout
 %%    - healthy          :: connects fine, no need to migrate             (insecure && secure)
 get_drain_conditions() ->
-    ets:foldl(fun(Drain, Results) ->
-                      case should_migrate_drain(Drain) of
-                          true ->
-                              [assess_drain_condition(Drain) | Results];
-                          _ ->
-                              Results
-                      end
-              end, [], drains).
+    {_Index, Results} = ets:foldl(
+                          fun(Drain, {Index, Results}=Acc) ->
+                                  case should_migrate_drain(Drain) of
+                                      true ->
+                                          Result = assess_drain_condition(Drain),
+                                          print_condition(Index, Result),
+                                          {Index +1, [Result | Results]};
+                                      _ ->
+                                          Acc
+                                  end
+                          end, {1, []}, drains),
+    Results.
 
 assess_drain_condition(Drain) ->
     case attempt_connection({insecure, Drain}) of
@@ -77,6 +81,15 @@ do_assess_drain_condition(Drain) ->
             % Connects fine, so leave as is.
             {healthy, Drain}
     end.
+
+print_condition(Index, {healthy, #drain{id=DrainID}}) ->
+    io:format("[~p] Condition of drain ~p is ~p~n", [Index, DrainID, healthy]);
+print_condition(Index, {needs_migrate, {#drain{id=DrainID}, Reason}}) ->
+    io:format("[~p] Condition of drain ~p is needs_migrate because ~p~n", [Index, DrainID, Reason]);
+print_condition(Index, {unhealthy, {#drain{id=DrainID}, Reason}}) ->
+    io:format("[~p] Condition of drain ~p is unhealthy because ~p~n", [Index, DrainID, Reason]);
+print_condition(Index, {unhealthy_if_tls, {#drain{id=DrainID}, Reason}}) ->
+    io:format("[~p] Condition of drain ~p is nonTLs error because ~p~n", [Index, DrainID, Reason]).
 
 attempt_connection({insecure, #drain{uri=URI}=Drain}) ->
     NewURI = logplex_drain:parse_url(
