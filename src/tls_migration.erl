@@ -100,8 +100,7 @@ should_migrate_drain(#drain{type=DrainType,
                             uri=#ex_uri{authority=#ex_uri_authority{host=Host},
                                         fragment=Fragment}})
   when Fragment =/= "insecure",
-       DrainType =:= 'tlssyslog',
-       Host =:= "logs.papertrailapp.com" ->
+       DrainType =:= 'tlssyslog' ->
     true;
 should_migrate_drain(#drain{}) ->
     false.
