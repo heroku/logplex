@@ -158,7 +158,7 @@ set_config(Key, Value) when is_atom(Key) ->
     application:set_env(?APP, Key, Value).
 
 set_config_value(Value, string) -> Value;
-set_config_value(Value, atom) -> list_to_atom(Value, latin1);
+set_config_value(Value, atom) -> list_to_atom(Value);
 set_config_value(Value, integer) -> list_to_integer(Value).
 
 priv_dir() ->
