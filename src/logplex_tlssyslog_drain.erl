@@ -40,6 +40,7 @@
 -export([valid_uri/1
          ,uri/2
          ,start_link/4
+         ,do_connect/5
         ]).
 
 %% ------------------------------------------------------------------
@@ -430,13 +431,16 @@ handle_error(_, _) ->
 %% @private
 connect(#state{sock = undefined, channel_id=ChannelID, drain_id=DrainID, uri=Dest, host=Host, port=Port})
     when is_integer(Port), 0 < Port, Port =< 65535 ->
+    do_connect(Host, Port, Dest, DrainID, ChannelID);
+connect(#state{}) ->
+    {error, bogus_port_number}.
+
+do_connect(Host, Port, Dest, DrainID, ChannelID) ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
     TLSOpts = logplex_tls:connect_opts(ChannelID, DrainID, Dest),
     SocketOpts = socket_opts(),
     ssl:connect(Host, Port, TLSOpts ++ SocketOpts,
-                timer:seconds(SendTimeoutS));
-connect(#state{}) ->
-    {error, bogus_port_number}.
+                timer:seconds(SendTimeoutS)).
 
 socket_opts() ->
     [binary
