@@ -190,13 +190,7 @@ post(Msg, #state{sock=Sock,
                                             {'error', term()}.
 connect(#state{sock = undefined, host=Host, port=Port})
     when is_integer(Port) ->
-    HostS = case Host of
-                B when is_binary(B) -> binary_to_list(B);
-                L when is_list(L) -> L;
-                T when is_tuple(T) -> T;
-                A when is_atom(A) -> A
-            end,
-    case inet:getaddrs(HostS, inet) of
+    case inet:getaddrs(Host, inet) of
         {ok, [Addr | _]} ->
             case gen_udp:open(0, [binary]) of
                 {ok, Sock} ->

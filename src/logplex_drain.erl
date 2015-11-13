@@ -49,12 +49,14 @@
          ,token/1
          ,channel_id/1
          ,uri/1
+         ,unpack_uri/1
         ]).
 
 -export([parse_url/1
          ,valid_uri/1
          ,has_valid_uri/1
          ,uri_schemes/0
+         ,uri_to_binary/1
         ]).
 
 -export([register/4
@@ -97,11 +99,21 @@ token(#drain{token=Token}) -> Token.
 channel_id(#drain{channel_id=CID}) -> CID.
 uri(#drain{uri=Uri}) -> Uri.
 
+unpack_uri(#ex_uri{scheme="syslog+tls",
+                  authority=#ex_uri_authority{host=Host, port=Port},
+                  fragment="insecure"}) ->
+    {Host, Port, insecure};
+unpack_uri(#ex_uri{scheme="syslog+tls",
+                  authority=#ex_uri_authority{host=Host, port=Port}}) ->
+    {Host, Port, logplex_app:config(tls_mode)}.
+
 start(#drain{type=Type, id=Id,
              channel_id=CID, token=Token,
              uri=Uri}) ->
     start(Type, Id, [CID, Id, Token, Uri]).
 
+whereis(DrainId) when is_integer(DrainId) ->
+  whereis({drain, DrainId});
 whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 

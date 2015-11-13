@@ -29,14 +29,14 @@
 %% Application callbacks
 -export([start/2, start_phase/3, stop/1]).
 
--export([nsync_opts/0
-         ,config/0
-         ,config/1
-         ,config/2
-         ,set_config/2
-         ,start/0
-         ,a_start/2
-        ]).
+-export([nsync_opts/0,
+         priv_dir/0,
+         config/0,
+         config/1,
+         config/2,
+         set_config/2,
+         start/0,
+         a_start/2]).
 
 -export([cache_os_envvars/0]). % for tests
 
@@ -67,6 +67,7 @@ start(_StartType, _StartArgs) ->
     logplex_realtime:setup_metrics(),
     setup_redgrid_vals(),
     setup_redis_shards(),
+    logplex_tls:cache_env(),
     application:start(nsync),
     logplex_sup:start_link().
 
@@ -117,6 +118,16 @@ cache_os_envvars() ->
                         integer}
                       ,{api_endpoint_url, ["LOGPLEX_API_ENDPOINT_URL"],
                        optional}
+                      ,{tls_mode, ["LOGPLEX_TLS_MODE"],
+                        optional,
+                        atom}
+                      ,{tls_cacertfile, ["LOGPLEX_TLS_CACERTFILE"],
+                        optional}
+                      ,{tls_pinned_certfile, ["LOGPLEX_TLS_PINNED_CERTFILE"],
+                        optional}
+                      ,{tls_pinned_certs, ["LOGPLEX_TLS_PINNED_CERTS"],
+                        optional,
+                        binary}
                      ]),
     ok.
 
@@ -130,8 +141,8 @@ cache_os_envvar({Var, Keys}) ->
     config(Var);
 cache_os_envvar({Var, Keys, optional}) ->
     cache_os_envvar(Var, Keys, string);
-cache_os_envvar({Var, Keys, optional, integer}) ->
-    cache_os_envvar(Var, Keys, integer).
+cache_os_envvar({Var, Keys, optional, Type}) ->
+    cache_os_envvar(Var, Keys, Type).
 
 %% Read os environment for Key and write to var if set.
 %% Keys later in the list overwrite earlier values allowing multiple
@@ -151,7 +162,13 @@ set_config(Key, Value) when is_atom(Key) ->
     application:set_env(?APP, Key, Value).
 
 set_config_value(Value, string) -> Value;
+set_config_value(Value, binary) -> list_to_binary(Value);
+set_config_value(Value, atom) -> list_to_atom(Value);
 set_config_value(Value, integer) -> list_to_integer(Value).
+
+priv_dir() ->
+    Ebin = filename:dirname(code:which(?MODULE)),
+    filename:join(filename:dirname(Ebin), "priv").
 
 config() ->
     application:get_all_env(logplex).

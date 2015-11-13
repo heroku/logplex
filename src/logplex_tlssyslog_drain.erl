@@ -23,6 +23,7 @@
 -define(SSL_SOCKET, {sslsocket,_,_}).
 
 -include("logplex.hrl").
+-include("logplex_error.hrl").
 -include("logplex_logging.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
 
@@ -32,8 +33,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/5
-         ,resize_msg_buffer/2
+-export([resize_msg_buffer/2
          ,set_target_send_size/2
         ]).
 
@@ -58,8 +58,10 @@
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
                 channel_id :: logplex_channel:id(),
+                uri :: #ex_uri{},
                 host :: string() | inet:ip_address() | binary(),
                 port :: inet:port_number(),
+                insecure :: boolean(),
                 sock = undefined :: 'undefined' | ssl:sslsocket(),
                 %% Buffer for messages while disconnected
                 buf = logplex_msg_buffer:new(default_buf_size()) :: logplex_msg_buffer:buf(),
@@ -84,18 +86,16 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(ChannelID, DrainID, DrainTok,
-           #ex_uri{scheme="syslog+tls",
-                   authority=#ex_uri_authority{host=Host, port=Port}}) ->
-    start_link(ChannelID, DrainID, DrainTok, Host, Port).
-
-start_link(ChannelID, DrainID, DrainTok, Host, Port) ->
+start_link(ChannelID, DrainID, DrainTok, Uri) ->
+    {Host, Port, Insecure} = logplex_drain:unpack_uri(Uri),
     gen_fsm:start_link(?MODULE,
                        [#state{drain_id=DrainID,
                                drain_tok=DrainTok,
                                channel_id=ChannelID,
+                               uri=Uri,
                                host=Host,
-                               port=Port}],
+                               port=Port,
+                               insecure=Insecure}],
                        []).
 
 valid_uri(#ex_uri{scheme="syslog+tls",
@@ -146,8 +146,8 @@ init([State0 = #state{sock = undefined, host=H, port=P,
                                {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_msg_buffer:new(DrainSize)},
-        ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
-              log_info(State, [])),
+        ?INFO("drain_id=~p channel_id=~p dest=~s insecure=~p at=spawn",
+              log_info(State, [State0#state.insecure])),
         {ok, disconnected,
          State, hibernate}
     catch
@@ -412,6 +412,7 @@ do_reconnect(State = #state{sock = undefined,
                     %% first failure.
                     ok;
                 _ ->
+                    handle_error(Reason, State),
                     ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
                          "err=gen_tcp data=~p try=~p last_success=~s "
                          "state=disconnected",
@@ -421,34 +422,30 @@ do_reconnect(State = #state{sock = undefined,
             reconnect(NewState)
     end.
 
+handle_error({tls_alert, Alert}, #state{ channel_id=ChannelID, uri=URI, drain_tok=DrainToken }) ->
+    logplex_message:process_error(ChannelID, DrainToken, ?L14, "error=\"~s\" uri=\"~s\"", [Alert, logplex_drain:uri_to_binary(URI)]);
+handle_error(_, _) ->
+    ok.
+
 %% @private
-connect(#state{sock = undefined, host=Host, port=Port})
+connect(#state{sock = undefined, channel_id=ChannelID, drain_id=DrainID, uri=Dest, host=Host, port=Port})
     when is_integer(Port), 0 < Port, Port =< 65535 ->
     SendTimeoutS = logplex_app:config(tcp_syslog_send_timeout_secs),
-    HostS = case Host of
-                B when is_binary(B) -> binary_to_list(B);
-                L when is_list(L) -> L;
-                T when is_tuple(T) -> T;
-                A when is_atom(A) -> A
-            end,
-    Aes128 = fun (Cipher) when Cipher =:= aes_128_cbc; Cipher =:= aes_128_gcm -> true;
-                  (_) -> false
-              end,
-    Ciphers = [Suite || {_, Cipher,_}=Suite <- ssl:cipher_suites(), Aes128(Cipher)],
-    Options = [binary
-               %% We don't expect data, but why not.
-               ,{active, true}
-               ,{exit_on_close, true}
-               ,{keepalive, true}
-               ,{packet, raw}
-               ,{reuseaddr, true}
-               ,{verify, verify_none}
-               ,{ciphers, Ciphers}
-              ],
-    ssl:connect(HostS, Port, Options,
+    TLSOpts = logplex_tls:connect_opts(ChannelID, DrainID, Dest),
+    SocketOpts = socket_opts(),
+    ssl:connect(Host, Port, TLSOpts ++ SocketOpts,
                 timer:seconds(SendTimeoutS));
 connect(#state{}) ->
     {error, bogus_port_number}.
+
+socket_opts() ->
+    [binary
+     %% We don't expect data, but why not.
+    ,{active, true}
+    ,{exit_on_close, true}
+    ,{keepalive, true}
+    ,{packet, raw}
+    ,{reuseaddr, true}].
 
 -spec reconnect(#state{}) -> {next_state, pstate(), #state{}}.
 %% @private
@@ -527,9 +524,9 @@ time_failed(_, #state{last_good_time=undefined}) ->
     "".
 
 %% @private
-log_info(#state{drain_id=DrainId, channel_id=ChannelId, host=H, port=P}, Rest)
+log_info(#state{drain_id=DrainId, channel_id=ChannelId, uri=Uri}, Rest)
   when is_list(Rest) ->
-    [DrainId, ChannelId, logplex_logging:dest(H,P) | Rest].
+    [DrainId, ChannelId, logplex_drain:uri_to_binary(Uri) | Rest].
 
 -spec msg_stat('drain_dropped' | 'drain_buffered' | 'drain_delivered' |
                'requests_sent',

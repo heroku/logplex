@@ -25,6 +25,7 @@
 -export([lookup/1
          ,lookup_by_channel/1
          ,lookup_ids_by_channel/1
+         ,lookup_heroku_token/1
         ]).
 
 -export([id/1
@@ -156,6 +157,9 @@ delete_by_channel(ChannelId) when is_integer(ChannelId) ->
     [ delete(Token)
       || Token <- lookup_by_channel(ChannelId)],
     ok.
+
+lookup_heroku_token(ChannelID) ->
+    lists:keyfind(<<"heroku">>, #token.name, lookup_by_channel(ChannelID)).
 
 lookup_by_channel(ChannelId) ->
     lists:flatmap(fun (Id) ->
