@@ -80,9 +80,11 @@
     ,{http_drain_idle_fuzz, 15000} % ms
     ,{http_drain_max_ttl, 18000000} % ms
     ,{workers, 10}
+    ,{tls_mode, secure} % OpenSSL defaults to 100
     ,{tls_max_depth, 9} % OpenSSL defaults to 100
     ,{tls_cacertfile, "cacert.pem"} % assumes stored in ./priv
     ,{tls_pinned_certfile, "pinned_certs.pem"} % assumes stored in ./priv
+    ,{tls_pinned_certs, []} % PEM formatted binary data or DER formatted list
    ]}
  ,{start_phases,
    [{listen, []}
