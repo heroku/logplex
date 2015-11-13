@@ -204,8 +204,8 @@ searches_to_max_depth(Config) ->
     {match, _} = re:run(TailMsg, "L14 \\(certificate validation\\)"),
     
     %% Look in the redis buffer
-    [BufferMsg]= logplex_channel:logs(ChannelID, 0),
-    {match, _} = re:run(BufferMsg, "L14 \\(certificate validation\\)"),
+    {match, _} = retry(fun() -> logplex_channel:logs(ChannelID, 0) end,
+                       fun ([BufferMsg]) -> re:run(BufferMsg, "L14 \\(certificate validation\\)") end),
     ok.
 
 
@@ -242,10 +242,23 @@ hostname_verification(Config) ->
     {match, _} = re:run(TailMsg, "L14 \\(certificate validation\\)"),
     
     %% Look in the redis buffer
-    [BufferMsg] = logplex_channel:logs(ChannelID, 0),
-    {match, _} = re:run(BufferMsg, "L14 \\(certificate validation\\)"),
+    {match, _} = retry(fun() -> logplex_channel:logs(ChannelID, 0) end,
+                       fun ([BufferMsg]) -> re:run(BufferMsg, "L14 \\(certificate validation\\)") end),
     ok.
 
+retry(Fun, Kont) ->
+    retry(Fun, Kont, {10, 100}).
+
+retry(_Fun, _Kont, {0, _}) ->
+    erlang:error({retry, max_attempts_reached});
+retry(Fun, Kont, {Attempts, Sleep}) ->
+    try Kont(Fun()) of
+         Result -> Result
+    catch
+        error:function_clause ->
+            timer:sleep(Sleep),
+            retry(Fun, Kont, {Attempts-1, Sleep})
+    end.
 
 insecure_drain(Config) ->
     ChannelID = ?config(channel_id, Config),
