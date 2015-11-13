@@ -88,12 +88,12 @@ do_assess_drain_condition(Drain) ->
 
 print_condition(Index, {healthy, #drain{id=DrainID}}) ->
     io:format("[~p] Condition of drain ~p is ~p~n", [Index, DrainID, healthy]);
-print_condition(Index, {needs_migrate, {#drain{id=DrainID}, Reason}}) ->
-    io:format("[~p] Condition of drain ~p is needs_migrate because ~p~n", [Index, DrainID, Reason]);
-print_condition(Index, {unhealthy, {#drain{id=DrainID}, Reason}}) ->
-    io:format("[~p] Condition of drain ~p is unhealthy because ~p~n", [Index, DrainID, Reason]);
-print_condition(Index, {unhealthy_if_tls, {#drain{id=DrainID}, Reason}}) ->
-    io:format("[~p] Condition of drain ~p is nonTLs error because ~p~n", [Index, DrainID, Reason]).
+print_condition(Index, {needs_migrate, {#drain{id=DrainID, uri=URI}, Reason}}) ->
+    io:format("[~p] Condition of drain ~p is needs_migrate because ~p (~s)~n", [Index, DrainID, Reason, logplex_drain:uri_to_binary(URI)]);
+print_condition(Index, {unhealthy, {#drain{id=DrainID, uri=URI}, Reason}}) ->
+    io:format("[~p] Condition of drain ~p is unhealthy because ~p (~s)~n", [Index, DrainID, Reason, logplex_drain:uri_to_binary(URI)]);
+print_condition(Index, {unhealthy_if_tls, {#drain{id=DrainID, uri=URI}, Reason}}) ->
+    io:format("[~p] Condition of drain ~p is nonTLs error because ~p (~s)~n", [Index, DrainID, Reason, logplex_drain:uri_to_binary(URI)]).
 
 attempt_connection({insecure, #drain{uri=URI}=Drain}) ->
     NewURI = logplex_drain:parse_url(
