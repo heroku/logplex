@@ -22,6 +22,8 @@
          pinned_certfile/1,
          approved_ciphers/0,
          approved_ciphers/1,
+         approved_versions/0,
+         approved_versions/1,
          cache_env/0]).
 
 %% Internal API Exports
@@ -49,7 +51,8 @@ connect_opts(ChannelID, DrainID, Dest) ->
      {partial_chain, fun partial_chain/1},
      {reuse_sessions, false},
      {cacertfile, cacertfile()},
-     {ciphers, approved_ciphers()}].
+     {ciphers, approved_ciphers()},
+     {versions, approved_versions()}].
 
 %% @doc Returns the maximum number of non Root CA certificates.
 %% @see ssl:ssloption()
@@ -115,6 +118,18 @@ approved_ciphers() ->
 
 approved_ciphers(Ciphers) when is_list(Ciphers) ->
     ?set_env(tls_ciphers, Ciphers).
+
+%% @doc Get the approved TLS versions.
+-spec approved_versions() -> [ssl:protocol()].
+
+approved_versions() ->
+    ?get_env(tls_versions).
+
+%% @doc Set the approved TLS versions.
+-spec approved_versions([ssl:protocol()]) -> ok.
+
+approved_versions(Versions) when is_list(Versions) ->
+    ?set_env(tls_ciphers, Versions).
 
 %% @doc Formats and caches various default settings.
 %% The following settings are cached.
