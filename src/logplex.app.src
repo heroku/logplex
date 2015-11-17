@@ -81,7 +81,7 @@
     ,{http_drain_max_ttl, 18000000} % ms
     ,{workers, 10}
     ,{tls_mode, secure} % OpenSSL defaults to 100
-    ,{tls_versions, ['tlsv1.2', 'tlsv1.1']}  % Successfully TLS versions, see ssl:versions()
+    ,{tls_versions, ['tlsv1.2', 'tlsv1.1']}  % Sets TLS versions, see ssl:versions()
     ,{tls_max_depth, 9} % OpenSSL defaults to 100
     ,{tls_cacertfile, "cacert.pem"} % assumes stored in ./priv
     ,{tls_pinned_certfile, "pinned_certs.pem"} % assumes stored in ./priv
