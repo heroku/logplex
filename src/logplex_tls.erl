@@ -22,6 +22,8 @@
          pinned_certfile/1,
          approved_ciphers/0,
          approved_ciphers/1,
+         approved_versions/0,
+         approved_versions/1,
          cache_env/0]).
 
 %% Internal API Exports
