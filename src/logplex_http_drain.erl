@@ -557,7 +557,13 @@ uri_to_string(Uri) ->
 
 auth_header(#ex_uri{authority=#ex_uri_authority{userinfo=Info}})
   when Info =/= undefined ->
-    cowboy_client:auth_header(Info);
+    case get(auth_header) of
+        undefined ->
+            Header = cowboy_client:auth_header(Info),
+            put(auth_header, Header),
+            Header;
+        Header -> Header
+    end;
 auth_header(_) ->
     [].
 
