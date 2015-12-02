@@ -61,6 +61,7 @@ loop(Req) ->
     Start = os:timestamp(),
     Method = Req:get(method),
     Host = Req:get_header_value('Host'),
+    Peer = Req:get(peer),
     Path = Req:get(path),
     ChannelId = header_value(Req, "Channel", ""),
     try
@@ -73,13 +74,13 @@ loop(Req) ->
         case Served of
             {Code, Hdr, Body} ->
                 Req:respond({status_io(Code), Hdr, Body}),
-                ?INFO("at=request channel_id=~s host=~p method=~p path=~s"
+                ?INFO("at=request channel_id=~s host=~p peer=~p method=~p path=~s"
                     " resp_code=~w time=~w body=~s",
-                    [ChannelId, Host, Method, Path, Code, Time, Body]);
+                    [ChannelId, Host, Peer, Method, Path, Code, Time, Body]);
             {done,{Code,Details}} ->
-                ?INFO("at=request channel_id=~s method=~p path=~s "
+                ?INFO("at=request channel_id=~s host=~p peer=~p method=~p path=~s "
                       "resp_code=~w time=~w body=~s",
-                      [ChannelId, Method, Path, Code, Time, Details])
+                      [ChannelId, Host, Peer, Method, Path, Code, Time, Details])
         end
     catch
         exit:normal ->
