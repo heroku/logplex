@@ -35,7 +35,7 @@ Prior versions of Logplex are designed to run on R16B03 and 17.x.
 # Docker Build
 
 Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
-Follow the [installations](https://docs.docker.com/installation/#installation)
+Follow the [installations](http://docs.docker.com/engine/installation/#installation)
 steps outlined docs.docker.com.
 
     docker-compose build
@@ -144,7 +144,7 @@ sessions
 
 ### config_redis
 
-A [redo](https://github.com/JacobVorreuter/redo) redis client process connected to the logplex config redis.
+A [redo](https://github.com/jkvor/redo) redis client process connected to the logplex config redis.
 
 ### logplex_drain_sup
 
@@ -155,13 +155,13 @@ An empty one_for_one supervisor. Supervises
 
 ### nsync
 
-An [nsync](https://github.com/JacobVorreuter/nsync) process connected to the logplex config redis. Callback module is [nsync_callback](./src/nsync_callback.erl).
+An [nsync](https://github.com/jkvor/nsync) process connected to the logplex config redis. Callback module is [nsync_callback](./src/nsync_callback.erl).
 
 Nsync is an Erlang redis replication client. It allows the logplex node to act as a redis slave and sync the logplex config redis data into memory.
 
 ### redgrid
 
-A [redgrid](https://github.com/JacobVorreuter/redgrid) process that registers the node in a central redis server to facilitate discovery by other nodes.
+A [redgrid](https://github.com/jkvor/redgrid) process that registers the node in a central redis server to facilitate discovery by other nodes.
 
 ### logplex_realtime
 
