@@ -428,17 +428,22 @@ handlers() ->
                         json_error(422, <<"You have already added the maximum number of drains allowed">>);
                     can_add_drain ->
                         {ok, DrainId, Token} = logplex_drain:reserve_token(),
-                        case logplex_drain:create(DrainId, Token, ChannelId, URI) of
-                            {error, already_exists} ->
-                                json_error(409, <<"Already exists">>);
-                            {drain, _Id, Token} ->
-                                Resp = [
-                                        {id, DrainId},
-                                        {token, Token},
-                                        {url, uri_to_binary(URI)}
-                                       ],
-                                {201,?JSON_CONTENT,
-                                 mochijson2:encode({struct, Resp})}
+                        case logplex_channel:lookup(ChannelId) of
+                            undefined ->
+                                json_error(404, "No such channel");
+                            _ ->
+                                case logplex_drain:create(DrainId, Token, ChannelId, URI) of
+                                    {error, already_exists} ->
+                                        json_error(409, <<"Already exists">>);
+                                    {drain, _Id, Token} ->
+                                        Resp = [
+                                                {id, DrainId},
+                                                {token, Token},
+                                                {url, uri_to_binary(URI)}
+                                               ],
+                                        {201,?JSON_CONTENT,
+                                         mochijson2:encode({struct, Resp})}
+                                end
                         end
                 end
         end
