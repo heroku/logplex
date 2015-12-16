@@ -74,11 +74,11 @@ loop(Req) ->
         case Served of
             {Code, Hdr, Body} ->
                 Req:respond({status_io(Code), Hdr, Body}),
-                ?INFO("at=request channel_id=~s host=~p peer=~p method=~p path=~s"
+                ?INFO("at=request channel_id=~s domain=~p peer=~p method=~p path=~s"
                     " resp_code=~w time=~w body=~s",
                     [ChannelId, Host, Peer, Method, Path, Code, Time, Body]);
             {done,{Code,Details}} ->
-                ?INFO("at=request channel_id=~s host=~p peer=~p method=~p path=~s "
+                ?INFO("at=request channel_id=~s domain=~p peer=~p method=~p path=~s "
                       "resp_code=~w time=~w body=~s",
                       [ChannelId, Host, Peer, Method, Path, Code, Time, Details])
         end
