@@ -650,7 +650,7 @@ close_if_idle(State = #state{client = Client}) ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
             logplex_http_client:close(Client),
-            {closed, State#state{client=undefined}};
+            {closed, State#state{client=undefined, last_good_time=never}};
         _ ->
             {not_closed, State}
     end.
