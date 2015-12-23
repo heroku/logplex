@@ -50,8 +50,8 @@
          notify/2
         ]).
 
--export([post/2
-        ]).
+-export([post/2,
+         max_size/1]).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Exports
@@ -106,6 +106,9 @@ resize_msg_buffer(Buffer, NewSize)
 
 post(Buffer, Msg) ->
     Buffer ! {post, Msg}.
+
+max_size(Buffer) ->
+    gen_fsm:sync_send_all_state_event(Buffer, max_size).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
@@ -188,6 +191,8 @@ handle_event(_Event, StateName, State) ->
     {next_state, StateName, State, ?HIBERNATE_TIMEOUT}.
 
 %% @private
+handle_sync_event(max_size, _From, StateName, State=#state{buf=Buf}) ->
+    {reply, logplex_msg_buffer:max_size(Buf), StateName, State};
 handle_sync_event({resize_msg_buffer, NewSize}, _From, StateName, State=#state{buf=Buf}) ->
     NewBuf = logplex_msg_buffer:resize(NewSize, Buf),
     {reply, ok, StateName, State#state{buf=NewBuf}, ?HIBERNATE_TIMEOUT};
