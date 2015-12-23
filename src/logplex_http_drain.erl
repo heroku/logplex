@@ -650,7 +650,7 @@ close_if_idle(State = #state{client = Client}) ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
                   log_info(State, [])),
             logplex_http_client:close(Client),
-            {closed, State#state{client=undefined}};
+            {closed, State#state{client=undefined, last_good_time=never}};
         _ ->
             {not_closed, State}
     end.
@@ -696,7 +696,8 @@ maybe_shrink(State = #state{last_good_time=never}) ->
     State#state{service=degraded};
 maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) ->
     MsecSinceLastGood = trunc(timer:now_diff(os:timestamp(), LastGood) / 1000),
-    case {MsecSinceLastGood > ?SHRINK_TIMEOUT, Status} of
+    ShrinkTimeout = logplex_app:config(http_drain_shrink_timeout, ?SHRINK_TIMEOUT),
+    case {MsecSinceLastGood > ShrinkTimeout, Status} of
         {true, normal} ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
                   " service=~p time_since_last_good=~p",
