@@ -11,6 +11,8 @@ groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                              full_buffer_temp_fail, full_stack]},
              {drain_buf, [], [restart_drain_buf, shrink]}].
 
+
+-type drop_info() :: {erlang:timestamp(), pos_integer()}.
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
                 channel_id :: logplex_channel:id(),
@@ -20,11 +22,12 @@ groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
                 out_q = queue:new() :: queue(),
                 reconnect_tref :: reference() | 'undefined',
                 reconnect_attempt = 0 :: pos_integer(),
-                idle_tref :: reference() | 'undefined',
-                drop_info,
+                close_tref :: reference() | 'undefined',
+                drop_info :: drop_info() | 'undefined',
                 %% Last time we connected or successfully sent data
                 last_good_time = never :: 'never' | erlang:timestamp(),
                 service = normal :: 'normal' | 'degraded',
+                %% Time of last successful connection
                 connect_time :: 'undefined' | erlang:timestamp()
                }).
 
@@ -61,6 +64,11 @@ init_per_testcase(close_max_ttl, Config) ->
     application:set_env(logplex, http_drain_max_ttl, 100),
     Tab = init_http_mocks(),
     init_config(Config, Tab);
+init_per_testcase(shrink, Config) ->
+    application:set_env(logplex, http_drain_idle_timeout, 50),
+    application:set_env(logplex, http_drain_idle_fuzz, 1),
+    application:set_env(logplex, http_drain_shrink_timeout, 50),
+    init_per_testcase('_', Config);
 init_per_testcase(_, Config) ->
     Tab = init_http_mocks(),
     Ref = mock_drain_buffer(),
@@ -314,9 +322,12 @@ restart_drain_buf(Config) ->
     false = Buf0 =:= Buf1.
 
 shrink(Config) ->
+    ChannelId = ?config(channel, Config),
     Buf = ?config(buffer, Config),
+    CloseTref = make_ref(),
     State1 = #state{last_good_time={0,0,0},
                     buf = Buf,
+                    close_tref=CloseTref,
                     uri = ?config(uri, Config),
                     service=normal},
     meck:expect(logplex_http_client, start_link,
@@ -346,9 +357,27 @@ shrink(Config) ->
     Res2 = logplex_http_drain:disconnected({logplex_drain_buffer, Buf, new_data}, State2),
     {next_state, connected, State3=#state{service=degraded}, _} = Res2,
     Res3 = logplex_http_drain:connected({logplex_drain_buffer, Buf, {frame,<<"log lines">>, 15, 3}}, State3),
-    {next_state, connected, #state{service=normal}, _} = Res3,
+    {next_state, connected, State4=#state{service=normal}, _} = Res3,
     %% The buffer was resized
-    wait_for_mocked_call(logplex_drain_buffer, resize_msg_buffer, ['_',Val], 1, 1000).
+    wait_for_mocked_call(logplex_drain_buffer, resize_msg_buffer, ['_',Val], 1, 1000),
+
+    %% simulate idle connection timeout
+    meck:unload(logplex_drain_buffer),
+    {ok, Buffer} = logplex_drain_buffer:start_link(ChannelId),
+    State5 = State4#state{client={connected,client}, buf=Buffer, last_good_time={0,0,0}, close_tref=CloseTref},
+    ct:pal("Mocking idle timeout now ~p", [State5]),
+    Res4 = logplex_http_drain:connected({timeout, CloseTref, close_timeout}, State5),
+    
+    ct:pal("Result was: ~p", [Res4]),
+    {next_state, disconnected, State6=#state{client=undefined, service=normal}, hibernate} = Res4,
+
+    meck:expect(logplex_http_client, raw_request,
+                fun(_Pid, _Req, _Timeout) ->
+                        {ok, 504, []}
+                end),
+    logplex_http_drain:connected({logplex_drain_buffer, Buffer, {frame,<<"log lines">>, 15, 3}}, State6),
+    1024 = logplex_drain_buffer:max_size(Buffer),
+    ok.
 
 close_max_ttl(Config) ->
     ChannelId = ?config(channel, Config),
@@ -422,4 +451,4 @@ wait_for_dead_proc(Pid) ->
     end.
 
 fake_msg(M) ->
-    {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M}.
+    {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M ++ "\n"}.
