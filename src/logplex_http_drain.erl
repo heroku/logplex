@@ -150,7 +150,7 @@ disconnected(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, disconnected, S, hibernate};
 disconnected({timeout, _Ref, ?CLOSE_TIMEOUT_MSG}, State) ->
-    {next_state, disconnected, State, hibernate};
+    {next_state, disconnected, State#state{last_good_time=never}, hibernate};
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=disconnected",
@@ -252,10 +252,6 @@ handle_info({'EXIT', ClientPid, Reason}, StateName,
           "state=~p client_pid=~p err=~1000p",
           log_info(State, [StateName, ClientPid, Reason])),
     {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
-
-%% close_timeout used to be called idle_timeout; remove once we are on v72+
-handle_info({timeout, TRef, idle_timeout}, StateName, State) ->
-    apply(?MODULE, StateName, [{timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State]);
 
 handle_info(timeout, StateName, State) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
@@ -526,7 +522,7 @@ msg_stat(Key, N,
 %% and enqueue it.
 push_frame(FrameData, MsgCount, Lost, State = #state{out_q = Q})
   when not is_record(FrameData, frame) ->
-    Retries = logplex_app:config(http_frame_retries, 1),
+    Retries = logplex_app:config(http_frame_retries, 2),
     Tries = Retries + 1,
     Frame = #frame{frame=FrameData, msg_count=MsgCount,
                    loss_count=Lost,
@@ -629,10 +625,13 @@ ltcy(Start, End) ->
 
 start_close_timer(State=#state{close_tref = CloseTRef}) ->
     cancel_timeout(CloseTRef, ?CLOSE_TIMEOUT_MSG),
-    MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
-    Fuzz = random:uniform(logplex_app:config(http_drain_idle_fuzz, 15000)),
+    MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(4)),
+    Fuzz = random:uniform(max_idle_fuzz()),
     NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?CLOSE_TIMEOUT_MSG),
     State#state{close_tref = NewTimer}.
+
+max_idle_fuzz() ->
+    logplex_app:config(http_drain_idle_fuzz, 15000).
 
 compare_point(#state{last_good_time=never, connect_time=ConnectTime}) ->
     ConnectTime;
@@ -696,8 +695,7 @@ maybe_shrink(State = #state{last_good_time=never}) ->
     State#state{service=degraded};
 maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) ->
     MsecSinceLastGood = trunc(timer:now_diff(os:timestamp(), LastGood) / 1000),
-    ShrinkTimeout = logplex_app:config(http_drain_shrink_timeout, ?SHRINK_TIMEOUT),
-    case {MsecSinceLastGood > ShrinkTimeout, Status} of
+    case {MsecSinceLastGood > shrink_timeout(), Status} of
         {true, normal} ->
             ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
                   " service=~p time_since_last_good=~p",
@@ -710,5 +708,8 @@ maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) -
                   log_info(State, [Status, MsecSinceLastGood])),
             State#state{service=Status}
     end.
+
+shrink_timeout() ->
+    erlang:max(max_idle_fuzz(), logplex_app:config(http_drain_shrink_timeout, ?SHRINK_TIMEOUT)).
 
 default_buf_size() -> logplex_app:config(http_drain_buffer_size, 1024).

@@ -361,11 +361,11 @@ shrink(Config) ->
     %% The buffer was resized
     wait_for_mocked_call(logplex_drain_buffer, resize_msg_buffer, ['_',Val], 1, 1000),
 
-    %% simulate idle connection timeout
+    %% simulate idle connection timeout while connection is open
     meck:unload(logplex_drain_buffer),
     {ok, Buffer} = logplex_drain_buffer:start_link(ChannelId),
     State5 = State4#state{client={connected,client}, buf=Buffer, last_good_time={0,0,0}, close_tref=CloseTref},
-    ct:pal("Mocking idle timeout now ~p", [State5]),
+    ct:pal("Mocking connected idle timeout now ~p", [State5]),
     Res4 = logplex_http_drain:connected({timeout, CloseTref, close_timeout}, State5),
     
     ct:pal("Result was: ~p", [Res4]),
@@ -376,6 +376,22 @@ shrink(Config) ->
                         {ok, 504, []}
                 end),
     logplex_http_drain:connected({logplex_drain_buffer, Buffer, {frame,<<"log lines">>, 15, 3}}, State6),
+    1024 = logplex_drain_buffer:max_size(Buffer),
+
+    %% simulate idle connection timeout while connection is closed
+    meck:unload(logplex_http_client),
+    State7 = State6#state{client=undefined, buf=Buffer, last_good_time={0,0,0}, close_tref=CloseTref},
+    ct:pal("Mocking disconnected idle timeout now ~p", [State7]),
+    Res5 = logplex_http_drain:disconnected({timeout, CloseTref, close_timeout}, State7),
+    
+    ct:pal("Result was: ~p", [Res5]),
+    {next_state, disconnected, State8=#state{last_good_time=never, service=normal}, hibernate} = Res5,
+
+    meck:expect(logplex_http_client, raw_request,
+                fun(_Pid, _Req, _Timeout) ->
+                        {ok, 504, []}
+                end),
+    logplex_http_drain:disconnected({logplex_drain_buffer, Buffer, {frame,<<"log lines">>, 15, 3}}, State8),
     1024 = logplex_drain_buffer:max_size(Buffer),
     ok.
 

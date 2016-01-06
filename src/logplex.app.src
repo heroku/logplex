@@ -40,7 +40,7 @@
     ,{http_body_checksum, none} % none | md5
     ,{http_drain_buffer_size, 1024} % messages
     ,{http_drain_target_bytes, 102400} % bytes
-    ,{http_frame_retries, 1} % #extra attempts after first
+    ,{http_frame_retries, 2} % #extra attempts after first
     ,{http_log_input_port, 8601} % syslog/http tcp listen port
     ,{http_port, 8001}
     ,{http_reconnect_time, 10} % ms
@@ -71,7 +71,7 @@
     ,{tcp_syslog_reconnect_min, 30} % seconds
     ,{tcp_syslog_send_loss_msg, send} % send | dont_send
     ,{tcp_syslog_send_timeout_secs, 4} % seconds
-    ,{tcp_syslog_idle_timeout, 300000} % ms
+    ,{tcp_syslog_idle_timeout, 240000} % ms
     ,{tcp_syslog_idle_fuzz, 15000} % ms
     ,{tcp_syslog_max_ttl, 18000000} % ms
     ,{tcp_syslog_shrink_after, 10} % retry attempts
