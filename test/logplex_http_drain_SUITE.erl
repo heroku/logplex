@@ -12,6 +12,10 @@ groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
              {drain_buf, [], [restart_drain_buf, shrink]}].
 
 
+-ifdef(namespaced_types).
+-type queue() :: queue:queue().
+-endif.
+
 -type drop_info() :: {erlang:timestamp(), pos_integer()}.
 -record(state, {drain_id :: logplex_drain:id(),
                 drain_tok :: logplex_drain:token(),
@@ -221,7 +225,7 @@ full_buffer_temp_fail(Config) ->
 
     %% Here the drain should try connecting (and succeeding through mocks)
     %% and then set the buffer to active
-    1 = logplex_app:config(http_frame_retries, 1),
+    2 = logplex_app:config(http_frame_retries, 2),
     %% We send the message but expect it to fail 3 times before finally
     %% getting a 200 status code back.
     client_call_status(Client, {3, 500, 200}),
