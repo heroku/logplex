@@ -151,8 +151,8 @@ disconnected({logplex_drain_buffer, Buf, {frame, Frame, MsgCount, Lost}},
 disconnected(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, disconnected, S, hibernate};
-disconnected({timeout, _Ref, ?CLOSE_TIMEOUT_MSG}, State) ->
-    {next_state, disconnected, State#state{last_good_time=never}, hibernate};
+disconnected({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
+    handle_close_timeout_msg(disconnected, State);
 disconnected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=disconnected",
@@ -170,17 +170,7 @@ connected(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, connected, S, hibernate};
 connected({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
-    case close_if_idle(State) of
-        {closed, ClosedState} ->
-            {next_state, disconnected, ClosedState, hibernate};
-        {not_closed, State} ->
-            case close_if_old(State) of
-                {closed, ClosedState} ->
-                    {next_state, disconnected, ClosedState, hibernate};
-                {not_closed, ContinueState} ->
-                    {next_state, connected, ContinueState}
-            end
-    end;
+    handle_close_timeout_msg(connected, State);
 connected(Msg, State) ->
     ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
           "data=\"~1000p\" state=connected",
@@ -262,6 +252,23 @@ handle_info(timeout, StateName, State) ->
 handle_info(Info, StateName, State) ->
     ?MODULE:StateName(Info, State).
 
+%% @private
+handle_close_timeout_msg(StateName, State) ->
+    case close_if_idle(State) of
+        {closed, ClosedState} ->
+            ?INFO("drain_id=~p channel_id=~p dest=~s state=~s at=idle_timeout",
+                  log_info(State, [StateName])),
+            {next_state, disconnected, ClosedState, hibernate};
+        {not_closed, State} ->
+            case close_if_old(State) of
+                {closed, ClosedState} ->
+                    ?INFO("drain_id=~p channel_id=~p dest=~s state=~s at=max_ttl",
+                          log_info(State, [StateName])),
+                    {next_state, disconnected, ClosedState, hibernate};
+                {not_closed, ContinueState} ->
+                    {next_state, connected, ContinueState}
+            end
+    end.
 
 
 %% @private
@@ -648,8 +655,6 @@ connection_idle(State) ->
 close_if_idle(State = #state{client = Client}) ->
     case connection_idle(State) of
         true ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
-                  log_info(State, [])),
             logplex_http_client:close(Client),
             {closed, State#state{client=undefined, last_good_time=never}};
         _ ->
@@ -664,8 +669,6 @@ connection_too_old(#state{connect_time = ConnectTime}) ->
 close_if_old(State = #state{client = Client}) ->
     case connection_too_old(State) of
         true ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=max_ttl",
-                  log_info(State, [])),
             logplex_http_client:close(Client),
             {closed, State#state{client=undefined}};
         _ ->
