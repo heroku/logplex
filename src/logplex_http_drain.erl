@@ -264,7 +264,7 @@ handle_close_timeout_msg(StateName, State) ->
                           log_info(State, [StateName])),
                     {next_state, disconnected, ClosedState, hibernate};
                 {not_closed, ContinueState} ->
-                    {next_state, connected, ContinueState}
+                    {next_state, StateName, ContinueState}
             end
     end.
 
