@@ -192,13 +192,8 @@ set_cookie() ->
     end.
 
 read_git_branch() ->
-    GitOutput = hd(string:tokens(os:cmd("git status"), "\n")),
-    case re:run(GitOutput, "On branch (\\S+)", [{capture, all_but_first, list}]) of
-        {match,[Branch]} ->
-            set_config(git_branch, Branch);
-        _ ->
-            set_config(git_branch, "unknown")
-    end.
+    [Branch] = string:tokens(os:cmd("git describe --tags --abbrev=0"), "\n"),
+    set_config(git_branch, Branch).
 
 read_availability_zone() ->
     Url = "http://169.254.169.254/latest/meta-data/placement/availability-zone",
