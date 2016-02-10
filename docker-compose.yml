@@ -9,7 +9,7 @@ db:
 base:
   command: /bin/true
   build: .
-console:
+logplex_console:
   image: logplex_base
   command: ./_build/default/rel/logplex/bin/logplex console
   hostname: logplex
@@ -21,6 +21,11 @@ console:
     - logplex.env
   volumes_from:
     - base
+  volumes:
+    - ./_build:/usr/src/app/_build
+    - ./src:/usr/src/app/src
+    - ./rebar.config:/usr/src/app/rebar.config
+    - ./Makefile:/usr/src/app/Makefile
   ports:
     - "8001:8001"
     - "8601:8601"
@@ -49,6 +54,7 @@ compile:
   command: env REBAR=rebar3 make compile
   image: logplex_base
   volumes:
+    - ./_build:/usr/src/app/_build
     - ./src:/usr/src/app/src
     - ./rebar.config:/usr/src/app/rebar.config
     - ./Makefile:/usr/src/app/Makefile

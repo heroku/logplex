@@ -10,17 +10,40 @@ On the other end of the spectrum, consumers may subscribe to a logplex instance,
 
 For more details, you can look at stream management documentation in `doc/`.
 
-# Table of Contents
+<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-generate-toc again -->
+**Table of Contents**
 
-1. [Erlang Version Reqirements](#erlang-version-requirements)
-1. [Local Build](#local-build)
-1. [Docker Build](#docker-build)
-2. [Local Test](#local-test)
-2. [Docker Test](#docker-test)
-3. [Develop](#develop)
-4. [Supervision Tree](#supervision-tree)
-5. [Processes](#processes)
-6. [Realtime Metrics](#realtime-metrics)
+- [Logplex](#logplex)
+- [Erlang Version Requirements](#erlang-version-requirements)
+- [Development](#development)
+    - [Local Build](#local-build)
+    - [Docker Build](#docker-build)
+    - [Local Test](#local-test)
+    - [Docker Test](#docker-test)
+    - [Local Develop](#local-develop)
+    - [Docker develop](#docker-develop)
+    - [Data setup](#data-setup)
+- [Supervision Tree](#supervision-tree)
+- [Processes](#processes)
+    - [-](#-)
+    - [config_redis](#configredis)
+    - [logplex_drain_sup](#logplexdrainsup)
+    - [nsync](#nsync)
+    - [redgrid](#redgrid)
+    - [logplex_realtime](#logplexrealtime)
+    - [logplex_stats](#logplexstats)
+    - [logplex_tail](#logplextail)
+    - [logplex_redis_writer_sup](#logplexrediswritersup)
+    - [logplex_read_queue_sup](#logplexreadqueuesup)
+    - [logplex_reader_sup](#logplexreadersup)
+    - [logplex_shard](#logplexshard)
+    - [logplex_api](#logplexapi)
+    - [logplex_syslog_sup](#logplexsyslogsup)
+    - [logplex_logs_rest](#logplexlogsrest)
+- [Realtime Metrics](#realtime-metrics)
+
+<!-- markdown-toc end -->
+
 
 # Erlang Version Requirements
 
@@ -28,11 +51,13 @@ As of Logplex v93, Logplex requires Erlang 18. Logplex is currently tested again
 
 Prior versions of Logplex are designed to run on R16B03 and 17.x.
 
-# Local Build
+# Development
+
+## Local Build
 
     $ ./rebar3 as public compile
 
-# Docker Build
+## Docker Build
 
 Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
 Follow the [installations](https://docs.docker.com/installation/#installation)
@@ -40,7 +65,7 @@ steps outlined docs.docker.com.
 
     docker-compose build
 
-# Local Test
+## Local Test
 
 Given an empty local redis (v2.6ish):
 
@@ -56,11 +81,11 @@ Given an empty local redis (v2.6ish):
 
 Runs the common test suite for logplex.
 
-# Docker Test
+## Docker Test
 
     docker-compose run test
 
-# Develop
+## Local Develop
 
 run
 
@@ -71,6 +96,16 @@ run
       LOGPLEX_COOKIE=123 \
       LOGPLEX_AUTH_KEY=123 \
       erl -name logplex@`hostname` -pa ebin -env ERL_LIBS deps -s logplex_app -setcookie ${LOGPLEX_COOKIE} -config sys
+
+## Docker develop
+
+```
+docker-compose run compile
+...
+docker-compose run --service-ports logplex_console
+```
+
+## Data setup
 
 create creds
 
