@@ -9,6 +9,18 @@ db:
 base:
   command: /bin/true
   build: .
+fastcompilebase:
+  image: logplex_base
+  volumes:
+    - ./_build:/usr/src/app/_build
+    - ./src:/usr/src/app/src
+    - ./rebar.config:/usr/src/app/rebar.config
+    - ./Makefile:/usr/src/app/Makefile
+compile:
+  command: env REBAR=rebar3 make compile
+  image: logplex_base
+  volumes_from:
+    - fastcompilebase
 console:
   image: logplex_base
   command: ./_build/default/rel/logplex/bin/logplex console
@@ -20,12 +32,7 @@ console:
   env_file:
     - logplex.env
   volumes_from:
-    - base
-  volumes:
-    - ./_build:/usr/src/app/_build
-    - ./src:/usr/src/app/src
-    - ./rebar.config:/usr/src/app/rebar.config
-    - ./Makefile:/usr/src/app/Makefile
+    - fastcompilebase
   ports:
     - "8001:8001"
     - "8601:8601"
@@ -50,16 +57,6 @@ logplex:
     - "6001:6001"
   links:
     - db
-compile:
-  command: env REBAR=rebar3 make compile
-  image: logplex_base
-  volumes:
-    - ./_build:/usr/src/app/_build
-    - ./src:/usr/src/app/src
-    - ./rebar.config:/usr/src/app/rebar.config
-    - ./Makefile:/usr/src/app/Makefile
-  volumes_from:
-    - base
 test:
   image: logplex_base
   command: make test
