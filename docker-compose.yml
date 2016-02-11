@@ -9,7 +9,7 @@ db:
 base:
   command: /bin/true
   build: .
-logplex_console:
+console:
   image: logplex_base
   command: ./_build/default/rel/logplex/bin/logplex console
   hostname: logplex

@@ -102,7 +102,7 @@ run
 ```
 docker-compose run compile
 ...
-docker-compose run --service-ports logplex_console
+docker-compose run --service-ports console
 ```
 
 ## Data setup
