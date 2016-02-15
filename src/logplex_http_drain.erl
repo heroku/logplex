@@ -27,6 +27,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
 -define(HIBERNATE_TIMEOUT, 5000).
+-define(IDLE_TIMEOUT, timer:minutes(4)).
 -define(SHRINK_TIMEOUT, timer:minutes(5)).
 -define(SHRINK_BUF_SIZE, 10).
 
@@ -634,7 +635,7 @@ ltcy(Start, End) ->
 
 start_close_timer(State=#state{close_tref = CloseTRef}) ->
     cancel_timeout(CloseTRef, ?CLOSE_TIMEOUT_MSG),
-    MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(4)),
+    MaxIdle = idle_timeout(),
     Fuzz = random:uniform(max_idle_fuzz()),
     NewTimer = erlang:start_timer(MaxIdle + Fuzz, self(), ?CLOSE_TIMEOUT_MSG),
     State#state{close_tref = NewTimer}.
@@ -648,7 +649,7 @@ compare_point(#state{last_good_time=LastGood}) ->
     LastGood.
 
 connection_idle(State) ->
-    MaxIdle = logplex_app:config(http_drain_idle_timeout, timer:minutes(5)),
+    MaxIdle = idle_timeout(),
     SinceLastGoodMicros = timer:now_diff(os:timestamp(), compare_point(State)),
     SinceLastGoodMicros > (MaxIdle * 1000).
 
@@ -713,6 +714,9 @@ maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) -
                   log_info(State, [Status, MsecSinceLastGood])),
             State#state{service=Status}
     end.
+
+idle_timeout() ->
+    logplex_app:config(http_drain_idle_timeout, ?IDLE_TIMEOUT).
 
 shrink_timeout() ->
     erlang:max(max_idle_fuzz(), logplex_app:config(http_drain_shrink_timeout, ?SHRINK_TIMEOUT)).
