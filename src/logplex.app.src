@@ -75,7 +75,7 @@
     ,{tcp_syslog_idle_fuzz, 15000} % ms
     ,{tcp_syslog_max_ttl, 18000000} % ms
     ,{tcp_syslog_shrink_after, 10} % retry attempts
-    ,{http_drain_idle_timeout, 240000} % ms
+    ,{http_drain_idle_timeout, 144000} % ms
     ,{http_drain_idle_fuzz, 15000} % ms
     ,{http_drain_max_ttl, 18000000} % ms
     ,{workers, 10}
