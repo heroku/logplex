@@ -97,6 +97,7 @@ Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
 Follow the [installations](https://docs.docker.com/installation/#installation)
 steps outlined docs.docker.com.
 ```
+docker-compose run compile
 docker-compose up logplex
 ```
 
