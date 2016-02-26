@@ -100,9 +100,13 @@ run
 ## Docker develop
 
 ```
-docker-compose run compile
-...
-docker-compose run --service-ports logplex
+docker-compose up logplex
+```
+
+To connect to the above logplex Erlang shell:
+
+```
+docker exec -it logplex_logplex_1 bash -c "TERM=xterm bin/connect"
 ```
 
 ## Data setup
