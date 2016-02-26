@@ -97,13 +97,14 @@ Requires a working install of Docker and Docker Compose.
 Follow the [installations](https://docs.docker.com/installation/#installation)
 steps outlined docs.docker.com.
 ```
+docker-compose run compile
 docker-compose up logplex
 ```
 
 To connect to the above logplex Erlang shell:
 
 ```
-docker exec -it logplex_logplex_1 bash -c "TERM=xterm bin/compose_connect"
+docker exec -it logplex_logplex_1 bash -c "TERM=xterm bin/connect"
 ```
 
 ### test
