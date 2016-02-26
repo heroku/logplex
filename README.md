@@ -63,7 +63,7 @@ Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
 Follow the [installations](https://docs.docker.com/installation/#installation)
 steps outlined docs.docker.com.
 
-    docker-compose build
+    docker-compose run compile
 
 ## Local Test
 
@@ -102,7 +102,7 @@ run
 ```
 docker-compose run compile
 ...
-docker-compose run --service-ports console
+docker-compose run --service-ports logplex
 ```
 
 ## Data setup
