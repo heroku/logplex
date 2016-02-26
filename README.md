@@ -93,7 +93,7 @@ Runs the common test suite for logplex.
 
 ### develop
 
-Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
+Requires a working install of Docker and Docker Compose.
 Follow the [installations](https://docs.docker.com/installation/#installation)
 steps outlined docs.docker.com.
 ```
@@ -103,7 +103,7 @@ docker-compose up logplex
 To connect to the above logplex Erlang shell:
 
 ```
-docker exec -it logplex_logplex_1 bash -c "TERM=xterm bin/connect"
+docker exec -it logplex_logplex_1 bash -c "TERM=xterm bin/compose_connect"
 ```
 
 ### test
