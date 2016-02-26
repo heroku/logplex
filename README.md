@@ -16,12 +16,13 @@ For more details, you can look at stream management documentation in `doc/`.
 - [Logplex](#logplex)
 - [Erlang Version Requirements](#erlang-version-requirements)
 - [Development](#development)
-    - [Local Build](#local-build)
-    - [Docker Build](#docker-build)
-    - [Local Test](#local-test)
-    - [Docker Test](#docker-test)
-    - [Local Develop](#local-develop)
-    - [Docker develop](#docker-develop)
+    - [Local development](#local-development)
+        - [build](#build)
+        - [develop](#develop)
+        - [test](#test)
+    - [Docker development](#docker-development)
+        - [develop](#develop)
+        - [test](#test)
     - [Data setup](#data-setup)
 - [Supervision Tree](#supervision-tree)
 - [Processes](#processes)
@@ -53,19 +54,26 @@ Prior versions of Logplex are designed to run on R16B03 and 17.x.
 
 # Development
 
-## Local Build
+## Local development
+
+### build
 
     $ ./rebar3 as public compile
+    
+### develop
 
-## Docker Build
+run
 
-Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
-Follow the [installations](https://docs.docker.com/installation/#installation)
-steps outlined docs.docker.com.
+    $ INSTANCE_NAME=`hostname` \
+      LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
+      LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379" \
+      LOCAL_IP="127.0.0.1" \
+      LOGPLEX_COOKIE=123 \
+      LOGPLEX_AUTH_KEY=123 \
+      erl -name logplex@`hostname` -pa ebin -env ERL_LIBS deps -s logplex_app -setcookie ${LOGPLEX_COOKIE} -config sys
 
-    docker-compose run compile
 
-## Local Test
+### test
 
 Given an empty local redis (v2.6ish):
 
@@ -81,24 +89,13 @@ Given an empty local redis (v2.6ish):
 
 Runs the common test suite for logplex.
 
-## Docker Test
+## Docker development
 
-    docker-compose run test
+### develop
 
-## Local Develop
-
-run
-
-    $ INSTANCE_NAME=`hostname` \
-      LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
-      LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379" \
-      LOCAL_IP="127.0.0.1" \
-      LOGPLEX_COOKIE=123 \
-      LOGPLEX_AUTH_KEY=123 \
-      erl -name logplex@`hostname` -pa ebin -env ERL_LIBS deps -s logplex_app -setcookie ${LOGPLEX_COOKIE} -config sys
-
-## Docker develop
-
+Requires a working install of Docker (boot2docker on OS X) and Docker Compose.
+Follow the [installations](https://docs.docker.com/installation/#installation)
+steps outlined docs.docker.com.
 ```
 docker-compose up logplex
 ```
@@ -108,6 +105,10 @@ To connect to the above logplex Erlang shell:
 ```
 docker exec -it logplex_logplex_1 bash -c "TERM=xterm bin/connect"
 ```
+
+### test
+
+    docker-compose run test
 
 ## Data setup
 
