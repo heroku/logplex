@@ -21,6 +21,7 @@
                   ,ranch
                   ,lager
                   ,batchio
+                  ,syslog
                   ,folsom
                   ,folsom_cowboy
                   ,ssl_verify_hostname

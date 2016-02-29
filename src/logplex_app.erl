@@ -57,6 +57,7 @@ start() ->
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    logplex_logging:setup(),
     ?INFO("at=start", []),
     cache_os_envvars(),
     heroku_crashdumps_app:start(),

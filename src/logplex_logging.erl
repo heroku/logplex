@@ -5,7 +5,8 @@
 %% @end
 -module(logplex_logging).
 
--export([dest/2]).
+-export([dest/2
+        ,setup/0]).
 
 -type host() :: inet:ip4_address() | iolist() | binary().
 
@@ -20,3 +21,11 @@ host_str({A,B,C,D}) ->
 host_str(H)
   when is_list(H); is_binary(H) ->
     H.
+
+setup() ->
+    create_ets_table().
+
+% TODO: stop hard-coding config here.
+create_ets_table() ->
+    syslog_lib:init_table(
+      syslog_tab, logplex, "localhost", 514, local0, "localhost").

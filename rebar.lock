@@ -101,4 +101,8 @@
  {<<"ssl_verify_hostname">>,
   {git,"https://github.com/deadtrickster/ssl_verify_hostname.erl.git",
        {ref,"1105981e2c3afb40dcda46163aa54c3f931a1e0b"}},
+  0},
+ {<<"syslog">>,
+  {git,"https://github.com/heroku/erlang_syslog",
+       {ref,"0cfef5a95150e11f60fee5c35b24decfcc41066e"}},
   0}].
