@@ -82,8 +82,9 @@ Requires a working install of Docker and Docker Compose.
 Follow the [installations](https://docs.docker.com/installation/#installation)
 steps outlined docs.docker.com.
 ```
-docker-compose run compile
-docker-compose up logplex
+docker-compose build         # Run once
+docker-compose run compile   # Run everytime source files change
+docker-compose up logplex    # Run logplex post-compilation
 ```
 
 To connect to the above logplex Erlang shell:
