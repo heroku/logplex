@@ -8,6 +8,13 @@
 -export([dest/2
         ,setup/0]).
 
+-include("logplex_logging.hrl").
+
+-define(SYSLOG_TAB, syslog_tab).
+-define(SYSLOG_HOST, {127, 0, 0, 1}).
+-define(SYSLOG_PORT, 514).
+-define(SYSLOG_FACILITY, local2).
+
 -type host() :: inet:ip4_address() | iolist() | binary().
 
 -spec dest(host(), inet:port_number()) -> binary().
@@ -22,10 +29,20 @@ host_str(H)
   when is_list(H); is_binary(H) ->
     H.
 
-setup() ->
-    create_ets_table().
+-ifdef(LOG_TO_SYSLOG).
 
-% TODO: stop hard-coding config here.
-create_ets_table() ->
+setup() ->
+    io:format("Setting up syslog logging~n"),
+    {ok, HostName} = inet:gethostname(),
     syslog_lib:init_table(
-      syslog_tab, logplex, "localhost", 514, local0, "localhost").
+      ?SYSLOG_TAB,
+      logplex,
+      ?SYSLOG_HOST,
+      ?SYSLOG_PORT,
+      ?SYSLOG_FACILITY,
+      HostName).
+
+-else.
+setup() ->
+    io:format("Using batchio logging~n").
+-endif.
