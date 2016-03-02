@@ -7,7 +7,7 @@
 -compile([{parse_transform, lager_transform}]).
 
 %% Uncomment this to use batchio logging
--define(LOG_TO_SYSLOG, true).
+%% -define(LOG_TO_SYSLOG, true).
 
 -define(LOGGING_ARGS(LEVEL, FORMAT, ARGS),
         "pid=~p m=~p ln=~p class=~s " ++ FORMAT ++ "~n", [self(), ?MODULE, ?LINE, LEVEL | ARGS]).
