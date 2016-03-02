@@ -1,2 +1,2 @@
-web: RELX_REPLACE_OS_VARS=true _build/default/rel/logplex/bin/logplex foreground
+web: RELX_REPLACE_OS_VARS=true _build/production/rel/logplex/bin/logplex foreground
 redis: redis-server
