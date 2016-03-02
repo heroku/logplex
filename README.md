@@ -58,19 +58,34 @@ Prior versions of Logplex are designed to run on R16B03 and 17.x.
 
 ### build
 
-    $ make compile
+    $ ./rebar3 as public compile
     
 ### develop
 
 run
 
-    $ forego start
+    $ INSTANCE_NAME=`hostname` \
+      LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
+      LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379" \
+      LOCAL_IP="127.0.0.1" \
+      LOGPLEX_COOKIE=123 \
+      LOGPLEX_AUTH_KEY=123 \
+      erl -name logplex@`hostname` -pa ebin -env ERL_LIBS deps -s logplex_app -setcookie ${LOGPLEX_COOKIE} -config sys
+
 
 ### test
 
 Given an empty local redis (v2.6ish):
 
-    $ make test
+    $ ./rebar3 as public,test compile
+    $ INSTANCE_NAME=`hostname` \
+      LOGPLEX_CONFIG_REDIS_URL="redis://localhost:6379" \
+      LOGPLEX_SHARD_URLS="redis://localhost:6379" \
+      LOGPLEX_REDGRID_REDIS_URL="redis://localhost:6379" \
+      LOCAL_IP="127.0.0.1" \
+      LOGPLEX_COOKIE=123 \
+      ERL_LIBS=`pwd`/deps/:$ERL_LIBS \
+      ct_run -spec logplex.spec -pa ebin
 
 Runs the common test suite for logplex.
 
