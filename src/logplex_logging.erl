@@ -10,11 +10,6 @@
 
 -include("logplex_logging.hrl").
 
--define(SYSLOG_TAB, syslog_tab).
--define(SYSLOG_HOST, {127, 0, 0, 1}).
--define(SYSLOG_PORT, 514).
--define(SYSLOG_FACILITY, local2).
-
 -type host() :: inet:ip4_address() | iolist() | binary().
 
 -spec dest(host(), inet:port_number()) -> binary().
@@ -30,16 +25,17 @@ host_str(H)
     H.
 
 -ifdef(LOG_TO_SYSLOG).
-
 setup() ->
-    io:format("Setting up syslog logging~n"),
+    Host = logplex_app:config(logging_syslog_host),
+    Port = logplex_app:config(logging_syslog_port),
+    io:format("Setting up syslog logging on ~p:~p~n", [Host, Port]),
     {ok, HostName} = inet:gethostname(),
     syslog_lib:init_table(
-      ?SYSLOG_TAB,
+      logplex_app:config(logging_syslog_tab),
       logplex,
-      ?SYSLOG_HOST,
-      ?SYSLOG_PORT,
-      ?SYSLOG_FACILITY,
+      Host,
+      Port,
+      logplex_app:config(logging_syslog_facility),
       HostName).
 
 -else.
