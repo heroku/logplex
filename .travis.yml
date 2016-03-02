@@ -17,9 +17,9 @@ script:
 notifications:
   email: false
   hipchat:
-    rooms:
-      secure: JpswqIXnvSfUTHo6IEuTygGlYj4okzeYJAoNAAd+REayScJFRf7YquS4rb/qjsCmfoiJ6SfqxB87zbiQMT/5XfuaNZf8n8qG/+Ayd+AGzGamCMMjvB86BvZG7nrBSPZ4vgcfnjdOuE3cwzVY1x3WPk1AuDrDe2nLgi8STpHPUa4=
     template:
-    - '%{repository}#%{build_number} (%{branch} - %{commit} : %{author}): %{message}
-      (<a href="%{build_url}">Details</a> | <a href="%{compare_url}">Change view</a>)'
+      - '%{repository}#%{build_number} (%{branch} - %{commit} : %{author}): %{message}
+        (<a href="%{build_url}">Details</a> | <a href="%{compare_url}">Change view</a>)'
     format: html
+    rooms:
+      - secure: "jiQSY6tkCyATKVw8azHyWg1yVD95bsNorzUaC3sDkbLJqNDqGL1Zhiz3OOAMdEdQ+or18nFhhW0cYzMsrqbSuDce6sV9w+khPeIbO4ASgYDJtPqck5P7buhX0ON06Etcz8wVehLgm/LKnRj8E0duyOaHcXhGthfVpvCegzDPH+A="
