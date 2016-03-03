@@ -22,4 +22,4 @@ notifications:
         (<a href="%{build_url}">Details</a> | <a href="%{compare_url}">Change view</a>)'
     format: html
     rooms:
-      - secure: "jiQSY6tkCyATKVw8azHyWg1yVD95bsNorzUaC3sDkbLJqNDqGL1Zhiz3OOAMdEdQ+or18nFhhW0cYzMsrqbSuDce6sV9w+khPeIbO4ASgYDJtPqck5P7buhX0ON06Etcz8wVehLgm/LKnRj8E0duyOaHcXhGthfVpvCegzDPH+A="
+    - secure: "PR3OjYP6aML3f/v9xonW8oASpaU2DGD0LDT/8keH2/PV66gY9MB8Vt6gTMpmEa/XctD5mMn7GCviSjrrZ/abp6NFPembWgAMf/RvBpvBNml8jzRFvzitcwNWwqyZFM9rM2uqJU1SHrPfB2tTKznthAgOZXMc6N0xDa4apK3fR+0="
