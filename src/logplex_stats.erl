@@ -155,27 +155,27 @@ start_timer() ->
     erlang:start_timer(Time, ?MODULE, flush).
 
 log_stat(UnixTS, {drain_stat, DrainId, ChannelId, Key}, Val) ->
-    ?INFO("m=logplex_stats ts=~p channel_id=~p drain_id=~p ~p=~p~n",
+    ?METRIC("m=logplex_stats ts=~p channel_id=~p drain_id=~p ~p=~p~n",
           [UnixTS, ChannelId, DrainId, Key, Val]);
 log_stat(UnixTS, #drain_stat{drain_id=DrainId, drain_type=DrainType, channel_id=ChannelId, key=Key}, Val) ->
-    ?INFO("m=logplex_stats ts=~p channel_id=~p drain_id=~p drain_type=~p ~p=~p~n",
+    ?METRIC("m=logplex_stats ts=~p channel_id=~p drain_id=~p drain_type=~p ~p=~p~n",
           [UnixTS, ChannelId, DrainId, DrainType, Key, Val]);
 
 log_stat(UnixTS, #channel_stat{channel_id=ChannelId, key=Key}, Val) ->
-    ?INFO("m=logplex_stats ts=~p channel_id=~p ~p=~p~n",
+    ?METRIC("m=logplex_stats ts=~p channel_id=~p ~p=~p~n",
           [UnixTS, ChannelId, Key, Val]);
 
 log_stat(UnixTS, #logplex_stat{module=Mod, key=K}, Val) ->
-    ?INFO("m=logplex_stats ts=~p system module=~p ~200p=~p~n",
+    ?METRIC("m=logplex_stats ts=~p system module=~p ~200p=~p~n",
           [UnixTS, Mod, K, Val]);
 
 log_stat(UnixTS, #queue_stat{redis_url=RedisUrl, key=Key}, Val) ->
-    ?INFO("m=logplex_stats ts=~p redis_url=~p ~p=~p~n",
+    ?METRIC("m=logplex_stats ts=~p redis_url=~p ~p=~p~n",
           [UnixTS, RedisUrl, Key, Val]);
 
 log_stat(UnixTS, {Class, Key}, Val) ->
-    ?INFO("m=logplex_stats ts=~p freeform class=~p key=~p count=~p~n",
+    ?METRIC("m=logplex_stats ts=~p freeform class=~p key=~p count=~p~n",
           [UnixTS, Class, Key, Val]);
 
 log_stat(UnixTS, Key, Val) when is_atom(Key); is_list(Key) ->
-    ?INFO("m=logplex_stats ts=~p ~p=~p~n", [UnixTS, Key, Val]).
+    ?METRIC("m=logplex_stats ts=~p ~p=~p~n", [UnixTS, Key, Val]).

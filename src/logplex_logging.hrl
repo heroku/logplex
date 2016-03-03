@@ -22,6 +22,9 @@
 -define(ERR(Format, Args),
         syslog_lib:notice(
           syslog_tab, io_lib:format(?LOGGING_ARGS("err", Format, Args)))).
+-define(METRIC(Format, Args),
+        syslog_lib:notice(
+          syslog_tab, io_lib:format(?LOGGING_ARGS("info", Format, Args)))).
 
 -else.
 -define(INFO(Format, Args),
@@ -30,6 +33,8 @@
         batchio:format(?LOGGING_ARGS("warn", Format, Args))).
 -define(ERR(Format, Args),
         batchio:format(?LOGGING_ARGS("err", Format, Args))).
+-define(METRIC(Format, Args),
+        io:format(user, ?LOGGING_ARGS("info", Format, Args))).
 -endif. %LOG_TO_SYSLOG
 
 -endif. %logging
