@@ -24,8 +24,7 @@ update:
 # 	typer --plt $(HERMES_PLT) -I deps/ -r src
 
 test: REBAR := $(REBAR),test
-test: testclean
-	$(REBAR) release
+test: testclean compile
 	ERL_LIBS=$(ROOT_DIR)/_build/public+test/lib/:${ERL_LIBS} ct_run -spec logplex.spec
 
 clean:
