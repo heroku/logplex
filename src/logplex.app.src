@@ -13,7 +13,7 @@
                   ,mochiweb
                   ,pagerduty
                   ,redo
-                  ,nsync
+                  ,sdiff
                   ,cowboy
                   ,quoted
                   ,gproc
@@ -91,6 +91,8 @@
     ,{tls_cacertfile, "cacert.pem"} % assumes stored in ./priv
     ,{tls_pinned_certfile, "pinned_certs.pem"} % assumes stored in ./priv
     ,{tls_pinned_certs, []} % PEM formatted binary data or DER formatted list
+    ,{tractor_url, "tcp://127.0.0.1:8080"}
+    ,{tractor_timeout, 10000}
    ]}
  ,{start_phases,
    [{listen, []}

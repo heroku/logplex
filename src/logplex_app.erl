@@ -29,8 +29,7 @@
 %% Application callbacks
 -export([start/2, start_phase/3, stop/1]).
 
--export([nsync_opts/0,
-         priv_dir/0,
+-export([priv_dir/0,
          config/0,
          config/1,
          config/2,
@@ -69,7 +68,6 @@ start(_StartType, _StartArgs) ->
     setup_redgrid_vals(),
     setup_redis_shards(),
     logplex_tls:cache_env(),
-    application:start(nsync),
     logplex_sup:start_link().
 
 stop(_State) ->
@@ -129,6 +127,7 @@ cache_os_envvars() ->
                       ,{tls_pinned_certs, ["LOGPLEX_TLS_PINNED_CERTS"],
                         optional,
                         binary}
+                      ,{tractor_url, ["LOGPLEX_TRACTOR_URL"]}
                      ]),
     ok.
 
@@ -245,19 +244,6 @@ setup_redis_shards() ->
 setup_firehose() ->
     logplex_firehose:enable().
 
-nsync_opts() ->
-    RedisUrl = config(config_redis_url),
-    RedisOpts = logplex_utils:parse_redis_url(RedisUrl),
-    Ip = case proplists:get_value(ip, RedisOpts) of
-             {_,_,_,_}=L ->
-                 string:join([integer_to_list(I)
-                              || I <- tuple_to_list(L)], ".");
-             Other -> Other
-         end,
-    RedisOpts1 = proplists:delete(ip, RedisOpts),
-    RedisOpts2 = [{host, Ip} | RedisOpts1],
-    [{callback, {nsync_callback, handle, []}} | RedisOpts2].
-
 a_start(App, Type) ->
     start_ok(App, Type, application:start(App, Type)).
 
@@ -270,7 +256,7 @@ start_ok(App, _Type, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
 
 elb_healthcheck() ->
-    case config(nsync_loaded, false) of
+    case config(tractor_loaded, false) of
         false ->
             unhealthy;
         true ->

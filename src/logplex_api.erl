@@ -43,7 +43,7 @@ start_link() ->
         {name, logplex_api}
     ],
 
-    wait_for_nsync(),
+    wait_for_tractor(),
     ?INFO("at=start", []),
     mochiweb_http:start(Opts).
 
@@ -649,12 +649,12 @@ header_value(Req, Key, Default) ->
         Val -> Val
     end.
 
-wait_for_nsync() ->
-    case application:get_env(logplex, nsync_loaded) of
+wait_for_tractor() ->
+    case application:get_env(logplex, tractor_loaded) of
         {ok, true} -> ok;
         _ ->
             timer:sleep(1000),
-            wait_for_nsync()
+            wait_for_tractor()
     end.
 
 channel_info(ApiVsn, ChannelId) when is_list(ChannelId) ->
