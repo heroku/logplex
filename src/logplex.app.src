@@ -21,6 +21,7 @@
                   ,ranch
                   ,lager
                   ,batchio
+                  ,syslog
                   ,folsom
                   ,folsom_cowboy
                   ,ssl_verify_hostname
@@ -31,7 +32,11 @@
   {mod, {logplex_app, []}},
   {env,
    [
-     {availability_zone, "not-aws"}
+     {logging_syslog_tab, syslog_tab}
+    ,{logging_syslog_host, {127, 0, 0, 1}}
+    ,{logging_syslog_port, 601}
+    ,{logging_syslog_facility, local3}
+    ,{availability_zone, "not-aws"}
     ,{cloud_name, "development"}
     ,{config_redis_url, "redis://localhost:6379"}
     ,{default_redis_poll_ms, 2000} % #ms
