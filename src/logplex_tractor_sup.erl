@@ -5,21 +5,19 @@
 -export([init/1]).
 
 start_link() ->
-    supervisor:start_link(ch_sup, []).
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init(_Args) ->
-    Name = {local, tractor},
-    SupFlags = #{strategy => rest_for_one, intensity => 1, period => 5},
-    ChildSpecs = [#{id => tractor_client,
-                    start => {sdiff_client, start_link, logplex_tractor_cb:sdiff_opts(Name)},
-                    restart => permanent,
-                    shutdown => 2000,
-                    type => worker,
-                    modules => [sdiff_client]},
-                 #{id => tractor_sync,
-                   start => {logplex_tractor_sync, start_link, [Name]},
-                   restart => permanent,
-                   shutdown => 2000,
-                   type => worker,
-                   modules => [logplex_tractor_sync]}],
+    SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
+    logplex_tractor_sync:init_tab(),
+
+    {ok, InitOpts} = logplex_tractor_cb:sdiff_opts(),
+
+    ChildSpecs = [#{id => Name,
+                     start => {logplex_tractor_sync, start_link, [Opts]},
+                     restart => permanent,
+                     shutdown => 2000,
+                     type => worker,
+                     modules => [logplex_tractor_sync]} || [Name | _]=Opts <- InitOpts],
+
     {ok, {SupFlags, ChildSpecs}}.

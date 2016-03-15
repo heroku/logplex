@@ -1,6 +1,7 @@
 -module(logplex_tractor_cb).
 
--export([sdiff_opts/1,
+-export([sdiff_opts/0,
+         opts_for_url/1,
          parse_url/1,
          handle/1]).
 
@@ -9,17 +10,22 @@
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 
+sdiff_opts() ->
+    URLS = logplex_app:config(tractor_shard_urls),
+    {ok, [ opts_for_url(URL) || URL <- URLS ]}.
 
-sdiff_opts(Name) ->
-    {Host, Port} = tractor_callback:parse_url(logplex_app:config(tractor_url)),
+opts_for_url(URL) ->
+    {Host, Port} = parse_url(URL),
     Timeout = logplex_app:config(tractor_timeout),
+    Name = binary_to_atom(iolist_to_binary(io_lib:format("~s:~B", [Host, Port])), utf8),
     [Name,
      fun ?MODULE:handle/1,
      sdiff_access_tcp_client,
      {Host, Port, [], Timeout}].
 
 parse_url(Url) when is_list(Url) ->
-    parse_url(ex_uri:decode(Url));
+    {ok, Decoded, []} = ex_uri:decode(Url),
+    parse_url(Decoded);
 parse_url(#ex_uri{authority=#ex_uri_authority{ host=Host, port=Port }}) ->
     {Host, Port}.
 

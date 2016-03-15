@@ -67,6 +67,7 @@ start(_StartType, _StartArgs) ->
     logplex_realtime:setup_metrics(),
     setup_redgrid_vals(),
     setup_redis_shards(),
+    setup_tractor_shards(),
     logplex_tls:cache_env(),
     logplex_sup:start_link().
 
@@ -127,7 +128,7 @@ cache_os_envvars() ->
                       ,{tls_pinned_certs, ["LOGPLEX_TLS_PINNED_CERTS"],
                         optional,
                         binary}
-                      ,{tractor_url, ["LOGPLEX_TRACTOR_URL"]}
+                      ,{tractor_shard_urls, ["LOGPLEX_TRACTOR_SHARD_URLS"]}
                      ]),
     ok.
 
@@ -240,6 +241,15 @@ setup_redis_shards() ->
            end,
     application:set_env(logplex, logplex_shard_urls,
                         logplex_shard:redis_sort(URLs)).
+
+setup_tractor_shards() ->
+    URLS = case config(tractor_shard_urls) of
+               UrlString when is_list(UrlString), UrlString =/= [] ->
+                   string:tokens(UrlString, ",");
+               _ ->
+                   [config(config_redis_url)]
+           end,
+    application:set_env(logplex, tractor_shard_urls, URLS).
 
 setup_firehose() ->
     logplex_firehose:enable().

@@ -47,7 +47,8 @@ init([]) ->
        ,{logplex_drain_sup,
          {logplex_drain_sup, start_link, []},
          permanent, 2000, supervisor, [logplex_drain_sup]}
-       ,{logplex_tractor_sup, {logplex_tractor_sup, start_link, []},
+       ,{logplex_tractor_sup,
+         {logplex_tractor_sup, start_link, []},
          permanent, 2000, supervisor, [logplex_tractor_sup]}
        ,{redgrid, {redgrid, start_link, []},
          permanent, 2000, worker, [redgrid]}
