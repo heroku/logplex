@@ -100,7 +100,7 @@
   0},
  {<<"sdiff">>,
   {git,"https://github.com/heroku/sdiff.git",
-       {ref,"aa41119e838422d0b7451b51d9b2f557f0d1b5bc"}},
+       {ref,"4eb714495f9cc91d16267729ffb1ec2472983879"}},
   0},
  {<<"ssl_verify_hostname">>,
   {git,"https://github.com/deadtrickster/ssl_verify_hostname.erl.git",
