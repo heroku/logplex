@@ -30,7 +30,7 @@ parse_url(#ex_uri{authority=#ex_uri_authority{ host=Host, port=Port }}) ->
     {Host, Port}.
 
 handle({write, <<"ch:", Rest/binary>>, Val}) ->
-    Id = parse_id(Rest),
+    Id = logplex_channel:binary_to_id(parse_id(Rest)),
     Dict = erlang:binary_to_term(Val),
     create_channel(Id, Dict),
     ?INFO("at=set type=channel id=~p", [Id]);
@@ -79,17 +79,10 @@ handle({delete, _Key}) ->
 
 %% Helper functions
 create_channel(ChannelId, Dict) ->
-    try
-        Name = dict_find(<<"name">>, Dict, <<"">>),
-        Flags = dict_find(<<"flags">>, Dict, <<"">>),
-        logplex_channel:cache(ChannelId, Name,
-                              logplex_channel:binary_to_flags(Flags))
-    catch
-        C:E ->
-            ?WARN("at=create_channel class=~p exception=e stack=~100p",
-                  [C, E, erlang:get_stacktrace()]),
-            {error, {C, E}}
-    end.
+    Name = dict_find(<<"name">>, Dict, <<"">>),
+    Flags = dict_find(<<"flags">>, Dict, <<"">>),
+    logplex_channel:cache(ChannelId, Name,
+                          logplex_channel:binary_to_flags(Flags)).
 
 create_token(Id, Dict) ->
     case find_token(Id, Dict) of
