@@ -265,7 +265,8 @@ handle_close_timeout_msg(StateName, State) ->
                           log_info(State, [StateName])),
                     {next_state, disconnected, ClosedState, hibernate};
                 {not_closed, ContinueState} ->
-                    {next_state, StateName, ContinueState}
+                    NewTimerState = start_close_timer(ContinueState),
+                    {next_state, connected, NewTimerState, hibernate}
             end
     end.
 
@@ -376,7 +377,7 @@ try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
 %% temp failure, so retry the frame.
 handle_response_status(Status, Frame, State, _Latency) when 200 =< Status, Status < 300 ->
     ready_to_send(sent_frame(Frame, State));
-handle_response_status(Status, Frame, State, Latency) when 400 =< Status, Status < 500 ->
+handle_response_status(Status, Frame, State, Latency) when 400 =< Status, Status < 500, Status =/= 429 ->
     ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
           "result=~p status=~p msg_count=~p req_time=~p",
           log_info(State, [perm_fail, Status, Frame#frame.msg_count, Latency])),

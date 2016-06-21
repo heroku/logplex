@@ -87,9 +87,9 @@ process_error(ChannelID, Origin, ?L14, Fmt, Args) ->
     process_error(ChannelID, Origin, ["Error L14 (certificate validation): ", Fmt], Args).
 
 process_error(ChannelID, Origin, Fmt, Args) when is_list(Fmt), is_list(Args) ->
-    HerokuToken = logplex_token:lookup_heroku_token(ChannelID),
+    #token{ id=HerokuToken } = logplex_token:lookup_heroku_token(ChannelID),
     HerokuOrigin = <<"heroku">>,
-    do_process_error({HerokuToken#token.id, HerokuOrigin}, ChannelID, Origin, Fmt, Args).
+    do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args).
 
 do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args) when is_binary(HerokuToken) ->
     Msg = logplex_syslog_utils:fmt(local7,

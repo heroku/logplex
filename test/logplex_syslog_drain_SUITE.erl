@@ -1,6 +1,9 @@
 -module(logplex_syslog_drain_SUITE).
 -include_lib("common_test/include/ct.hrl").
 -include_lib("ex_uri/include/ex_uri.hrl").
+
+-include("../src/logplex.hrl").
+
 -compile(export_all).
 
 -include("logplex_test_helpers.hrl").
@@ -139,10 +142,17 @@ init_logplex_drain(DrainMod, Config0) ->
     ChannelID = 1337,
     DrainID = 31337,
     DrainTok = "d.12930-321-312213-12321",
+    HerokuToken = #token{ id = <<"t.mocked-token">>,
+                          channel_id = ChannelID,
+                          name = <<"heroku">> },
     URI = ?config(drain_uri, Config0),
     {ok, Pid} = DrainMod:start_link(ChannelID, DrainID, DrainTok, URI),
     unlink(Pid),
-    [{channel_id, ChannelID}, {drain_id, DrainID}, {drain_token, DrainTok}, {drain_pid, Pid} | Config0].
+    [{channel_id, ChannelID},
+     {drain_id, DrainID},
+     {drain_token, DrainTok},
+     {heroku_token, HerokuToken},
+     {drain_pid, Pid} | Config0].
 
 end_logplex_drain(Config0) ->
     Drain = ?config(drain_pid, Config0),
@@ -177,7 +187,7 @@ searches_to_max_depth(Config) ->
 
     %% Since we don't have the channel created, we mock things here to deal with
     %% channel not existing condition.
-    meck:expect(logplex_token, lookup_heroku_token, ['_'], <<"t.mocked.token">>),
+    meck:expect(logplex_token, lookup_heroku_token, ['_'], ?config(heroku_token, Config)),
     meck:expect(logplex_channel, lookup_flag, [no_redis, ChannelID], no_such_flag),
 
     meck:expect(logplex_firehose, post_msg, ['_', '_', '_'], ok),
@@ -215,7 +225,7 @@ hostname_verification(Config) ->
 
     %% Since we don't have the channel created, we mock things here to deal with
     %% channel not existing condition.
-    meck:expect(logplex_token, lookup_heroku_token, ['_'], <<"t.mocked.token">>),
+    meck:expect(logplex_token, lookup_heroku_token, ['_'], ?config(heroku_token, Config)),
     meck:expect(logplex_channel, lookup_flag, [no_redis, ChannelID], no_such_flag),
 
     meck:expect(logplex_firehose, post_msg, ['_', '_', '_'], ok),

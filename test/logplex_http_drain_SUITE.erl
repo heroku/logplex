@@ -7,9 +7,13 @@ all() -> [{group, overflow},
           {group, drain_buf},
           close_max_ttl].
 
-groups() -> [{overflow, [], [full_buffer_success, full_buffer_fail,
-                             full_buffer_temp_fail, full_stack]},
-             {drain_buf, [], [restart_drain_buf, shrink]}].
+groups() -> [{overflow, [], [full_buffer_success,
+                             full_buffer_fail,
+                             full_buffer_temp_fail,
+                             full_buffer_http_retry,
+                             full_stack]},
+             {drain_buf, [], [restart_drain_buf,
+                              shrink]}].
 
 
 -ifdef(namespaced_types).
@@ -214,6 +218,63 @@ full_buffer_fail(Config) ->
     {match, _} = re:run(Success, Msg),
     %% (15 + 3) + 3 failures
     {match, _} = re:run(Success, "21 messages dropped").
+
+%% We drop frames twice, but the rest is successfully delivered. Overflow
+%% messages should be accumulated. This one experiments with temporary
+%% failure of delivery (429 range of HTTP responses)
+full_buffer_http_retry(Config) ->
+    Buf = ?config(buffer, Config),
+    Drain = ?config(drain, Config),
+    Client = ?config(client, Config),
+
+    %% Here the drain should try connecting (and succeeding through mocks)
+    %% and then set the buffer to active
+    2 = logplex_app:config(http_frame_retries, 2),
+    %% We send the message but expect it to fail 3 times before finally
+    %% getting a 200 status code back.
+    client_call_status(Client, {3, 429, 200}),
+    Msg = "some io data that represents 15 messages",
+    Frame = {frame, Msg, 15, 3},
+    Drain ! {logplex_drain_buffer, Buf, new_data},
+    Drain ! {logplex_drain_buffer, Buf, Frame},
+    %% When the drain fails temp, it closes the connection before continuing and
+    %% retrying again on the next frame sent
+    %% 1st frame: 15 queued, 3 lost (1 fail)
+    %% :: 0 global lost, 1 req
+    %%
+    %% We can now send a second frame and expect our errors
+    %% to be accumulated when the reconnection with the client is done.
+    Drain ! {logplex_drain_buffer, Buf, Frame},
+    %% 1st frame:  0 queued, 0 lost (dropped after 2 fails)
+    %% 2nd frame: 15 queued, 3 lost (0 attempt)
+    %% :: 18 global lost, 2 req
+    Drain ! {logplex_drain_buffer, Buf, Frame},
+    %% 2nd frame: 15 queued, 3 lost (1 fail)
+    %% 3rd frame: 15 queued, 3 lost (0 attempt)
+    %% :: 18 global lost, 3 req
+    %%
+    Drain ! {logplex_drain_buffer, Buf, Frame},
+    %% 2nd frame: delivered, 3+(15+3) lost (1 req)
+    %% 3rd frame: delivered, 3 lost (1 req)
+    %% 4th frame: delivered, 3 lost (1 req)
+    %% :: 18+3+3+3 = 27 global lost, (reqs for 3fail+3succeed = 6 total), 4 reconnections
+    wait_for_mocked_call(logplex_http_client, raw_request, '_', 6, 30000),
+    %% Everything is sent
+    6 = meck:num_calls(logplex_http_client, raw_request, '_'), % sends
+    Hist = meck:history(logplex_http_client),
+
+    [Fail1, Fail2, Fail3, Success1, Success2, Success3] =
+      [iolist_to_binary(IoData) || {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
+    {match, _} = re:run(Fail1, Msg), % temp 1st frame
+    {match, _} = re:run(Fail2, Msg), % permanent 1st frame
+    {match, _} = re:run(Fail3, Msg), % temp 2nd frame
+    {match, _} = re:run(Success1, Msg), % success 2nd frame
+    {match, _} = re:run(Success2, Msg), % success 3rd frame
+    {match, _} = re:run(Success3, Msg), % success 4th frame
+    %% 15 + 3 + 3 failures
+    {match, _} = re:run(Success1, "21 messages dropped"),
+    {match, _} = re:run(Success2, "3 messages dropped"),
+    {match, _} = re:run(Success3, "3 messages dropped").
 
 %% We drop frames twice, but the rest is successfully delivered. Overflow
 %% messages should be accumulated. This one experiments with temporary
