@@ -397,6 +397,8 @@ shrink(Config) ->
                     close_tref=CloseTref,
                     uri = ?config(uri, Config),
                     service=normal},
+    meck:unload(logplex_http_client),
+    meck:new(logplex_http_client, [passthrough]),
     meck:expect(logplex_http_client, start_link,
         fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
             {error, mocked}
@@ -413,6 +415,8 @@ shrink(Config) ->
     %% This worked, so let's see the opposite -- that the size is brought back up
     %% to whatever configured value we have:
     Val = logplex_app:config(http_drain_buffer_size, 1024),
+    meck:unload(logplex_http_client),
+    meck:new(logplex_http_client, [passthrough]),
     meck:expect(logplex_http_client, start_link,
         fun(_Drain, _Channel, _Uri, _Scheme, _Host, _Port, _Timeout) ->
             {ok, self()}
@@ -438,6 +442,8 @@ shrink(Config) ->
     ct:pal("Result was: ~p", [Res4]),
     {next_state, disconnected, State6=#state{client=undefined, service=normal}, hibernate} = Res4,
 
+    meck:unload(logplex_http_client),
+    meck:new(logplex_http_client, [passthrough]),
     meck:expect(logplex_http_client, raw_request,
                 fun(_Pid, _Req, _Timeout) ->
                         {ok, 504, []}
@@ -447,6 +453,7 @@ shrink(Config) ->
 
     %% simulate idle connection timeout while connection is closed
     meck:unload(logplex_http_client),
+    meck:new(logplex_http_client, [passthrough]),
     State7 = State6#state{client=undefined, buf=Buffer, last_good_time={0,0,0}, close_tref=CloseTref},
     ct:pal("Mocking disconnected idle timeout now ~p", [State7]),
     Res5 = logplex_http_drain:disconnected({timeout, CloseTref, close_timeout}, State7),
