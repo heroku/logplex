@@ -76,7 +76,9 @@ init_per_testcase(shrink, Config) ->
     application:set_env(logplex, http_drain_idle_timeout, 50),
     application:set_env(logplex, http_drain_idle_fuzz, 1),
     application:set_env(logplex, http_drain_shrink_timeout, 50),
-    init_per_testcase('_', Config);
+    Tab = init_http_mocks(),
+    Ref = mock_drain_buffer(),
+    [{buffer, Ref} | init_config(Config, Tab)];
 init_per_testcase(_, Config) ->
     Tab = init_http_mocks(),
     Ref = mock_drain_buffer(),
