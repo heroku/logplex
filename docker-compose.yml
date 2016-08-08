@@ -17,6 +17,11 @@ compile:
   image: logplex_base
   volumes_from:
     - base
+clean:
+  command: env REBAR=rebar3 make clean
+  image: logplex_base
+  volumes_from:
+    - base
 logplex:
   image: logplex_base
   command: ./_build/default/rel/logplex/bin/logplex foreground

@@ -28,7 +28,9 @@
 -record(state, {token :: logplex_token:id() | 'any',
                 name :: logplex_token:name(),
                 channel_id :: logplex_channel:id() | 'any',
-                msgs :: list()}).
+                msgs :: list(),
+                compressed = false :: boolean(),
+                zlib_port = zlib:open() :: port()}).
 
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 
@@ -80,10 +82,15 @@ handle(Req, State) ->
                  end,
     {ok, Req2, State}.
 
-terminate(_, _, _) -> ok.
+terminate(_, _, #state{zlib_port = Z}) ->
+    _ = (catch zlib:close(Z)),
+    ok.
 
 %% Logs cowboy_rest implementation
 rest_init(Req, _Opts) ->
+    State = #state{},
+    %% this is a side-effecting function, no need to store the altered port.
+    zlib:inflateInit(State#state.zlib_port),
     {ok, Req, #state{}}.
 
 allowed_methods(Req, State) ->
@@ -194,12 +201,32 @@ from_logplex(Req, State = #state{token = Token,
             respond(400, <<"Bad request">>, Req2, State2)
     end.
 
-parse_logplex_body(Req, State) ->
+parse_logplex_body(Req, #state{zlib_port = ZPort} = State) ->
     case cowboy_req:body(Req) of
-        {ok, Body, Req2} ->
-            parse_messages_from_body(Body, Req2, State);
+        {ok, Body0, Req2} ->
+            case maybe_decompress_body(Body0, Req2, ZPort) of
+                {Body, Req3} ->
+                    parse_messages_from_body(Body, Req3, State);
+                {error, CompReason, Req3} ->
+                    ?WARN("at=parse_syslog_decompress reason=~p body=~1000p",
+                          [CompReason, Body0]),
+                    {{error, CompReason}, Req3, State}
+            end;
         {error, Reason} ->
             {{error, Reason}, Req, State}
+    end.
+
+maybe_decompress_body(Body0, Req, ZPort) ->
+    case cowboy_req:header(<<"content-encoding">>, Req, undefined) of
+        {<<"gzip">>, Req1} ->
+            case decompress_body(Body0, ZPort) of
+                {ok, Body} ->
+                    {Body, Req1};
+                {error, Reason} ->
+                    {error, Reason, Req1}
+            end;
+        {_, Req1} ->
+            {Body0, Req1}
     end.
 
 parse_messages_from_body(Body, Req, State) ->
@@ -259,3 +286,11 @@ respond(Code, Text, Req, State) ->
     Req3 = cowboy_req:set_resp_body(Text, Req2),
     {ok, Req4} = cowboy_req:reply(<<(integer_to_binary(Code))/binary, " ", Text/binary>>, Req3),
     {halt, Req4, State}.
+
+decompress_body(CompressedBody, ZPort) ->
+    try
+        ok = zlib:inflateReset(ZPort),
+        {ok, zlib:inflate(ZPort, CompressedBody)}
+    catch _Class:Reason ->
+            {error, Reason}
+    end.
