@@ -186,7 +186,7 @@ sessions
 
 ### config_redis
 
-A [redo](https://github.com/JacobVorreuter/redo) redis client process connected to the logplex config redis.
+A [redo](https://github.com/heroku/redo) redis client process connected to the logplex config redis.
 
 ### logplex_drain_sup
 
@@ -197,13 +197,13 @@ An empty one_for_one supervisor. Supervises
 
 ### nsync
 
-An [nsync](https://github.com/JacobVorreuter/nsync) process connected to the logplex config redis. Callback module is [nsync_callback](./src/nsync_callback.erl).
+An [nsync](https://github.com/heroku/nsync) process connected to the logplex config redis. Callback module is [nsync_callback](./src/nsync_callback.erl).
 
 Nsync is an Erlang redis replication client. It allows the logplex node to act as a redis slave and sync the logplex config redis data into memory.
 
 ### redgrid
 
-A [redgrid](https://github.com/JacobVorreuter/redgrid) process that registers the node in a central redis server to facilitate discovery by other nodes.
+A [redgrid](https://github.com/heroku/redgrid) process that registers the node in a central redis server to facilitate discovery by other nodes.
 
 ### logplex_realtime
 
