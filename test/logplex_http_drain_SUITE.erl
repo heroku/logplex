@@ -348,10 +348,10 @@ full_stack(Config) ->
     logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg3")),
     logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg4")),
     logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg5")),
-    wait_for_mocked_call(logplex_http_client, raw_request, '_', 1, 5000),
+    wait_for_client_request("mymsg5", Client, 5000),
     client_call_status(Client, 200),
     logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg6")),
-    wait_for_mocked_call(logplex_http_client, raw_request, '_', 2, 5000),
+    wait_for_client_request("mymsg6", Client, 5000),
     Hist = meck:history(logplex_http_client),
     [Failure, Success] =
       [iolist_to_binary(IoData) ||
@@ -542,3 +542,23 @@ wait_for_dead_proc(Pid) ->
 
 fake_msg(M) ->
     {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M ++ "\n"}.
+
+wait_for_client_request(Match, Client, Timeout) when Timeout > 0 ->
+    History = meck:history(logplex_http_client),
+    Requests = [iolist_to_binary(IoData) ||
+                   {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- History],
+    Pred = fun (Request) ->
+                   case re:run(Request, Match) of
+                       {match, _} -> true;
+                       nomatch -> false
+                   end
+           end,
+    case lists:any(Pred, Requests) of
+        false ->
+            timer:sleep(100),
+            wait_for_client_request(Match, Client, Timeout-100);
+        true ->
+            true
+    end;
+wait_for_client_request(_Match, _Client, _Timeout) ->
+    false.
