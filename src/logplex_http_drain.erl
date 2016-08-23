@@ -266,7 +266,7 @@ handle_close_timeout_msg(StateName, State) ->
                     {next_state, disconnected, ClosedState, hibernate};
                 {not_closed, ContinueState} ->
                     NewTimerState = start_close_timer(ContinueState),
-                    {next_state, connected, NewTimerState, hibernate}
+                    {next_state, StateName, NewTimerState, hibernate}
             end
     end.
 
