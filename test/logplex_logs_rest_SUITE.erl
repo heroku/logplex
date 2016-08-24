@@ -3,7 +3,8 @@
 -compile(export_all).
 
 all() ->
-    [v2_redirects, v1_redirects_channels, v1_redirects_sessions].
+    [v2_redirects, v1_redirects_channels, v1_redirects_sessions,
+     post_logline, post_logline_compressed].
 
 init_per_suite(Config) ->
     set_os_vars(),
@@ -17,16 +18,31 @@ end_per_suite(_Config) ->
 init_per_testcase(Case, Config)
   when Case =:= v2_redirects;
        Case =:= v1_redirects_channels;
-       Case =:= v1_redirects_sessions ->
+       Case =:= v1_redirects_sessions;
+       Case =:= post_logline;
+       Case =:= post_logline_compressed ->
     Channel = logplex_channel:create(atom_to_binary(Case, latin1)),
     ChannelId = logplex_channel:id(Channel),
     Token = logplex_token:create(ChannelId, atom_to_binary(Case, latin1)),
     logplex_SUITE:wait_for_chan(Channel),
     logplex_channel:register({channel, ChannelId}),
     logplex_SUITE:wait_for_registration({channel, ChannelId}),
+    case Case of
+        C when C =:= post_logline; C =:= post_logline_compressed ->
+            %% intercept this bit:
+            %% logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
+            meck:new(logplex_api, [no_link, passthrough]),
+            meck:expect(logplex_api, process_msgs, fun(_) -> ok end);
+        _ -> ok
+    end,
     [{channel_id, ChannelId}, {token, Token} |Config].
 
-end_per_testcase(Config) ->
+end_per_testcase(Case, Config)
+  when Case =:= post_logline;
+       Case =:= post_logline_compressed ->
+    meck:unload(logplex_api),
+    Config;
+end_per_testcase(_Case, Config) ->
     Config.
 
 v2_redirects(Config) ->
@@ -53,6 +69,28 @@ v1_redirects_channels(Config) ->
     ok.
 
 v1_redirects_sessions(Config) ->
+    BasicAuth = ?config(auth, Config),
+    Post = binary_to_list(iolist_to_binary([?config(logs, Config),
+           "/sessions/"])),
+    PostRes = logplex_api_SUITE:post(Post, [{headers, [{"Authorization", BasicAuth}]},
+                                       {http_opts, [{autoredirect, false}]}]),
+    302 = proplists:get_value(status_code, PostRes),
+    ok.
+
+post_logline(Config) ->
+    BasicAuth = ?config(auth, Config),
+    Post = binary_to_list(iolist_to_binary([?config(logs, Config),
+           "/sessions/"])),
+    PostRes = logplex_api_SUITE:post(Post, [{headers, [{"Authorization", BasicAuth}]},
+                                            {http_opts, [{autoredirect, false}]}]),
+    201 = proplists:get_value(status_code, PostRes),
+
+    History = meck:history(logplex_api),
+    ct:pal("hist ~p", [History]),
+
+    ok.
+
+post_logline_compressed(Config) ->
     BasicAuth = ?config(auth, Config),
     Post = binary_to_list(iolist_to_binary([?config(logs, Config),
            "/sessions/"])),
