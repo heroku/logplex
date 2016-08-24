@@ -64,7 +64,7 @@
   0},
  {<<"nsync">>,
   {git,"git://github.com/heroku/nsync.git",
-       {ref,"687d499bcf14ecd87a44d416a58cf67c3f558fa5"}},
+       {ref,"df46d5315b94d71942599f15ff3187795e195085"}},
   0},
  {<<"pagerduty">>,
   {git,"git://github.com/heroku/pagerduty.git",
