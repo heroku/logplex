@@ -264,9 +264,8 @@ handle_close_timeout_msg(StateName, State) ->
                     ?INFO("drain_id=~p channel_id=~p dest=~s state=~s at=max_ttl",
                           log_info(State, [StateName])),
                     {next_state, disconnected, ClosedState, hibernate};
-                {not_closed, ContinueState} ->
-                    NewTimerState = start_close_timer(ContinueState),
-                    {next_state, connected, NewTimerState, hibernate}
+                {not_closed, NewState} ->
+                    {next_state, StateName, NewState, hibernate}
             end
     end.
 
