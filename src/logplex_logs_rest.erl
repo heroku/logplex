@@ -30,7 +30,7 @@
                 channel_id :: logplex_channel:id() | 'any',
                 msgs :: list(),
                 compressed = false :: boolean(),
-                zlib_port = zlib:open() :: port()}).
+                zlib_port :: port()}).
 
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 
@@ -89,9 +89,9 @@ terminate(_, _, #state{zlib_port = Z}) ->
 %% Logs cowboy_rest implementation
 rest_init(Req, _Opts) ->
     State = #state{},
-    %% this is a side-effecting function, no need to store the altered port.
-    zlib:inflateInit(State#state.zlib_port),
-    {ok, Req, #state{}}.
+    ZPort = zlib:open(),
+    ok = zlib:inflateInit(ZPort, 31),
+    {ok, Req, #state{zlib_port = ZPort}}.
 
 allowed_methods(Req, State) ->
     {[<<"POST">>], Req, State}.
@@ -217,6 +217,8 @@ parse_logplex_body(Req, #state{zlib_port = ZPort} = State) ->
     end.
 
 maybe_decompress_body(Body0, Req, ZPort) ->
+    Res = cowboy_req:header(<<"content-encoding">>, Req, undefined),
+    ct:pal("enc ~p", [Res]),
     case cowboy_req:header(<<"content-encoding">>, Req, undefined) of
         {<<"gzip">>, Req1} ->
             case decompress_body(Body0, ZPort) of
@@ -289,8 +291,11 @@ respond(Code, Text, Req, State) ->
 
 decompress_body(CompressedBody, ZPort) ->
     try
+        [Inflated] = zlib:inflate(ZPort, CompressedBody),
+        %% reset rather than end so we can call this function again if
+        %% need be.
         ok = zlib:inflateReset(ZPort),
-        {ok, zlib:inflate(ZPort, CompressedBody)}
+        {ok, Inflated}
     catch _Class:Reason ->
             {error, Reason}
     end.
