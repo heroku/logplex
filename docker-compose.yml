@@ -59,4 +59,25 @@ test:
     - base
   links:
     - db
+# for quicker test development, allow a shell.  note that you'll need
+# to run `epmd &` manually before you run tests.
+test_bash:
+  image: logplex_base
+  command: bash
+  hostname: logplex
+  domainname: docker.local
+  extra_hosts:
+    - "server:127.0.0.1"
+    - "evilserver:127.0.0.1"
+  environment:
+    - INSTANCE_NAME=logplex.docker.local
+    - LOCAL_IP=127.0.0.1
+  volumes:
+    - ./test:/usr/src/app/test
+    - ./logs:/usr/src/app/logs
+    - ./logplex.spec:/usr/src/app/logplex.spec
+  volumes_from:
+    - base
+  links:
+    - db
 
