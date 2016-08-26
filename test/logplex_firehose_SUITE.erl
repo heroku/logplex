@@ -17,7 +17,6 @@ all() ->
 %%%%%%%%%%%%%%%%%%%%%%
 %% Runs once at the beginning of the suite. The process is different
 %% from the one the case will run in.
-
 init_per_suite(Config) ->
     Config.
 
