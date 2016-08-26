@@ -119,6 +119,15 @@ post_logline_compressed(Config) ->
     Token = ?config(token, Config),
     meck:expect(logplex_logs_rest, is_authorized,
                 fun(Req, State) ->
+                        %% faking out the following record here, from
+                        %% logplex_logs_rest.erl. if the early stuff
+                        %% gets reordered, these indices will need to
+                        %% be changed.
+
+                        %% -record(state, {token :: logplex_token:id() | 'any',
+                        %%                 name :: logplex_token:name(),
+                        %%                 channel_id :: logplex_channel:id() | 'any',
+                        %%                 msgs :: list()}).
                         State1 = setelement(2, State, Token),
                         State2 = setelement(3, State1, <<"dont'care">>),
                         State3 = setelement(4, State2, 3),
