@@ -11,7 +11,8 @@ groups() -> [{overflow, [], [full_buffer_success,
                              full_buffer_fail,
                              full_buffer_temp_fail,
                              full_buffer_http_retry,
-                             full_stack]},
+                             full_stack,
+                             full_stack_compressed]},
              {drain_buf, [], [restart_drain_buf,
                               shrink]}].
 
@@ -36,7 +37,8 @@ groups() -> [{overflow, [], [full_buffer_success,
                 last_good_time = never :: 'never' | erlang:timestamp(),
                 service = normal :: 'normal' | 'degraded',
                 %% Time of last successful connection
-                connect_time :: 'undefined' | erlang:timestamp()
+                connect_time :: 'undefined' | erlang:timestamp(),
+                compressed :: boolean()
                }).
 
 init_per_suite(Config) ->
@@ -66,6 +68,11 @@ init_per_testcase(full_stack, Config) ->
     application:set_env(logplex, http_drain_idle_fuzz, 1),
     Tab = init_http_mocks(),
     init_config(Config, Tab);
+init_per_testcase(full_stack_compressed, Config) ->
+    application:set_env(logplex, http_drain_idle_timeout, 50),
+    application:set_env(logplex, http_drain_idle_fuzz, 1),
+    Tab = init_http_mocks(),
+    init_config(Config, Tab, "#gzip");
 init_per_testcase(close_max_ttl, Config) ->
     application:set_env(logplex, http_drain_idle_timeout, 50),
     application:set_env(logplex, http_drain_idle_fuzz, 1),
@@ -348,10 +355,10 @@ full_stack(Config) ->
     logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg3")),
     logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg4")),
     logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg5")),
-    wait_for_client_request("mymsg5", Client, 5000),
+    true = wait_for_client_request("mymsg5", Client, 5000),
     client_call_status(Client, 200),
     logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg6")),
-    wait_for_client_request("mymsg6", Client, 5000),
+    true = wait_for_client_request("mymsg6", Client, 5000),
     Hist = meck:history(logplex_http_client),
     [Failure, Success] =
       [iolist_to_binary(IoData) ||
@@ -375,6 +382,62 @@ full_stack(Config) ->
     {match, _} = re:run(Success, "mymsg6"),
     {match, _} = re:run(Success, "Error L10"),
     {match, _} = re:run(Success, "5 messages dropped").
+
+%% Checking that framing funs and overflow functions still work when
+%% the payload is compressed
+full_stack_compressed(Config) ->
+    ChannelId = ?config(channel, Config),
+    Client = ?config(client, Config),
+    client_call_status(Client, 404),
+    Msg = fun(M) -> {user, debug, logplex_syslog_utils:datetime(now),
+                     "fakehost", "erlang", M}
+    end,
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg1")),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg2")),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg3")),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg4")),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg5")),
+    true = wait_for_client_request(<<31,139,8,0,0,0,0,0,0,3,203,173,204,
+                                     45,78,55,5,0,13,255,158,18,6,0,0,0>>,
+                                   Client, 5000),
+    client_call_status(Client, 200),
+    logplex_channel:post_msg({channel, ChannelId}, Msg("mymsg6")),
+    true = wait_for_client_request(<<31,139,8,0,0,0,0,0,0,3,203,173,204,
+                                     45,78,55,3,0,183,174,151,139,6,0,0,0>>,
+                                   Client, 5000),
+    timer:sleep(200),
+    Hist = meck:history(logplex_http_client),
+    [Failure, Success] =
+      [iolist_to_binary(IoData) ||
+       {_Pid, {_Mod, raw_request, [_Ref, IoData, _TimeOut]}, _Res} <- Hist],
+    %% ensure idle drain is closed
+    wait_for_mocked_call(logplex_http_client, close, '_', 1, 100),
+    %% missed call
+    ct:pal("res ~p ~p", [Failure, Success]),
+    FailBody = zlib:gunzip(lists:last(binary:split(Failure,
+                                                   <<"\r\n">>,
+                                                   [global, trim]))),
+    {match, _} = re:run(Failure, "Content-Encoding: gzip"),
+    {match, _} = re:run(FailBody, "mymsg1"),
+    {match, _} = re:run(FailBody, "mymsg2"),
+    {match, _} = re:run(FailBody, "mymsg3"),
+    {match, _} = re:run(FailBody, "mymsg4"),
+    {match, _} = re:run(FailBody, "mymsg5"),
+    nomatch = re:run(FailBody, "mymsg6"),
+    nomatch = re:run(FailBody, "Error L10"),
+    %% successful call
+    SuccBody = zlib:gunzip(lists:last(binary:split(Success,
+                                                   <<"\r\n">>,
+                                                   [global, trim]))),
+    {match, _} = re:run(Success, "Content-Encoding: gzip"),
+    nomatch = re:run(SuccBody, "mymsg1"),
+    nomatch = re:run(SuccBody, "mymsg2"),
+    nomatch = re:run(SuccBody, "mymsg3"),
+    nomatch = re:run(SuccBody, "mymsg4"),
+    nomatch = re:run(SuccBody, "mymsg5"),
+    {match, _} = re:run(SuccBody, "mymsg6"),
+    {match, _} = re:run(SuccBody, "Error L10"),
+    {match, _} = re:run(SuccBody, "5 messages dropped").
 
 %% Check that the drain restarts the drain buffer if we kill it.
 restart_drain_buf(Config) ->
@@ -490,10 +553,13 @@ close_max_ttl(Config) ->
 
 %%% HELPERS
 init_config(Config, Tab) ->
+    init_config(Config, Tab, "").
+
+init_config(Config, Tab, Fragment) ->
     ChannelId = 1337,
     DrainId = 2198712,
     DrainTok = "d.12930-321-312213-12321",
-    {ok,URI,_} = ex_uri:decode("http://example.org"),
+    {ok,URI,_} = ex_uri:decode("http://example.org" ++ Fragment),
     {ok, Pid} = logplex_http_drain:start_link(ChannelId, DrainId, DrainTok, URI),
     unlink(Pid),
     [{channel, ChannelId}, {drain_id, DrainId}, {drain_tok, DrainTok},

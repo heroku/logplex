@@ -50,7 +50,8 @@
                 last_good_time = never :: 'never' | erlang:timestamp(),
                 service = normal :: 'normal' | 'degraded',
                 %% Time of last successful connection
-                connect_time :: 'undefined' | erlang:timestamp()
+                connect_time :: 'undefined' | erlang:timestamp(),
+                compressed :: boolean()
                }).
 
 -record(frame, {frame :: iolist(),
@@ -102,7 +103,8 @@ start_link(ChannelID, DrainID, DrainTok,
                        #state{drain_id=DrainID,
                               drain_tok=DrainTok,
                               channel_id=ChannelID,
-                              uri = Uri},
+                              uri = Uri,
+                              compressed = is_compressed(Uri)},
                        []).
 
 valid_uri(#ex_uri{scheme=Http,
@@ -112,6 +114,12 @@ valid_uri(#ex_uri{scheme=Http,
     {valid, http, Uri};
 valid_uri(_) ->
     {error, invalid_http_uri}.
+
+is_compressed(#ex_uri{fragment=Fragment}) when is_list(Fragment) ->
+    lists:member("gzip", string:tokens(Fragment, "+"));
+is_compressed(_) ->
+    false.
+
 
 user_agent() ->
     [<<"Logplex">>, $/, logplex_app:config(git_branch)].
@@ -428,8 +436,9 @@ request_to_iolist(#frame{frame = Body0,
                          id = Id},
                   #state{uri = URI = #ex_uri{},
                          drop_info=Drops,
-                         drain_tok = Token}) ->
-    {Body, Count} = case {Drops,Lost} of
+                         drain_tok = Token,
+                         compressed = Compressed}) ->
+    {Body1, Count} = case {Drops,Lost} of
         {undefined,0} -> {Body0, Count0};
         {undefined,_} ->
             T0 = os:timestamp(),
@@ -444,12 +453,21 @@ request_to_iolist(#frame{frame = Body0,
             {[Msg, Body0],Count0+1}
     end,
     AuthHeader = auth_header(URI),
+    {EncodingHeader, Body} =
+        case Compressed of
+            true ->
+                {[{<<"Content-Encoding">>, <<"gzip">>}],
+                 zlib:gzip(Body1)};
+            _ ->
+                {[], Body1}
+        end,
     MD5Header = case logplex_app:config(http_body_checksum, none) of
                     md5 -> [{<<"Content-MD5">>,
                              base64:encode(crypto:hash(md5,Body))}];
                     none -> []
                 end,
     Headers = MD5Header ++ AuthHeader ++
+        EncodingHeader ++
         [{<<"Content-Type">>, ?CONTENT_TYPE},
          {<<"Logplex-Msg-Count">>, integer_to_list(Count)},
          {<<"Logplex-Frame-Id">>, frame_id_to_iolist(Id)},
