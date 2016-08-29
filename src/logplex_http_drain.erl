@@ -115,8 +115,8 @@ valid_uri(#ex_uri{scheme=Http,
 valid_uri(_) ->
     {error, invalid_http_uri}.
 
-is_compressed(#ex_uri{fragment=Fragment}) when is_list(Fragment) ->
-    lists:member("gzip", string:tokens(Fragment, "+"));
+is_compressed(#ex_uri{fragment="gzip"}) ->
+    true;
 is_compressed(_) ->
     false.
 
