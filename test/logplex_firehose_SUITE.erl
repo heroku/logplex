@@ -28,6 +28,7 @@ end_per_suite(Config) ->
 %% Runs before the test case. Runs in the same process.
 init_per_testcase(_, Config) ->
     application:start(folsom_metrics, transient),
+    logplex_logging:setup(),
     Config.
 
 %% Runs after the test case. Runs in the same process.
