@@ -127,9 +127,11 @@ scheme_to_transport("https") -> ranch_ssl;
 scheme_to_transport("http") -> ranch_tcp.
 
 client_init("http") ->
-    cowboy_client:init([]);
+    cowboy_client:init([{reuseaddr, true}
+                       ]);
 client_init("https") ->
-    cowboy_client:init([{reuse_sessions, false}
+    cowboy_client:init([{reuse_sessions, false},
+                        {reuseaddr, true}
                        ]).
 
 log_info(#state{drain_id=DrainId, channel_id=ChannelId, dest=Dest}, Rest)
