@@ -23,9 +23,11 @@ update:
 # typer: $(LOGPLEX_PLT)
 # 	typer --plt $(HERMES_PLT) -I deps/ -r src
 
-test: REBAR := $(REBAR),test
+test:
 test: testclean compile
-	ERL_LIBS=$(ROOT_DIR)/_build/public+test/lib/:${ERL_LIBS} ct_run -spec logplex.spec
+	epmd &
+	$(REBAR),test ct --setcookie "asfasfas" --name foo@127.0.0.1
+	$(REBAR),test,syslog ct --setcookie "asfasfas" --name foo@127.0.0.1
 
 clean:
 	$(REBAR) clean

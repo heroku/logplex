@@ -259,13 +259,18 @@ handlers() ->
         {struct, Data} = mochijson2:decode(Body),
         ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
         not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
+
         ChannelId = list_to_integer(binary_to_list(ChannelId0)),
+        IsTail = proplists:get_value(<<"tail">>, Data, false) =/= false,
 
         logplex_stats:incr(session_accessed),
 
         Filters = filters(Data),
         NumBin = proplists:get_value(<<"num">>, Data, <<"100">>),
         Num = list_to_integer(binary_to_list(NumBin)),
+
+        ?INFO("at=sessions_start channel_id=~p is_tail=~p num=~p",
+                [ChannelId, IsTail, Num]),
 
         Logs = logplex_channel:logs(ChannelId, Num),
         Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
