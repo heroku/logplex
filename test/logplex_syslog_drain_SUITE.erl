@@ -341,26 +341,29 @@ backoff(Config) ->
     wait_for_log(),
 
     end_drain_endpoint(),
-    BackoffTime1 = timer:seconds(1 bsl 1)-500,
-    timer:sleep(BackoffTime1),
+    BackoffTime1 = timer:seconds(1 bsl 1),
+    timer:sleep(BackoffTime1-500),
 
     init_drain_endpoint(backoff, Config),
+    timer:sleep(500),
     logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 3: detects up")),
     {Time1, _} = timer:tc(fun wait_for_log/1, [BackoffTime1]),
 
     end_drain_endpoint(),
-    BackoffTime2 = timer:seconds(1 bsl 2)-500,
-    timer:sleep(BackoffTime2),
+    BackoffTime2 = timer:seconds(1 bsl 2),
+    timer:sleep(BackoffTime2-500),
 
     init_drain_endpoint(backoff, Config),
+    timer:sleep(500),
     logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 5: detects up")),
     {Time2, _} = timer:tc(fun wait_for_log/1, [BackoffTime2]),
 
     end_drain_endpoint(),
-    BackoffTime3 = timer:seconds(1 bsl 3)-500,
-    timer:sleep(BackoffTime3),
+    BackoffTime3 = timer:seconds(1 bsl 3),
+    timer:sleep(BackoffTime3-500),
 
     init_drain_endpoint(backoff, Config),
+    timer:sleep(500),
     logplex_channel:post_msg({channel, ChannelID}, fake_msg("backoff 7: detects up")),
     {Time3, _} = timer:tc(fun wait_for_log/1, [BackoffTime3]),
 
