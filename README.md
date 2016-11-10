@@ -4,7 +4,7 @@ Logplex is a distributed syslog log router, able to merge and redistribute multi
 
 A typical logplex installation will be a cluster of distributed Erlang nodes connected in a mesh, with one or more redis instances (which can be sharded). The cluster may or may not be sitting behind a load-balancer or proxy, but any of them may be contacted at any time for ideal scenarios.
 
-Applications sitting on their own node or server need to send their log messages either to a local syslog, or though [log shuttle](https://github.com/heroku/log-shuttle), which will then forward them to one instance of a logplex router.
+Applications sitting on their own node or server need to send their log messages either to a local syslog, or through [log shuttle](https://github.com/heroku/log-shuttle), which will then forward them to one instance of a logplex router.
 
 On the other end of the spectrum, consumers may subscribe to a logplex instance, which will then merge streams of incoming log messages and forward them to the subscriber. Alternatively, the consumer may register a given endpoint (say, a database behind the proper API) and logplex nodes will be able to push messages to that end-point as they come in.
 
