@@ -196,10 +196,30 @@ from_logplex(Req, State = #state{token = Token,
 
 parse_logplex_body(Req, State) ->
     case cowboy_req:body(Req) of
-        {ok, Body, Req2} ->
-            parse_messages_from_body(Body, Req2, State);
+        {ok, Body0, Req2} ->
+            case maybe_decompress_body(Body0, Req2) of
+                {Body, Req3} ->
+                    parse_messages_from_body(Body, Req3, State);
+                {error, CompReason, Req3} ->
+                    ?WARN("at=parse_syslog_decompress reason=~p body=~1000p",
+                          [CompReason, Body0]),
+                    {{error, CompReason}, Req3, State}
+            end;
         {error, Reason} ->
             {{error, Reason}, Req, State}
+    end.
+
+maybe_decompress_body(Body0, Req) ->
+    case cowboy_req:header(<<"content-encoding">>, Req, undefined) of
+        {<<"gzip">>, Req1} ->
+            case decompress_body(Body0) of
+                {ok, Body} ->
+                    {Body, Req1};
+                {error, Reason} ->
+                    {error, Reason, Req1}
+            end;
+        {_, Req1} ->
+            {Body0, Req1}
     end.
 
 parse_messages_from_body(Body, Req, State) ->
@@ -259,3 +279,11 @@ respond(Code, Text, Req, State) ->
     Req3 = cowboy_req:set_resp_body(Text, Req2),
     {ok, Req4} = cowboy_req:reply(<<(integer_to_binary(Code))/binary, " ", Text/binary>>, Req3),
     {halt, Req4, State}.
+
+decompress_body(CompressedBody) ->
+    try
+        Inflated = zlib:gunzip(CompressedBody),
+        {ok, Inflated}
+    catch _Class:Reason ->
+            {error, Reason}
+    end.
