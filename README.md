@@ -207,7 +207,7 @@ A [redgrid](https://github.com/heroku/redgrid) process that registers the node i
 
 ### logplex_realtime
 
-Captures realtime metrics about the running logplex node. This metrics are exported using [folsom_cowboy](https:/github.com/voidlock/folsom_cowboy) and are available for consumption via HTTP.
+Captures realtime metrics about the running logplex node. This metrics are exported using [folsom_cowboy](https://github.com/voidlock/folsom_cowboy) and are available for consumption via HTTP.
 
 Memory Usage information is available:
 ```shell
