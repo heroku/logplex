@@ -444,12 +444,7 @@ request_to_iolist(#frame{frame = Body0,
             {[Msg, Body0],Count0+1}
     end,
     AuthHeader = auth_header(URI),
-    MD5Header = case logplex_app:config(http_body_checksum, none) of
-                    md5 -> [{<<"Content-MD5">>,
-                             base64:encode(crypto:hash(md5,Body))}];
-                    none -> []
-                end,
-    Headers = MD5Header ++ AuthHeader ++
+    Headers = AuthHeader ++
         [{<<"Content-Type">>, ?CONTENT_TYPE},
          {<<"Logplex-Msg-Count">>, integer_to_list(Count)},
          {<<"Logplex-Frame-Id">>, frame_id_to_iolist(Id)},
