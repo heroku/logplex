@@ -249,34 +249,27 @@ handlers() ->
          mochijson2:encode({struct, [{url, api_relative_url(canary, UUID)}]})}
     end},
 
+    {['GET', "^/v2/sessions/([\\w-]+)$"], fun(Req, [Session], _) ->
+        {struct, RawData} = case fetch_session_data(Session),
+        Data = validate_session_data(RawData),
+        logplex_stats:incr(session_accessed),
+    end],
+
+
     {['GET', "^/sessions/([\\w-]+)$"], fun(Req, [Session], _) ->
-        Timeout = timer:seconds(logplex_app:config(session_lookup_timeout_s,
-                                                   5)),
-        Body = logplex_session:poll(list_to_binary(Session),
-                                    Timeout),
-        not is_binary(Body) andalso error_resp(404, <<"Not found">>),
-
-        {struct, Data} = mochijson2:decode(Body),
-        ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
-        not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
-
-        ChannelId = list_to_integer(binary_to_list(ChannelId0)),
-        IsTail = proplists:get_value(<<"tail">>, Data, false) =/= false,
+        {struct, RawData} = case fetch_session_data(Session),
+        {ChannelId, NumLines, TailTime, Filters} = validate_session_data(RawData),
+        IsTail = TailTime == -1,
 
         logplex_stats:incr(session_accessed),
 
-        Filters = filters(Data),
-        NumBin = proplists:get_value(<<"num">>, Data, <<"100">>),
-        Num = list_to_integer(binary_to_list(NumBin)),
-
         ?INFO("at=sessions_start channel_id=~p is_tail=~p num=~p",
-                [ChannelId, IsTail, Num]),
+                [ChannelId, IsTail, NumLines]),
 
-        Logs = logplex_channel:logs(ChannelId, Num),
+        Logs = logplex_channel:logs(ChannelId, NumLines),
         Logs == {error, timeout} andalso error_resp(500, <<"timeout">>),
         not is_list(Logs) andalso exit({expected_list, Logs}),
 
-        Socket = Req:get(socket),
         Header0 = case logplex_channel:lookup_flag(no_redis, ChannelId) of
                      no_redis -> ?HDR ++ [{"X-Heroku-Warning",
                                            logplex_app:config(no_redis_warning)}];
@@ -284,33 +277,9 @@ handlers() ->
                  end,
         Header = Header0 ++ [{"connection", "close"}],
         Resp = Req:respond({200, Header, chunked}),
+        filter_and_send_buffer(Resp, Logs, Filters, NumLines),
 
-        inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
-
-        filter_and_send_chunked_logs(Resp, Logs, Filters, Num),
-
-        case {proplists:get_value(<<"tail">>, Data, tail_not_requested),
-              logplex_channel:lookup_flag(no_tail, ChannelId)} of
-            {tail_not_requested, _} ->
-                write_chunk(Resp, close);
-            {_, no_tail} ->
-                write_chunk(Resp, no_tail_warning()),
-                write_chunk(Resp, close);
-            _ ->
-                ?INFO("at=tail_start channel_id=~p filters=~100p",
-                      [ChannelId, Filters]),
-                logplex_stats:incr(session_tailed),
-                {ok, Buffer} =
-                    logplex_tail_buffer:start_link(ChannelId, self()),
-                try
-                    tail_init(Socket, Resp, Buffer, Filters, ChannelId)
-                after
-                    ?INFO("at=tail_end channel_id=~p",
-                          [ChannelId]),
-                    exit(Buffer, shutdown)
-                end
-        end,
-
+        filter_and_send_logs(Req:get(socket),Resp, ChannelId, Filters, NumLines, TailTime),
         {200, ""}
     end},
 
@@ -340,7 +309,7 @@ handlers() ->
         inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
         Resp = Req:respond({200, ?HDR, chunked}),
 
-        filter_and_send_chunked_logs(Resp, Logs, Filters, Num),
+        filter_and_send_buffer(Resp, Logs, Filters, Num),
 
         write_chunk(Resp, close),
 
@@ -480,7 +449,51 @@ handlers() ->
                 ok = logplex_drain:delete(list_to_integer(DrainId)),
                 {200, <<>>}
         end
-    end}].
+    end},
+    
+    % V3 API Endpoints
+    {['POST', "^/v3/sessions$", fun(_Req, _Match, read_only) -> {503, ?API_READONLY};
+                                    (Req, _Match, _) ->
+        authorize(Req),
+        Body = Req:recv_body(),
+        {struct, Data} = mochijson2:decode(Body),
+
+        ChannelId = proplists:get_value(<<"channel_id">>, Data),
+        not is_binary(ChannelId) andalso error_resp(400, <<"'channel_id' missing">>),
+
+        NumLines0 = proplists:get_value(<<"num">>, Data, <<"100">>),,
+        NumLines = case catch to_integer(NumLines0) of
+          L when L > 0 ->
+            L
+          _ ->
+            error_resp(400, <<"'num' must be a numerical value greater than or equal to zero"),
+            exit({expected_num, Body});
+        end
+
+        TailTime0 = proplists:get_value(<<"tail">>, Data, <<"5">>),
+        TailTime = case catch to_integer(TailTime0) of
+          L when L > -2 ->
+            L
+          _ ->
+            error_resp(400, <<"'tail' must be a numerical value greater than or equal to -1"),
+            exit({expected_num, Body});
+        end
+
+        case {NumLines, TailTime} of
+          {0,0} ->
+            error_resp(422, <<"no outcome possible"),
+            exit({unprocessable, Body});
+          _ ->
+            ok
+        end,
+
+        UUID = logplex_session:publish(Body),
+        not is_binary(UUID) andalso exit({expected_binary, UUID}),
+        {201, ?JSON_CONTENT,
+         mochijson2:encode({struct, [{url, api_relative_url(api_v3, UUID)}]})}
+    ],
+    
+    }].
 
 serve(_Handlers, _Method, _Path, _Req, disabled) ->
     {503, ?API_DISABLED};
@@ -541,6 +554,21 @@ authorize(Req) ->
 error_resp(RespCode, Body) ->
     throw({RespCode, Body}).
 
+fetch_session_data() ->
+  Timeout = timer:seconds(logplex_app:config(session_lookup_timeout_s, 5)),
+  Body = logplex_session:poll(list_to_binary(Session), Timeout),
+  not is_binary(Body) andalso error_resp(404, <<"not found">>),
+  {struct, Data} = mochijson2:decode(Body).
+
+validate_session_data(Data) ->
+  ChannelId = proplists:get_value(<<"channel_id">>, Data),
+  not is_binary(ChannelId) andalso error_resp(400, <<"'channel_id' missing">>),
+  TailTime = proplists:get_value(<<"tail">>, Data, <<"5">>),
+  Filters = filters(Data),
+  NumBin = proplists:get_value(<<"num">>, Data, <<"100">>),
+  Num = list_to_integer(binary_to_list(NumBin)),
+  {ChannelId, Num, TailTime, Filters}.
+
 write_chunk(Resp, close) ->
     Resp:write_chunk(<<>>);
 write_chunk(Resp, Data) ->
@@ -553,22 +581,61 @@ write_chunk(Resp, Data) ->
             Resp:write_chunk(Data)
     end.
 
-filter_and_send_chunked_logs(Resp, Logs, [], _Num) ->
+-record(session, {channel_id :: binary() | pos_integer(),
+                  flags :: [atom],
+                  filters :: [fun()],
+                  lines :: pos_integer(),
+                  tail :: integer(),
+                  socket :: term(),
+                  resp :: term(),
+                  buf :: pid()}).
+
+filter_and_send_logs(Socket, Resp, ChannelID, Filters, NumLines, TailTime) ->
+  Session = #session{
+               channel_id = ChannelID,
+               chan_flag = logplex:channel(lookup_flag, no_tail, ChannelID),
+               filters = Filters,
+               lines = NumLines,
+               tail = TailTime,
+               socket = Socket,
+               resp = Resp,
+              },
+  filter_and_send_logs(Session).
+
+filter_and_send_logs(#session{resp=Resp, chan_flag=no_tail}) ->
+  write_chunk(Resp, no_tail_warning()),
+  write_chunk(Resp, close);
+filter_and_send_logs(#session{resp=Resp, tail=0}) ->
+  write_chunk(Resp, close);
+filter_and_send_logs(#session{socket=Socket, channel_id=ChannelID, filters=Filters}=Session) ->
+  ?INFO("at=tail_start channel_id=~p filters=~100p", [ChannelId, Filters]),
+  logplex_stats:incr(session_tailed),
+  
+  inet:setopts(Socket, [{nodelay, true}, {packet_size, 1024 * 1024}, {recbuf, 1024 * 1024}]),
+  {ok, Buffer} = logplex_tail_buffer:start_link(ChannelId, self()),
+  try
+    tail_init(Session#session{buf=Buffer})
+  after
+    ?INFO("at=tail_end channel_id=~p", [ChannelId]),
+    exit(Buffer, shutdown)
+  end.
+
+filter_and_send_buffer(Resp, Logs, [], _Num) ->
     [write_chunk(Resp, logplex_utils:format(logplex_utils:parse_msg(Msg))) || Msg <- lists:reverse(Logs)];
 
-filter_and_send_chunked_logs(Resp, Logs, Filters, Num) ->
-    filter_and_send_chunked_logs(Resp, Logs, Filters, Num, []).
+filter_and_send_buffer(Resp, Logs, Filters, Num) ->
+    filter_and_send_buffer(Resp, Logs, Filters, Num, []).
 
-filter_and_send_chunked_logs(Resp, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
+filter_and_send_buffer(Resp, Logs, _Filters, Num, Acc) when Logs == []; Num == 0 ->
     write_chunk(Resp, Acc);
 
-filter_and_send_chunked_logs(Resp, [Msg|Tail], Filters, Num, Acc) ->
+filter_and_send_buffer(Resp, [Msg|Tail], Filters, Num, Acc) ->
     Msg1 = logplex_utils:parse_msg(Msg),
     case logplex_utils:filter(Msg1, Filters) of
         true ->
-            filter_and_send_chunked_logs(Resp, Tail, Filters, Num-1, [logplex_utils:format(Msg1)|Acc]);
+            filter_and_send_buffer(Resp, Tail, Filters, Num-1, [logplex_utils:format(Msg1)|Acc]);
         false ->
-            filter_and_send_chunked_logs(Resp, Tail, Filters, Num, Acc)
+            filter_and_send_buffer(Resp, Tail, Filters, Num, Acc)
     end.
 
 
@@ -578,17 +645,26 @@ no_tail_warning() ->
                          <<"Logplex">>,
                          logplex_app:config(no_tail_warning)).
 
-tail_init(Socket, Resp, Buffer, Filters, ChannelId) ->
+tail_init(#session{socket=Socket}=Session) ->
     inet:setopts(Socket, [{active, once}]),
-    tail_loop(Socket, Resp, Buffer, Filters, ChannelId, 0).
+    tail_loop(Session, LinesSent, 0).
 
-tail_loop(Socket, Resp, Buffer, Filters, ChannelId, BytesSent) ->
-    logplex_tail_buffer:set_active(Buffer,
-                                   tail_filter(Filters)),
+tail_loop(#session{buf=Buffer lines=MaxLines}=Session, MaxLines, BytesSent) when is_integer(MaxLines) ->
+  ?INFO("at=tail_loop event=tail_close reason=tcp_closed channel_id=~p bytes_sent=~p", [ChannelId, BytesSent]),
+  ok;
+tail_loop(#session{buf=Buffer lines=MaxLines}=Session, LinesSent, BytesSent) ->
+    logplex_tail_buffer:set_active(Buffer, tail_filter(Filters)),
+    % TODO make this handle TailTime
     receive
-        {logplex_tail_data, Buffer, Data} ->
-            write_chunk(Resp, Data),
-            tail_loop(Socket, Resp, Buffer, Filters, ChannelId, iolist_size(Data) + BytesSent);
+        {logplex_tail_data, Buffer, Data, Count} ->
+            Slice = case MaxLines of
+                      infinite -> Data;
+                      MaxLines ->
+                        SliceSize = min(MaxLines - LinesSent - Count, length(Data)),
+                        lists:sublist(Data, SliceSize)
+                    end,
+            write_chunk(Resp, Slice),
+            tail_loop(Session, LinesSent+len(Slice), iolist_size(Data) + BytesSent);
         {tcp_data, Socket, _} ->
             inet:setopts(Socket, [{active, once}]),
             tail_loop(Socket, Resp, Buffer, Filters, ChannelId, BytesSent);
@@ -696,7 +772,9 @@ json_error(Code, Err) ->
 
 api_relative_url(canary, UUID) when is_binary(UUID) ->
     iolist_to_binary([<<"/v2/canary-fetch/">>, UUID]);
-api_relative_url(_APIVSN, UUID) when is_binary(UUID) ->
+api_relative_url(api_v3, UUID) when is_binary(UUID) ->
+    iolist_to_binary([logplex_app:config(api_endpoint_url, ""), <<"/v3/sessions/">>, UUID]);
+api_relative_url(_API_VSN, UUID) when is_binary(UUID) ->
     iolist_to_binary([logplex_app:config(api_endpoint_url, ""), <<"/sessions/">>, UUID]).
 
 uri_to_binary(Uri) ->
@@ -722,6 +800,13 @@ valid_uri(Req) ->
                   end
           end,
     logplex_drain:valid_uri(Uri).
+
+to_integer(S) when is_list(S) ->
+  list_to_integer(S);
+to_integer(B) when is_binary(B) ->
+  to_integer(binary_to_list(B));
+to_integer(I) when is_integer(I) ->
+  I.
 
 %% Checks whether the API state
 -spec status() -> 'normal' | 'read_only' | 'disabled'.

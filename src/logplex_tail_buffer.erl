@@ -129,8 +129,8 @@ send(S = #state{owner = Owner, buf = Buf,
     case logplex_msg_buffer:to_pkts(Buf, 4096, Fun) of
         {_, 0, NewBuf} ->
             {next_state, active, S#state{buf=NewBuf}};
-        {Data, _Count, NewBuf} ->
-            Owner ! {logplex_tail_data, self(), Data},
+        {Data, Count, NewBuf} ->
+            Owner ! {logplex_tail_data, self(), Data, Count},
             {next_state, passive, S#state{buf=NewBuf}}
     end.
 
