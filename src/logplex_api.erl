@@ -143,7 +143,7 @@ handlers() ->
                 _ ->
                     []
             end,
-        Info = [{channel_id, ChannelId}, {tokens, Tokens}],
+        Info = [{channel_id, backwards_compat_chan_id(ChannelId)}, {tokens, Tokens}],
         {201, ?JSON_CONTENT, iolist_to_binary(mochijson2:encode({struct, Info}))}
     end},
 
@@ -160,7 +160,7 @@ handlers() ->
     {['DELETE', "^/channels/(\\d+)$"], fun(_Req, _Match, read_only) -> {503, ?API_READONLY};
                                           (Req, [ChannelId], _) ->
         authorize(Req),
-        case logplex_channel:delete(list_to_integer(ChannelId)) of
+        case logplex_channel:delete(list_to_binary(ChannelId)) of
             ok -> {200, <<"OK">>};
             {error, not_found} -> {404, <<"Not found">>}
         end
@@ -170,7 +170,7 @@ handlers() ->
     {['DELETE', "^/v2/channels/(\\d+)$"], fun(_Req, _Match, read_only) -> {503, ?API_READONLY};
                                              (Req, [ChannelId], _) ->
         authorize(Req),
-        case logplex_channel:delete(list_to_integer(ChannelId)) of
+        case logplex_channel:delete(list_to_binary(ChannelId)) of
             ok ->
                 {200, <<>>};
             {error, not_found} ->
@@ -187,7 +187,7 @@ handlers() ->
         TokenName == undefined andalso error_resp(400, <<"'name' post param missing">>),
 
         {Time, Token} = timer:tc(fun logplex_token:create/2,
-                                 [list_to_integer(ChannelId), TokenName]),
+                                 [list_to_binary(ChannelId), TokenName]),
         not is_binary(Token) andalso exit({expected_binary, Token}),
 
         ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
@@ -209,7 +209,7 @@ handlers() ->
             ]}))),
 
        {Time, Token} = timer:tc(fun logplex_token:create/2,
-                                 [list_to_integer(ChannelId), Name]),
+                                 [list_to_binary(ChannelId), Name]),
         not is_binary(Token) andalso exit({expected_binary, Token}),
 
         ?INFO("at=create_token name=~s channel_id=~s time=~w~n",
@@ -257,10 +257,9 @@ handlers() ->
         not is_binary(Body) andalso error_resp(404, <<"Not found">>),
 
         {struct, Data} = mochijson2:decode(Body),
-        ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
-        not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
+        ChannelId = proplists:get_value(<<"channel_id">>, Data),
+        not is_binary(ChannelId) andalso error_resp(400, <<"'channel_id' missing">>),
 
-        ChannelId = list_to_integer(binary_to_list(ChannelId0)),
         IsTail = proplists:get_value(<<"tail">>, Data, false) =/= false,
 
         logplex_stats:incr(session_accessed),
@@ -269,7 +268,7 @@ handlers() ->
         NumBin = proplists:get_value(<<"num">>, Data, <<"100">>),
         Num = list_to_integer(binary_to_list(NumBin)),
 
-        ?INFO("at=sessions_start channel_id=~p is_tail=~p num=~p",
+        ?INFO("at=sessions_start channel_id=~s is_tail=~p num=~p",
                 [ChannelId, IsTail, Num]),
 
         Logs = logplex_channel:logs(ChannelId, Num),
@@ -297,7 +296,7 @@ handlers() ->
                 write_chunk(Resp, no_tail_warning()),
                 write_chunk(Resp, close);
             _ ->
-                ?INFO("at=tail_start channel_id=~p filters=~100p",
+                ?INFO("at=tail_start channel_id=~s filters=~100p",
                       [ChannelId, Filters]),
                 logplex_stats:incr(session_tailed),
                 {ok, Buffer} =
@@ -305,7 +304,7 @@ handlers() ->
                 try
                     tail_init(Socket, Resp, Buffer, Filters, ChannelId)
                 after
-                    ?INFO("at=tail_end channel_id=~p",
+                    ?INFO("at=tail_end channel_id=~s",
                           [ChannelId]),
                     exit(Buffer, shutdown)
                 end
@@ -322,9 +321,8 @@ handlers() ->
         not is_binary(Body) andalso error_resp(404, <<"Not found">>),
 
         {struct, Data} = mochijson2:decode(Body),
-        ChannelId0 = proplists:get_value(<<"channel_id">>, Data),
-        not is_binary(ChannelId0) andalso error_resp(400, <<"'channel_id' missing">>),
-        ChannelId = list_to_integer(binary_to_list(ChannelId0)),
+        ChannelId = proplists:get_value(<<"channel_id">>, Data),
+        not is_binary(ChannelId) andalso error_resp(400, <<"'channel_id' missing">>),
 
         logplex_stats:incr(session_accessed),
 
@@ -363,7 +361,7 @@ handlers() ->
         %% Drain reservation occurs in order to ensure DrainId is propgated
         %% back to ETS.
         {ok, DrainId, Token} = logplex_drain:reserve_token(),
-        logplex_drain:cache(DrainId, Token, list_to_integer(ChannelId)),
+        logplex_drain:cache(DrainId, Token, list_to_binary(ChannelId)),
         Resp = [{id, DrainId},
                 {token, Token},
                 {msg, <<"Successfully reserved drain token">>}],
@@ -380,11 +378,11 @@ handlers() ->
         authorize(Req),
 
         DrainId = list_to_integer(DrainIdStr),
-        ChannelId = list_to_integer(ChannelIdStr),
+        ChannelId = list_to_binary(ChannelIdStr),
         RequestId = header_value(Req, "Request-Id", ""),
         case logplex_drain:poll_token(DrainId) of
             {error, timeout} ->
-                ?INFO("drain_id=~p channel_id=~p request_id=~p at=poll_token result=timeout",
+                ?INFO("drain_id=~p channel_id=~s request_id=~p at=poll_token result=timeout",
                       [DrainId, ChannelId, RequestId]),
                 json_error(404, <<"Unknown drain.">>);
             Token when is_binary(Token) ->
@@ -421,7 +419,7 @@ handlers() ->
     {['POST', "^/v2/channels/(\\d+)/drains$"], fun(_Req, _Match, read_only) -> {503, ?API_READONLY};
                                                   (Req, [ChannelIdStr], _) ->
         authorize(Req),
-        ChannelId = list_to_integer(ChannelIdStr),
+        ChannelId = list_to_binary(ChannelIdStr),
         case valid_uri(Req) of
             {error, What} ->
                 Err = io_lib:format("Invalid drain destination: ~p",
@@ -469,9 +467,9 @@ handlers() ->
                                                            (Req, [ChannelId, DrainId], _) ->
         authorize(Req),
         Deletable = try
-            ChannelIdInt = list_to_integer(ChannelId),
+            ChannelIdBin = list_to_binary(ChannelId),
             Drain = logplex_drain:lookup(list_to_integer(DrainId)),
-            ChannelIdInt =:= logplex_drain:channel_id(Drain)
+            ChannelIdBin =:= logplex_drain:channel_id(Drain)
             catch _:_ -> false end,
         case Deletable of
             false ->
@@ -663,11 +661,11 @@ wait_for_nsync() ->
     end.
 
 channel_info(ApiVsn, ChannelId) when is_list(ChannelId) ->
-    channel_info(ApiVsn, list_to_integer(ChannelId));
-channel_info(ApiVsn, ChannelId) when is_integer(ChannelId) ->
+    channel_info(ApiVsn, list_to_binary(ChannelId));
+channel_info(ApiVsn, ChannelId) when is_binary(ChannelId) ->
     case logplex_channel:info(ChannelId) of
         {ChannelId, Tokens, Drains} ->
-            [{channel_id, ChannelId},
+            [{channel_id, backwards_compat_chan_id(ChannelId)},
              {tokens, lists:sort([ token_info(ApiVsn, Token)
                                    || Token = #token{} <- Tokens])},
 
@@ -798,3 +796,12 @@ status_io(507) -> <<"507 Insufficient Storage">>;
 status_io(510) -> <<"510 Not Extended">>;
 status_io(511) -> <<"511 Network Authentication Required">>;
 status_io(B) when is_binary(B) -> B.
+
+-spec backwards_compat_chan_id(binary()) -> binary() | integer().
+backwards_compat_chan_id(Id) when is_binary(Id) ->
+    try
+        list_to_integer(binary_to_list(Id))
+    catch
+        error:badarg ->
+           Id
+    end.

@@ -95,7 +95,7 @@ init([State = #state{drain_id=DrainId, channel_id=ChannelId,
   when H =/= undefined, is_integer(P) ->
     try
         logplex_drain:register(DrainId, ChannelId, udpsyslog, {H,P}),
-        ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
+        ?INFO("drain_id=~p channel_id=~s dest=~s at=spawn",
               log_info(State, [])),
         {ok, State, hibernate}
     catch
@@ -104,7 +104,7 @@ init([State = #state{drain_id=DrainId, channel_id=ChannelId,
 
 %% @private
 handle_call(Call, _From, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_call data=~p",
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_call data=~p",
           log_info(State, [Call])),
     {noreply, State}.
 
@@ -113,7 +113,7 @@ handle_cast(shutdown, State) ->
     {stop, normal, State};
 
 handle_cast(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_cast data=~p",
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_cast data=~p",
           log_info(State, [Msg])),
     {noreply, State}.
 
@@ -122,7 +122,7 @@ handle_info({post, Msg}, State = #state{sock = undefined})
   when is_tuple(Msg) ->
     case connect(State) of
         {ok, Addr, Sock} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=connect try=~p addr=~s",
+            ?INFO("drain_id=~p channel_id=~s dest=~s at=connect try=~p addr=~s",
                   log_info(State, [State#state.failures + 1,
                                    host_str(Addr)])),
             handle_info({post, Msg},
@@ -130,7 +130,7 @@ handle_info({post, Msg}, State = #state{sock = undefined})
         {error, Reason} ->
             NewState = udp_bad(State#state{sock=undefined}),
             msg_stat(drain_dropped, 1, NewState),
-            ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
+            ?ERR("drain_id=~p channel_id=~s dest=~s at=connect "
                  "err=gen_udp data=~p try=~p last_success=~s",
                  log_info(State, [Reason, NewState#state.failures,
                                   time_failed(NewState)])),
@@ -146,19 +146,19 @@ handle_info({post, Msg}, State = #state{}) when is_tuple(Msg) ->
         {error, Reason} ->
             NewState = udp_bad(State#state{sock=undefined}),
             msg_stat(drain_dropped, 1, State),
-            ?ERR("drain_id=~p channel_id=~p dest=~s at=post "
+            ?ERR("drain_id=~p channel_id=~s dest=~s at=post "
                  "err=gen_udp data=~p",
                  log_info(NewState, [Reason])),
             {noreply, NewState}
     end;
 
 handle_info({udp, S, _IP, _Port, Data}, State = #state{sock = S}) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_peer_data data=~p",
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_peer_data data=~p",
           log_info(State, [Data])),
     {noreply, State};
 
 handle_info(Info, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info data=~p",
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_info data=~p",
           log_info(State, [Info])),
     {noreply, State}.
 

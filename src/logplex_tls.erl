@@ -182,7 +182,7 @@ verify_none(_, valid_peer, UserState) ->
     {valid, UserState}.
 
 verify_host(_Cert, {bad_cert, Reason}, UserState) ->
-    ?ERR("channel_id=~p drain_id=~p dest=~s depth=~b at=verify_host "
+    ?ERR("channel_id=~s drain_id=~p dest=~s depth=~b at=verify_host "
          "err=bad_cert reason=~p",
          log_args(UserState, [Reason])),
     {fail, Reason};
@@ -194,12 +194,12 @@ verify_host(Cert, valid_peer, #user_state{ host=Host }=UserState) ->
     try ssl_verify_hostname:verify_cert_hostname(Cert, Host) of
         {valid, Host} -> {valid, incr_depth(UserState)};
         {fail, Reason}=Error ->
-            ?ERR("channel_id=~p drain_id=~p dest=~s depth=~b at=verify_host failure=Reason",
+            ?ERR("channel_id=~s drain_id=~p dest=~s depth=~b at=verify_host failure=Reason",
                  log_args(UserState, [Reason])),
             Error
     catch
         Error:Reason ->
-            ?ERR("channel_id=~p drain_id=~p dest=~s depth=~b at=verify_host err=~p reason=~p trace=~p",
+            ?ERR("channel_id=~s drain_id=~p dest=~s depth=~b at=verify_host err=~p reason=~p trace=~p",
                  log_args(UserState, [Error, Reason, erlang:get_stacktrace()])),
             {fail, unexpected_error}
     end.

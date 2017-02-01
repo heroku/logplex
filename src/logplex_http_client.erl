@@ -56,13 +56,13 @@ init([State = #state{},
                               Host, Port, Client0) of
         {ok, Client} ->
             ConnectEnd = os:timestamp(),
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
+            ?INFO("drain_id=~p channel_id=~s dest=~s at=try_connect "
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
             {ok, State#state{client=Client}};
         {error, Why} ->
             ConnectEnd = os:timestamp(),
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
+            ?WARN("drain_id=~p channel_id=~s dest=~s at=try_connect "
                   "attempt=fail connect_time=~p tcp_err=~1000p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd), Why])),
             ignore
@@ -70,7 +70,7 @@ init([State = #state{},
         Class:Err ->
             Report = {Class, Err, erlang:get_stacktrace()},
             ConnectEnd = os:timestamp(),
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=connect "
+            ?WARN("drain_id=~p channel_id=~s dest=~s at=connect "
                   "attempt=fail err=exception connect_time=~p "
                   "next_state=disconnected "
                   "data=~1000p",
@@ -86,7 +86,7 @@ handle_call({raw_request, Req}, _From, State) ->
             {reply, {ok, Status, Headers}, NewState};
         {error, Why} = Err ->
             ReqEnd = os:timestamp(),
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=response"
+            ?WARN("drain_id=~p channel_id=~s dest=~s at=response"
                   " result=error req_time=~p tcp_err=\"~1000p\"",
                   log_info(State, [ltcy(ReqStart, ReqEnd), Why])),
             {stop, normal, Err, State}

@@ -76,7 +76,7 @@ start_link(ChannelId, Owner) ->
                  Owner::pid(),
                  'passive' | 'notify', Size::pos_integer()) -> any().
 start_link(ChannelId, Owner, Mode, Size)
-  when is_integer(ChannelId),
+  when is_binary(ChannelId),
        is_pid(Owner),
        Mode =:= passive orelse Mode =:= notify,
        is_integer(Size), Size > 0 ->
@@ -119,7 +119,7 @@ init({Mode, S = #state{channel_id = ChannelId,
                        owner = Owner,
                        buf_size = Size}})
   when Mode =:= notify orelse Mode =:= passive,
-       is_pid(Owner), is_integer(ChannelId) ->
+       is_pid(Owner), is_binary(ChannelId) ->
     logplex_channel:register({channel, ChannelId}),
     {ok, Mode, S#state{buf = logplex_msg_buffer:new(Size)}}.
 
