@@ -100,7 +100,7 @@ cache_os_envvars() ->
                       ,{instance_name, ["INSTANCE_NAME"]}
                       ,{metrics_channel_id, ["METRICS_CHANNEL_ID"],
                         optional,
-                        integer}
+                        binary}
                       ,{firehose_channel_ids, ["FIREHOSE_CHANNEL_IDS"],
                         optional}
                       ,{firehose_filter_tokens, ["FIREHOSE_FILTER_TOKENS"],

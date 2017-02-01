@@ -40,7 +40,7 @@
 
 -record(shard_pool, {key=master_shard,
                      size=0 :: integer(),
-                     pool={} :: tuple()}).
+                     pool=[] :: list()}).
 -record(shard, {id :: {integer(), binary()},
                 channel_id :: logplex_channel:id() }).
 
@@ -57,18 +57,18 @@ create_ets_tables() ->
                               {read_concurrency, true}]),
     [?MASTER_TAB, ?SHARD_TAB].
 
-next_shard(ChannelId, Token) 
-  when is_integer(ChannelId),
+next_shard(ChannelId, Token)
+  when is_binary(ChannelId),
        is_binary(Token) ->
     lookup_shard({next_hash(ChannelId), Token}).
 
 post_msg(SourceId, TokenName, Msg)
-  when is_integer(SourceId),
+  when is_binary(SourceId),
        is_binary(TokenName) ->
     case next_shard(SourceId, TokenName) of
         undefined -> ok; % no shards, drop
         SourceId -> ok; % do not firehose a firehose
-        ChannelId when is_integer(ChannelId) ->
+        ChannelId when is_binary(ChannelId) ->
             logplex_realtime:incr(metric_name(ChannelId)),
             logplex_channel:post_msg({channel, ChannelId}, Msg)
     end.
@@ -95,7 +95,7 @@ compute_hash(ChannelId, Bounds) ->
     erlang:phash2({os:timestamp(), self(), ChannelId}, Bounds) + 1.
 
 firehose_channel_ids() ->
-    [ list_to_integer(Id) || Id <- split_list(firehose_channel_ids) ].
+    [ list_to_binary(Id) || Id <- split_list(firehose_channel_ids) ].
 
 firehose_filter_tokens() ->
     [ list_to_binary(Token) || Token <- split_list(firehose_filter_tokens) ].
@@ -143,8 +143,8 @@ store_channels([Shard | Rest]) ->
 create_metric(#shard{ channel_id=ChannelId }) ->
     logplex_realtime:create_counter_metric(metric_name(ChannelId)).
 
-metric_name(ChannelId) when is_integer(ChannelId) ->
+metric_name(ChannelId) when is_binary(ChannelId) ->
     binary_to_atom(
       iolist_to_binary(
-        ["firehose.post.", integer_to_list(ChannelId)]), utf8).
+        ["firehose.post.", ChannelId]), utf8).
 

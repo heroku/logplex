@@ -139,7 +139,7 @@ init_logplex_drain(Config) ->
     init_logplex_drain(drain_mod_for(DrainType), Config).
 
 init_logplex_drain(DrainMod, Config0) ->
-    ChannelID = 1337,
+    ChannelID = <<"1337">>,
     DrainID = 31337,
     DrainTok = "d.12930-321-312213-12321",
     HerokuToken = #token{ id = <<"t.mocked-token">>,

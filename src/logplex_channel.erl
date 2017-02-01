@@ -39,8 +39,6 @@
          ,create/1
          ,destroy/1
          ,id/1
-         ,binary_to_id/1
-         ,id_to_binary/1
          ,name/1
          ,flags/1
         ]).
@@ -61,7 +59,7 @@
 -include("logplex_channel.hrl").
 -include("logplex_logging.hrl").
 
--type id() :: integer().
+-type id() :: binary().
 -type name() :: binary().
 -type flag() :: 'no_tail' | 'no_redis'.
 -type flags() :: [flag()].
@@ -82,7 +80,7 @@ new(Id, Name) -> new(Id, Name, []).
 new(undefined, Name, Flags) when is_binary(Name),
                                  is_list(Flags) ->
     new(new_id(), Name, Flags);
-new(Id, Name, Flags) when is_integer(Id),
+new(Id, Name, Flags) when is_binary(Id),
                           is_binary(Name),
                           is_list(Flags) ->
     #channel{id=Id, name=Name, flags=Flags}.
@@ -95,12 +93,12 @@ create_ets_table() ->
     ets:new(channels, [named_table, public, set, {keypos, #channel.id}]).
 
 register({channel, ChannelId} = C)
-  when is_integer(ChannelId) ->
+  when is_binary(ChannelId) ->
     put(logplex_channel_id, ChannelId), %% post mortem debug info
     gproc:add_local_property(C, true).
 
 unregister({channel, ChannelId} = C)
-  when is_integer(ChannelId) ->
+  when is_binary(ChannelId) ->
     erase(logplex_channel_id),
     gproc:unreg({p, l, C}).
 
@@ -120,7 +118,7 @@ post_msg({channel, ChannelId}=Name, Msg) when is_tuple(Msg) ->
 -spec new_id() -> id().
 new_id() ->
     case redis_helper:channel_index() of
-        ChannelId when is_integer(ChannelId) ->
+        ChannelId when is_binary(ChannelId) ->
             ChannelId
     end.
 
@@ -130,7 +128,7 @@ store(#channel{id=ChannelId, flags=Flags, name=Name}) ->
 
 -spec cache(id(), name(), flags()) -> channel().
 cache(ChannelId, Name, Flags)
-  when is_integer(ChannelId),
+  when is_binary(ChannelId),
        is_binary(Name),
        is_list(Flags) ->
     Chan = #channel{id=ChannelId,
@@ -153,7 +151,7 @@ binary_to_flags(Str) when is_binary(Str) ->
       end || Flag <- binary:split(Str, <<":">>),
              Flag =/= <<>> ].
 
-delete(ChannelId) when is_integer(ChannelId) ->
+delete(ChannelId) when is_binary(ChannelId) ->
     case lookup(ChannelId) of
         undefined ->
             {error, not_found};
@@ -163,7 +161,7 @@ delete(ChannelId) when is_integer(ChannelId) ->
             redis_helper:delete_channel(ChannelId)
     end.
 
-lookup(ChannelId) when is_integer(ChannelId) ->
+lookup(ChannelId) when is_binary(ChannelId) ->
     case ets:lookup(channels, ChannelId) of
         [Channel = #channel{}] -> Channel;
         _ -> undefined
@@ -185,35 +183,35 @@ lookup_flag(Flag, ChannelId) when Flag =:= no_tail;
     end.
 
 -spec lookup_flags(id()) -> flags() | 'not_found'.
-lookup_flags(ChannelId) when is_integer(ChannelId) ->
+lookup_flags(ChannelId) when is_binary(ChannelId) ->
     try ets:lookup_element(channels, ChannelId, #channel.flags)
     catch
         error:badarg ->
             not_found
     end.
 
-lookup_tokens(ChannelId) when is_integer(ChannelId) ->
+lookup_tokens(ChannelId) when is_binary(ChannelId) ->
     logplex_token:lookup_by_channel(ChannelId).
 
-lookup_drains(ChannelId) when is_integer(ChannelId) ->
+lookup_drains(ChannelId) when is_binary(ChannelId) ->
     logplex_drain:lookup_by_channel(ChannelId).
 
-logs(ChannelId, Num) when is_integer(ChannelId), is_integer(Num) ->
+logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
 
     {Map, Interval, _TS} = logplex_shard_info:read(logplex_read_pool_map),
-    Index = redis_shard:key_to_index(integer_to_list(ChannelId)),
+    Index = redis_shard:key_to_index(binary_to_list(ChannelId)),
     {_RedisUrl, Pool} = redis_shard:get_matching_pool(Index, Map, Interval),
-    Cmd = [<<"LRANGE">>, iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))],
+    Cmd = [<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))],
     case catch redo:cmd(Pool, Cmd) of
         {'EXIT', Err} ->
-            ?ERR("at=fetch_logs channel_id=~p err=\"~p\"",
+            ?ERR("at=fetch_logs channel_id=~s err=\"~p\"",
                  [ChannelId, Err]),
             [];
         Logs ->
             Logs
     end.
 
-info(ChannelId) when is_integer(ChannelId) ->
+info(ChannelId) when is_binary(ChannelId) ->
     case lookup(ChannelId) of
         #channel{} ->
             {ChannelId,
@@ -223,7 +221,7 @@ info(ChannelId) when is_integer(ChannelId) ->
     end.
 
 can_add_drain(ChannelId)
-  when is_integer(ChannelId) ->
+  when is_binary(ChannelId) ->
     CurrentCount = logplex_drain:count_by_channel(ChannelId),
     Max = logplex_app:config(max_drains_per_channel),
     if CurrentCount < Max ->
@@ -231,12 +229,6 @@ can_add_drain(ChannelId)
        true ->
             cannot_add_drain
     end.
-
-binary_to_id(Bin) when is_binary(Bin) ->
-    list_to_integer(binary_to_list(Bin)).
-
-id_to_binary(Id) when is_integer(Id) ->
-    iolist_to_binary(integer_to_list(Id)).
 
 num_channels() ->
     ets:info(channels, size).

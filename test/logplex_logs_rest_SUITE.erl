@@ -57,7 +57,7 @@ v2_redirects(Config) ->
     BasicAuth = ?config(auth, Config),
     Logs = ?config(logs, Config) ++ "/v2/channels/",
     ChannelId = ?config(channel_id, Config),
-    Get = Logs ++ integer_to_list(ChannelId),
+    Get = Logs ++ binary_to_list(ChannelId),
     %% Get = ?config(logs, Config) ++ "/healthcheck",
     Res = logplex_api_SUITE:get_(Get, [{headers, [{"Authorization", BasicAuth}]},
                                        {http_opts, [{autoredirect, false}]}]),
@@ -69,7 +69,7 @@ v1_redirects_channels(Config) ->
     ChannelId = ?config(channel_id, Config),
     Get = binary_to_list(iolist_to_binary([?config(logs, Config),
            "/channels/",
-           integer_to_list(ChannelId),
+           binary_to_list(ChannelId),
            "/info"])),
     Res = logplex_api_SUITE:get_(Get, [{headers, [{"Authorization", BasicAuth}]},
                                        {http_opts, [{autoredirect, false}]}]),
@@ -94,7 +94,7 @@ post_logline(Config) ->
                 fun(Req, State) ->
                         State1 = setelement(2, State, Token),
                         State2 = setelement(3, State1, <<"dont'care">>),
-                        State3 = setelement(4, State2, 3),
+                        State3 = setelement(4, State2, <<"3">>),
                         {true, Req, State3}
                 end),
     PostRes = logplex_api_SUITE:post(Post, [{headers, [{"Authorization", BasicAuth}]},
@@ -130,7 +130,7 @@ post_logline_compressed(Config) ->
                         %%                 msgs :: list()}).
                         State1 = setelement(2, State, Token),
                         State2 = setelement(3, State1, <<"dont'care">>),
-                        State3 = setelement(4, State2, 3),
+                        State3 = setelement(4, State2, <<"3">>),
                         {true, Req, State3}
                 end),
     Body = ?BODY(Token),

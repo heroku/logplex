@@ -191,14 +191,14 @@ lookup_token(DrainId) when is_integer(DrainId) ->
 
 store_token(DrainId, Token, ChannelId) when is_integer(DrainId),
                                             is_binary(Token),
-                                            is_integer(ChannelId) ->
+                                            is_binary(ChannelId) ->
     true = ets:insert(drains, #drain{id=DrainId, token=Token,
                                      channel_id=ChannelId}),
     ok.
 
 cache(DrainId, Token, ChannelId) when is_integer(DrainId),
                                       is_binary(Token),
-                                      is_integer(ChannelId) ->
+                                      is_binary(ChannelId) ->
     redis_helper:reserve_drain(DrainId, Token, ChannelId).
 
 -spec create(logplex_channel:id(), #ex_uri{}) ->
@@ -219,7 +219,7 @@ create(ChannelId, URI) ->
 create(DrainId, Token, ChannelId, URI)
   when is_integer(DrainId),
        is_binary(Token),
-       is_integer(ChannelId) ->
+       is_binary(ChannelId) ->
     case ets:match_object(drains, #drain{channel_id=ChannelId,
                                          uri=URI, _='_'}) of
         [_] ->
@@ -302,7 +302,7 @@ has_valid_uri(#drain{uri=Uri}) ->
         _ -> false
     end.
 
-delete_by_channel(ChannelId) when is_integer(ChannelId) ->
+delete_by_channel(ChannelId) when is_binary(ChannelId) ->
     Drains = ets:select(drains,
                         ets:fun2ms(fun (#drain{id=Id,channel_id=C})
                                         when C =:= ChannelId ->
@@ -312,7 +312,7 @@ delete_by_channel(ChannelId) when is_integer(ChannelId) ->
     ok.
 
 
-count_by_channel(ChannelId) when is_integer(ChannelId) ->
+count_by_channel(ChannelId) when is_binary(ChannelId) ->
     ets:select_count(drains,
                      ets:fun2ms(fun (#drain{channel_id=C,
                                             uri = Uri})
@@ -322,7 +322,7 @@ count_by_channel(ChannelId) when is_integer(ChannelId) ->
                                 end)).
 
 
-lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
+lookup_by_channel(ChannelId) when is_binary(ChannelId) ->
     ets:select(drains,
                ets:fun2ms(fun (#drain{channel_id=C})
                                 when C =:= ChannelId ->
@@ -332,7 +332,7 @@ lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
 
 -spec register(id(), logplex_channel:id(), atom(), term()) -> ok.
 register(DrainId, ChannelId, Type, Dest)
-  when is_integer(DrainId), is_integer(ChannelId) ->
+  when is_integer(DrainId), is_binary(ChannelId) ->
     logplex_channel:register({channel, ChannelId}),
     register(DrainId, Type, Dest).
 

@@ -490,7 +490,7 @@ close_max_ttl(Config) ->
 
 %%% HELPERS
 init_config(Config, Tab) ->
-    ChannelId = 1337,
+    ChannelId = <<"1337">>,
     DrainId = 2198712,
     DrainTok = "d.12930-321-312213-12321",
     {ok,URI,_} = ex_uri:decode("http://example.org"),

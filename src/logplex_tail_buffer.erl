@@ -137,7 +137,7 @@ send(S = #state{owner = Owner, buf = Buf,
 check_overload(#state{channel_id=Id}) ->
     case process_info(self(), message_queue_len) of
         {message_queue_len, N} when N > 100000 ->
-            ?ERR("channel_id=~p error=tail_buffer_overload msg_q_len=~p",
+            ?ERR("channel_id=~s error=tail_buffer_overload msg_q_len=~p",
                  [Id, N]),
             erlang:exit(normal);
         _ ->
