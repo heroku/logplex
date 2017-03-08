@@ -297,16 +297,16 @@ handlers() ->
                 write_chunk(Resp, no_tail_warning()),
                 write_chunk(Resp, close);
             _ ->
-                ?INFO("at=tail_start channel_id=~p filters=~100p",
-                      [ChannelId, Filters]),
+                ?INFO("at=tail_start channel_id=~p session_id=~p filters=~100p",
+                      [ChannelId, Session, Filters]),
                 logplex_stats:incr(session_tailed),
                 {ok, Buffer} =
                     logplex_tail_buffer:start_link(ChannelId, self()),
                 try
                     tail_init(Socket, Resp, Buffer, Filters, ChannelId)
                 after
-                    ?INFO("at=tail_end channel_id=~p",
-                          [ChannelId]),
+                    ?INFO("at=tail_end channel_id=~p session_id=~p",
+                          [ChannelId, Session]),
                     exit(Buffer, shutdown)
                 end
         end,
