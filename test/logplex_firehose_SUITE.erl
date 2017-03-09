@@ -42,8 +42,8 @@ end_per_testcase(_CaseName, Config) ->
 %%%%%%%%%%%%%
 
 master_config(_Config) ->
-    FirehoseChannelId = 21894100,
-    ChannelId = 21894200,
+    FirehoseChannelId = <<"21894100">>,
+    ChannelId = <<"21894200">>,
 
     logplex_firehose:create_ets_tables(),
     logplex_firehose:enable(),
@@ -51,7 +51,7 @@ master_config(_Config) ->
     undefined = logplex_firehose:next_shard(ChannelId, <<"app">>),
     undefined = logplex_firehose:next_shard(ChannelId, <<"filtered">>),
 
-    application:set_env(logplex, firehose_channel_ids, lists:concat([FirehoseChannelId])),
+    application:set_env(logplex, firehose_channel_ids, lists:concat([binary_to_list(FirehoseChannelId)])),
     application:set_env(logplex, firehose_filter_tokens, "filtered"),
     logplex_firehose:enable(),
 
@@ -66,8 +66,8 @@ master_config(_Config) ->
     ok.
 
 post_msg(_Config) ->
-    FirehoseChannelId = 21894100,
-    ChannelId = 21894200,
+    FirehoseChannelId = <<"21894100">>,
+    ChannelId = <<"21894200">>,
     Msg1 = term_to_binary(make_ref()),
     Msg2 = term_to_binary(make_ref()),
     Msg3 = term_to_binary(make_ref()),
@@ -81,7 +81,7 @@ post_msg(_Config) ->
     ok = logplex_firehose:post_msg(ChannelId, <<"heroku">>, Msg1),
     false = meck:called(logplex_channel, post_msg, [{channel, FirehoseChannelId}, Msg1]),
 
-    application:set_env(logplex, firehose_channel_ids, lists:concat([FirehoseChannelId])),
+    application:set_env(logplex, firehose_channel_ids, lists:concat([binary_to_list(FirehoseChannelId)])),
     application:set_env(logplex, firehose_filter_tokens, "heroku"),
     logplex_firehose:create_ets_tables(),
     logplex_firehose:enable(),
@@ -104,7 +104,7 @@ post_msg(_Config) ->
 
 distribution(_Config) ->
     FirehoseChannelId = "21894100,21894101",
-    ChannelId = 21894200,
+    ChannelId = <<"21894200">>,
 
     meck:expect(logplex_channel, post_msg, [{[{channel, '_'}, '_'], ok}]),
 
@@ -128,8 +128,8 @@ distribution(_Config) ->
             timeout
     end,
 
-    Calls1 = meck:num_calls(logplex_channel, post_msg, [{channel,21894100}, '_']),
-    Calls2 = meck:num_calls(logplex_channel, post_msg, [{channel,21894101}, '_']),
+    Calls1 = meck:num_calls(logplex_channel, post_msg, [{channel,<<"21894100">>}, '_']),
+    Calls2 = meck:num_calls(logplex_channel, post_msg, [{channel,<<"21894101">>}, '_']),
     ct:pal("channel_id=~p calls=~p", [21894100, Calls1]),
     ct:pal("channel_id=~p calls=~p", [21894101, Calls2]),
 

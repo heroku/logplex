@@ -21,6 +21,7 @@ all() ->
     ,{group, read_only}
     ,{group, disabled}
     ,channel_create_with_app_name
+    ,channel_int_compat
     ].
 
 init_per_suite(Config) ->
@@ -62,6 +63,10 @@ init_per_testcase(channel_create_with_app_name=_Case, Config) ->
     ChannelName = <<"test-app">>,
     Token = <<"test">>,
     [{channel_name, ChannelName}, {channel_token, Token} | Config];
+init_per_testcase(channel_int_compat, Config) ->
+    ChannelName = <<"test-app">>,
+    Token = <<"test">>,
+    [{channel_name, ChannelName}, {channel_token, Token} | Config];
 init_per_testcase(v2_canary_session=Case, Config) ->
     Channel = logplex_channel:create(atom_to_binary(Case, latin1)),
     ChannelId = logplex_channel:id(Channel),
@@ -95,7 +100,7 @@ init_per_testcase(unavailable_v2_canary_fetch=Case, Config) ->
     logplex_SUITE:wait_for_registration({channel, ChannelId}),
     %% Create a working session to simulate a failure after having gotten auth
     UUID = logplex_session:publish(<<"{\"channel_id\":\"",
-                                     (list_to_binary(integer_to_list(ChannelId)))/binary,
+                                     ChannelId/binary,
                                      "\"}">>),
     TokenId = logplex_token:create(ChannelId, <<"ct">>),
     Token = logplex_SUITE:get_token(TokenId),
@@ -129,10 +134,34 @@ channel_create_with_app_name(Config) ->
     201 = proplists:get_value(status_code, Res),
     {struct, Props} = mochijson2:decode(proplists:get_value(body, Res)),
 
-    ChannelId = proplists:get_value(<<"channel_id">>, Props),
+    ChannelId = list_to_binary(integer_to_list(proplists:get_value(<<"channel_id">>, Props))),
     {struct, [{TokenName, Token}]} = proplists:get_value(<<"tokens">>, Props),
 
     meck:unload(),
+    ok.
+
+channel_int_compat(Config) ->
+    %% Queries for channels are only valid if the id is a string representable
+    %% as an integer.
+    ApiV1 = ?config(api, Config) ++ "/channels/",
+    ApiV2 = ?config(api, Config) ++ "/v2/channels/",
+    BasicAuth = ?config(auth, Config),
+    ChannelName = ?config(channel_name, Config),
+    TokenName = ?config(channel_token, Config),
+
+    Channel = logplex_channel:create(ChannelName),
+    ChannelId = logplex_channel:id(Channel),
+    Token = logplex_token:create(ChannelId, TokenName),
+    Opts = [{headers, [{"Authorization", BasicAuth}]}],
+
+    meck:expect(logplex_channel, create, [{[ChannelName], Channel}]),
+    meck:expect(logplex_token, create, [{[ChannelId, TokenName], Token}]),
+
+    200 = proplists:get_value(status_code, get_(ApiV1 ++ binary_to_list(ChannelId) ++ "/info", Opts)),
+    200 = proplists:get_value(status_code, get_(ApiV2 ++ binary_to_list(ChannelId), Opts)),
+    %% Result is not found since the regexes used for api v2 only match integers
+    404 = proplists:get_value(status_code, get_(ApiV1 ++ "123badchannel/info", Opts)),
+    404 = proplists:get_value(status_code, get_(ApiV2 ++ "123badchannel", Opts)),
     ok.
 
 v2_canary_session(Config) ->
@@ -140,7 +169,7 @@ v2_canary_session(Config) ->
     BasicAuth = ?config(auth, Config),
     ChannelId = ?config(channel_id, Config),
     Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
-                     {body, "{\"channel_id\":\"" ++ integer_to_list(ChannelId) ++ "\"}"}]),
+                     {body, "{\"channel_id\":\"" ++ binary_to_list(ChannelId) ++ "\"}"}]),
     201 = proplists:get_value(status_code, Res),
     {struct, [{<<"url">>, <<"/v2/canary-fetch/", Session:36/binary>>}]} = 
         mochijson2:decode(proplists:get_value(body, Res)),
@@ -179,7 +208,7 @@ unavailable_v2_canary_session(Config) ->
     BasicAuth = ?config(auth, Config),
     ChannelId = ?config(channel_id, Config),
     Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
-                     {body, "{\"channel_id\":\"" ++ integer_to_list(ChannelId) ++ "\"}"}]),
+                     {body, "{\"channel_id\":\"" ++ binary_to_list(ChannelId) ++ "\"}"}]),
     503 = proplists:get_value(status_code, Res).
 
 unavailable_v2_canary_fetch(Config) ->

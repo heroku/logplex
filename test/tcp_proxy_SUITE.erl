@@ -28,7 +28,7 @@ end_per_testcase(_Case, Config) ->
 accepts_tcp_syslog_data(Config) ->
     Sock = ?config(socket, Config),
     Token = #token{id = <<"t.d6799f88-4a77-402f-b197-2b722a02cdbc">>,
-                   channel_id = 12345,
+                   channel_id = <<"12345">>,
                    name = <<"test">>},
     meck:expect(logplex_token, lookup, fun(Id) when Id =:= Token#token.id -> Token end),
     meck:expect(logplex_channel, lookup_flag, [no_redis, Token#token.channel_id], meck:val(no_such_flag)),
@@ -49,7 +49,7 @@ accepts_tcp_syslog_data(Config) ->
 rejects_newline_delimited_data(Config) ->
     Sock = ?config(socket, Config),
     Token = #token{id = <<"t.d6799f88-4a77-402f-b197-2b722a02cdbc">>,
-                   channel_id = 12345,
+                   channel_id = <<"12345">>,
                    name = <<"test">>},
 
     meck:expect(logplex_realtime, incr, fun(_Key) -> ok end),

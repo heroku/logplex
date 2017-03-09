@@ -24,7 +24,7 @@ serialize_from_token(TokenId) when is_binary(TokenId) ->
             serialize_channel(logplex_token:channel_id(Token))
     end.
 
-serialize_channel(ChannelId) when is_integer(ChannelId) ->
+serialize_channel(ChannelId) when is_binary(ChannelId) ->
     {logplex_channel:lookup(ChannelId),
      logplex_token:lookup_by_channel(ChannelId),
      logplex_drain:lookup_by_channel(ChannelId)}.
@@ -42,7 +42,7 @@ deserialize_channel({Chan,
 drain_dests() ->
     logplex_drain:by_dest().
 
-post_to_channel(ChannelId, Fmt, Args) when is_integer(ChannelId) ->
+post_to_channel(ChannelId, Fmt, Args) when is_binary(ChannelId) ->
     logplex_channel:post_msg({channel, ChannelId},
                              logplex_syslog_utils:fmt('user', 'debug', now,
                                                       "erlang", "shell",

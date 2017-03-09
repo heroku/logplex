@@ -140,7 +140,7 @@ init([State0 = #state{sock = undefined, host=H, port=P,
                                {H,P}),
         DrainSize = logplex_app:config(tcp_drain_buffer_size),
         State = State0#state{buf = logplex_msg_buffer:new(DrainSize)},
-        ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
+        ?INFO("drain_id=~p channel_id=~s dest=~s at=spawn",
               log_info(State, [])),
         {ok, disconnected,
          State, hibernate}
@@ -155,7 +155,7 @@ disconnected({timeout, TRef, ?RECONNECT_MSG},
     do_reconnect(State#state{reconnect_tref=undefined});
 disconnected({timeout, Received, ?RECONNECT_MSG},
              State = #state{reconnect_tref = Expected}) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_reconnect "
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_reconnect "
           "expected=~p received=~p state=disconnected",
           log_info(State, [Expected, Received])),
     reconnect(State);
@@ -168,7 +168,7 @@ disconnected(timeout, State) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, disconnected, State, hibernate};
 disconnected(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_info "
           "data=~1000p state=disconnected",
           log_info(State, [Msg])),
     {next_state, disconnected, State, ?HIBERNATE_TIMEOUT}.
@@ -205,7 +205,7 @@ ready_to_send(timeout, S = #state{}) ->
     {next_state, ready_to_send, S, hibernate};
 ready_to_send(Msg, State = #state{sock = Sock})
   when is_port(Sock) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_info "
           "data=~p state=ready_to_send",
           log_info(State, [Msg])),
     {next_state, ready_to_send, State, ?HIBERNATE_TIMEOUT}.
@@ -215,7 +215,7 @@ ready_to_send(Msg, State = #state{sock = Sock})
 %% the send operation.
 sending({timeout, Ref, ?SEND_TIMEOUT_MSG},
         S = #state{send_tref=Ref}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s err=send_timeout "
+    ?INFO("drain_id=~p channel_id=~s dest=~s err=send_timeout "
           "state=sending",
           log_info(S, [])),
     reconnect(tcp_bad(S#state{send_tref=undefined}));
@@ -224,7 +224,7 @@ sending({post, Msg}, State) ->
 sending({inet_reply, Sock, ok}, S = #state{sock = Sock, send_tref = TRef}) ->
     send(tcp_good(S#state{send_tref=cancel_timeout(TRef, ?SEND_TIMEOUT_MSG)}));
 sending({inet_reply, Sock, {error, Reason}}, S = #state{sock = Sock}) ->
-    ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
+    ?ERR("drain_id=~p channel_id=~s dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s state=sending",
           log_info(S, [sending, Reason, Sock, duration(S)])),
     reconnect(tcp_bad(S));
@@ -239,7 +239,7 @@ sending(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, sending, S, hibernate};
 sending(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_info "
           "data=~p state=sending",
           log_info(State, [Msg])),
     {next_state, sending, State, ?HIBERNATE_TIMEOUT}.
@@ -247,7 +247,7 @@ sending(Msg, State) ->
 %% @doc We got an close timeout while in the sending state but haven't
 %% gotten an inet_reply yet.
 disconnecting({timeout, _TRef, ?SEND_TIMEOUT_MSG}, S) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s err=send_timeout "
+    ?INFO("drain_id=~p channel_id=~s dest=~s err=send_timeout "
          "state=disconnecting", log_info(S, [])),
     {next_state, disconnected,
      tcp_bad(close(S#state{send_tref=undefined})), hibernate};
@@ -255,7 +255,7 @@ disconnecting({inet_reply, Sock, Status}, S = #state{sock = Sock,
                                                      send_tref = SendTRef}) ->
     case Status of
         {error, Reason} ->
-            ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
+            ?ERR("drain_id=~p channel_id=~s dest=~s state=~p "
                 "err=gen_tcp data=~p sock=~p duration=~s state=disconnecting",
                 log_info(S, [disconnecting, Reason, Sock, duration(S)]));
         _ -> ok
@@ -267,14 +267,14 @@ disconnecting({post, Msg}, State) ->
     {next_state, sending, buffer(Msg, State), ?HIBERNATE_TIMEOUT};
 disconnecting({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     %% Shouldn't see this since entering this state means the timer wasn't reset
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_close_timeout "
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_close_timeout "
           "state=disconnecting", log_info(State, [])),
     {next_state, disconnecting, State};
 disconnecting(timeout, S = #state{}) ->
     %% Sleep when inactive, trigger fullsweep GC & Compact
     {next_state, disconnecting, S, hibernate};
 disconnecting(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_info "
           "data=~p state=disconnecting", log_info(State, [Msg])),
     {next_state, disconnecting, State, ?HIBERNATE_TIMEOUT}.
 
@@ -309,25 +309,25 @@ handle_sync_event(Event, _From, StateName, State) ->
 %% @private
 handle_info({tcp, Sock, Data}, StateName,
             State = #state{sock = Sock}) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s state=~p "
+    ?WARN("drain_id=~p channel_id=~s dest=~s state=~p "
           "err=unexpected_peer_data data=~p",
           log_info(State, [StateName, Data])),
     {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
 handle_info({tcp_error, Sock, Reason}, StateName,
             State = #state{sock = Sock}) ->
-    ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
+    ?ERR("drain_id=~p channel_id=~s dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, Sock, duration(State)])),
     reconnect(tcp_bad(State));
 handle_info({inet_reply, Sock, {error, Reason}}, StateName,
             State = #state{sock = Sock}) ->
-    ?ERR("drain_id=~p channel_id=~p dest=~s state=~p "
+    ?ERR("drain_id=~p channel_id=~s dest=~s state=~p "
          "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, Reason, Sock, duration(State)])),
     reconnect(tcp_bad(State));
 handle_info({tcp_closed, Sock}, StateName,
             State = #state{sock = Sock}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+    ?INFO("drain_id=~p channel_id=~s dest=~s state=~p "
           "err=gen_tcp data=~p sock=~p duration=~s",
           log_info(State, [StateName, closed, Sock, duration(State)])),
     reconnect(tcp_bad(State));
@@ -336,7 +336,7 @@ handle_info(shutdown, StateName, State0 = #state{sock = Sock})
     case send(State0) of
       {next_state, ready_to_send, State1} ->
         catch gen_tcp:close(Sock),
-        ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+        ?INFO("drain_id=~p channel_id=~s dest=~s state=~p "
               "err=gen_tcp data=~p sock=~p duration=~s",
               log_info(State1, [StateName, shutdown, Sock, duration(State1)])),
         {stop, {shutdown,call}, State1#state{sock = undefined}};
@@ -357,7 +357,7 @@ handle_info(Info, StateName, State) ->
 
 %% @private
 terminate(Reason, StateName, State) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+    ?INFO("drain_id=~p channel_id=~s dest=~s state=~p "
           "at=terminate reason=~p",
           log_info(State, [StateName, Reason])),
     ok.
@@ -382,7 +382,7 @@ do_reconnect(State = #state{sock = undefined,
                             failures = Failures}) ->
     case connect(State) of
         {ok, Sock} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s "
+            ?INFO("drain_id=~p channel_id=~s dest=~s "
                   "state=disconnected at=connect try=~p sock=~p",
                   log_info(State, [Failures + 1, Sock])),
             NewState = State#state{sock=Sock,
@@ -399,7 +399,7 @@ do_reconnect(State = #state{sock = undefined,
                     %% first failure.
                     ok;
                 _ ->
-                    ?ERR("drain_id=~p channel_id=~p dest=~s at=connect "
+                    ?ERR("drain_id=~p channel_id=~s dest=~s at=connect "
                          "err=gen_tcp data=~p try=~p last_success=~s "
                          "state=disconnected",
                          log_info(State, [Reason, NewState#state.failures,
@@ -471,7 +471,7 @@ reconnect(State = #state{failures = F}) ->
 
 reconnect_in(MS, State = #state{}) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
-    ?INFO("drain_id=~p channel_id=~p dest=~s "
+    ?INFO("drain_id=~p channel_id=~s dest=~s "
           "state=disconnected at=reconnect_in time=~p",
           log_info(State, [MS])),
     State#state{reconnect_tref = Ref}.
@@ -561,7 +561,7 @@ send(State = #state{buf = Buf, sock = Sock,
                 buffer_to_pkts(Buf, PktSize, DrainTok),
             try
                 case erlang:port_command(Sock, Data, [nosuspend]) of
-                    false -> ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+                    false -> ?INFO("drain_id=~p channel_id=~s dest=~s state=~p "
                                    "err=gen_tcp data=~p sock=~p duration=~s",
                                    log_info(State, [send, port_dropped, Sock,
                                                     duration(State)])),
@@ -577,7 +577,7 @@ send(State = #state{buf = Buf, sock = Sock,
                 end
             catch
                 error:badarg ->
-                    ?INFO("drain_id=~p channel_id=~p dest=~s state=~p "
+                    ?INFO("drain_id=~p channel_id=~s dest=~s state=~p "
                           "err=gen_tcp data=~p sock=~p duration=~s",
                           log_info(State, [send, closed, Sock,
                                            duration(State)])),
@@ -622,7 +622,7 @@ connection_idle(State) ->
 close_if_idle(State = #state{}) ->
     case connection_idle(State) of
         true ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=idle_timeout",
+            ?INFO("drain_id=~p channel_id=~s dest=~s at=idle_timeout",
                   log_info(State, [])),
             {closed, close(State)};
         _ ->
@@ -643,7 +643,7 @@ close(State = #state{sock = Sock}) ->
 close_if_old(State) ->
     case connection_too_old(State) of
         true ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=max_ttl",
+            ?INFO("drain_id=~p channel_id=~s dest=~s at=max_ttl",
                   log_info(State, [])),
             {closed, close(State)};
         _ ->
@@ -701,7 +701,7 @@ maybe_shrink(#state{ failures=Tries, buf=Buf }=State) ->
             NumLost = logplex_msg_buffer:lost(Buf),
             ShrinkAfter = logplex_app:config(tcp_syslog_shrink_after, ?DEFAULT_SHRINK_TRIES),
 
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink "
+            ?INFO("drain_id=~p channel_id=~s dest=~s at=maybe_shrink "
                   "is_full=~p num_lost=~p tries=~p shrink_after=~p",
               log_info(State, [IsFull, NumLost, Tries, ShrinkAfter])),
             case IsFull andalso NumLost > 0 andalso Tries > ShrinkAfter of

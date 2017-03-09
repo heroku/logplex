@@ -66,7 +66,7 @@ process_msg({msg, RawMsg}, ChannelId, Token, TokenName, ShardInfo)
     process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo);
 process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
   when is_binary(RawMsg),
-       is_integer(ChannelId),
+       is_binary(ChannelId),
        is_binary(Token),
        is_binary(TokenName) ->
     logplex_stats:incr(message_received),
@@ -74,7 +74,7 @@ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
     case logplex_channel:lookup_flag(no_redis, ChannelId) of
         not_found ->
             logplex_realtime:incr(unknown_channel),
-            ?INFO("at=process_msg channel_id=~p msg=unknown_channel", [ChannelId]);
+            ?INFO("at=process_msg channel_id=~s msg=unknown_channel", [ChannelId]);
         Flag ->
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
             logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
@@ -130,7 +130,7 @@ process_redis(ChannelId, ShardInfo, Msg, _Flag) ->
     Expiry = logplex_app:config(redis_buffer_expiry),
     HistorySize = logplex_app:config(log_history),
     {Map, Interval} = logplex_shard_info:map_interval(ShardInfo),
-    BufferPid = logplex_shard:lookup(integer_to_list(ChannelId),
+    BufferPid = logplex_shard:lookup(binary_to_list(ChannelId),
                                      Map, Interval),
     Cmd = redis_helper:build_push_msg(ChannelId, HistorySize,
                                       Msg, Expiry),

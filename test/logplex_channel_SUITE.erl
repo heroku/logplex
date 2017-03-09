@@ -46,7 +46,7 @@ end_per_testcase(_CaseName, Config) ->
 %%%%%%%%%%%%%
 
 properties(_Config) ->
-    Channel = {channel, 2189312},
+    Channel = {channel, <<"2189312">>},
     Msg1 = msg(term_to_binary(make_ref())),
     Msg2 = msg(term_to_binary(make_ref())),
     S = self(),

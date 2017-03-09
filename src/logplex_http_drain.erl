@@ -129,7 +129,7 @@ init(State0 = #state{uri=URI,
         Dest = uri_to_string(URI),
         State = start_drain_buffer(State0),
         logplex_drain:register(DrainId, http, Dest),
-        ?INFO("drain_id=~p channel_id=~p dest=~s at=spawn",
+        ?INFO("drain_id=~p channel_id=~s dest=~s at=spawn",
               log_info(State, [])),
         {ok, disconnected,
          State, hibernate}
@@ -153,7 +153,7 @@ disconnected(timeout, S = #state{}) ->
 disconnected({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     handle_close_timeout_msg(disconnected, State);
 disconnected(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_info "
           "data=\"~1000p\" state=disconnected",
           log_info(State, [Msg])),
     {next_state, disconnected, State, ?HIBERNATE_TIMEOUT}.
@@ -171,7 +171,7 @@ connected(timeout, S = #state{}) ->
 connected({timeout, TRef, ?CLOSE_TIMEOUT_MSG}, State=#state{close_tref=TRef}) ->
     handle_close_timeout_msg(connected, State);
 connected(Msg, State) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s err=unexpected_info "
+    ?WARN("drain_id=~p channel_id=~s dest=~s err=unexpected_info "
           "data=\"~1000p\" state=connected",
           log_info(State, [Msg])),
     {next_state, connected, State, ?HIBERNATE_TIMEOUT}.
@@ -221,7 +221,7 @@ handle_info({timeout, Ref, ?RECONNECT_MSG}, StateName,
     {next_state, StateName, State#state{reconnect_tref=undefined}, ?HIBERNATE_TIMEOUT};
 handle_info({timeout, _Ref, ?RECONNECT_MSG}, StateName,
             State = #state{}) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s at=reconnect_timeout "
+    ?WARN("drain_id=~p channel_id=~s dest=~s at=reconnect_timeout "
           "err=invalid_timeout state=~p",
           log_info(State, [StateName])),
     {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
@@ -231,7 +231,7 @@ handle_info(shutdown, _StateName, State) ->
 
 handle_info({'EXIT', BufPid, Reason}, StateName,
             State = #state{buf = BufPid}) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s at=drain_buffer_exit "
+    ?WARN("drain_id=~p channel_id=~s dest=~s at=drain_buffer_exit "
           "state=~p buffer_pid=~p err=~1000p",
           log_info(State, [StateName, BufPid, Reason])),
     NewState = start_drain_buffer(State#state{buf = undefined}),
@@ -239,7 +239,7 @@ handle_info({'EXIT', BufPid, Reason}, StateName,
 
 handle_info({'EXIT', ClientPid, Reason}, StateName,
             State = #state{client = ClientPid}) ->
-    ?WARN("drain_id=~p channel_id=~p dest=~s at=http_client_exit "
+    ?WARN("drain_id=~p channel_id=~s dest=~s at=http_client_exit "
           "state=~p client_pid=~p err=~1000p",
           log_info(State, [StateName, ClientPid, Reason])),
     {next_state, StateName, State, ?HIBERNATE_TIMEOUT};
@@ -255,13 +255,13 @@ handle_info(Info, StateName, State) ->
 handle_close_timeout_msg(StateName, State) ->
     case close_if_idle(State) of
         {closed, ClosedState} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s state=~s at=idle_timeout",
+            ?INFO("drain_id=~p channel_id=~s dest=~s state=~s at=idle_timeout",
                   log_info(State, [StateName])),
             {next_state, disconnected, ClosedState, hibernate};
         {not_closed, State} ->
             case close_if_old(State) of
                 {closed, ClosedState} ->
-                    ?INFO("drain_id=~p channel_id=~p dest=~s state=~s at=max_ttl",
+                    ?INFO("drain_id=~p channel_id=~s dest=~s state=~s at=max_ttl",
                           log_info(State, [StateName])),
                     {next_state, disconnected, ClosedState, hibernate};
                 {not_closed, NewState} ->
@@ -283,7 +283,7 @@ try_connect(State = #state{uri=Uri,
                                         Port, ?CONNECT_TIMEOUT) of
         {ok, Pid} ->
             ConnectEnd = os:timestamp(),
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=try_connect "
+            ?INFO("drain_id=~p channel_id=~s dest=~s at=try_connect "
                   "attempt=success connect_time=~p",
                   log_info(State, [ltcy(ConnectStart, ConnectEnd)])),
             NewTimerState = start_close_timer(State),
@@ -294,7 +294,7 @@ try_connect(State = #state{uri=Uri,
             http_fail(State);
         Why ->
             ConnectEnd = os:timestamp(),
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=try_connect "
+            ?WARN("drain_id=~p channel_id=~s dest=~s at=try_connect "
                   "attempt=fail reason=~100p connect_time=~p",
                   log_info(State, [Why, ltcy(ConnectStart, ConnectEnd)])),
             http_fail(State)
@@ -343,14 +343,14 @@ try_send(Frame = #frame{tries = Tries},
             ReqEnd = os:timestamp(),
             handle_response_status(Status, Frame, State, ltcy(ReqStart, ReqEnd));
         {error, Why} ->
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request"
+            ?WARN("drain_id=~p channel_id=~s dest=~s at=send_request"
                   " tcp_err=~1000p",
                   log_info(State, [Why])),
             http_fail(retry_frame(Frame, State))
     catch
         exit:{timeout, _} ->
             ReqEnd = os:timestamp(),
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
+            ?WARN("drain_id=~p channel_id=~s dest=~s at=send_request "
                   "attempt=fail err=timeout req_time=~p "
                   "next_state=disconnected",
                   log_info(State, [ltcy(ReqStart, ReqEnd)])),
@@ -358,14 +358,14 @@ try_send(Frame = #frame{tries = Tries},
         Class:Err ->
             ReqEnd = os:timestamp(),
             Report = {Class, Err, erlang:get_stacktrace()},
-            ?WARN("drain_id=~p channel_id=~p dest=~s at=send_request "
+            ?WARN("drain_id=~p channel_id=~s dest=~s at=send_request "
                   "attempt=fail err=exception req_time=~p "
                   "next_state=disconnected data=~1000p",
                   log_info(State, [ltcy(ReqStart, ReqEnd), Report])),
             http_fail(retry_frame(Frame,State))
     end;
 try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=try_send result=tries_exceeded "
+    ?INFO("drain_id=~p channel_id=~s dest=~s at=try_send result=tries_exceeded "
           "frame_tries=0 dropped_msgs=~p",
           log_info(State, [C])),
     ready_to_send(drop_frame(Frame, State)).
@@ -377,12 +377,12 @@ try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
 handle_response_status(Status, Frame, State, _Latency) when 200 =< Status, Status < 300 ->
     ready_to_send(sent_frame(Frame, State));
 handle_response_status(Status, Frame, State, Latency) when 400 =< Status, Status < 500, Status =/= 429 ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
+    ?INFO("drain_id=~p channel_id=~s dest=~s at=response "
           "result=~p status=~p msg_count=~p req_time=~p",
           log_info(State, [perm_fail, Status, Frame#frame.msg_count, Latency])),
     ready_to_send(drop_frame(Frame, State));
 handle_response_status(Status, Frame, State, Latency) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=response "
+    ?INFO("drain_id=~p channel_id=~s dest=~s at=response "
           "result=~p status=~p msg_count=~p req_time=~p",
           log_info(State, [temp_fail, Status, Frame#frame.msg_count, Latency])),
     http_fail(retry_frame(Frame, State)).
@@ -608,7 +608,7 @@ backoff_slot(Attempt) when is_integer(Attempt), Attempt > 0 ->
 
 reconnect_in(MS, State = #state{ reconnect_attempt=N }) ->
     Ref = erlang:start_timer(MS, self(), ?RECONNECT_MSG),
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=reconnect_delay attempt=~p delay=~p "
+    ?INFO("drain_id=~p channel_id=~s dest=~s at=reconnect_delay attempt=~p delay=~p "
           "ref=~p",
           log_info(State, [N, MS, Ref])),
     State#state{reconnect_tref = Ref, reconnect_attempt=N+1}.
@@ -687,13 +687,13 @@ maybe_resize(State0=#state{ service=degraded, buf=Buf }) ->
     State = State0#state{last_good_time=os:timestamp(), service=normal},
     Size = default_buf_size(),
     logplex_drain_buffer:resize_msg_buffer(Buf, Size),
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_resize"
+    ?INFO("drain_id=~p channel_id=~s dest=~s at=maybe_resize"
           " service=normal buf_size=~p",
           log_info(State, [Size])),
     State.
 
 maybe_shrink(State = #state{last_good_time=never}) ->
-    ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
+    ?INFO("drain_id=~p channel_id=~s dest=~s at=maybe_shrink"
           " service=~p time_since_last_good=~p",
           log_info(State, [degraded, never])),
     State#state{service=degraded};
@@ -701,13 +701,13 @@ maybe_shrink(State = #state{buf=Buf, service=Status, last_good_time=LastGood}) -
     MsecSinceLastGood = trunc(timer:now_diff(os:timestamp(), LastGood) / 1000),
     case {MsecSinceLastGood > shrink_timeout(), Status} of
         {true, normal} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
+            ?INFO("drain_id=~p channel_id=~s dest=~s at=maybe_shrink"
                   " service=~p time_since_last_good=~p",
                   log_info(State, [degraded, MsecSinceLastGood])),
             logplex_drain_buffer:resize_msg_buffer(Buf, ?SHRINK_BUF_SIZE),
             State#state{service=degraded};
         {_, Status} ->
-            ?INFO("drain_id=~p channel_id=~p dest=~s at=maybe_shrink"
+            ?INFO("drain_id=~p channel_id=~s dest=~s at=maybe_shrink"
                   " service=~p time_since_last_good=~p",
                   log_info(State, [Status, MsecSinceLastGood])),
             State#state{service=Status}
