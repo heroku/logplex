@@ -91,7 +91,8 @@ create_ets_table() ->
 
 create(ChannelId, TokenName) when is_binary(ChannelId), is_binary(TokenName) ->
     TokenId = new_unique_token_id(),
-    case store(new(TokenId, ChannelId, TokenName)) of
+    Token = new(TokenId, ChannelId, TokenName),
+    case store(Token) of
         ok ->
             TokenId;
         Err ->

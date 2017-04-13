@@ -41,6 +41,7 @@
          ,id/1
          ,name/1
          ,flags/1
+         ,poll/2
         ]).
 
 -export([lookup_flag/2
@@ -88,6 +89,16 @@ new(Id, Name, Flags) when is_binary(Id),
 id(#channel{id=Id}) -> Id.
 name(#channel{id=Name}) -> Name.
 flags(#channel{flags=Flags}) -> Flags.
+
+-spec poll(id(), non_neg_integer()) -> channel() | {error, term()}.
+poll(ChannelId, Timeout) ->
+    logplex_db:poll(fun() ->
+                            case lookup(ChannelId) of
+                                undefined -> not_found;
+                                Channel -> {found, Channel}
+                            end
+                    end,
+                    Timeout).
 
 create_ets_table() ->
     ets:new(channels, [named_table, public, set, {keypos, #channel.id}]).

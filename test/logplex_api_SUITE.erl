@@ -123,6 +123,7 @@ channel_create_with_app_name(Config) ->
     ChannelId = logplex_channel:id(Channel),
     Token = logplex_token:create(ChannelId, TokenName),
 
+    meck:new([logplex_channel, logplex_token], [passthrough]),
     meck:expect(logplex_channel, create, [{[ChannelName], Channel}]),
     meck:expect(logplex_token, create, [{[ChannelId, TokenName], Token}]),
 
@@ -137,7 +138,7 @@ channel_create_with_app_name(Config) ->
     ChannelId = list_to_binary(integer_to_list(proplists:get_value(<<"channel_id">>, Props))),
     {struct, [{TokenName, Token}]} = proplists:get_value(<<"tokens">>, Props),
 
-    meck:unload(),
+    meck:unload([logplex_channel, logplex_token]),
     ok.
 
 channel_int_compat(Config) ->
@@ -154,6 +155,7 @@ channel_int_compat(Config) ->
     Token = logplex_token:create(ChannelId, TokenName),
     Opts = [{headers, [{"Authorization", BasicAuth}]}],
 
+    meck:new([logplex_channel, logplex_token], [passthrough]),
     meck:expect(logplex_channel, create, [{[ChannelName], Channel}]),
     meck:expect(logplex_token, create, [{[ChannelId, TokenName], Token}]),
 
@@ -162,6 +164,8 @@ channel_int_compat(Config) ->
     %% Result is not found since the regexes used for api v2 only match integers
     404 = proplists:get_value(status_code, get_(ApiV1 ++ "123badchannel/info", Opts)),
     404 = proplists:get_value(status_code, get_(ApiV2 ++ "123badchannel", Opts)),
+
+    meck:unload([logplex_channel, logplex_token]),
     ok.
 
 v2_canary_session(Config) ->
@@ -171,7 +175,7 @@ v2_canary_session(Config) ->
     Res = post(Api, [{headers, [{"Authorization", BasicAuth}]},
                      {body, "{\"channel_id\":\"" ++ binary_to_list(ChannelId) ++ "\"}"}]),
     201 = proplists:get_value(status_code, Res),
-    {struct, [{<<"url">>, <<"/v2/canary-fetch/", Session:36/binary>>}]} = 
+    {struct, [{<<"url">>, <<"/v2/canary-fetch/", Session:36/binary>>}]} =
         mochijson2:decode(proplists:get_value(body, Res)),
     {save_config, [{canary_session, Session},
                    {channel_id, ChannelId}]}.
@@ -226,12 +230,16 @@ post(Url, Opts) ->
     ct:pal("POST url=~p, opts=~p", [Url, Opts]),
     request(post, Url, Opts).
 
+put_(Url, Opts) ->
+    ct:pal("PUT url=~p, opts=~p", [Url, Opts]),
+    request(put, Url, Opts).
+
 request(Method, Url, Opts) ->
     Headers = proplists:get_value(headers, Opts, []),
     Timeout = proplists:get_value(timeout, Opts, 1000),
-    Request = 
+    Request =
         case Method of
-            post ->
+            PostOrPut when PostOrPut == post; PostOrPut == put ->
                 ContentType = proplists:get_value(content_type, Opts, "application/json"),
                 BodyToSend = proplists:get_value(body, Opts, []),
                 {Url, Headers, ContentType, BodyToSend};

@@ -49,6 +49,8 @@
     ,{http_frame_retries, 2} % #extra attempts after first
     ,{http_log_input_port, 8601} % syslog/http tcp listen port
     ,{http_port, 8001}
+    ,{http_v3_url, "http://localhost:8002"}
+    ,{http_v3_port, 8002}
     ,{http_reconnect_time, 10} % ms
     ,{http_send_loss_msg, send} % send | dont_send
     ,{log_history, 1500}

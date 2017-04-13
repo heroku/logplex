@@ -66,6 +66,7 @@ start(_StartType, _StartArgs) ->
     read_availability_zone(),
     boot_pagerduty(),
     logplex_realtime:setup_metrics(),
+    logplex_api_v3:setup_metrics(),
     setup_redgrid_vals(),
     setup_redis_shards(),
     logplex_tls:cache_env(),
@@ -84,6 +85,8 @@ start_phase(listen, normal, _Args) ->
                                      logplex_syslog_sup:child_spec()),
     {ok, _} = supervisor:start_child(logplex_sup,
                                      logplex_logs_rest:child_spec()),
+    {ok, _} = supervisor:start_child(logplex_sup,
+                                     logplex_api_v3:child_spec()),
     ok.
 
 cache_os_envvars() ->

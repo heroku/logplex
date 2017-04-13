@@ -85,10 +85,12 @@
 -type token() :: binary().
 -type type() :: 'tcpsyslog' | 'http' | 'udpsyslog' | 'tlssyslog'.
 -type deprecated_types() :: 'tcpsyslog2' | 'tcpsyslog_old'.
+-type drain() :: #drain{}.
 
 -export_type([id/0
               ,token/0
               ,type/0
+              ,drain/0
              ]).
 
 new(Id, ChannelId, Token, Type, Uri) ->

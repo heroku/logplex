@@ -124,13 +124,15 @@ lookup_channel(ChannelId) when is_binary(ChannelId) ->
 %% TOKEN
 %%====================================================================
 -spec create_token(logplex_channel:id(), logplex_token:id(),
-                   logplex_token:name()) -> any().
+                   logplex_token:name()) -> ok | {error, term()}.
 create_token(ChannelId, TokenId, TokenName)
   when is_binary(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
     Res = redo_block:cmd(config_block, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName]),
     case Res of
-        <<"OK">> -> ok;
-        Err -> Err
+        <<"OK">> ->
+            ok;
+        {error, Err} ->
+            {error, Err}
     end.
 
 delete_token(TokenId) when is_binary(TokenId) ->
