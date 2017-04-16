@@ -183,11 +183,11 @@ auth(Id, Pass) when is_binary(Id), is_binary(Pass) ->
 %% Internal functions
 %%====================================================================
 
-cred_from_dict(<<"pass">>, Pass, Cred = #cred{}) ->
-    Cred#cred{pass = Pass};
+cred_from_dict(<<"pass">>, Pass, Cred = #cred{}) when is_binary(Pass) ->
+    Cred#cred{pass = binary:copy(Pass)};
 
-cred_from_dict(<<"name">>, Name, Cred = #cred{}) ->
-    Cred#cred{name = Name};
+cred_from_dict(<<"name">>, Name, Cred = #cred{}) when is_binary(Name) ->
+    Cred#cred{name = binary:copy(Name)};
 
 cred_from_dict(<<"full_api">>, _, Cred = #cred{perms = Perms}) ->
     Cred#cred{perms = ordsets:add_element(full_api, Perms)};
