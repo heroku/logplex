@@ -52,8 +52,6 @@ links:
     properties:
       url:
         "$ref": "/schemata/drain#/definitions/url"
-    required:
-    - url
     type:
     - object
   title: Create

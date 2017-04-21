@@ -332,9 +332,6 @@
                 "$ref": "#/definitions/drain/definitions/url"
               }
             },
-            "required": [
-              "url"
-            ],
             "type": [
               "object"
             ]
@@ -521,7 +518,7 @@
           "schema": {
             "properties": {
               "channel": {
-                "description": "unique identifier of channel (must be a string)",
+                "description": "unique identifier of channel",
                 "example": "12345",
                 "type": [
                   "string"
