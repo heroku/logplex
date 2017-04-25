@@ -54,7 +54,7 @@ channels_path() ->
     {?CHANNELS_PATH, logplex_api_v3_channels, [{route, ?CHANNELS_PATH}]}.
 
 drains_path() ->
-    {?DRAINS_PATH, logplex_api_v3_drains, [{route, ?DRAINS_PATH}]}.
+    {?DRAINS_PATH, [{drain_id, int}], logplex_api_v3_drains, [{route, ?DRAINS_PATH}]}.
 
 sessions_path() ->
     {?SESSIONS_PATH, logplex_api_v3_sessions, [{route, ?SESSIONS_PATH}]}.

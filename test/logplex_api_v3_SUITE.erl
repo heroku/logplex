@@ -4,16 +4,34 @@
 -compile(export_all).
 
 all() ->
-    [channel_service_unavailable
-     , channel_method_not_allowed
-     , create_channel_without_tokens
-     , create_channel_with_tokens
-     , update_channel_with_tokens
-     , update_channel_and_remove_some_tokens
-     , update_channel_and_nuke_tokens
-     , get_channel_without_tokens
-     , get_channel_with_tokens
-     , delete_channel
+    [{group, channels}
+     , {group, drains}
+    ].
+
+groups() ->
+    [{channels,
+      [channel_service_unavailable
+       , channel_method_not_allowed
+       , create_channel_without_tokens
+       , create_channel_with_tokens
+       , update_channel_with_tokens
+       , update_channel_and_remove_some_tokens
+       , update_channel_and_nuke_tokens
+       , get_channel_without_tokens
+       , get_channel_with_tokens
+       , delete_channel
+       , reject_invalid_channel_payload
+      ]},
+     {drains,
+      [reserve_drain_without_drainurl
+       , reserve_drain_with_drainurl
+       , update_drain_url
+       , update_invalid_drain_url
+       , get_channel_with_drain
+       , cannot_add_duplicate_drain
+       , cannot_add_more_drains
+       , cannot_update_non_existing_drain
+      ]}
     ].
 
 init_per_suite(Config) ->
@@ -30,11 +48,20 @@ end_per_suite(Config) ->
 init_per_testcase(channel_service_unavailable, Config) ->
     logplex_app:set_config(api_status, disabled),
     Config;
+init_per_testcase(cannot_add_more_drains, Config) ->
+    OldLimit = logplex_app:config(max_drains_per_channel),
+    logplex_app:set_config(max_drains_per_channel, 1),
+    [{old_max_drains_per_channel, OldLimit}
+     | Config];
 init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(channel_service_unavailable, Config) ->
     logplex_app:set_config(api_status, normal),
+    Config;
+end_per_testcase(cannot_add_more_drains, Config) ->
+    OldLimit = ?config(old_max_drains_per_channel, Config),
+    logplex_app:set_config(max_drains_per_channel, OldLimit),
     Config;
 end_per_testcase(_, Config) ->
     Config.
@@ -90,6 +117,7 @@ create_channel_with_tokens(Config) ->
     [{channel, Channel}
      , {tokens, Tokens}
      | Config].
+
 
 update_channel_with_tokens(Config0) ->
     Config = create_channel_without_tokens(Config0),
@@ -186,6 +214,151 @@ delete_channel(Config0) ->
     ?assertEqual(204, proplists:get_value(status_code, Props)),
     ?assertEqual("No Content", proplists:get_value(http_reason, Props)).
 
+reject_invalid_channel_payload(Config) ->
+    Channel = new_channel(),
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel,
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    JSON = jsx:encode([<<"asdf">>, 123, [<<"test">>]]),
+    Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
+    Props = logplex_api_SUITE:put_(Url, Opts),
+    Body = proplists:get_value(body, Props),
+    RespHeaders = proplists:get_value(headers, Props),
+    Resp = jsx:decode(list_to_binary(Body), [return_maps]),
+    ?assertEqual(<<"invalid payload">>, maps:get(<<"error">>, Resp)),
+    ?assertEqual(400, proplists:get_value(status_code, Props)),
+    ?assertEqual("Bad Request", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", RespHeaders)),
+    ?assert(is_list(proplists:get_value("request-id", RespHeaders))),
+    Config.
+
+reserve_drain_without_drainurl(Config0) ->
+    Config = create_channel_without_tokens(Config0),
+    Channel = ?config(channel, Config),
+    Props = create_drain(Channel, undefined, Config),
+    Body = proplists:get_value(body, Props),
+    Headers = proplists:get_value(headers, Props),
+    Resp = jsx:decode(list_to_binary(Body), [return_maps]),
+    DrainId = maps:get(<<"id">>, Resp),
+    DrainToken = maps:get(<<"token">>, Resp),
+    ?assert(is_integer(DrainId)),
+    ?assert(is_binary(DrainToken)),
+    ?assert(not maps:is_key(<<"url">>, Resp)),
+    ?assertEqual(201, proplists:get_value(status_code, Props)),
+    ?assertEqual("Created", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    ?assert(is_list(proplists:get_value("location", Headers))),
+    [{drain, {DrainId, DrainToken, undefined}}
+     | Config].
+
+reserve_drain_with_drainurl(Config0) ->
+    Config = create_channel_without_tokens(Config0),
+    Channel = ?config(channel, Config),
+    DrainUrl = new_drain_url(),
+    Props = create_drain(Channel, DrainUrl, Config),
+    Body = proplists:get_value(body, Props),
+    Headers = proplists:get_value(headers, Props),
+    Resp = jsx:decode(list_to_binary(Body), [return_maps]),
+    DrainId = maps:get(<<"id">>, Resp),
+    DrainToken = maps:get(<<"token">>, Resp),
+    ?assert(is_integer(DrainId)),
+    ?assert(is_binary(DrainToken)),
+    ?assertEqual(DrainUrl, maps:get(<<"url">>, Resp)),
+    ?assertEqual(201, proplists:get_value(status_code, Props)),
+    ?assertEqual("Created", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    ?assert(is_list(proplists:get_value("location", Headers))),
+    [{drain, {DrainId, DrainToken, DrainUrl}}
+     | Config].
+
+update_drain_url(Config0) ->
+    Config = reserve_drain_without_drainurl(Config0),
+    Channel = ?config(channel, Config),
+    {DrainId, DrainToken, _} = proplists:get_value(drain, Config),
+    DrainUrl = new_drain_url(),
+    Props = update_drain(Channel, DrainId, DrainUrl, Config),
+    ct:pal("~p~n", [Props]),
+    Headers = proplists:get_value(headers, Props),
+    Body = proplists:get_value(body, Props),
+    Resp = jsx:decode(list_to_binary(Body), [return_maps]),
+    ?assertEqual(DrainId, maps:get(<<"id">>, Resp)),
+    ?assertEqual(DrainToken, maps:get(<<"token">>, Resp)),
+    ?assertEqual(DrainUrl, maps:get(<<"url">>, Resp)),
+    ?assertEqual(200, proplists:get_value(status_code, Props)),
+    ?assertEqual("OK", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    ?assert(not proplists:is_defined("location", Headers)),
+    [{drain, {DrainId, DrainToken, DrainUrl}}
+     | Config].
+
+update_invalid_drain_url(Config0) ->
+    Config = reserve_drain_without_drainurl(Config0),
+    Channel = ?config(channel, Config),
+    {DrainId, _, _} = proplists:get_value(drain, Config),
+    DrainUrl = <<"i am not a url">>,
+    Props = update_drain(Channel, DrainId, DrainUrl, Config),
+    ?assertEqual(400, proplists:get_value(status_code, Props)),
+    ?assertEqual("Bad Request", proplists:get_value(http_reason, Props)),
+    Config.
+
+get_channel_with_drain(Config0) ->
+    Config = reserve_drain_with_drainurl(Config0),
+    Channel = ?config(channel, Config),
+    {DrainId, DrainToken, DrainUrl} = proplists:get_value(drain, Config),
+    Props = get_channel(Channel, Config),
+    ct:pal("~p~n", [Props]),
+    Headers = proplists:get_value(headers, Props),
+    Body = proplists:get_value(body, Props),
+    Resp = jsx:decode(list_to_binary(Body), [return_maps]),
+    ?assertMatch(Channel, binary_to_list(maps:get(<<"channel">>, Resp))),
+    ?assertMatch([#{<<"id">> := DrainId, <<"token">> := DrainToken, <<"url">> := DrainUrl}],
+                 maps:get(<<"drains">>, Resp)),
+    ?assertEqual(200, proplists:get_value(status_code, Props)),
+    ?assertEqual("OK", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+cannot_add_duplicate_drain(Config0) ->
+    Config = reserve_drain_with_drainurl(Config0),
+    Channel = ?config(channel, Config),
+    {_, _, DrainUrl} = proplists:get_value(drain, Config),
+    Props = create_drain(Channel, DrainUrl, Config),
+    Headers = proplists:get_value(headers, Props),
+    ct:pal("~p~n", [Props]),
+    ?assertEqual(409, proplists:get_value(status_code, Props)),
+    ?assertEqual("Conflict", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+cannot_add_more_drains(Config0) ->
+    Config = reserve_drain_with_drainurl(Config0),
+    Channel = ?config(channel, Config),
+    DrainUrl = new_drain_url(),
+    Props = create_drain(Channel, DrainUrl, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(422, proplists:get_value(status_code, Props)),
+    ?assertEqual("Unprocessable Entity", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+cannot_update_non_existing_drain(Config0) ->
+    Config = create_channel_without_tokens(Config0),
+    Channel = ?config(channel, Config),
+    DrainUrl = new_drain_url(),
+    FakeDrainId = 123123123123123123123123,
+    Props = update_drain(Channel, FakeDrainId, DrainUrl, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(404, proplists:get_value(status_code, Props)),
+    ?assertEqual("Not Found", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
 put_channel(Channel, Tokens, Config) ->
     Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel,
     Headers = [{"Authorization", ?config(auth, Config)}],
@@ -206,12 +379,35 @@ delete_channel(Channel, Config) ->
     Opts = [{headers, Headers}, {timeout, timer:seconds(10)}],
     logplex_api_SUITE:request(delete, Url, Opts).
 
+create_drain(Channel, DrainUrl, Config) ->
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/drains",
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    JSON = jsx:encode(maps:from_list([{<<"url">>, DrainUrl} || DrainUrl =/= undefined])),
+    Opts = [{headers, Headers}, {body, JSON}, {http_opts, [{autoredirect, false}]},
+            {timeout, timer:seconds(10)}],
+    logplex_api_SUITE:post(Url, Opts).
+
+update_drain(Channel, DrainId, DrainUrl, Config) ->
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/drains/" ++ integer_to_list(DrainId),
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    JSON = jsx:encode(maps:from_list([{<<"url">>, DrainUrl} || DrainUrl =/= undefined])),
+    Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
+    logplex_api_SUITE:put_(Url, Opts).
+
+delete_drain(Channel, DrainId, Config) ->
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/drains/" ++ integer_to_list(DrainId),
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    Opts = [{headers, Headers}, {timeout, timer:seconds(10)}],
+    logplex_api_SUITE:request(delete, Url, Opts).
 
 new_channel() ->
     "app-" ++ uuid:to_string(uuid:v4()).
 
 new_token_name() ->
     "token-" ++ uuid:to_string(uuid:v4()).
+
+new_drain_url() ->
+    list_to_binary([<<"http://my.drain.com/">>, uuid:to_binary(uuid:v4())]).
 
 set_os_vars() ->
     [os:putenv(Key,Val) || {Key,Val} <-

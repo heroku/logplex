@@ -26,7 +26,7 @@ update:
 test:
 test: testclean compile
 	epmd &
-	$(REBAR),test,syslog ct --setcookie "asfasfas" --name foo@127.0.0.1
+	$(REBAR),syslog ct --setcookie "asfasfas" --name foo@127.0.0.1
 
 clean:
 	$(REBAR) clean

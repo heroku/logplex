@@ -23,7 +23,6 @@
 -module(nsync_callback).
 -export([handle/1]).
 
--include_lib("ex_uri/include/ex_uri.hrl").
 -include("logplex.hrl").
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
