@@ -6,12 +6,14 @@
 all() ->
     [{group, channels}
      , {group, drains}
+     , {group, tokens}
     ].
 
 groups() ->
     [{channels,
       [channel_service_unavailable
        , channel_method_not_allowed
+       , channel_not_authorized
        , create_channel_without_tokens
        , create_channel_with_tokens
        , update_channel_with_tokens
@@ -23,16 +25,31 @@ groups() ->
        , reject_invalid_channel_payload
       ]},
      {drains,
-      [reserve_drain_without_drainurl
+      [drains_service_unavailable
+       , drains_not_authorized
+       , reserve_drain_without_drainurl
        , reserve_drain_with_drainurl
        , update_drain_url
-       , update_invalid_drain_url
+       , cannot_update_invalid_drain_url
        , get_channel_with_drain
        , cannot_add_duplicate_drain
        , cannot_add_more_drains
        , cannot_update_non_existing_drain
+       , cannot_create_drain_for_non_existing_channel
+       , cannot_update_drain_for_non_existing_channel
+      ]},
+     {tokens,
+      [tokens_service_unavailable
+       , tokens_not_authorized
+       , create_new_token
+       , cannot_create_token_without_name
+       , cannot_create_token_for_non_existing_channel
       ]}
     ].
+
+%% -----------------------------------------------------------------------------
+%% setup functions
+%% -----------------------------------------------------------------------------
 
 init_per_suite(Config) ->
     set_os_vars(),
@@ -45,9 +62,18 @@ end_per_suite(Config) ->
     application:stop(logplex),
     Config.
 
-init_per_testcase(channel_service_unavailable, Config) ->
+init_per_testcase(Testcase , Config)
+  when Testcase == channel_service_unavailable;
+       Testcase == drains_service_unavailable;
+       Testcase == tokens_service_unavailable ->
     logplex_app:set_config(api_status, disabled),
     Config;
+init_per_testcase(Testcase , Config)
+  when Testcase == channel_not_authorized;
+       Testcase == drains_not_authorized;
+       Testcase == tokens_not_authorized ->
+    [{auth, "Basic bad-token"}
+     | Config];
 init_per_testcase(cannot_add_more_drains, Config) ->
     OldLimit = logplex_app:config(max_drains_per_channel),
     logplex_app:set_config(max_drains_per_channel, 1),
@@ -56,7 +82,10 @@ init_per_testcase(cannot_add_more_drains, Config) ->
 init_per_testcase(_, Config) ->
     Config.
 
-end_per_testcase(channel_service_unavailable, Config) ->
+end_per_testcase(Testcase, Config)
+  when Testcase == channel_service_unavailable;
+       Testcase == drains_service_unavailable;
+       Testcase == tokens_service_unavailable ->
     logplex_app:set_config(api_status, normal),
     Config;
 end_per_testcase(cannot_add_more_drains, Config) ->
@@ -65,6 +94,10 @@ end_per_testcase(cannot_add_more_drains, Config) ->
     Config;
 end_per_testcase(_, Config) ->
     Config.
+
+%% -----------------------------------------------------------------------------
+%% channels tests
+%% -----------------------------------------------------------------------------
 
 channel_service_unavailable(Config) ->
     Channel = new_channel(),
@@ -82,6 +115,13 @@ channel_method_not_allowed(Config) ->
          ?assertEqual(405, proplists:get_value(status_code, Props)),
          ?assertEqual("Method Not Allowed", proplists:get_value(http_reason, Props))
      end || Method <- [post, head, options]],
+    Config.
+
+channel_not_authorized(Config) ->
+    Channel = new_channel(),
+    Props = get_channel(Channel, Config),
+    ?assertEqual(401, proplists:get_value(status_code, Props)),
+    ?assertEqual("Unauthorized", proplists:get_value(http_reason, Props)),
     Config.
 
 create_channel_without_tokens(Config) ->
@@ -231,6 +271,25 @@ reject_invalid_channel_payload(Config) ->
     ?assert(is_list(proplists:get_value("request-id", RespHeaders))),
     Config.
 
+%% -----------------------------------------------------------------------------
+%% drains tests
+%% -----------------------------------------------------------------------------
+
+drains_service_unavailable(Config) ->
+    Channel = new_channel(),
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/drains",
+    Props = logplex_api_SUITE:post( Url, []),
+    ?assertEqual(503, proplists:get_value(status_code, Props)),
+    ?assertEqual("Service Unavailable", proplists:get_value(http_reason, Props)),
+    Config.
+
+drains_not_authorized(Config) ->
+    Channel = new_channel(),
+    Props = create_drain(Channel, undefined, Config),
+    ?assertEqual(401, proplists:get_value(status_code, Props)),
+    ?assertEqual("Unauthorized", proplists:get_value(http_reason, Props)),
+    Config.
+
 reserve_drain_without_drainurl(Config0) ->
     Config = create_channel_without_tokens(Config0),
     Channel = ?config(channel, Config),
@@ -293,7 +352,7 @@ update_drain_url(Config0) ->
     [{drain, {DrainId, DrainToken, DrainUrl}}
      | Config].
 
-update_invalid_drain_url(Config0) ->
+cannot_update_invalid_drain_url(Config0) ->
     Config = reserve_drain_without_drainurl(Config0),
     Channel = ?config(channel, Config),
     {DrainId, _, _} = proplists:get_value(drain, Config),
@@ -359,6 +418,84 @@ cannot_update_non_existing_drain(Config0) ->
     ?assert(is_list(proplists:get_value("request-id", Headers))),
     Config.
 
+cannot_create_drain_for_non_existing_channel(Config) ->
+    FakeChannel = new_channel(),
+    DrainUrl = new_drain_url(),
+    Props = create_drain(FakeChannel, DrainUrl, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(404, proplists:get_value(status_code, Props)),
+    ?assertEqual("Not Found", proplists:get_value(http_reason, Props)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+cannot_update_drain_for_non_existing_channel(Config) ->
+    FakeChannel = new_channel(),
+    FakeDrainId = 123123123123123123123123,
+    DrainUrl = new_drain_url(),
+    Props = update_drain(FakeChannel, FakeDrainId, DrainUrl, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(404, proplists:get_value(status_code, Props)),
+    ?assertEqual("Not Found", proplists:get_value(http_reason, Props)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+%% -----------------------------------------------------------------------------
+%% tokens tests
+%% -----------------------------------------------------------------------------
+
+tokens_service_unavailable(Config) ->
+    Channel = new_channel(),
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/tokens",
+    Props = logplex_api_SUITE:post(Url, []),
+    ?assertEqual(503, proplists:get_value(status_code, Props)),
+    ?assertEqual("Service Unavailable", proplists:get_value(http_reason, Props)),
+    Config.
+
+tokens_not_authorized(Config) ->
+    Channel = new_channel(),
+    TokenName = new_token_name(),
+    Props = create_token(Channel, TokenName, Config),
+    ?assertEqual(401, proplists:get_value(status_code, Props)),
+    ?assertEqual("Unauthorized", proplists:get_value(http_reason, Props)),
+    Config.
+
+create_new_token(Config0) ->
+    Config = create_channel_with_tokens(Config0),
+    Channel = ?config(channel, Config),
+    TokenName = new_token_name(),
+    Props = create_token(Channel, TokenName, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(200, proplists:get_value(status_code, Props)),
+    ?assertEqual("OK", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+cannot_create_token_without_name(Config0) ->
+    Config = create_channel_with_tokens(Config0),
+    Channel = ?config(channel, Config),
+    TokenName = undefined,
+    Props = create_token(Channel, TokenName, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(400, proplists:get_value(status_code, Props)),
+    ?assertEqual("Bad Request", proplists:get_value(http_reason, Props)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+cannot_create_token_for_non_existing_channel(Config) ->
+    FakeChannel = new_channel(),
+    TokenName = new_token_name(),
+    Props = create_token(FakeChannel, TokenName, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(404, proplists:get_value(status_code, Props)),
+    ?assertEqual("Not Found", proplists:get_value(http_reason, Props)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+%% -----------------------------------------------------------------------------
+%% helper functions
+%% -----------------------------------------------------------------------------
+
 put_channel(Channel, Tokens, Config) ->
     Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel,
     Headers = [{"Authorization", ?config(auth, Config)}],
@@ -399,6 +536,13 @@ delete_drain(Channel, DrainId, Config) ->
     Headers = [{"Authorization", ?config(auth, Config)}],
     Opts = [{headers, Headers}, {timeout, timer:seconds(10)}],
     logplex_api_SUITE:request(delete, Url, Opts).
+
+create_token(Channel, TokenName, Config) ->
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/tokens",
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    JSON = jsx:encode(maps:from_list([{<<"name">>, list_to_binary(TokenName)} || TokenName =/= undefined])),
+    Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
+    logplex_api_SUITE:post(Url, Opts).
 
 new_channel() ->
     "app-" ++ uuid:to_string(uuid:v4()).
