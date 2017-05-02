@@ -47,38 +47,6 @@ links:
       - channel_id
     type:
       - object
-  title: Create (Deprecated)
-- description: Create a new session.
-  href: "/v3/sessions"
-  method: POST
-  rel: create
-  type:
-    - object
-  schema:
-    properties:
-      channel:
-        description: unique identifier of channel
-        example: "12345"
-        type:
-        - string
-      num:
-        description: number of log lines to fetch
-        default: "100"
-        type:
-        - string
-        - "null"
-      tail:
-        description: if present with any value, start a live tail session
-        type:
-        - boolean
-        - "null"
-    example:
-      channel_id: "12345"
-      num: "5"
-    required:
-      - channel
-    type:
-      - object
   title: Create
 - description: Get the chunk encoded session log data. If tail was specified the connection is long lived.
   href: "/sessions/{(%2Fschemata%2Fsession%23%2Fdefinitions%2Fidentity)}"

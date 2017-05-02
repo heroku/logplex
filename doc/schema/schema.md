@@ -506,7 +506,7 @@ Sessions fetch recent and real-time logs from channels.
 | ------- | ------- | ------- | ------- |
 | **url** | *string* | session URL to GET to retrieve logs | `"https://logplex.heroku.com/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f"` |
 
-### <a name="link-POST-session-/v2/sessions">Session Create (Deprecated)</a>
+### <a name="link-POST-session-/v2/sessions">Session Create</a>
 
 Create a new session.
 
@@ -533,53 +533,6 @@ POST /v2/sessions
 
 ```bash
 $ curl -n -X POST https://logplex.heroku.com/v2/sessions \
-  -d '{
-  "channel_id": "12345",
-  "num": "5"
-}' \
-  -H "Content-Type: application/json"
-```
-
-
-#### Response Example
-
-```
-HTTP/1.1 201 Created
-```
-
-```json
-{
-  "url": "https://logplex.heroku.com/sessions/d58fb90e-c2bd-4e16-bfe0-e9e7cc7bff7f"
-}
-```
-
-### <a name="link-POST-session-/v3/sessions">Session Create</a>
-
-Create a new session.
-
-```
-POST /v3/sessions
-```
-
-#### Required Parameters
-
-| Name | Type | Description | Example |
-| ------- | ------- | ------- | ------- |
-| **channel** | *string* | unique identifier of channel | `"12345"` |
-
-
-#### Optional Parameters
-
-| Name | Type | Description | Example |
-| ------- | ------- | ------- | ------- |
-| **num** | *nullable string* | number of log lines to fetch<br/> **default:** `"100"` | `null` |
-| **tail** | *nullable boolean* | if present with any value, start a live tail session | `null` |
-
-
-#### Curl Example
-
-```bash
-$ curl -n -X POST https://logplex.heroku.com/v3/sessions \
   -d '{
   "channel_id": "12345",
   "num": "5"
