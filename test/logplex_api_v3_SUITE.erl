@@ -7,6 +7,7 @@ all() ->
     [{group, channels}
      , {group, drains}
      , {group, tokens}
+     , {group, healthcheck}
     ].
 
 groups() ->
@@ -44,6 +45,11 @@ groups() ->
        , create_new_token
        , cannot_create_token_without_name
        , cannot_create_token_for_non_existing_channel
+      ]},
+     {healthcheck,
+      [healthy,
+       unhealthy,
+       healtcheck_not_authorized
       ]}
     ].
 
@@ -71,7 +77,8 @@ init_per_testcase(Testcase , Config)
 init_per_testcase(Testcase , Config)
   when Testcase == channel_not_authorized;
        Testcase == drains_not_authorized;
-       Testcase == tokens_not_authorized ->
+       Testcase == tokens_not_authorized;
+       Testcase == healtcheck_not_authorized ->
     [{auth, "Basic bad-token"}
      | Config];
 init_per_testcase(cannot_add_more_drains, Config) ->
@@ -493,6 +500,39 @@ cannot_create_token_for_non_existing_channel(Config) ->
     Config.
 
 %% -----------------------------------------------------------------------------
+%% healtchecks
+%% -----------------------------------------------------------------------------
+
+healthy(Config) ->
+    Props = check_health(Config),
+    Body = proplists:get_value(body, Props),
+    Resp = jsx:decode(list_to_binary(Body), [return_maps]),
+    ?assertEqual(200, proplists:get_value(status_code, Props)),
+    ?assertEqual("OK", proplists:get_value(http_reason, Props)),
+    ?assert(maps:is_key(<<"status">>, Resp)),
+    Config.
+
+unhealthy(Config) ->
+    %% note: only tests when processes monitored by logplex_sup are down
+    [begin
+         erlang:suspend_process(whereis(logplex_sup)),
+         erlang:exit(whereis(Mod), kill),
+         Props = check_health(Config),
+         ?assertEqual(503, proplists:get_value(status_code, Props)),
+         ?assertEqual("Service Unavailable", proplists:get_value(http_reason, Props)),
+         erlang:resume_process(whereis(logplex_sup))
+     end || Mod <- [logplex_stats, logplex_tail, logplex_shard]],
+    Config.
+
+healtcheck_not_authorized(Config) ->
+    Props = check_health(Config),
+    ?assertEqual(401, proplists:get_value(status_code, Props)),
+    ?assertEqual("Unauthorized", proplists:get_value(http_reason, Props)),
+    Config.
+
+
+
+%% -----------------------------------------------------------------------------
 %% helper functions
 %% -----------------------------------------------------------------------------
 
@@ -543,6 +583,12 @@ create_token(Channel, TokenName, Config) ->
     JSON = jsx:encode(maps:from_list([{<<"name">>, list_to_binary(TokenName)} || TokenName =/= undefined])),
     Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
     logplex_api_SUITE:post(Url, Opts).
+
+check_health(Config) ->
+    Url = ?config(api_v3_url, Config) ++ "/v3/healthcheck",
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    Opts = [{headers, Headers}, {timeout, timer:seconds(10)}],
+    logplex_api_SUITE:get_(Url, Opts).
 
 new_channel() ->
     "app-" ++ uuid:to_string(uuid:v4()).

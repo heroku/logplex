@@ -19,10 +19,11 @@
          done/4
         ]).
 
--define(CHANNELS_PATH, "/v3/channels/:channel_id").
--define(DRAINS_PATH,   "/v3/channels/:channel_id/drains/[:drain_id]").
--define(TOKENS_PATH,   "/v3/channels/:channel_id/tokens").
--define(SESSIONS_PATH, "/v3/sessions/[:session_id]").
+-define(HEALTHCHECK_PATH, "/v3/healthcheck").
+-define(CHANNELS_PATH,    "/v3/channels/:channel_id").
+-define(DRAINS_PATH,      "/v3/channels/:channel_id/drains/[:drain_id]").
+-define(TOKENS_PATH,      "/v3/channels/:channel_id/tokens").
+-define(SESSIONS_PATH,    "/v3/sessions/[:session_id]").
 
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 -define(REQUEST_ID_HEADER_KEY, <<"request-id">>).
@@ -44,11 +45,15 @@ child_spec() ->
 
 dispatch() ->
     cowboy_router:compile([{'_',
-                            [channels_path(),
+                            [healthcheck_path(),
+                             channels_path(),
                              drains_path(),
                              sessions_path(),
                              tokens_path()
                             ]}]).
+
+healthcheck_path() ->
+    {?HEALTHCHECK_PATH, logplex_api_v3_healthcheck, []}.
 
 channels_path() ->
     {?CHANNELS_PATH, logplex_api_v3_channels, [{route, ?CHANNELS_PATH}]}.
