@@ -42,6 +42,7 @@
          ,lookup_token/1
          ,poll/1
          ,poll_token/1
+         ,find/1
          ,store_token/3
          ,create_ets_table/0
         ]).
@@ -175,7 +176,7 @@ reserve_token() ->
     end.
 
 
--spec poll(id()) -> drain() | {error, term()}.
+-spec poll(id()) -> drain() | {error, timeout}.
 poll(DrainId) ->
     logplex_db:poll(fun() ->
                             case lookup(DrainId) of
@@ -195,6 +196,21 @@ poll_token(DrainId) ->
                             end
                     end,
                     logplex_app:config(default_redis_poll_ms, 2000)).
+
+-spec find(id()) -> {ok, token()} | {error, not_found | timeout}.
+find(DrainId) when is_integer(DrainId) ->
+    case redis_helper:drain_exists(DrainId) of
+        true ->
+            case poll(DrainId) of
+                Drain when is_record(Drain, drain) ->
+                    {ok, Drain};
+                {error, Reason} ->
+                    {error, Reason}
+            end;
+        false ->
+            {error, not_found}
+    end.
+
 
 lookup_token(DrainId) when is_integer(DrainId) ->
     case ets:lookup(drains, DrainId) of

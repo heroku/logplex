@@ -86,30 +86,29 @@ is_authorized(Req, State) ->
 resource_exists(Req, #state{ channel_id = ChannelId,
                              drain_id   = undefined } = State) ->
     %% this is a POST
-    Timeout = logplex_app:config(default_redis_poll_ms, 2000),
-    case logplex_channel:poll(ChannelId, Timeout) of
-        Channel when is_record(Channel, channel) ->
+    case logplex_channel:find(ChannelId) of
+        {ok, _Channel} ->
             %% we return false here because we're attempting to create a new resource
             {false, Req, State};
-        {error, timeout} ->
+        {error, not_found} ->
             %% channel was not found
             {ok, Req1} = cowboy_req:reply(404, Req),
             {halt, Req1, State}
     end;
 resource_exists(Req, #state{ channel_id = ChannelId,
                              drain_id   = DrainId } = State) ->
-    Timeout = logplex_app:config(default_redis_poll_ms, 2000),
-    case logplex_channel:poll(ChannelId, Timeout) of
-        Channel when is_record(Channel, channel) ->
-            case logplex_drain:poll(DrainId) of
-                Drain when is_record(Drain, drain) ->
+
+    case logplex_channel:find(ChannelId) of
+        {ok, _Channel} ->
+            case logplex_drain:find(DrainId) of
+                {ok, Drain} ->
                     NewState = State#state{ drain = Drain },
                     {true, Req, NewState};
-                {error, timeout} ->
+                {error, not_found} ->
                     %% drain was not found for channel
                     {false, Req, State}
             end;
-        {error, timeout} ->
+        {error, not_found} ->
             %% channel was not found
             {ok, Req1} = cowboy_req:reply(404, Req),
             {halt, Req1, State}

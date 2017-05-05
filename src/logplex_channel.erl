@@ -43,6 +43,7 @@
          ,flags/1
          ,poll/2
          ,set_flag/2
+         ,find/1
         ]).
 
 -export([lookup_flag/2
@@ -91,7 +92,7 @@ id(#channel{id=Id}) -> Id.
 name(#channel{id=Name}) -> Name.
 flags(#channel{flags=Flags}) -> Flags.
 
--spec poll(id(), non_neg_integer()) -> channel() | {error, term()}.
+-spec poll(id(), non_neg_integer()) -> channel() | {error, timeout}.
 poll(ChannelId, Timeout) ->
     logplex_db:poll(fun() ->
                             case lookup(ChannelId) of
@@ -104,6 +105,23 @@ poll(ChannelId, Timeout) ->
 -spec set_flag(flag(), channel()) -> channel().
 set_flag(Flag, #channel{ flags = Flags } = Channel) ->
     Channel#channel{ flags = [Flag | Flags]}.
+
+
+-spec find(id()) -> {ok, channel()} | {error, not_found | timeout}.
+find(ChannelId) when is_binary(ChannelId) ->
+    case redis_helper:channel_exists(ChannelId) of
+        true ->
+            Timeout = logplex_app:config(default_redis_poll_ms, 2000),
+            case poll(ChannelId, Timeout) of
+                Channel when is_record(Channel, channel) ->
+                    {ok, Channel};
+                {error, Reason} ->
+                    {error, Reason}
+            end;
+        false ->
+            {error, not_found}
+    end.
+
 
 create_ets_table() ->
     ets:new(channels, [named_table, public, set, {keypos, #channel.id}]).

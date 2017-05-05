@@ -50,16 +50,14 @@ is_authorized(Req, State) ->
 
 %% @private
 resource_exists(Req, #state{ channel_id = ChannelId } = State) ->
-    %% we need to poll here to wait for nsync replication to catch up
-    Timeout = logplex_app:config(default_redis_poll_ms, 2000),
-    case logplex_channel:poll(ChannelId, Timeout) of
-        Channel when is_record(Channel, channel) ->
+    case logplex_channel:find(ChannelId) of
+        {ok, Channel} ->
             {ChannelId, Tokens, Drains} = logplex_channel:info(ChannelId),
             NewState = State#state{ channel = Channel,
                                     tokens  = Tokens,
                                     drains  = Drains },
             {true, Req, NewState};
-        {error, timeout} ->
+        {error, not_found} ->
             %% channel was not found
             {false, Req, State}
     end.

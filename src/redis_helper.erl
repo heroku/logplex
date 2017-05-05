@@ -111,6 +111,15 @@ build_push_msg(ChannelId, Length, Msg, Expiry)
     iolist_to_binary([ redis_proto:build(Cmd)
                        || Cmd <- Cmds ]).
 
+-spec channel_exists(logplex_channel:id()) -> boolean().
+channel_exists(ChannelId) when is_binary(ChannelId) ->
+    Key = iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>]),
+    Cmd = [<<"EXISTS">>, Key],
+    case redo_block:cmd(config_block, Cmd) of
+        1 -> true;
+        0 -> false
+    end.
+
 %% seems unused
 lookup_channel(ChannelId) when is_binary(ChannelId) ->
     case redo_block:cmd(config_block, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
@@ -184,6 +193,15 @@ delete_drain(DrainId) when is_integer(DrainId) ->
     case redo_block:cmd(config_block, [<<"DEL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
         1 -> ok;
         Err -> Err
+    end.
+
+-spec drain_exists(logplex_drain:id()) -> boolean().
+drain_exists(DrainId) when is_integer(DrainId) ->
+    Key = drain_redis_key(DrainId),
+    Cmd = [<<"EXISTS">>, Key],
+    case redo_block:cmd(config_block, Cmd) of
+        1 -> true;
+        0 -> false
     end.
 
 %%====================================================================
