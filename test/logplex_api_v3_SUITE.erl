@@ -24,6 +24,7 @@ groups() ->
        , get_channel_with_tokens
        , delete_channel
        , reject_invalid_channel_payload
+       , retain_flags_on_channel_update
       ]},
      {drains,
       [drains_service_unavailable
@@ -276,6 +277,17 @@ reject_invalid_channel_payload(Config) ->
     ?assertEqual("Bad Request", proplists:get_value(http_reason, Props)),
     ?assertEqual("application/json", proplists:get_value("content-type", RespHeaders)),
     ?assert(is_list(proplists:get_value("request-id", RespHeaders))),
+    Config.
+
+retain_flags_on_channel_update(Config0) ->
+    Config = create_channel_without_tokens(Config0),
+    Channel = ?config(channel, Config),
+    ChanRec = logplex_channel:poll(list_to_binary(Channel), timer:seconds(1)),
+    ChanRecWithFlag = logplex_channel:set_flag(no_redis, ChanRec),
+    ?assertEqual(ok, logplex_channel:store(ChanRecWithFlag)),
+    Props = put_channel(Channel, [], Config),
+    ?assertEqual(200, proplists:get_value(status_code, Props)),
+    ?assertEqual(ChanRecWithFlag, logplex_channel:poll(list_to_binary(Channel), timer:seconds(1))),
     Config.
 
 %% -----------------------------------------------------------------------------

@@ -42,6 +42,7 @@
          ,name/1
          ,flags/1
          ,poll/2
+         ,set_flag/2
         ]).
 
 -export([lookup_flag/2
@@ -99,6 +100,10 @@ poll(ChannelId, Timeout) ->
                             end
                     end,
                     Timeout).
+
+-spec set_flag(flag(), channel()) -> channel().
+set_flag(Flag, #channel{ flags = Flags } = Channel) ->
+    Channel#channel{ flags = [Flag | Flags]}.
 
 create_ets_table() ->
     ets:new(channels, [named_table, public, set, {keypos, #channel.id}]).

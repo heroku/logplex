@@ -19,6 +19,7 @@
 
 -record(state, {
           channel_id :: binary(),
+          channel :: undefined | logplex_channel:channel(),
           tokens = [] :: [logplex_token:token()],
           drains = [] :: [logplex_drain:drain()]
          }).
@@ -54,8 +55,9 @@ resource_exists(Req, #state{ channel_id = ChannelId } = State) ->
     case logplex_channel:poll(ChannelId, Timeout) of
         Channel when is_record(Channel, channel) ->
             {ChannelId, Tokens, Drains} = logplex_channel:info(ChannelId),
-            NewState = State#state{ tokens = Tokens,
-                                    drains = Drains },
+            NewState = State#state{ channel = Channel,
+                                    tokens  = Tokens,
+                                    drains  = Drains },
             {true, Req, NewState};
         {error, timeout} ->
             %% channel was not found
@@ -84,6 +86,7 @@ content_types_accepted(Req, State) ->
 
 %% @private
 from_json(Req, #state{ channel_id = ChannelId,
+                       channel    = Channel,
                        tokens     = OldTokens,
                        drains     = Drains } = State) ->
     {ok, Body, Req1} = cowboy_req:body(Req),
@@ -91,7 +94,7 @@ from_json(Req, #state{ channel_id = ChannelId,
         Map ->
             case validate_payload(Map) of
                 {ok, NewTokenNames} ->
-                    ok = create_or_update_channel(ChannelId),
+                    ok = create_or_update_channel(ChannelId, Channel),
                     case create_or_update_tokens(ChannelId, OldTokens, NewTokenNames) of
                         {ok, Tokens} ->
                             Resp = serialize_channel(ChannelId, Tokens, Drains),
@@ -129,8 +132,10 @@ validate_payload(#{}) ->
 validate_payload(_) ->
     {error, invalid_payload}.
 
-create_or_update_channel(ChannelId) ->
+create_or_update_channel(ChannelId, undefined) ->
     Channel = logplex_channel:new(ChannelId),
+    logplex_channel:store(Channel);
+create_or_update_channel(_ChannelId, Channel) ->
     logplex_channel:store(Channel).
 
 -spec create_or_update_tokens(logplex_channel:id(),
