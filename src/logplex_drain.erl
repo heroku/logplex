@@ -35,11 +35,14 @@
          ,delete_partial_drain/2
          ,lookup_by_channel/1
          ,count_by_channel/1
+         ,exists/2
          ,create/2
          ,create/4
          ,store/1
          ,lookup_token/1
+         ,poll/1
          ,poll_token/1
+         ,find/1
          ,store_token/3
          ,create_ets_table/0
         ]).
@@ -74,7 +77,6 @@
         ]).
 
 -include("logplex.hrl").
--include_lib("ex_uri/include/ex_uri.hrl").
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
@@ -85,10 +87,12 @@
 -type token() :: binary().
 -type type() :: 'tcpsyslog' | 'http' | 'udpsyslog' | 'tlssyslog'.
 -type deprecated_types() :: 'tcpsyslog2' | 'tcpsyslog_old'.
+-type drain() :: #drain{}.
 
 -export_type([id/0
               ,token/0
               ,type/0
+              ,drain/0
              ]).
 
 new(Id, ChannelId, Token, Type, Uri) ->
@@ -171,6 +175,17 @@ reserve_token() ->
             Err
     end.
 
+
+-spec poll(id()) -> drain() | {error, timeout}.
+poll(DrainId) ->
+    logplex_db:poll(fun() ->
+                            case lookup(DrainId) of
+                                undefined -> not_found;
+                                Drain -> {found, Drain}
+                            end
+                    end,
+                    logplex_app:config(default_redis_poll_ms, 2000)).
+
 -spec poll_token(id()) -> token() | {'error', 'timeout'} |
                           {'error', any()}.
 poll_token(DrainId) ->
@@ -182,6 +197,21 @@ poll_token(DrainId) ->
                     end,
                     logplex_app:config(default_redis_poll_ms, 2000)).
 
+-spec find(id()) -> {ok, token()} | {error, not_found | timeout}.
+find(DrainId) when is_integer(DrainId) ->
+    case redis_helper:drain_exists(DrainId) of
+        true ->
+            case poll(DrainId) of
+                Drain when is_record(Drain, drain) ->
+                    {ok, Drain};
+                {error, Reason} ->
+                    {error, Reason}
+            end;
+        false ->
+            {error, not_found}
+    end.
+
+
 lookup_token(DrainId) when is_integer(DrainId) ->
     case ets:lookup(drains, DrainId) of
         [#drain{token=Token}] ->
@@ -191,14 +221,14 @@ lookup_token(DrainId) when is_integer(DrainId) ->
 
 store_token(DrainId, Token, ChannelId) when is_integer(DrainId),
                                             is_binary(Token),
-                                            is_integer(ChannelId) ->
+                                            is_binary(ChannelId) ->
     true = ets:insert(drains, #drain{id=DrainId, token=Token,
                                      channel_id=ChannelId}),
     ok.
 
 cache(DrainId, Token, ChannelId) when is_integer(DrainId),
                                       is_binary(Token),
-                                      is_integer(ChannelId) ->
+                                      is_binary(ChannelId) ->
     redis_helper:reserve_drain(DrainId, Token, ChannelId).
 
 -spec create(logplex_channel:id(), #ex_uri{}) ->
@@ -219,12 +249,11 @@ create(ChannelId, URI) ->
 create(DrainId, Token, ChannelId, URI)
   when is_integer(DrainId),
        is_binary(Token),
-       is_integer(ChannelId) ->
-    case ets:match_object(drains, #drain{channel_id=ChannelId,
-                                         uri=URI, _='_'}) of
-        [_] ->
+       is_binary(ChannelId) ->
+    case exists(ChannelId, URI) of
+        true ->
             {error, already_exists};
-        [] ->
+        false ->
             case redis_helper:create_url_drain(DrainId, ChannelId,
                                                Token, uri_to_binary(URI)) of
                 ok ->
@@ -233,6 +262,9 @@ create(DrainId, Token, ChannelId, URI)
                     {error, Err}
             end
     end.
+
+exists(ChannelId, URI) when is_binary(ChannelId) ->
+    [] =/= ets:match_object(drains, #drain{channel_id=ChannelId, uri=URI, _='_'}).
 
 store(#drain{id=DrainId, token=Token,
              channel_id=ChannelId, uri=URI}) ->
@@ -302,7 +334,7 @@ has_valid_uri(#drain{uri=Uri}) ->
         _ -> false
     end.
 
-delete_by_channel(ChannelId) when is_integer(ChannelId) ->
+delete_by_channel(ChannelId) when is_binary(ChannelId) ->
     Drains = ets:select(drains,
                         ets:fun2ms(fun (#drain{id=Id,channel_id=C})
                                         when C =:= ChannelId ->
@@ -312,7 +344,7 @@ delete_by_channel(ChannelId) when is_integer(ChannelId) ->
     ok.
 
 
-count_by_channel(ChannelId) when is_integer(ChannelId) ->
+count_by_channel(ChannelId) when is_binary(ChannelId) ->
     ets:select_count(drains,
                      ets:fun2ms(fun (#drain{channel_id=C,
                                             uri = Uri})
@@ -322,7 +354,7 @@ count_by_channel(ChannelId) when is_integer(ChannelId) ->
                                 end)).
 
 
-lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
+lookup_by_channel(ChannelId) when is_binary(ChannelId) ->
     ets:select(drains,
                ets:fun2ms(fun (#drain{channel_id=C})
                                 when C =:= ChannelId ->
@@ -332,7 +364,7 @@ lookup_by_channel(ChannelId) when is_integer(ChannelId) ->
 
 -spec register(id(), logplex_channel:id(), atom(), term()) -> ok.
 register(DrainId, ChannelId, Type, Dest)
-  when is_integer(DrainId), is_integer(ChannelId) ->
+  when is_integer(DrainId), is_binary(ChannelId) ->
     logplex_channel:register({channel, ChannelId}),
     register(DrainId, Type, Dest).
 

@@ -43,6 +43,17 @@ links:
     - url
     type:
     - object
+  title: Create (Deprecated)
+- description: Create a new drain.
+  href: "/v3/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fchannel)}/drains"
+  method: POST
+  rel: create
+  schema:
+    properties:
+      url:
+        "$ref": "/schemata/drain#/definitions/url"
+    type:
+    - object
   title: Create
 - description: Delete an existing drain.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}/drains/{(%2Fschemata%2Fdrain%23%2Fdefinitions%2Fidentity)}"
@@ -50,12 +61,34 @@ links:
   rel: "empty"
   response_example:
     head: "HTTP/1.1 200 OK"
+  title: Delete (Deprecated)
+  type:
+    - null
+- description: Delete an existing drain.
+  href: "/v3/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fchannel)}/drains/{(%2Fschemata%2Fdrain%23%2Fdefinitions%2Fidentity)}"
+  method: DELETE
+  rel: "empty"
+  response_example:
+    head: "HTTP/1.1 204 No Content"
   title: Delete
   type:
     - null
 - description: Update an existing drain.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}/drains/{(%2Fschemata%2Fdrain%23%2Fdefinitions%2Fidentity)}"
   method: POST
+  rel: update
+  schema:
+    properties:
+      url:
+        "$ref": "/schemata/drain#/definitions/url"
+    required:
+    - url
+    type:
+    - object
+  title: Update (Deprecated)
+- description: Update an existing drain.
+  href: "/v3/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fchannel)}/drains/{(%2Fschemata%2Fdrain%23%2Fdefinitions%2Fidentity)}"
+  method: PUT
   rel: update
   schema:
     properties:

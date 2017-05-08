@@ -3,10 +3,15 @@
 title: Channel
 definitions:
   channel_id:
-    description: unique identifier of channel
+    description: unique identifier of a channel (deprecated)
     example: 123456
     type:
       - integer
+  channel:
+    description: unique identifier of a channel
+    example: "123456"
+    type:
+      - string
   drains:
     description: drains under the channel
     items:
@@ -59,26 +64,94 @@ links:
         example: {"my-token": "t.01234567-89ab-cdef-0123-456789abcdef", "your-token":"t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"}
         type:
           - object
-  title: Create
+  title: Create (Deprecated)
 - description: Delete an existing channel.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
   method: DELETE
   rel: "empty"
   response_example:
     head: "HTTP/1.1 200 OK"
-  title: Delete
+  title: Delete (Deprecated)
   type:
     - null
 - description: Info for existing channel.
   href: "/v2/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fidentity)}"
   method: GET
   rel: self
-  title: Info
+  title: Info (Deprecated)
+  targetSchema:
+    type:
+      - object
+    properties:
+      channel_id:
+        "$ref": "/schemata/channel#/definitions/channel_id"
+      tokens:
+        description: created token names and tokens
+        example: {"my-token": "t.01234567-89ab-cdef-0123-456789abcdef", "your-token":"t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"}
+        type:
+          - object
   type:
     - object
+- description: Create or update a channel.
+  href: "/v3/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fchannel)}"
+  method: PUT
+  rel: create_or_update
+  schema:
+    properties:
+      tokens:
+        description: names of tokens to create
+        example:
+          - my-token
+          - your-token
+        items:
+          type:
+            - string
+        type:
+          - array
+    type:
+      - object
+  targetSchema:
+    type:
+      - object
+    properties:
+      channel:
+        "$ref": "/schemata/channel#/definitions/channel"
+      tokens:
+        description: token names and tokens
+        example: {"my-token": "t.01234567-89ab-cdef-0123-456789abcdef", "your-token":"t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"}
+        type:
+          - object
+  title: Create or Update
+- description: Info for existing channel.
+  href: "/v3/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fchannel)}"
+  method: GET
+  rel: self
+  title: Info
+  targetSchema:
+    type:
+      - object
+    properties:
+      channel:
+        "$ref": "/schemata/channel#/definitions/channel"
+      tokens:
+        description: token names and tokens
+        example: {"my-token": "t.01234567-89ab-cdef-0123-456789abcdef", "your-token":"t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"}
+        type:
+          - object
+- description: Delete an existing channel.
+  href: "/v3/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fchannel)}"
+  method: DELETE
+  rel: "empty"
+  response_example:
+    head: "HTTP/1.1 204 No Content"
+  title: Delete
+  type:
+    - null
 properties:
   drains:
     "$ref": "/schemata/channel#/definitions/drains"
+  channel:
+    "$ref": "/schemata/channel#/definitions/channel"
   channel_id:
     "$ref": "/schemata/channel#/definitions/channel_id"
   tokens:

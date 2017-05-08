@@ -54,12 +54,12 @@ lookup_session(UUID) when is_binary(UUID) ->
 channel_index() ->
     case redo_block:cmd(config_block, [<<"INCR">>, <<"channel_index">>]) of
         {error, Err} -> {error, Err};
-        ChannelId when is_integer(ChannelId) -> ChannelId
+        ChannelId when is_integer(ChannelId) -> list_to_binary(integer_to_list(ChannelId))
     end.
 
 -spec create_channel(logplex_channel:id()) -> 'ok' | {'error', Reason::term()}.
-create_channel(ChannelId) when is_integer(ChannelId) ->
-    Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
+create_channel(ChannelId) when is_binary(ChannelId) ->
+    Key = iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>]),
     Cmd = [<<"HMSET">>, Key, <<"name">>, ""],
     case redo_block:cmd(config_block, Cmd) of
         <<"OK">> ->
@@ -72,10 +72,10 @@ create_channel(ChannelId) when is_integer(ChannelId) ->
                      logplex_channel:name(),
                      binary()) -> 'ok' | {'error', Reason::term()}.
 store_channel(ChannelId, Name, FlagStr)
-  when is_integer(ChannelId),
+  when is_binary(ChannelId),
        is_binary(Name),
        is_binary(FlagStr) ->
-    Key = iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>]),
+    Key = iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>]),
     Cmd = [<<"HMSET">>, Key, <<"name">>, Name, <<"flags">>, FlagStr],
     case redo_block:cmd(config_block, Cmd) of
         <<"OK">> ->
@@ -84,36 +84,45 @@ store_channel(ChannelId, Name, FlagStr)
             {error, Err}
     end.
 
-delete_channel(ChannelId) when is_integer(ChannelId) ->
-    case redo_block:cmd(config_block, [<<"DEL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
+delete_channel(ChannelId) when is_binary(ChannelId) ->
+    case redo_block:cmd(config_block, [<<"DEL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
         1 -> ok;
         Err -> Err
     end.
 
 build_push_msg(ChannelId, Length, Msg, Expiry)
-  when is_integer(ChannelId), is_integer(Length), is_binary(Msg),
+  when is_binary(ChannelId), is_integer(Length), is_binary(Msg),
        is_binary(Expiry) ->
     build_push_msg(ChannelId, integer_to_list(Length),
                    Msg, Expiry);
 build_push_msg(ChannelId, Length, Msg, Expiry)
-  when is_integer(ChannelId), is_list(Length), is_binary(Msg),
+  when is_binary(ChannelId), is_list(Length), is_binary(Msg),
        is_binary(Expiry) ->
     build_push_msg(ChannelId, iolist_to_binary(Length),
                    Msg, Expiry);
 
 build_push_msg(ChannelId, Length, Msg, Expiry)
-  when is_integer(ChannelId), is_binary(Length),
+  when is_binary(ChannelId), is_binary(Length),
        is_binary(Msg), is_binary(Expiry) ->
-    Key = iolist_to_binary(["ch:", integer_to_list(ChannelId), ":spool"]),
+    Key = iolist_to_binary(["ch:", ChannelId, ":spool"]),
     Cmds = [ [<<"LPUSH">>, Key, Msg]
             ,[<<"LTRIM">>, Key, <<"0">>, Length]
             ,[<<"EXPIRE">>, Key, Expiry] ],
     iolist_to_binary([ redis_proto:build(Cmd)
                        || Cmd <- Cmds ]).
 
+-spec channel_exists(logplex_channel:id()) -> boolean().
+channel_exists(ChannelId) when is_binary(ChannelId) ->
+    Key = iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>]),
+    Cmd = [<<"EXISTS">>, Key],
+    case redo_block:cmd(config_block, Cmd) of
+        1 -> true;
+        0 -> false
+    end.
+
 %% seems unused
-lookup_channel(ChannelId) when is_integer(ChannelId) ->
-    case redo_block:cmd(config_block, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, integer_to_list(ChannelId), <<":data">>])]) of
+lookup_channel(ChannelId) when is_binary(ChannelId) ->
+    case redo_block:cmd(config_block, [<<"HGETALL">>, iolist_to_binary([<<"ch:">>, ChannelId, <<":data">>])]) of
         Fields when is_list(Fields), length(Fields) > 0 ->
             logplex_channel:new(ChannelId);
         _ ->
@@ -124,13 +133,15 @@ lookup_channel(ChannelId) when is_integer(ChannelId) ->
 %% TOKEN
 %%====================================================================
 -spec create_token(logplex_channel:id(), logplex_token:id(),
-                   logplex_token:name()) -> any().
+                   logplex_token:name()) -> ok | {error, term()}.
 create_token(ChannelId, TokenId, TokenName)
-  when is_integer(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
-    Res = redo_block:cmd(config_block, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, integer_to_list(ChannelId), <<"name">>, TokenName]),
+  when is_binary(ChannelId), is_binary(TokenId), is_binary(TokenName) ->
+    Res = redo_block:cmd(config_block, [<<"HMSET">>, iolist_to_binary([<<"tok:">>, TokenId, <<":data">>]), <<"ch">>, ChannelId, <<"name">>, TokenName]),
     case Res of
-        <<"OK">> -> ok;
-        Err -> Err
+        <<"OK">> ->
+            ok;
+        {error, Err} ->
+            {error, Err}
     end.
 
 delete_token(TokenId) when is_binary(TokenId) ->
@@ -151,10 +162,10 @@ drain_index() ->
 reserve_drain(DrainId, Token, ChannelId)
   when is_integer(DrainId),
        is_binary(Token),
-       is_integer(ChannelId) ->
+       is_binary(ChannelId) ->
     Key = drain_redis_key(DrainId),
     Res = redo_block:cmd(config_block, [<<"HMSET">>, Key,
-                                        <<"ch">>, integer_to_list(ChannelId),
+                                        <<"ch">>, ChannelId,
                                         <<"token">>, Token]),
     case Res of
         <<"OK">> -> ok;
@@ -162,11 +173,11 @@ reserve_drain(DrainId, Token, ChannelId)
     end.
 
 create_url_drain(DrainId, ChannelId, Token, URL)
-  when is_integer(DrainId), is_integer(ChannelId),
+  when is_integer(DrainId), is_binary(ChannelId),
        is_binary(Token), is_binary(URL) ->
     Key = drain_redis_key(DrainId),
     Res = redo_block:cmd(config_block, [<<"HMSET">>, Key,
-                                        <<"ch">>, integer_to_list(ChannelId),
+                                        <<"ch">>, ChannelId,
                                         <<"token">>, Token,
                                         <<"url">>, URL,
                                         <<"state">>,<<"provisioned">>]),
@@ -182,6 +193,15 @@ delete_drain(DrainId) when is_integer(DrainId) ->
     case redo_block:cmd(config_block, [<<"DEL">>, iolist_to_binary([<<"drain:">>, integer_to_list(DrainId), <<":data">>])]) of
         1 -> ok;
         Err -> Err
+    end.
+
+-spec drain_exists(logplex_drain:id()) -> boolean().
+drain_exists(DrainId) when is_integer(DrainId) ->
+    Key = drain_redis_key(DrainId),
+    Cmd = [<<"EXISTS">>, Key],
+    case redo_block:cmd(config_block, Cmd) of
+        1 -> true;
+        0 -> false
     end.
 
 %%====================================================================
@@ -234,14 +254,14 @@ register_stat_instance() ->
 %%====================================================================
 
 %% appears unused
-quarantine_channel(ChannelId) when is_integer(ChannelId) ->
+quarantine_channel(ChannelId) when is_binary(ChannelId) ->
     redo_block:cmd(config_block, [<<"SADD">>, <<"quarantine:channels">>,
-                                  integer_to_list(ChannelId)]).
+                                  ChannelId]).
 
 %% appears unused
-unquarantine_channel(ChannelId) when is_integer(ChannelId) ->
+unquarantine_channel(ChannelId) when is_binary(ChannelId) ->
     redo_block:cmd(config_block, [<<"SREM">>, <<"quarantine:channels">>,
-                                  integer_to_list(ChannelId)]).
+                                  ChannelId]).
 
 %%====================================================================
 %% CREDS

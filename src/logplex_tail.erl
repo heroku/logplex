@@ -36,19 +36,19 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-register(ChannelId) when is_integer(ChannelId) ->
+register(ChannelId) when is_binary(ChannelId) ->
     put(logplex_tail, {channel_id, ChannelId}), %% post mortem debug info
     Self = self(),
     gen_server:abcast([node()|nodes()], ?MODULE, {register, ChannelId, Self}),
     ok.
 
-route(ChannelId, Msg) when is_integer(ChannelId), is_binary(Msg) ->
+route(ChannelId, Msg) when is_binary(ChannelId), is_binary(Msg) ->
     [Pid ! {log, Msg} || {_ChannelId, Pid} <- ets:lookup(?MODULE, ChannelId)],
     ok.
 
 %% @doc Shut down a running tail - intended for use when no_tail is
 %% added to a channel.
-shutdown(ChannelId) when is_integer(ChannelId) ->
+shutdown(ChannelId) when is_binary(ChannelId) ->
     [exit(Pid, shutdown)
      || {_ChannelId, Pid} <- ets:lookup(?MODULE, ChannelId)],
     ok.

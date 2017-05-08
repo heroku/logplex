@@ -171,7 +171,7 @@ from_logplex(Req, State = #state{token = Token,
     case parse_logplex_body(Req, State) of
         {parsed, Req2, State2 = #state{msgs = Msgs}}
           when is_list(Msgs), is_binary(Token),
-                 is_integer(ChannelId), is_binary(Name) ->
+                 is_binary(ChannelId), is_binary(Name) ->
             logplex_message:process_msgs(Msgs, ChannelId, Token, Name),
             {true, Req2, State2#state{msgs = []}};
         {parsed, Req2, State2 = #state{msgs = Msgs}}
@@ -184,13 +184,13 @@ from_logplex(Req, State = #state{token = Token,
         {{error, malformed_messages}, Req2, State2} ->
             %% XXX - Add stat counter here?
             respond(400, <<"Malformed log messages">>, Req2, State2);
-        {{error, Reason}, Req2, State2} when is_integer(ChannelId) ->
-            ?WARN("at=parse_logplex_body channel_id=~p error=~p",
+        {{error, Reason}, Req2, State2} when is_binary(ChannelId) ->
+            ?WARN("at=parse_logplex_body channel_id=~s error=~p",
                   [ChannelId, Reason]),
             respond(400, <<"Bad request">>, Req2, State2);
         {{error, Reason}, Req2, State2} when ChannelId =:= any ->
-            ?WARN("at=parse_logplex_body channel_id=~p error=~p",
-                  [ChannelId, Reason]),
+            ?WARN("at=parse_logplex_body channel_id=any error=~p",
+                  [Reason]),
             respond(400, <<"Bad request">>, Req2, State2)
     end.
 

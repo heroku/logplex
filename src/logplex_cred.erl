@@ -138,7 +138,7 @@ grant(Perm, Cred = #cred{perms = Perms}) ->
 -spec valid_perm(any()) -> 'valid' | 'invalid'.
 valid_perm(full_api) -> valid;
 valid_perm(any_channel) -> valid;
-valid_perm({channel, Id}) when is_integer(Id) -> valid;
+valid_perm({channel, Id}) when is_binary(Id) -> valid;
 valid_perm(_) -> invalid.
 
 -spec has_perm(perm(), #cred{}) -> 'permitted' | 'not_permitted'.
@@ -193,8 +193,7 @@ cred_from_dict(<<"full_api">>, _, Cred = #cred{perms = Perms}) ->
     Cred#cred{perms = ordsets:add_element(full_api, Perms)};
 cred_from_dict(<<"channel">>, <<"any">>, Cred = #cred{perms = Perms}) ->
     Cred#cred{perms = ordsets:add_element(any_channel, Perms)};
-cred_from_dict(<<"channel">>, ChannelIdB, Cred = #cred{perms = Perms}) ->
-    ChannelId = logplex_channel:binary_to_id(ChannelIdB),
+cred_from_dict(<<"channel">>, ChannelId, Cred = #cred{perms = Perms}) ->
     Cred#cred{perms = ordsets:add_element({chan, ChannelId}, Perms)};
 
 cred_from_dict(Key, Value, Cred) ->
@@ -206,7 +205,7 @@ perms_to_dict(Perms) ->
     [ case Perm of
           full_api -> {<<"full_api">>, <<"1">>};
           any_channel -> {<<"channel">>, <<"any">>};
-          {channel, Id} -> {<<"channel">>, logplex_channel:id_to_binary(Id)}
+          {channel, Id} -> {<<"channel">>, Id}
       end
       || Perm <- ordsets:to_list(Perms) ].
 

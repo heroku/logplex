@@ -28,6 +28,19 @@ links:
     - name
     type:
     - object
+  title: Create (Deprecated)
+- description: Create a new token.
+  href: "/v3/channels/{(%2Fschemata%2Fchannel%23%2Fdefinitions%2Fchannel)}/tokens"
+  method: POST
+  rel: create
+  schema:
+    properties:
+      name:
+        "$ref": "/schemata/token#/definitions/name"
+    required:
+    - name
+    type:
+    - object
   title: Create
 properties:
   token:

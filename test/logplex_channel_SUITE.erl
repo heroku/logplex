@@ -16,7 +16,9 @@
 %% a single atom.
 
 all() ->
-    [properties].
+    [properties,
+     create_and_poll
+    ].
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%% Setup/Teardown %%%
@@ -32,11 +34,20 @@ end_per_suite(Config) ->
     Config.
 
 %% Runs before the test case. Runs in the same process.
+init_per_testcase(create_and_poll, Config) ->
+    set_os_vars(),
+    ok = logplex_app:a_start(logplex, temporary),
+    [{api_v3_url, "http://localhost:" ++ integer_to_list(logplex_app:config(http_v3_port))}
+     , {auth, "Basic " ++ logplex_app:config(auth_key)}
+     | Config];
 init_per_testcase(_, Config) ->
     application:start(gproc),
     Config.
 
 %% Runs after the test case. Runs in the same process.
+end_per_testcase(create_and_poll, Config) ->
+    application:stop(logplex),
+    Config;
 end_per_testcase(_CaseName, Config) ->
     application:stop(gproc),
     Config.
@@ -46,7 +57,7 @@ end_per_testcase(_CaseName, Config) ->
 %%%%%%%%%%%%%
 
 properties(_Config) ->
-    Channel = {channel, 2189312},
+    Channel = {channel, <<"2189312">>},
     Msg1 = msg(term_to_binary(make_ref())),
     Msg2 = msg(term_to_binary(make_ref())),
     S = self(),
@@ -71,6 +82,12 @@ properties(_Config) ->
     %% The process should be down
     [] = logplex_channel:whereis(Channel).
 
+create_and_poll(_Config) ->
+    ChannelId = <<"test">>,
+    Channel = logplex_channel:new(ChannelId),
+    ok = logplex_channel:store(Channel),
+    Channel = logplex_channel:poll(ChannelId, timer:seconds(20)).
+
 %%%%%%%%%%%%%%%
 %%% PRIVATE %%%
 %%%%%%%%%%%%%%%
@@ -83,3 +100,14 @@ recv_msg(Msg) ->
 
 msg(M) ->
     {user, debug, logplex_syslog_utils:datetime(now), "fakehost", "erlang", M}.
+
+set_os_vars() ->
+    [os:putenv(Key,Val) || {Key,Val} <-
+        [{"INSTANCE_NAME", net_adm:localhost()},
+         {"LOCAL_IP", "localhost"},
+         {"CLOUD_DOMAIN", "localhost"},
+         {"LOGPLEX_AUTH_KEY", uuid:to_string(uuid:v4())},
+         {"LOGPLEX_COOKIE", "ct test"},
+         {"LOGPLEX_NODE_NAME", atom_to_list(node())},
+         {"LOGPLEX_API_ENDPOINT_URL", "http://localhost:8001"}
+        ]].

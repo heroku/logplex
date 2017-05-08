@@ -23,7 +23,6 @@
 -module(nsync_callback).
 -export([handle/1]).
 
--include_lib("ex_uri/include/ex_uri.hrl").
 -include("logplex.hrl").
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
@@ -32,7 +31,7 @@
 
 %% LOAD
 handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
-    Id = logplex_channel:binary_to_id(parse_id(Rest)),
+    Id = parse_id(Rest),
     create_channel(Id, Dict);
 
 handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
@@ -63,9 +62,9 @@ handle({load, eof}) ->
 
 %% STREAM
 handle({cmd, "hmset", [<<"ch:", Rest/binary>> | Args]}) ->
-    Id = logplex_channel:binary_to_id(parse_id(Rest)),
+    Id = parse_id(Rest),
     Dict = dict_from_list(Args),
-    ?INFO("at=set type=channel id=~p", [Id]),
+    ?INFO("at=set type=channel id=~s", [Id]),
     create_channel(Id, Dict);
 
 handle({cmd, "hmset", [<<"tok:", Rest/binary>> | Args]}) ->
@@ -99,8 +98,8 @@ handle({cmd, "setbit", [<<"control_rod">>, <<"0">>, BinValue]}) ->
 handle({cmd, "del", []}) ->
     ok;
 handle({cmd, "del", [<<"ch:", Suffix/binary>> | Args]}) ->
-    Id = logplex_channel:binary_to_id(parse_id(Suffix)),
-    ?INFO("at=delete type=channel id=~p", [Id]),
+    Id = parse_id(Suffix),
+    ?INFO("at=delete type=channel id=~s", [Id]),
     ets:delete(channels, Id),
     handle({cmd, "del", Args});
 handle({cmd, "del", [<<"tok:", Suffix/binary>> | Args]}) ->
@@ -194,7 +193,7 @@ find_token(Id, Dict) ->
         undefined ->
             {error, missing_channel};
         Val1 ->
-            Ch = convert_to_integer(Val1),
+            Ch = iolist_to_binary(Val1),
             Name = dict_find(<<"name">>, Dict),
             Token = logplex_token:new(Id, Ch, Name),
             {ok, Token}
@@ -218,7 +217,7 @@ create_or_update_drain(Id, Dict) ->
             ?ERR("~p ~p ~p ~p",
                  [create_drain, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
-            Ch = convert_to_integer(Val1),
+            Ch = iolist_to_binary(Val1),
             case dict_find(<<"token">>, Dict) of
                 undefined ->
                     ?ERR("~p ~p ~p ~p",
@@ -227,7 +226,7 @@ create_or_update_drain(Id, Dict) ->
                     case drain_uri(Dict) of
                         partial_drain_record ->
                             ?INFO("at=partial_drain_record drain_id=~p "
-                                  "token=~p channel=~p",
+                                  "token=~p channel=~s",
                                   [Id, Token, Ch]),
                             logplex_drain:store_token(Id, Token, Ch);
                         Uri ->
@@ -286,11 +285,6 @@ drain_uri(Dict) ->
 parse_id(Bin) ->
     [Id | _] = binary:split(Bin, <<":">>),
     Id.
-
-convert_to_integer(V) when is_binary(V) ->
-    list_to_integer(binary_to_list(V));
-convert_to_integer(V) when is_list(V) ->
-    list_to_integer(V).
 
 dict_from_list(List) ->
     dict_from_list(List, dict:new()).

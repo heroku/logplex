@@ -69,11 +69,11 @@
 -define(CHAN_TOKEN_TAB, channel_tokens).
 
 new(Id, ChannelId, Name)
-  when is_binary(Id), is_integer(ChannelId), is_binary(Name) ->
+  when is_binary(Id), is_binary(ChannelId), is_binary(Name) ->
     #token{id = Id, channel_id = ChannelId, name = Name}.
 
 new(ChannelId, Name)
-  when is_integer(ChannelId), is_binary(Name) ->
+  when is_binary(ChannelId), is_binary(Name) ->
     new(new_unique_token_id(), ChannelId, Name).
 
 id(#token{id=Id}) -> Id.
@@ -89,9 +89,10 @@ create_ets_table() ->
                               {read_concurrency, true},
                               {write_concurrency, true}]).
 
-create(ChannelId, TokenName) when is_integer(ChannelId), is_binary(TokenName) ->
+create(ChannelId, TokenName) when is_binary(ChannelId), is_binary(TokenName) ->
     TokenId = new_unique_token_id(),
-    case store(new(TokenId, ChannelId, TokenName)) of
+    Token = new(TokenId, ChannelId, TokenName),
+    case store(Token) of
         ok ->
             TokenId;
         Err ->
@@ -153,7 +154,7 @@ delete_by_id(Id) ->
             ok
     end.
 
-delete_by_channel(ChannelId) when is_integer(ChannelId) ->
+delete_by_channel(ChannelId) when is_binary(ChannelId) ->
     [ delete(Token)
       || Token <- lookup_by_channel(ChannelId)],
     ok.
@@ -167,7 +168,7 @@ lookup_by_channel(ChannelId) ->
                   end,
                   lookup_ids_by_channel(ChannelId)).
 
-lookup_ids_by_channel(ChannelId) when is_integer(ChannelId) ->
+lookup_ids_by_channel(ChannelId) when is_binary(ChannelId) ->
     ets:select(?CHAN_TOKEN_TAB,
                [{#token_idx{key = {ChannelId, '$1'}},[],['$1']}]).
 

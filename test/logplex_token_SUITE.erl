@@ -37,7 +37,7 @@ init_per_testcase(by_id, Config) ->
     Config;
 init_per_testcase(by_channel, Config) ->
     logplex_db:start_link(),
-    [{chan, 1} | Config];
+    [{chan, <<"1">>} | Config];
 init_per_testcase(_CaseName, Config) ->
     Config.
 
@@ -67,7 +67,7 @@ by_channel(Config) ->
     ok.
 
 by_id(_Config) ->
-    Chan = 2,
+    Chan = <<"2">>,
     Id = <<"t.1">>,
     BobT = logplex_token:new(Id, Chan, <<"bob">>),
     undefined = logplex_token:lookup(Id),

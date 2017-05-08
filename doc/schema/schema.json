@@ -9,10 +9,17 @@
       "title": "Channel",
       "definitions": {
         "channel_id": {
-          "description": "unique identifier of channel",
+          "description": "unique identifier of a channel (deprecated)",
           "example": 123456,
           "type": [
             "integer"
+          ]
+        },
+        "channel": {
+          "description": "unique identifier of a channel",
+          "example": "123456",
+          "type": [
+            "string"
           ]
         },
         "drains": {
@@ -96,7 +103,7 @@
               }
             }
           },
-          "title": "Create"
+          "title": "Create (Deprecated)"
         },
         {
           "description": "Delete an existing channel.",
@@ -106,7 +113,7 @@
           "response_example": {
             "head": "HTTP/1.1 200 OK"
           },
-          "title": "Delete",
+          "title": "Delete (Deprecated)",
           "type": [
             null
           ]
@@ -116,15 +123,127 @@
           "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}",
           "method": "GET",
           "rel": "self",
-          "title": "Info",
+          "title": "Info (Deprecated)",
+          "targetSchema": {
+            "type": [
+              "object"
+            ],
+            "properties": {
+              "channel_id": {
+                "$ref": "#/definitions/channel/definitions/channel_id"
+              },
+              "tokens": {
+                "description": "created token names and tokens",
+                "example": {
+                  "my-token": "t.01234567-89ab-cdef-0123-456789abcdef",
+                  "your-token": "t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"
+                },
+                "type": [
+                  "object"
+                ]
+              }
+            }
+          },
           "type": [
             "object"
+          ]
+        },
+        {
+          "description": "Create or update a channel.",
+          "href": "/v3/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fchannel)}",
+          "method": "PUT",
+          "rel": "create_or_update",
+          "schema": {
+            "properties": {
+              "tokens": {
+                "description": "names of tokens to create",
+                "example": [
+                  "my-token",
+                  "your-token"
+                ],
+                "items": {
+                  "type": [
+                    "string"
+                  ]
+                },
+                "type": [
+                  "array"
+                ]
+              }
+            },
+            "type": [
+              "object"
+            ]
+          },
+          "targetSchema": {
+            "type": [
+              "object"
+            ],
+            "properties": {
+              "channel": {
+                "$ref": "#/definitions/channel/definitions/channel"
+              },
+              "tokens": {
+                "description": "token names and tokens",
+                "example": {
+                  "my-token": "t.01234567-89ab-cdef-0123-456789abcdef",
+                  "your-token": "t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"
+                },
+                "type": [
+                  "object"
+                ]
+              }
+            }
+          },
+          "title": "Create or Update"
+        },
+        {
+          "description": "Info for existing channel.",
+          "href": "/v3/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fchannel)}",
+          "method": "GET",
+          "rel": "self",
+          "title": "Info",
+          "targetSchema": {
+            "type": [
+              "object"
+            ],
+            "properties": {
+              "channel": {
+                "$ref": "#/definitions/channel/definitions/channel"
+              },
+              "tokens": {
+                "description": "token names and tokens",
+                "example": {
+                  "my-token": "t.01234567-89ab-cdef-0123-456789abcdef",
+                  "your-token": "t.5b432a82-2c03-4ecd-a8d4-a75d627b29ab"
+                },
+                "type": [
+                  "object"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "description": "Delete an existing channel.",
+          "href": "/v3/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fchannel)}",
+          "method": "DELETE",
+          "rel": "empty",
+          "response_example": {
+            "head": "HTTP/1.1 204 No Content"
+          },
+          "title": "Delete",
+          "type": [
+            null
           ]
         }
       ],
       "properties": {
         "drains": {
           "$ref": "#/definitions/channel/definitions/drains"
+        },
+        "channel": {
+          "$ref": "#/definitions/channel/definitions/channel"
         },
         "channel_id": {
           "$ref": "#/definitions/channel/definitions/channel_id"
@@ -200,6 +319,23 @@
               "object"
             ]
           },
+          "title": "Create (Deprecated)"
+        },
+        {
+          "description": "Create a new drain.",
+          "href": "/v3/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fchannel)}/drains",
+          "method": "POST",
+          "rel": "create",
+          "schema": {
+            "properties": {
+              "url": {
+                "$ref": "#/definitions/drain/definitions/url"
+              }
+            },
+            "type": [
+              "object"
+            ]
+          },
           "title": "Create"
         },
         {
@@ -210,6 +346,19 @@
           "response_example": {
             "head": "HTTP/1.1 200 OK"
           },
+          "title": "Delete (Deprecated)",
+          "type": [
+            null
+          ]
+        },
+        {
+          "description": "Delete an existing drain.",
+          "href": "/v3/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fchannel)}/drains/{(%23%2Fdefinitions%2Fdrain%2Fdefinitions%2Fidentity)}",
+          "method": "DELETE",
+          "rel": "empty",
+          "response_example": {
+            "head": "HTTP/1.1 204 No Content"
+          },
           "title": "Delete",
           "type": [
             null
@@ -219,6 +368,26 @@
           "description": "Update an existing drain.",
           "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}/drains/{(%23%2Fdefinitions%2Fdrain%2Fdefinitions%2Fidentity)}",
           "method": "POST",
+          "rel": "update",
+          "schema": {
+            "properties": {
+              "url": {
+                "$ref": "#/definitions/drain/definitions/url"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "type": [
+              "object"
+            ]
+          },
+          "title": "Update (Deprecated)"
+        },
+        {
+          "description": "Update an existing drain.",
+          "href": "/v3/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fchannel)}/drains/{(%23%2Fdefinitions%2Fdrain%2Fdefinitions%2Fidentity)}",
+          "method": "PUT",
           "rel": "update",
           "schema": {
             "properties": {
@@ -390,6 +559,26 @@
         {
           "description": "Create a new token.",
           "href": "/v2/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fidentity)}/tokens",
+          "method": "POST",
+          "rel": "create",
+          "schema": {
+            "properties": {
+              "name": {
+                "$ref": "#/definitions/token/definitions/name"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": [
+              "object"
+            ]
+          },
+          "title": "Create (Deprecated)"
+        },
+        {
+          "description": "Create a new token.",
+          "href": "/v3/channels/{(%23%2Fdefinitions%2Fchannel%2Fdefinitions%2Fchannel)}/tokens",
           "method": "POST",
           "rel": "create",
           "schema": {
