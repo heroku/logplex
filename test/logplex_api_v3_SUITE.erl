@@ -49,8 +49,7 @@ groups() ->
       ]},
      {healthcheck,
       [healthy,
-       unhealthy,
-       healtcheck_not_authorized
+       unhealthy
       ]}
     ].
 
@@ -78,8 +77,7 @@ init_per_testcase(Testcase , Config)
 init_per_testcase(Testcase , Config)
   when Testcase == channel_not_authorized;
        Testcase == drains_not_authorized;
-       Testcase == tokens_not_authorized;
-       Testcase == healtcheck_not_authorized ->
+       Testcase == tokens_not_authorized ->
     [{auth, "Basic bad-token"}
      | Config];
 init_per_testcase(cannot_add_more_drains, Config) ->
@@ -87,6 +85,9 @@ init_per_testcase(cannot_add_more_drains, Config) ->
     logplex_app:set_config(max_drains_per_channel, 1),
     [{old_max_drains_per_channel, OldLimit}
      | Config];
+init_per_testcase(unhealthy, Config) ->
+    logplex_app:set_config(nsync_loaded, false),
+    Config;
 init_per_testcase(_, Config) ->
     Config.
 
@@ -99,6 +100,9 @@ end_per_testcase(Testcase, Config)
 end_per_testcase(cannot_add_more_drains, Config) ->
     OldLimit = ?config(old_max_drains_per_channel, Config),
     logplex_app:set_config(max_drains_per_channel, OldLimit),
+    Config;
+end_per_testcase(unhealthy, Config) ->
+    logplex_app:set_config(nsync_loaded, true),
     Config;
 end_per_testcase(_, Config) ->
     Config.
@@ -517,32 +521,16 @@ cannot_create_token_for_non_existing_channel(Config) ->
 
 healthy(Config) ->
     Props = check_health(Config),
-    Body = proplists:get_value(body, Props),
-    Resp = jsx:decode(list_to_binary(Body), [return_maps]),
     ?assertEqual(200, proplists:get_value(status_code, Props)),
     ?assertEqual("OK", proplists:get_value(http_reason, Props)),
-    ?assert(maps:is_key(<<"status">>, Resp)),
     Config.
 
 unhealthy(Config) ->
-    %% note: only tests when processes monitored by logplex_sup are down
-    [begin
-         erlang:suspend_process(whereis(logplex_sup)),
-         erlang:exit(whereis(Mod), kill),
-         Props = check_health(Config),
-         ?assertEqual(503, proplists:get_value(status_code, Props)),
-         ?assertEqual("Service Unavailable", proplists:get_value(http_reason, Props)),
-         erlang:resume_process(whereis(logplex_sup))
-     end || Mod <- [logplex_stats, logplex_tail, logplex_shard]],
-    Config.
-
-healtcheck_not_authorized(Config) ->
     Props = check_health(Config),
-    ?assertEqual(401, proplists:get_value(status_code, Props)),
-    ?assertEqual("Unauthorized", proplists:get_value(http_reason, Props)),
+    ?assertEqual(503, proplists:get_value(status_code, Props)),
+    ?assertEqual("Service Unavailable", proplists:get_value(http_reason, Props)),
+    ?assertEqual("SYSTEM BOOTING", proplists:get_value(body, Props)),
     Config.
-
-
 
 %% -----------------------------------------------------------------------------
 %% helper functions
