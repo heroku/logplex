@@ -62,20 +62,26 @@ allowed_methods(Req, State) ->
 
 %% @private
 malformed_request(Req, State) ->
-    {ok, Body, Req1} = cowboy_req:body(Req),
-    try jsx:decode(Body, [return_maps]) of
-        Map ->
-            case validate_payload(Map) of
-                {ok, URI} ->
-                    NewState = State#state{ uri = URI },
-                    {false, Req1, NewState};
-                {error, _Reason} ->
-                    {true, Req1, State}
+    {Method, Req1} = cowboy_req:method(Req),
+    case cowboy_req:has_body(Req1) of
+        false when Method == <<"DELETE">> ->
+            {false, Req1, State};
+        true ->
+            {ok, Body, Req2} = cowboy_req:body(Req1),
+            try jsx:decode(Body, [return_maps]) of
+                Map ->
+                    case validate_payload(Map) of
+                        {ok, URI} ->
+                            NewState = State#state{ uri = URI },
+                            {false, Req2, NewState};
+                        {error, _Reason} ->
+                            {true, Req2, State}
+                    end
+            catch
+                error:badarg ->
+                    %% invalid json
+                    {true, Req2, State}
             end
-    catch
-        error:badarg ->
-            %% invalid json
-            {true, Req1, State}
     end.
 
 %% @private

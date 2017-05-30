@@ -39,6 +39,8 @@ groups() ->
        , cannot_update_non_existing_drain
        , cannot_create_drain_for_non_existing_channel
        , cannot_update_drain_for_non_existing_channel
+       , delete_existing_drain
+       , cannot_delete_non_existing_drain
       ]},
      {tokens,
       [tokens_service_unavailable
@@ -456,6 +458,28 @@ cannot_update_drain_for_non_existing_channel(Config) ->
     FakeDrainId = 123123123123123123123123,
     DrainUrl = new_drain_url(),
     Props = update_drain(FakeChannel, FakeDrainId, DrainUrl, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(404, proplists:get_value(status_code, Props)),
+    ?assertEqual("Not Found", proplists:get_value(http_reason, Props)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+delete_existing_drain(Config0) ->
+    Config = reserve_drain_with_drainurl(Config0),
+    Channel = ?config(channel, Config),
+    {DrainId, _, _} = ?config(drain, Config),
+    Props = delete_drain(Channel, DrainId, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(204, proplists:get_value(status_code, Props)),
+    ?assertEqual("No Content", proplists:get_value(http_reason, Props)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+cannot_delete_non_existing_drain(Config0) ->
+    Config = create_channel_without_tokens(Config0),
+    Channel = ?config(channel, Config),
+    FakeDrainId = 123123123123123123123123,
+    Props = delete_drain(Channel, FakeDrainId, Config),
     Headers = proplists:get_value(headers, Props),
     ?assertEqual(404, proplists:get_value(status_code, Props)),
     ?assertEqual("Not Found", proplists:get_value(http_reason, Props)),
