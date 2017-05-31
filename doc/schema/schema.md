@@ -565,7 +565,7 @@ POST /v3/sessions
 
 | Name | Type | Description | Example |
 | ------- | ------- | ------- | ------- |
-| **channel_id** | *string* | unique identifier of channel | `"d23d5262-d1f0-46f0-93c5-3781b48a258d"` |
+| **channel_id** | *string* | unique identifier of channel | `"app-d23d5262-d1f0-46f0-93c5-3781b48a258d"` |
 
 
 #### Optional Parameters
@@ -581,7 +581,7 @@ POST /v3/sessions
 ```bash
 $ curl -n -X POST https://logplex.heroku.com/v3/sessions \
   -d '{
-  "channel_id": "d23d5262-d1f0-46f0-93c5-3781b48a258d",
+  "channel_id": "app-d23d5262-d1f0-46f0-93c5-3781b48a258d",
   "num": "5"
 }' \
   -H "Content-Type: application/json"
