@@ -7,6 +7,7 @@ all() ->
     [{group, channels}
      , {group, drains}
      , {group, tokens}
+     , {group, sessions}
      , {group, healthcheck}
     ].
 
@@ -48,6 +49,10 @@ groups() ->
        , create_new_token
        , cannot_create_token_without_name
        , cannot_create_token_for_non_existing_channel
+      ]},
+     {sessions,
+      [create_session_for_existing_channel
+       , cannot_create_session_for_non_existing_channel
       ]},
      {healthcheck,
       [healthy,
@@ -540,6 +545,37 @@ cannot_create_token_for_non_existing_channel(Config) ->
     Config.
 
 %% -----------------------------------------------------------------------------
+%% sessions
+%% -----------------------------------------------------------------------------
+
+create_session_for_existing_channel(Config0) ->
+    Config = create_channel_with_tokens(Config0),
+    Channel = ?config(channel, Config),
+    Props = create_session(Channel, Config),
+    Body = proplists:get_value(body, Props),
+    Headers = proplists:get_value(headers, Props),
+    Resp = jsx:decode(list_to_binary(Body), [return_maps]),
+    URL = maps:get(<<"url">>, Resp),
+    Location = proplists:get_value("location", Headers),
+    ?assertEqual(201, proplists:get_value(status_code, Props)),
+    ?assertEqual("Created", proplists:get_value(http_reason, Props)),
+    ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    ?assert(is_list(Location)),
+    ?assertEqual(Location, binary_to_list(URL)),
+    Config.
+
+cannot_create_session_for_non_existing_channel(Config) ->
+    FakeChannel = new_channel(),
+    Props = create_session(FakeChannel, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(422, proplists:get_value(status_code, Props)),
+    ?assertEqual("Unprocessable Entity", proplists:get_value(http_reason, Props)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+
+%% -----------------------------------------------------------------------------
 %% healtchecks
 %% -----------------------------------------------------------------------------
 
@@ -605,6 +641,13 @@ create_token(Channel, TokenName, Config) ->
     Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/tokens",
     Headers = [{"Authorization", ?config(auth, Config)}],
     JSON = jsx:encode(maps:from_list([{<<"name">>, list_to_binary(TokenName)} || TokenName =/= undefined])),
+    Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
+    logplex_api_SUITE:post(Url, Opts).
+
+create_session(Channel, Config) ->
+    Url = ?config(api_v3_url, Config) ++ "/v3/sessions",
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    JSON = jsx:encode(maps:from_list([{<<"channel_id">>, list_to_binary(Channel)} || Channel =/= undefined])),
     Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
     logplex_api_SUITE:post(Url, Opts).
 
