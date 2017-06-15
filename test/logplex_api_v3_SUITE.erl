@@ -336,7 +336,7 @@ reserve_drain_without_drainurl(Config0) ->
     ?assertEqual("Created", proplists:get_value(http_reason, Props)),
     ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
     ?assert(is_list(proplists:get_value("request-id", Headers))),
-    ?assert(is_list(proplists:get_value("location", Headers))),
+    ?assertMatch("http://localhost:8002/v3/channels/"++_, proplists:get_value("location", Headers)),
     [{drain, {DrainId, DrainToken, undefined}}
      | Config].
 
@@ -357,7 +357,7 @@ reserve_drain_with_drainurl(Config0) ->
     ?assertEqual("Created", proplists:get_value(http_reason, Props)),
     ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
     ?assert(is_list(proplists:get_value("request-id", Headers))),
-    ?assert(is_list(proplists:get_value("location", Headers))),
+    ?assertMatch("http://localhost:8002/v3/channels/"++_, proplists:get_value("location", Headers)),
     [{drain, {DrainId, DrainToken, DrainUrl}}
      | Config].
 
@@ -561,7 +561,7 @@ create_session_for_existing_channel(Config0) ->
     ?assertEqual("Created", proplists:get_value(http_reason, Props)),
     ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
     ?assert(is_list(proplists:get_value("request-id", Headers))),
-    ?assert(is_list(Location)),
+    ?assertMatch("http://localhost:8001/sessions/"++_, Location), %% note: old api URL
     ?assertEqual(Location, binary_to_list(URL)),
     Config.
 
