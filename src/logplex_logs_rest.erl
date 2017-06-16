@@ -43,29 +43,11 @@ child_spec() ->
 dispatch() ->
     cowboy_router:compile([{'_',
                             [{<<"/healthcheck">>, ?MODULE, [healthcheck]},
-                             {<<"/logs">>, ?MODULE, [logs]},
-                             % support for v2 API
-                             {<<"/v2/[...]">>, ?MODULE, [api]},
-                             % support for old v1 API
-                             {<<"/channels/[...]">>, ?MODULE, [api]},
-                             {<<"/sessions/[...]">>, ?MODULE, [api]}]}]).
+                             {<<"/logs">>, ?MODULE, [logs]}
+                            ]}]).
 
 init(_Transport, Req, [healthcheck]) ->
     {ok, Req, undefined};
-init(_Transport, Req0, [api]) ->
-    {ok, Req} = case logplex_app:config(api_endpoint_url, undefined) of
-                     undefined ->
-                         cowboy_req:reply(404, [], "", Req0);
-                     Endpoint ->
-                        {Path, Req1} = cowboy_req:path(Req0),
-                        {Query, Req2} = cowboy_req:qs(Req1),
-                        ?INFO("at=api_redirect path=~p query=~p", [Path, Query]),
-                        cowboy_req:reply(302,
-                                         [{<<"Location">>, [Endpoint, Path,
-                                                            "?", Query]}],
-                                         "redirecting", Req2)
-                 end,
-    {shutdown, Req, no_state};
 init(_Transport, _Req, [logs]) ->
     {upgrade, protocol, cowboy_rest}.
 
