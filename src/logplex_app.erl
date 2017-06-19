@@ -120,8 +120,8 @@ cache_os_envvars() ->
                       ,{force_gc_memory, ["LOGPLEX_FORCE_GC_MEMORY"],
                         optional, %% in bytes
                         integer}
-                      ,{api_endpoint_url, ["LOGPLEX_API_ENDPOINT_URL"],
-                       optional}
+                      ,{api_endpoint_url, ["LOGPLEX_API_ENDPOINT_URL"]}
+                      ,{http_v3_url, ["LOGPLEX_HTTP_V3_URL"]}
                       ,{tls_mode, ["LOGPLEX_TLS_MODE"],
                         optional,
                         atom}

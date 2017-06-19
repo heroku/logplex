@@ -9,8 +9,7 @@
 
 
 all() ->
-    [v2_redirects, v1_redirects_channels, v1_redirects_sessions,
-     post_logline, post_logline_compressed].
+    [post_logline, post_logline_compressed].
 
 init_per_suite(Config) ->
     set_os_vars(),
@@ -22,10 +21,7 @@ end_per_suite(_Config) ->
     application:stop(logplex).
 
 init_per_testcase(Case, Config)
-  when Case =:= v2_redirects;
-       Case =:= v1_redirects_channels;
-       Case =:= v1_redirects_sessions;
-       Case =:= post_logline;
+  when        Case =:= post_logline;
        Case =:= post_logline_compressed ->
     Channel = logplex_channel:create(atom_to_binary(Case, latin1)),
     ChannelId = logplex_channel:id(Channel),
@@ -52,38 +48,6 @@ end_per_testcase(Case, Config)
     Config;
 end_per_testcase(_Case, Config) ->
     Config.
-
-v2_redirects(Config) ->
-    BasicAuth = ?config(auth, Config),
-    Logs = ?config(logs, Config) ++ "/v2/channels/",
-    ChannelId = ?config(channel_id, Config),
-    Get = Logs ++ binary_to_list(ChannelId),
-    %% Get = ?config(logs, Config) ++ "/healthcheck",
-    Res = logplex_api_SUITE:get_(Get, [{headers, [{"Authorization", BasicAuth}]},
-                                       {http_opts, [{autoredirect, false}]}]),
-    302 = proplists:get_value(status_code, Res),
-    ok.
-
-v1_redirects_channels(Config) ->
-    BasicAuth = ?config(auth, Config),
-    ChannelId = ?config(channel_id, Config),
-    Get = binary_to_list(iolist_to_binary([?config(logs, Config),
-           "/channels/",
-           binary_to_list(ChannelId),
-           "/info"])),
-    Res = logplex_api_SUITE:get_(Get, [{headers, [{"Authorization", BasicAuth}]},
-                                       {http_opts, [{autoredirect, false}]}]),
-    302 = proplists:get_value(status_code, Res),
-    ok.
-
-v1_redirects_sessions(Config) ->
-    BasicAuth = ?config(auth, Config),
-    Post = binary_to_list(iolist_to_binary([?config(logs, Config),
-           "/sessions/"])),
-    PostRes = logplex_api_SUITE:post(Post, [{headers, [{"Authorization", BasicAuth}]},
-                                            {http_opts, [{autoredirect, false}]}]),
-    302 = proplists:get_value(status_code, PostRes),
-    ok.
 
 post_logline(Config) ->
     BasicAuth = ?config(auth, Config),
