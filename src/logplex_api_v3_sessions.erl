@@ -17,7 +17,8 @@
         ]).
 
 -record(state, {
-          channel_id :: undefined | binary()
+          channel_id :: undefined | binary(),
+          session_data :: binary()
          }).
 
 %% @private
@@ -55,7 +56,8 @@ malformed_request(Req, State) ->
         Map ->
             case validate_payload(Map) of
                 {ok, ChannelId} ->
-                    NewState = State#state{ channel_id = ChannelId },
+                    NewState = State#state{ channel_id   = ChannelId,
+                                            session_data = Body },
                     {false, Req1, NewState};
                 {error, _Reason} ->
                     {true, Req1, State}
@@ -80,15 +82,15 @@ to_json(_, _) ->
     {error, not_implemented}.
 
 %% @private
-from_json(Req, #state{ channel_id = ChannelId } = State) ->
+from_json(Req, #state{ channel_id   = ChannelId,
+                       session_data = SessionData } = State) ->
     case logplex_channel:find(ChannelId) of
         {ok, _Channel} ->
-            {ok, Body, Req1} = cowboy_req:body(Req),
-            UUID = logplex_session:publish(Body),
+            UUID = logplex_session:publish(SessionData),
             Location = iolist_to_binary([logplex_app:config(api_endpoint_url, ""), <<"/sessions/">>, UUID]),
             Resp = jsx:encode([{<<"url">>, Location}]),
-            Req2 = cowboy_req:set_resp_body(Resp, Req1),
-            {{true, Location}, Req2, State};
+            Req1 = cowboy_req:set_resp_body(Resp, Req),
+            {{true, Location}, Req1, State};
         {error, not_found} ->
             Resp = jsx:encode([{<<"error">>, <<"channel not found">>}]),
             Req1 = cowboy_req:set_resp_body(Resp, Req),
