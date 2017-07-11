@@ -95,6 +95,9 @@
               ,drain/0
              ]).
 
+-define(DRAINS_TABLE, drains).
+-define(DRAIN_BY_CHANNEL_LOOKUP_TABLE, channel_drains).
+
 new(Id, ChannelId, Token, Type, Uri) ->
     #drain{id=Id, channel_id=ChannelId, token=Token, type=Type, uri=Uri}.
 
@@ -122,7 +125,7 @@ whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
 create_ets_table() ->
-    ets:new(drains, [named_table, public, set, {keypos, #drain.id}]).
+    ets:new(?DRAINS_TABLE, [named_table, public, set, {keypos, #drain.id}]).
 
 start(Type, DrainId, Args) ->
     start_mod(mod(Type), DrainId, Args).
@@ -213,7 +216,7 @@ find(DrainId) when is_integer(DrainId) ->
 
 
 lookup_token(DrainId) when is_integer(DrainId) ->
-    case ets:lookup(drains, DrainId) of
+    case ets:lookup(?DRAINS_TABLE, DrainId) of
         [#drain{token=Token}] ->
             Token;
         [] -> not_found
@@ -222,8 +225,8 @@ lookup_token(DrainId) when is_integer(DrainId) ->
 store_token(DrainId, Token, ChannelId) when is_integer(DrainId),
                                             is_binary(Token),
                                             is_binary(ChannelId) ->
-    true = ets:insert(drains, #drain{id=DrainId, token=Token,
-                                     channel_id=ChannelId}),
+    true = ets:insert(?DRAINS_TABLE, #drain{id=DrainId, token=Token,
+                                            channel_id=ChannelId}),
     ok.
 
 cache(DrainId, Token, ChannelId) when is_integer(DrainId),
@@ -239,7 +242,6 @@ create(ChannelId, URL) when is_list(URL);
     URI = parse_url(URL),
     create(ChannelId, URI);
 create(ChannelId, URI) ->
-    reserve_token(),
     {ok, DrainId, Token} = reserve_token(),
     create(DrainId, Token, ChannelId, URI).
 
@@ -264,7 +266,8 @@ create(DrainId, Token, ChannelId, URI)
     end.
 
 exists(ChannelId, URI) when is_binary(ChannelId) ->
-    [] =/= ets:match_object(drains, #drain{channel_id=ChannelId, uri=URI, _='_'}).
+    [] =/= ets:match_object(?DRAINS_TABLE,
+                            #drain{channel_id=ChannelId, uri=URI, _='_'}).
 
 store(#drain{id=DrainId, token=Token,
              channel_id=ChannelId, uri=URI}) ->
@@ -274,7 +277,7 @@ delete(DrainId) when is_integer(DrainId) ->
     redis_helper:delete_drain(DrainId).
 
 lookup(DrainId) when is_integer(DrainId) ->
-    case ets:lookup(drains, DrainId) of
+    case ets:lookup(?DRAINS_TABLE, DrainId) of
         [Drain] -> Drain;
         _ -> undefined
     end.
@@ -287,7 +290,7 @@ new_token(0) ->
 
 new_token(Retries) ->
     Token = list_to_binary("d." ++ uuid:to_string(uuid:v4())),
-    case ets:match_object(drains, #drain{token=Token, _='_'}) of
+    case ets:match_object(?DRAINS_TABLE, #drain{token=Token, _='_'}) of
         [#drain{}] -> new_token(Retries-1);
         [] -> Token
     end.
@@ -335,7 +338,7 @@ has_valid_uri(#drain{uri=Uri}) ->
     end.
 
 delete_by_channel(ChannelId) when is_binary(ChannelId) ->
-    Drains = ets:select(drains,
+    Drains = ets:select(?DRAINS_TABLE,
                         ets:fun2ms(fun (#drain{id=Id,channel_id=C})
                                         when C =:= ChannelId ->
                                             Id
@@ -345,7 +348,7 @@ delete_by_channel(ChannelId) when is_binary(ChannelId) ->
 
 
 count_by_channel(ChannelId) when is_binary(ChannelId) ->
-    ets:select_count(drains,
+    ets:select_count(?DRAINS_TABLE,
                      ets:fun2ms(fun (#drain{channel_id=C,
                                             uri = Uri})
                                      when C =:= ChannelId,
@@ -355,7 +358,7 @@ count_by_channel(ChannelId) when is_binary(ChannelId) ->
 
 
 lookup_by_channel(ChannelId) when is_binary(ChannelId) ->
-    ets:select(drains,
+    ets:select(?DRAINS_TABLE,
                ets:fun2ms(fun (#drain{channel_id=C})
                                 when C =:= ChannelId ->
                                   object()
@@ -442,7 +445,7 @@ orphaned(Id) ->
         _ -> []
     end
     ++
-    case ets:match(drains, #drain{id=Id, channel_id='$1', _='_'}) of
+    case ets:match(?DRAINS_TABLE, #drain{id=Id, channel_id='$1', _='_'}) of
         [] -> [];
         [[Chan]] ->
             case logplex_channel:lookup(Chan) of
