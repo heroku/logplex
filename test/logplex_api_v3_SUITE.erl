@@ -563,6 +563,11 @@ create_session_for_existing_channel(Config0) ->
     ?assert(is_list(proplists:get_value("request-id", Headers))),
     ?assertMatch("http://localhost:8001/sessions/"++_, Location), %% note: old api URL
     ?assertEqual(Location, binary_to_list(URL)),
+
+    Props1 = get_session(Location, Config),
+    ?assertEqual(200, proplists:get_value(status_code, Props1)),
+    ?assertEqual("OK", proplists:get_value(http_reason, Props1)),
+
     Config.
 
 cannot_create_session_for_non_existing_channel(Config) ->
@@ -650,6 +655,10 @@ create_session(Channel, Config) ->
     JSON = jsx:encode(maps:from_list([{<<"channel_id">>, list_to_binary(Channel)} || Channel =/= undefined])),
     Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
     logplex_api_SUITE:post(Url, Opts).
+
+get_session(URL, _Config) ->
+    Opts = [{timeout, timer:seconds(10)}],
+    logplex_api_SUITE:get_(URL, Opts).
 
 check_health(Config) ->
     Url = ?config(api_v3_url, Config) ++ "/v3/healthcheck",
