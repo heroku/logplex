@@ -45,6 +45,8 @@
          ,find/1
          ,store_token/3
          ,create_ets_table/0
+         ,load/1
+         ,unload/1
         ]).
 
 -export([new/5
@@ -168,6 +170,18 @@ stop(DrainId, Timeout) ->
             supervisor:delete_child(logplex_drain_sup, DrainId);
         _ -> ok
     end.
+
+%% @doc Load drain in local memory.
+-spec load(drain()) -> ok.
+load(Drain) when is_record(Drain, drain) ->
+    true = ets:insert(?DRAINS_TABLE, Drain),
+    ok.
+
+%% @doc Unload drain from local memory.
+-spec unload(id()) -> ok.
+unload(ID) when is_integer(ID) ->
+    true = ets:delete(?DRAINS_TABLE, ID),
+    ok.
 
 reserve_token() ->
     Token = new_token(),

@@ -111,7 +111,7 @@ handle({cmd, "del", [<<"drain:", Suffix/binary>> | Args]}) ->
     Id = drain_id(parse_id(Suffix)),
     ?INFO("at=delete type=drain id=~p", [Id]),
     catch logplex_drain:stop(Id),
-    ets:delete(drains, Id),
+    logplex_drain:unload(Id),
     handle({cmd, "del", Args});
 handle({cmd, "del", [<<"cred:", Suffix/binary>> | Args]}) ->
     Id = logplex_cred:binary_to_id(parse_id(Suffix)),
@@ -234,7 +234,7 @@ create_or_update_drain(Id, Dict) ->
                                 {valid, Type, NewUri} ->
                                     Drain = logplex_drain:new(Id, Ch, Token,
                                                               Type, NewUri),
-                                    ets:insert(drains, Drain),
+                                    ok = logplex_drain:load(Drain),
                                     maybe_update_drain(logplex_drain:start(Drain), Drain),
                                     Drain;
                                 {error, Reason} ->
