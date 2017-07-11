@@ -99,6 +99,7 @@
 
 -define(DRAINS_TABLE, drains).
 -define(DRAIN_BY_CHANNEL_LOOKUP_TABLE, channel_drains).
+-record(drain_idx, {key :: {logplex_channel:id(), id() | '$1'}}).
 
 new(Id, ChannelId, Token, Type, Uri) ->
     #drain{id=Id, channel_id=ChannelId, token=Token, type=Type, uri=Uri}.
@@ -127,7 +128,11 @@ whereis({drain, _DrainId} = Name) ->
     gproc:lookup_local_name(Name).
 
 create_ets_table() ->
-    ets:new(?DRAINS_TABLE, [named_table, public, set, {keypos, #drain.id}]).
+    ets:new(?DRAINS_TABLE, [named_table, public, set, {keypos, #drain.id}]),
+    ets:new(?DRAIN_BY_CHANNEL_LOOKUP_TABLE, [named_table, public, ordered_set,
+                                             {keypos, #drain_idx.key},
+                                             {read_concurrency, true},
+                                             {write_concurrency, true}]).
 
 start(Type, DrainId, Args) ->
     start_mod(mod(Type), DrainId, Args).
@@ -173,14 +178,18 @@ stop(DrainId, Timeout) ->
 
 %% @doc Load drain in local memory.
 -spec load(drain()) -> ok.
-load(Drain) when is_record(Drain, drain) ->
+load(#drain{ id = ID, channel_id = ChannelID } = Drain) ->
     true = ets:insert(?DRAINS_TABLE, Drain),
+    true = ets:insert(?DRAIN_BY_CHANNEL_LOOKUP_TABLE,
+                      #drain_idx{ key = {ChannelID, ID} }),
     ok.
 
 %% @doc Unload drain from local memory.
 -spec unload(id()) -> ok.
 unload(ID) when is_integer(ID) ->
     true = ets:delete(?DRAINS_TABLE, ID),
+    true = ets:match_delete(?DRAIN_BY_CHANNEL_LOOKUP_TABLE,
+                            #drain_idx{ key = {'_', ID} }),
     ok.
 
 reserve_token() ->
@@ -191,7 +200,6 @@ reserve_token() ->
         Err ->
             Err
     end.
-
 
 -spec poll(id()) -> drain() | {error, timeout}.
 poll(DrainId) ->
@@ -279,9 +287,10 @@ create(DrainId, Token, ChannelId, URI)
             end
     end.
 
-exists(ChannelId, URI) when is_binary(ChannelId) ->
-    [] =/= ets:match_object(?DRAINS_TABLE,
-                            #drain{channel_id=ChannelId, uri=URI, _='_'}).
+-spec exists(logplex_channel:id(), #ex_uri{}) -> boolean().
+exists(ChannelID, URI) when is_binary(ChannelID) ->
+    Drains = lookup_by_channel(ChannelID),
+    length([Drain || Drain <- Drains, Drain#drain.uri =:= URI]) > 0.
 
 store(#drain{id=DrainId, token=Token,
              channel_id=ChannelId, uri=URI}) ->
@@ -351,33 +360,24 @@ has_valid_uri(#drain{uri=Uri}) ->
         _ -> false
     end.
 
-delete_by_channel(ChannelId) when is_binary(ChannelId) ->
-    Drains = ets:select(?DRAINS_TABLE,
-                        ets:fun2ms(fun (#drain{id=Id,channel_id=C})
-                                        when C =:= ChannelId ->
-                                            Id
-                                    end)),
-    [delete(DrainId) || DrainId <- Drains],
+-spec delete_by_channel(logplex_channel:id()) -> ok.
+delete_by_channel(ChannelID) when is_binary(ChannelID) ->
+    [delete(DrainID) || DrainID <- lookup_ids_by_channel(ChannelID)],
     ok.
 
 
-count_by_channel(ChannelId) when is_binary(ChannelId) ->
-    ets:select_count(?DRAINS_TABLE,
-                     ets:fun2ms(fun (#drain{channel_id=C,
-                                            uri = Uri})
-                                     when C =:= ChannelId,
-                                          Uri =/= undefined ->
-                                        true
-                                end)).
+count_by_channel(ChannelID) when is_binary(ChannelID) ->
+    Drains = lookup_by_channel(ChannelID),
+    length([Drain || Drain <- Drains, Drain#drain.uri =/= undefined]).
 
-
+-spec lookup_by_channel(logplex_channel:id()) -> [drain()].
 lookup_by_channel(ChannelId) when is_binary(ChannelId) ->
-    ets:select(?DRAINS_TABLE,
-               ets:fun2ms(fun (#drain{channel_id=C})
-                                when C =:= ChannelId ->
-                                  object()
-                          end)).
+    lists:flatmap(fun(DrainID) -> ets:lookup(?DRAINS_TABLE, DrainID) end,
+                  lookup_ids_by_channel(ChannelId)).
 
+lookup_ids_by_channel(ChannelID) ->
+    ets:select(?DRAIN_BY_CHANNEL_LOOKUP_TABLE,
+               [{#drain_idx{key = {ChannelID, '$1'}}, [], ['$1']}]).
 
 -spec register(id(), logplex_channel:id(), atom(), term()) -> ok.
 register(DrainId, ChannelId, Type, Dest)
