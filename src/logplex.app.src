@@ -40,7 +40,7 @@
     ,{availability_zone, "not-aws"}
     ,{cloud_name, "development"}
     ,{config_redis_url, "redis://localhost:6379"}
-    ,{default_redis_poll_ms, 2000} % #ms
+    ,{default_redis_poll_ms, 5000} % #ms
     ,{drain_buffer_size, 1024} % #messages
     ,{ets_token_reindex_step_size,
       10000} % num tokens per tab read, index write.
