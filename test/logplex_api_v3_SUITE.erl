@@ -12,47 +12,50 @@ all() ->
     ].
 
 groups() ->
-    [{channels,
-      [channel_service_unavailable
-       , channel_method_not_allowed
-       , channel_not_authorized
-       , create_channel_without_tokens
-       , create_channel_with_tokens
-       , update_channel_with_tokens
-       , update_channel_and_remove_some_tokens
-       , update_channel_and_nuke_tokens
-       , get_channel_without_tokens
-       , get_channel_with_tokens
-       , delete_channel
-       , reject_invalid_channel_payload
-       , retain_flags_on_channel_update
+    [{channels, [parallel],
+      [ channel_method_not_allowed
+        , channel_not_authorized
+        , create_channel_without_tokens
+        , create_channel_with_tokens
+        , update_channel_with_tokens
+        , update_channel_and_remove_some_tokens
+        , update_channel_and_nuke_tokens
+        , get_channel_without_tokens
+        , get_channel_with_tokens
+        , delete_channel
+        , reject_invalid_channel_payload
+        , retain_flags_on_channel_update
       ]},
-     {drains,
-      [drains_service_unavailable
-       , drains_not_authorized
-       , reserve_drain_without_drainurl
-       , reserve_drain_with_drainurl
-       , update_drain_url
-       , cannot_update_invalid_drain_url
-       , get_channel_with_drain
-       , cannot_add_duplicate_drain
-       , cannot_add_more_drains
-       , cannot_update_non_existing_drain
-       , cannot_create_drain_for_non_existing_channel
-       , cannot_update_drain_for_non_existing_channel
-       , delete_existing_drain
-       , cannot_delete_non_existing_drain
+     {drains, [parallel],
+      [ drains_not_authorized
+        , reserve_drain_without_drainurl
+        , reserve_drain_with_drainurl
+        , update_drain_url
+        , cannot_update_invalid_drain_url
+        , get_channel_with_drain
+        , cannot_add_duplicate_drain
+        , cannot_add_more_drains
+        , cannot_update_non_existing_drain
+        , cannot_create_drain_for_non_existing_channel
+        , cannot_update_drain_for_non_existing_channel
+        , delete_existing_drain
+        , cannot_delete_non_existing_drain
+        , cannot_delete_drain_of_non_existing_channel
       ]},
-     {tokens,
-      [tokens_service_unavailable
-       , tokens_not_authorized
-       , create_new_token
-       , cannot_create_token_without_name
-       , cannot_create_token_for_non_existing_channel
+     {tokens, [parallel],
+      [ tokens_not_authorized
+        , create_new_token
+        , cannot_create_token_without_name
+        , cannot_create_token_for_non_existing_channel
       ]},
-     {sessions,
-      [create_session_for_existing_channel
-       , cannot_create_session_for_non_existing_channel
+     {sessions, [parallel],
+      [ create_session_for_existing_channel
+        , cannot_create_session_for_non_existing_channel
+      ]},
+     {service_availability,
+      [ channel_service_unavailable
+        , drains_service_unavailable
+        , tokens_service_unavailable
       ]},
      {healthcheck,
       [healthy,
@@ -460,7 +463,7 @@ cannot_create_drain_for_non_existing_channel(Config) ->
 
 cannot_update_drain_for_non_existing_channel(Config) ->
     FakeChannel = new_channel(),
-    FakeDrainId = 123123123123123123123123,
+    FakeDrainId = rand:uniform(10000000000),
     DrainUrl = new_drain_url(),
     Props = update_drain(FakeChannel, FakeDrainId, DrainUrl, Config),
     Headers = proplists:get_value(headers, Props),
@@ -483,8 +486,18 @@ delete_existing_drain(Config0) ->
 cannot_delete_non_existing_drain(Config0) ->
     Config = create_channel_without_tokens(Config0),
     Channel = ?config(channel, Config),
-    FakeDrainId = 123123123123123123123123,
+    FakeDrainId = rand:uniform(10000000000),
     Props = delete_drain(Channel, FakeDrainId, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual(404, proplists:get_value(status_code, Props)),
+    ?assertEqual("Not Found", proplists:get_value(http_reason, Props)),
+    ?assert(is_list(proplists:get_value("request-id", Headers))),
+    Config.
+
+cannot_delete_drain_of_non_existing_channel(Config) ->
+    FakeChannel = "fake-channel-id-123",
+    FakeDrainId = rand:uniform(10000000000),
+    Props = delete_drain(FakeChannel, FakeDrainId, Config),
     Headers = proplists:get_value(headers, Props),
     ?assertEqual(404, proplists:get_value(status_code, Props)),
     ?assertEqual("Not Found", proplists:get_value(http_reason, Props)),

@@ -103,7 +103,6 @@ resource_exists(Req, #state{ channel_id = ChannelId,
     end;
 resource_exists(Req, #state{ channel_id = ChannelId,
                              drain_id   = DrainId } = State) ->
-
     case logplex_channel:find(ChannelId) of
         {ok, _Channel} ->
             case logplex_drain:find(DrainId) of
