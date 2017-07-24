@@ -236,7 +236,7 @@ put_(Url, Opts) ->
 
 request(Method, Url, Opts) ->
     Headers = proplists:get_value(headers, Opts, []),
-    Timeout = proplists:get_value(timeout, Opts, 1000),
+    Timeout = proplists:get_value(timeout, Opts, timer:seconds(2)),
     Request =
         case Method of
             PostOrPut when PostOrPut == post; PostOrPut == put ->
@@ -262,7 +262,7 @@ request(Method, Url, Opts) ->
             {Headers0, Body} = wait_for_http(ReqId, [], []),
             [{headers, Headers0},
              {body, Body}];
-        Other -> ct:pal("~p", [Other]),
+        Other -> ct:pal("HTTP request: ~p ~p ~p failed with reason: ~p", [Method, Url, Opts, Other]),
                  exit(bad_case)
     end.
 
