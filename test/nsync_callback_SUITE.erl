@@ -13,6 +13,13 @@ all() ->
     create_or_update_drain_with_missing_channel,
     create_or_update_drain_with_invalid_channel].
 
+init_per_suite(Config) ->
+    ok = logplex_app:a_start(logplex, temporary),
+    Config.
+
+end_per_suite(_Config) ->
+    application:stop(logplex).
+
 run_eunit(_Config) ->
     ok = eunit:test(nsync_callback).
 
