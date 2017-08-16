@@ -28,6 +28,11 @@
 -include("logplex_drain.hrl").
 -include("logplex_logging.hrl").
 
+-ifdef(TEST).
+-compile(export_all).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
 %% nsync callbacks
 
 %% LOAD
@@ -36,8 +41,8 @@ handle({load, <<"ch:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     create_channel(Id, Dict);
 
 handle({load, <<"tok:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
-    Id = parse_id(Rest),
-    load_token(Id, Dict);
+   Id = parse_id(Rest),
+   load_token(Id, Dict);
 
 handle({load, <<"drain:", Rest/binary>>, Dict}) when is_tuple(Dict) ->
     Id = drain_id(parse_id(Rest)),
@@ -184,6 +189,9 @@ create_token(Id, Dict) ->
         {error, missing_channel} ->
             ?ERR("~p ~p ~p ~p",
                  [create_token, missing_ch, Id, dict:to_list(Dict)]);
+        {error, bad_token} ->
+            ?ERR("~p ~p ~p ~p",
+                 [create_token, bad_, Id, dict:to_list(Dict)]);
         {ok, Token} ->
             logplex_token:cache(Token),
             Token
@@ -194,10 +202,13 @@ find_token(Id, Dict) ->
         undefined ->
             {error, missing_channel};
         Val1 ->
-            Ch = convert_to_integer(Val1),
-            Name = dict_find(<<"name">>, Dict),
-            Token = logplex_token:new(Id, Ch, Name),
-            {ok, Token}
+            case convert_to_integer(Val1) of
+                {ok, Ch} ->
+                    Name = dict_find(<<"name">>, Dict),
+                    Token = logplex_token:new(Id, Ch, Name),
+                    {ok, Token};
+                Result -> Result
+            end
     end.
 
 %% Loads tokens without indexing them. Can only be used by rdb-load
@@ -218,33 +229,38 @@ create_or_update_drain(Id, Dict) ->
             ?ERR("~p ~p ~p ~p",
                  [create_drain, missing_ch, Id, dict:to_list(Dict)]);
         Val1 ->
-            Ch = convert_to_integer(Val1),
-            case dict_find(<<"token">>, Dict) of
-                undefined ->
-                    ?ERR("~p ~p ~p ~p",
-                         [create_drain, missing_token, Id, dict:to_list(Dict)]);
-                Token when is_binary(Token) ->
-                    case drain_uri(Dict) of
-                        partial_drain_record ->
-                            ?INFO("at=partial_drain_record drain_id=~p "
-                                  "token=~p channel=~p",
-                                  [Id, Token, Ch]),
-                            logplex_drain:store_token(Id, Token, Ch);
-                        Uri ->
-                            case logplex_drain:valid_uri(Uri) of
-                                {valid, Type, NewUri} ->
-                                    Drain = logplex_drain:new(Id, Ch, Token,
-                                                              Type, NewUri),
-                                    ets:insert(drains, Drain),
-                                    maybe_update_drain(logplex_drain:start(Drain), Drain),
-                                    Drain;
-                                {error, Reason} ->
-                                    ?ERR("create_drain invalid_uri ~p ~p ~p",
-                                         [Reason, Id, dict:to_list(Dict)])
+            case convert_to_integer(Val1) of
+                {ok, Ch} ->
+                    case dict_find(<<"token">>, Dict) of
+                        undefined ->
+                            ?ERR("~p ~p ~p ~p",
+                                 [create_drain, missing_token, Id, dict:to_list(Dict)]);
+                        Token when is_binary(Token) ->
+                            case drain_uri(Dict) of
+                                partial_drain_record ->
+                                    ?INFO("at=partial_drain_record drain_id=~p "
+                                          "token=~p channel=~p",
+                                          [Id, Token, Ch]),
+                                    logplex_drain:store_token(Id, Token, Ch);
+                                Uri ->
+                                    case logplex_drain:valid_uri(Uri) of
+                                        {valid, Type, NewUri} ->
+                                            Drain = logplex_drain:new(Id, Ch, Token,
+                                                                      Type, NewUri),
+                                            ets:insert(drains, Drain),
+                                            maybe_update_drain(logplex_drain:start(Drain), Drain),
+                                            Drain;
+                                        {error, Reason} ->
+                                            ?ERR("create_drain invalid_uri ~p ~p ~p",
+                                                 [Reason, Id, dict:to_list(Dict)])
+                                    end
                             end
-                    end
-            end
-    end.
+                    end;
+                {error, bad_token} ->
+                  ?ERR("~p ~p ~p ~p", [create_drain, bad_token, Id,
+                      dict:to_list(Dict)])
+          end
+      end.
 
 maybe_update_drain({ok, _Pid}, _Drain) ->
   ok;
@@ -288,9 +304,13 @@ parse_id(Bin) ->
     Id.
 
 convert_to_integer(V) when is_binary(V) ->
-    list_to_integer(binary_to_list(V));
+    convert_to_integer(binary_to_list(V));
 convert_to_integer(V) when is_list(V) ->
-    list_to_integer(V).
+    try list_to_integer(V) of
+      Int -> {ok, Int}
+    catch
+      error:badarg -> {error, bad_token}
+    end.
 
 dict_from_list(List) ->
     dict_from_list(List, dict:new()).
@@ -318,3 +338,17 @@ drain_id(Bin) when is_binary(Bin) ->
 
 control_rod_flag(<<"1">>) -> read_only;
 control_rod_flag(<<"0">>) -> normal.
+
+-ifdef(TEST).
+
+convert_to_integer_test_() ->
+    Token1 = "app-beddff26-5f30-46e9-aadb-45bc6e61aae4",
+    Token2 = "12345",
+    [
+        ?_assertEqual({error, bad_token}, convert_to_integer(Token1)),
+        ?_assertEqual({error, bad_token},
+          convert_to_integer(list_to_binary(Token1))),
+        ?_assertEqual({ok, 12345}, convert_to_integer(Token2)),
+        ?_assertEqual({ok, 12345}, convert_to_integer(list_to_binary(Token2)))
+    ].
+-endif.
