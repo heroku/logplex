@@ -59,7 +59,7 @@ Prior versions of Logplex are designed to run on R16B03 and 17.x.
 ### build
 
     $ ./rebar3 as public compile
-    
+
 ### develop
 
 run
@@ -94,16 +94,17 @@ Runs the common test suite for logplex.
 ### develop
 
 Requires a working install of Docker and Docker Compose.
-Follow the [installations](https://docs.docker.com/installation/#installation)
-steps outlined docs.docker.com.
+Follow the [installation steps](https://docs.docker.com/installation/#installation)
+outlined on the Docker website.
 ```
+source setup-host-vars.sh    # create network related env vars
+
 docker-compose build         # Run once
 docker-compose run compile   # Run everytime source files change
 docker-compose up logplex    # Run logplex post-compilation
 ```
 
 To connect to the above logplex Erlang shell:
-
 ```
 docker exec -it logplex_logplex_1 bash -c "TERM=xterm bin/connect"
 ```
