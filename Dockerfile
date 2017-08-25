@@ -20,8 +20,7 @@ RUN cd /usr/src \
       && cd .. \
       && rm -rf rebar3
 
-RUN mkdir -p /home/logplex
-COPY logplex.env /home/logplex/keys.sh
+RUN mkdir -p /home/logplex && ln -s logplex.env /home/logplex/keys.sh
 
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
