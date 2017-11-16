@@ -29,6 +29,8 @@ main(["resume", Name]) ->
 main(["reload_config", Name]) ->
     Node = connect(Name),
     io:format("Reloading redgrid conf... "),
+    RedisURL = getenv("LOGPLEX_REDGRID_REDIS_URL"),
+    ok = rpc:call(Node, application, set_env, [redgrid, redis_url, RedisURL]),
     Res = rpc:call(Node, redgrid, reload_config, []),
     io:format("Result: ~p.~n", [Res]),
     disconnect(),
@@ -81,3 +83,12 @@ set_cookie(Node) ->
         Cookie ->
             erlang:set_cookie(Node, list_to_atom(Cookie))
     end.
+
+getenv(Key) ->
+  case os:getenv(Key) of
+    false ->
+      io:format("Env variable ~s not set~n", [Key]),
+      halt(1);
+    Val ->
+      Val
+  end.
