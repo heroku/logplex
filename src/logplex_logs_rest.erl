@@ -33,9 +33,10 @@
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 
 child_spec() ->
-    ranch:child_spec(?MODULE, 100,
+    ranch:child_spec(?MODULE, logplex_app:config(http_log_input_acceptors),
                      ranch_tcp,
-                     [{port, logplex_app:config(http_log_input_port)}],
+                     [{port, logplex_app:config(http_log_input_port)},
+                      {max_connections, logplex_app:config(http_log_input_max_connections)}],
                      cowboy_protocol,
                      [{env,
                        [{dispatch, dispatch()}]}]).

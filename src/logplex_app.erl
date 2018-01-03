@@ -132,6 +132,12 @@ cache_os_envvars() ->
                       ,{tls_pinned_certs, ["LOGPLEX_TLS_PINNED_CERTS"],
                         optional,
                         binary}
+                     ,{http_log_input_acceptors, ["HTTP_LOG_INPUT_ACCEPTORS"],
+                       optional,
+                       integer}
+                     ,{http_log_input_max_connections, ["HTTP_LOG_INPUT_MAX_CONNECTIONS"],
+                       optional,
+                       integer}
                      ]),
     ok.
 
