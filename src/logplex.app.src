@@ -49,6 +49,8 @@
     ,{http_drain_target_bytes, 102400} % bytes
     ,{http_frame_retries, 2} % #extra attempts after first
     ,{http_log_input_port, 8601} % syslog/http tcp listen port
+    ,{http_log_input_acceptors, 100}
+    ,{http_log_input_max_connections, 1024}
     ,{http_port, 8001}
     ,{http_v3_url, "http://localhost:8002"}
     ,{http_v3_port, 8002}
