@@ -64,7 +64,7 @@
 
 -type id() :: binary().
 -type name() :: binary().
--type flag() :: 'no_tail' | 'no_redis'.
+-type flag() :: 'no_tail' | 'no_redis' | 'no_drains'.
 -type flags() :: [flag()].
 -type channel() :: #channel{}.
 -export_type([id/0, name/0, flags/0]).
@@ -181,7 +181,8 @@ flags_to_binary(Flags) when is_list(Flags) ->
 binary_to_flags(Str) when is_binary(Str) ->
     [ case Flag of
           <<"no_tail">> -> no_tail;
-          <<"no_redis">> -> no_redis
+          <<"no_redis">> -> no_redis;
+          <<"no_drains">> -> no_drains
       end || Flag <- binary:split(Str, <<":">>),
              Flag =/= <<>> ].
 
@@ -204,7 +205,8 @@ lookup(ChannelId) when is_binary(ChannelId) ->
 -spec lookup_flag(F, id()) -> F | 'no_such_flag' | 'not_found'
                                   when is_subtype(F, flag()).
 lookup_flag(Flag, ChannelId) when Flag =:= no_tail;
-                                  Flag =:= no_redis ->
+                                  Flag =:= no_redis;
+                                  Flag =:= no_drains ->
     try
         Flags =ets:lookup_element(channels, ChannelId, #channel.flags),
         case lists:member(Flag, Flags) of

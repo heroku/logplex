@@ -71,27 +71,28 @@ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
        is_binary(TokenName) ->
     logplex_stats:incr(message_received),
     logplex_realtime:incr('message.received'),
-    case logplex_channel:lookup_flag(no_redis, ChannelId) of
+
+    case logplex_channel:lookup_flags(ChannelId) of
         not_found ->
             logplex_realtime:incr(unknown_channel),
             ?INFO("at=process_msg channel_id=~s msg=unknown_channel", [ChannelId]);
-        Flag ->
+        Flags ->
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
             logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
-            process_drains(ChannelId, CookedMsg),
-            process_tails(ChannelId, CookedMsg),
-            process_redis(ChannelId, ShardInfo, CookedMsg, Flag)
+            process_drains(ChannelId, CookedMsg, Flags),
+            process_tails(ChannelId, CookedMsg, Flags),
+            process_redis(ChannelId, ShardInfo, CookedMsg, Flags)
     end.
 
-process_error(ChannelID, Origin, ?L14, Fmt, Args) ->
-    process_error(ChannelID, Origin, ["Error L14 (certificate validation): ", Fmt], Args).
+process_error(ChannelId, Origin, ?L14, Fmt, Args) ->
+    process_error(ChannelId, Origin, ["Error L14 (certificate validation): ", Fmt], Args).
 
-process_error(ChannelID, Origin, Fmt, Args) when is_list(Fmt), is_list(Args) ->
-    #token{ id=HerokuToken } = logplex_token:lookup_heroku_token(ChannelID),
+process_error(ChannelId, Origin, Fmt, Args) when is_list(Fmt), is_list(Args) ->
+    #token{ id=HerokuToken } = logplex_token:lookup_heroku_token(ChannelId),
     HerokuOrigin = <<"heroku">>,
-    do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args).
+    do_process_error({HerokuToken, HerokuOrigin}, ChannelId, Origin, Fmt, Args).
 
-do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args) when is_binary(HerokuToken) ->
+do_process_error({HerokuToken, HerokuOrigin}, ChannelId, Origin, Fmt, Args) when is_binary(HerokuToken) ->
     Msg = logplex_syslog_utils:fmt(local7,
                                    warning,
                                    now,
@@ -100,33 +101,61 @@ do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args) when
                                    iolist_to_binary(Fmt),
                                    Args),
     RawMsg =  iolist_to_binary(logplex_syslog_utils:to_msg(Msg, Origin)),
-    logplex_firehose:post_msg(ChannelID, HerokuOrigin, RawMsg),
+    logplex_firehose:post_msg(ChannelId, HerokuOrigin, RawMsg),
 
-    case logplex_channel:lookup_flag(no_redis, ChannelID) of
+    case logplex_channel:lookup_flags(ChannelId) of
         not_found ->
             ignore;
-        Flag ->
+        Flags ->
             CookedMsg = iolist_to_binary(re:replace(RawMsg, HerokuToken, HerokuOrigin)),
             ShardInfo = shard_info(),
-            process_tails(ChannelID, CookedMsg),
-            process_redis(ChannelID, ShardInfo, CookedMsg, Flag)
+            process_tails(ChannelId, CookedMsg, Flags),
+            process_redis(ChannelId, ShardInfo, CookedMsg, Flags)
     end;
 
-do_process_error({false, _HerokuOrigin}, _ChannelID, _Origin, Fmt, Args) ->
+do_process_error({false, _HerokuOrigin}, _ChannelId, _Origin, Fmt, Args) ->
     ErrMsg = io_lib:format(iolist_to_binary(Fmt), Args),
     ?INFO("at=process_error channel_id=~s err=\"~s\"",
           [channel_id, ErrMsg]),
     ignored.
 
-process_drains(ChannelID, Msg) ->
-    logplex_channel:post_msg({channel, ChannelID}, Msg).
+process_drains(ChannelId, Msg, []) ->
+  do_process_drains(ChannelId, Msg);
+process_drains(ChannelId, Msg, Flags) ->
+  case lists:member(no_drains, Flags) of
+    false ->
+      do_process_drains(ChannelId, Msg);
+    true ->
+      ok
+  end.
 
-process_tails(ChannelId, Msg) ->
+do_process_drains(ChannelId, Msg) ->
+    logplex_channel:post_msg({channel, ChannelId}, Msg).
+
+process_tails(ChannelId, Msg, []) ->
+  do_process_tails(ChannelId, Msg);
+process_tails(ChannelId, Msg, Flags) ->
+  case lists:member(no_tail, Flags) of
+    false ->
+      do_process_tails(ChannelId, Msg);
+    true ->
+      ok
+  end.
+
+do_process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg).
 
-process_redis(_ChannelId, _ShardInfo, _Msg, no_redis) ->
-    ok;
-process_redis(ChannelId, ShardInfo, Msg, _Flag) ->
+process_redis(ChannelId, ShardInfo, Msg, []) ->
+    do_process_redis(ChannelId, ShardInfo, Msg);
+process_redis(ChannelId, ShardInfo, Msg, Flags) ->
+  case lists:member(no_redis, Flags) of
+    false ->
+      do_process_redis(ChannelId, ShardInfo, Msg);
+    true ->
+      ok
+  end.
+
+do_process_redis(ChannelId, ShardInfo, Msg) ->
     Expiry = logplex_app:config(redis_buffer_expiry),
     HistorySize = logplex_app:config(log_history),
     {Map, Interval} = logplex_shard_info:map_interval(ShardInfo),
