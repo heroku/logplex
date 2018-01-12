@@ -14,10 +14,10 @@ main(["nodes", Name]) ->
     halt(0);
 main(["stop", Name]) ->
     Node = connect(Name),
-    io:format("Suspending redgrid... "),
+    io:format("Suspending redgrid...~n"),
     rpc:call(Node, redgrid, suspend, []),
     Nodes = rpc:call(Node, redgrid, nodes, []),
-    [ disconnect_node(N) || {N, _} <- Nodes ],
+    [ do_disconnect_node(Node, Target) || {Target, _} <- Nodes ],
     io:format("ok.~n"),
     disconnect(),
     halt(0);
@@ -78,9 +78,11 @@ disconnect() ->
     io:format("Disconnecting.~n"),
     net_kernel:stop().
 
-disconect_node(Node) ->
-  Res = rpc:call(erlang, disconect_node, [Node]),
-  io:format("Disconnected from ~p ~p", [Node, Res]),
+do_disconnect_node(Node, Node) ->
+    skipped_self;
+do_disconnect_node(Node, Target) ->
+  Res = rpc:call(Node, erlang, disconnect_node, [Target]),
+  io:format("Disconnecting from ~p... ~p~n", [Target, Res]),
   Res.
 
 name() ->
