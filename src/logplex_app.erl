@@ -241,11 +241,17 @@ boot_pagerduty() ->
     end.
 
 setup_redgrid_vals() ->
-    application:load(redgrid),
-    application:set_env(redgrid, local_ip, config(local_ip)),
-    application:set_env(redgrid, redis_url, config(redgrid_redis_url)),
-    application:set_env(redgrid, domain, config(cloud_name)),
-    ok.
+    case config(disable_redgrid, false) of
+        true ->
+            ?INFO("at=setup_redgrid_vals msg='redgrid disabled'", []),
+            ok;
+        _ ->
+            application:load(redgrid),
+            application:set_env(redgrid, local_ip, config(local_ip)),
+            application:set_env(redgrid, redis_url, config(redgrid_redis_url)),
+            application:set_env(redgrid, domain, config(cloud_name)),
+            ok
+    end.
 
 setup_redis_shards() ->
     URLs = case config(logplex_shard_urls) of
