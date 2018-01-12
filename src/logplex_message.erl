@@ -124,7 +124,8 @@ process_drains(ChannelID, Msg) ->
 process_tails(ChannelId, Msg) ->
     logplex_tail:route(ChannelId, Msg).
 
-process_redis(_ChannelId, _ShardInfo, _Msg, no_redis) ->
+process_redis(_ChannelId, _ShardInfo, _Msg, Flag) when Flag =:= no_redis;
+                                                       Flag =:= true ->
     ok;
 process_redis(ChannelId, ShardInfo, Msg, _Flag) ->
     Expiry = logplex_app:config(redis_buffer_expiry),
