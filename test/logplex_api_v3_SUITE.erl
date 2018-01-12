@@ -51,7 +51,8 @@ groups() ->
        , cannot_create_token_for_non_existing_channel
       ]},
      {sessions,
-      [create_session_for_existing_channel
+      [sessions_service_unavailable
+       , create_session_for_existing_channel
        , cannot_create_session_for_non_existing_channel
       ]},
      {healthcheck,
@@ -95,6 +96,9 @@ init_per_testcase(cannot_add_more_drains, Config) ->
 init_per_testcase(unhealthy, Config) ->
     logplex_app:set_config(nsync_loaded, false),
     Config;
+init_per_testcase(sessions_service_unavailable, Config) ->
+    logplex_app:set_config(deny_tail_sessions, true),
+    Config;
 init_per_testcase(_, Config) ->
     Config.
 
@@ -110,6 +114,9 @@ end_per_testcase(cannot_add_more_drains, Config) ->
     Config;
 end_per_testcase(unhealthy, Config) ->
     logplex_app:set_config(nsync_loaded, true),
+    Config;
+end_per_testcase(sessions_service_unavailable, Config) ->
+    logplex_app:set_config(deny_tail_sessions, false),
     Config;
 end_per_testcase(_, Config) ->
     Config.
@@ -548,6 +555,14 @@ cannot_create_token_for_non_existing_channel(Config) ->
 %% sessions
 %% -----------------------------------------------------------------------------
 
+sessions_service_unavailable(Config) ->
+    SessionId = new_session(),
+    Url = ?config(api_v3_url, Config) ++ "/v3/sessions/" ++ SessionId,
+    Props = logplex_api_SUITE:post( Url, []),
+    ?assertEqual(503, proplists:get_value(status_code, Props)),
+    ?assertEqual("Service Unavailable", proplists:get_value(http_reason, Props)),
+    Config.
+
 create_session_for_existing_channel(Config0) ->
     Config = create_channel_with_tokens(Config0),
     Channel = ?config(channel, Config),
@@ -671,6 +686,9 @@ new_channel() ->
 
 new_token_name() ->
     "token-" ++ uuid:to_string(uuid:v4()).
+
+new_session() ->
+    "session-" ++ uuid:to_string(uuid:v4()).
 
 new_drain_url() ->
     list_to_binary([<<"http://my.drain.com/">>, uuid:to_binary(uuid:v4())]).
