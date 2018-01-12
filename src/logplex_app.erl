@@ -138,6 +138,9 @@ cache_os_envvars() ->
                      ,{http_log_input_max_connections, ["HTTP_LOG_INPUT_MAX_CONNECTIONS"],
                        optional,
                        integer}
+                     ,{deny_tail_sessions, ["DENY_TAIL_SESSIONS"],
+                       optional,
+                       atom}
                      ]),
     ok.
 

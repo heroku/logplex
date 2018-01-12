@@ -34,7 +34,12 @@ rest_init(Req, _Opts) ->
 
 %% @private
 service_available(Req, State) ->
-    logplex_api_v3:service_available(Req, State).
+    case logplex_app:config(deny_tail_sessions, false) of
+        true ->
+            {false, Req, State};
+        _ ->
+            logplex_api_v3:service_available(Req, State)
+    end.
 
 %% @private
 allowed_methods(Req, State) ->
