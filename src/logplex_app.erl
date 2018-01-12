@@ -147,6 +147,9 @@ cache_os_envvars() ->
                      ,{disable_redgrid, ["DISABLE_REDGRID"],
                        optional,
                        atom}
+                     ,{disable_drain_forwarding, ["DISABLE_DRAIN_FORWARDING"],
+                       optional,
+                       atom}
                      ]),
     ok.
 
