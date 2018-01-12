@@ -144,6 +144,9 @@ cache_os_envvars() ->
                      ,{deny_redis_buffers, ["DENY_REDIS_BUFFERS"],
                        optional,
                        atom}
+                     ,{disable_redgrid, ["DISABLE_REDGRID"],
+                       optional,
+                       atom}
                      ]),
     ok.
 
