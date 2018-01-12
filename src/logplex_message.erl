@@ -78,7 +78,7 @@ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
         Flag ->
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
             logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
-            process_drains(ChannelId, CookedMsg),
+            process_drains(ChannelId, CookedMsg, logplex_app:config(deny_drain_forwarding, false)),
             process_tails(ChannelId, CookedMsg),
             process_redis(ChannelId, ShardInfo, CookedMsg, logplex_app:config(deny_redis_buffers, Flag))
     end.
@@ -118,7 +118,9 @@ do_process_error({false, _HerokuOrigin}, _ChannelID, _Origin, Fmt, Args) ->
           [channel_id, ErrMsg]),
     ignored.
 
-process_drains(ChannelID, Msg) ->
+process_drains(ChannelID, Msg, true) ->
+    ok;
+process_drains(ChannelID, Msg, false) ->
     logplex_channel:post_msg({channel, ChannelID}, Msg).
 
 process_tails(ChannelId, Msg) ->
