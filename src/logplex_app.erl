@@ -141,6 +141,9 @@ cache_os_envvars() ->
                      ,{deny_tail_sessions, ["DENY_TAIL_SESSIONS"],
                        optional,
                        atom}
+                     ,{deny_redis_buffers, ["DENY_REDIS_BUFFERS"],
+                       optional,
+                       atom}
                      ]),
     ok.
 

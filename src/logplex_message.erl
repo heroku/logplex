@@ -80,7 +80,7 @@ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
             logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
             process_drains(ChannelId, CookedMsg),
             process_tails(ChannelId, CookedMsg),
-            process_redis(ChannelId, ShardInfo, CookedMsg, Flag)
+            process_redis(ChannelId, ShardInfo, CookedMsg, logplex_app:config(deny_redis_buffers, Flag))
     end.
 
 process_error(ChannelID, Origin, ?L14, Fmt, Args) ->
