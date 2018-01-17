@@ -54,7 +54,7 @@ end_per_testcase(Case, Config)
     meck:unload(logplex_message),
     Config;
 end_per_testcase(service_unavailable, Config) ->
-    logplex_app:set_config(deny_logs_ingress, true),
+    logplex_app:set_config(deny_logs_ingress, false),
     Config;
 end_per_testcase(_Case, Config) ->
     Config.
