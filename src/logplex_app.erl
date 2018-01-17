@@ -150,6 +150,9 @@ cache_os_envvars() ->
                      ,{disable_drain_forwarding, ["DISABLE_DRAIN_FORWARDING"],
                        optional,
                        atom}
+                     ,{disable_firehose, ["DISABLE_FIREHOSE"],
+                       optional,
+                       atom}
                      ]),
     ok.
 
@@ -270,7 +273,13 @@ setup_redis_shards() ->
                         logplex_shard:redis_sort(URLs)).
 
 setup_firehose() ->
-    logplex_firehose:enable().
+    case config(disable_firehose, false) of
+        true ->
+            ?INFO("at=setup_firehose msg='firehose disabled'", []),
+            ok;
+        _ ->
+            logplex_firehose:enable()
+    end.
 
 nsync_opts() ->
     RedisUrl = config(config_redis_url),
