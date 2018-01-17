@@ -9,7 +9,10 @@
 
 
 all() ->
-    [post_logline, post_logline_compressed].
+    [post_logline,
+     post_logline_compressed,
+     service_unavailable
+    ].
 
 init_per_suite(Config) ->
     set_os_vars(),
@@ -19,6 +22,7 @@ init_per_suite(Config) ->
 
 end_per_suite(_Config) ->
     application:stop(logplex).
+
 
 init_per_testcase(Case, Config)
   when        Case =:= post_logline;
@@ -38,7 +42,10 @@ init_per_testcase(Case, Config)
             meck:new(logplex_logs_rest, [no_link, passthrough]);
         _ -> ok
     end,
-    [{channel_id, ChannelId}, {token, Token} |Config].
+    [{channel_id, ChannelId}, {token, Token} |Config];
+init_per_testcase(service_unavailable, Config) ->
+    logplex_app:set_config(deny_logs_ingress, true),
+    Config.
 
 end_per_testcase(Case, Config)
   when Case =:= post_logline;
@@ -46,8 +53,17 @@ end_per_testcase(Case, Config)
     meck:unload(logplex_logs_rest),
     meck:unload(logplex_message),
     Config;
+end_per_testcase(service_unavailable, Config) ->
+    logplex_app:set_config(deny_logs_ingress, true),
+    Config;
 end_per_testcase(_Case, Config) ->
     Config.
+
+service_unavailable(Config) ->
+    Url = binary_to_list(iolist_to_binary([?config(logs, Config), "/logs"])),
+    Props = logplex_api_SUITE:post(Url, []),
+    503 = proplists:get_value(status_code, Props),
+    ok.
 
 post_logline(Config) ->
     BasicAuth = ?config(auth, Config),
