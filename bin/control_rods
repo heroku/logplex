@@ -1,6 +1,5 @@
 #!/usr/bin/env escript
 
-
 %% Only works on localhost, assumes the current hostname will fit the localhost
 -define(NAME, filename:basename(escript:script_name())).
 
@@ -22,6 +21,13 @@ main(["deny_tail_sessions"]) ->
     Node = connect(),
     io:format("Preventing creation of new tail sessions..."),
     Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, true]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["kill_tail_sessions"]) ->
+    Node = connect(),
+    io:format("Killing all tail sessions..."),
+    Res = rpc:call(Node, logplex_tail, kill_all_sessions, []),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
@@ -75,7 +81,6 @@ main(["enable_firehose"]) ->
     disconnect(),
     halt(0);
 main(_) ->
-    %% TODO: write help
     io:format("Control rods for local logplex node. These control rods can be modified on the fly while logplex is running.~n~n"
               "Usage: control_rods <rod>~n~n"
               "deny_redis_buffers\t\tPrevent all writes to logplex_logs_redis nodes.~n"
