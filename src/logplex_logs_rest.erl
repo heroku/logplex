@@ -11,6 +11,7 @@
 
 -export([init/3
          ,rest_init/2
+         ,service_available/2
          ,allowed_methods/2
          ,is_authorized/2
          ,known_content_type/2
@@ -68,6 +69,14 @@ terminate(_, _, _) -> ok.
 %% Logs cowboy_rest implementation
 rest_init(Req, _Opts) ->
     {ok, Req, #state{}}.
+
+service_available(Req, State) ->
+    case logplex_app:config(deny_logs_ingress, false) of
+        true ->
+            {false, Req, State};
+        _ ->
+            {true, Req, State}
+    end.
 
 allowed_methods(Req, State) ->
     {[<<"POST">>], Req, State}.

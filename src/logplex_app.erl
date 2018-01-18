@@ -153,6 +153,9 @@ cache_os_envvars() ->
                      ,{disable_firehose, ["DISABLE_FIREHOSE"],
                        optional,
                        atom}
+                     ,{deny_logs_ingress, ["DENY_LOGS_INGRESS"],
+                       optional,
+                       atom}
                      ]),
     ok.
 
