@@ -1,0 +1,120 @@
+#!/usr/bin/env escript
+
+
+%% Only works on localhost, assumes the current hostname will fit the localhost
+-define(NAME, filename:basename(escript:script_name())).
+
+main(["deny_redis_buffers"]) ->
+    Node = connect(),
+    io:format("Preventing all writes to logplex_logs_redis nodes..."),
+    Res = rpc:call(Node, logplex_app, set_config, [deny_redis_buffers, true]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["allow_redis_buffers"]) ->
+    Node = connect(),
+    io:format("Allowing writes to logplex_logs_redis nodes..."),
+    Res = rpc:call(Node, logplex_app, set_config, [deny_redis_buffers, false]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["deny_tail_sessions"]) ->
+    Node = connect(),
+    io:format("Preventing creation of new tail sessions..."),
+    Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, true]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["allow_tail_sessions"]) ->
+    Node = connect(),
+    io:format("Allowing creation of new tail sessions..."),
+    Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, false]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["deny_drain_forwarding"]) ->
+    Node = connect(),
+    io:format("Preventing all writes to drains..."),
+    Res = rpc:call(Node, logplex_app, set_config, [deny_drain_forwarding, true]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["allow_drain_forwarding"]) ->
+    Node = connect(),
+    io:format("Allowing writes to drains..."),
+    Res = rpc:call(Node, logplex_app, set_config, [deny_drain_forwarding, false]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["deny_logs_ingress"]) ->
+    Node = connect(),
+    io:format("Preventing ingress for all logs..."),
+    Res = rpc:call(Node, logplex_app, set_config, [deny_logs_ingress, true]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["allow_logs_ingress"]) ->
+    Node = connect(),
+    io:format("Allowing logs ingress..."),
+    Res = rpc:call(Node, logplex_app, set_config, [deny_logs_ingress, false]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["disable_firehose"]) ->
+    Node = connect(),
+    io:format("Disabling firehose..."),
+    Res = rpc:call(Node, logplex_app, set_config, [disable_firehose, true]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["enable_firehose"]) ->
+    Node = connect(),
+    io:format("Enabling firehose..."),
+    Res = rpc:call(Node, logplex_app, set_config, [disable_firehose, false]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(_) ->
+    %% TODO: write help
+    io:format("Control rods for local logplex node. These control rods can be modified on the fly while logplex is running.~n~n"
+              "Usage: control_rods <rod>~n~n"
+              "deny_redis_buffers\t\tPrevent all writes to logplex_logs_redis nodes.~n"
+              "allow_redis_buffers\t\tAllow writes to logplex_logs_redis nodes.~n~n"
+              "deny_tail_sessions\t\tPrevent creation of new tail sessions.~n"
+              "allow_tail_sessions\t\tAllow creation of new tail sessions.~n~n"
+              "deny_drain_forward\t\tPrevent all writes to drains.~n"
+              "allow_drain_forward\t\tAllow writes to drains.~n~n"
+              "deny_logs_ress\t\t\tPrevent ress for all logs.~n"
+              "allow_logs_ress\t\t\tAllow logs ress.~n~n"
+              "disable_firehose\t\tDisable firehose.~n"
+              "enable_firehose\t\t\tEnable firehose.~n~n"
+             ),
+    halt(0).
+
+connect() ->
+    Node = list_to_atom("logplex@" ++ net_adm:localhost()),
+    io:format("Starting distributed mode.~n"),
+    {ok, _} = net_kernel:start([script_name(), longnames]),
+    set_cookie(Node),
+    io:format("Connecting (hidden) to ~p.~n", [Node]),
+    true = net_kernel:hidden_connect(Node), % undocumented yay!
+    io:format("Connected.~n"),
+    Node.
+
+disconnect() ->
+    io:format("Disconnecting.~n"),
+    net_kernel:stop().
+
+script_name() ->
+    list_to_atom(?NAME ++ "_"
+                 ++ os:getpid()
+                 ++ "@" ++ net_adm:localhost()).
+
+set_cookie(Node) ->
+    case os:getenv("LOGPLEX_COOKIE") of
+        false ->
+            io:format("LOGPLEX_COOKIE not found, proceeding without it.~n");
+        Cookie ->
+            erlang:set_cookie(Node, list_to_atom(Cookie))
+    end.
+
