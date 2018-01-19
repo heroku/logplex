@@ -69,14 +69,14 @@ main(["allow_logs_ingress"]) ->
 main(["disable_firehose"]) ->
     Node = connect(),
     io:format("Disabling firehose..."),
-    Res = rpc:call(Node, logplex_app, set_config, [disable_firehose, true]),
+    Res = rpc:call(Node, logplex_firehose, disable, []),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["enable_firehose"]) ->
     Node = connect(),
     io:format("Enabling firehose..."),
-    Res = rpc:call(Node, logplex_app, set_config, [disable_firehose, false]),
+    Res = rpc:call(Node, logplex_firehose, enable, []),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
@@ -86,11 +86,12 @@ main(_) ->
               "deny_redis_buffers\t\tPrevent all writes to logplex_logs_redis nodes.~n"
               "allow_redis_buffers\t\tAllow writes to logplex_logs_redis nodes.~n~n"
               "deny_tail_sessions\t\tPrevent creation of new tail sessions.~n"
+              "kill_tail_sessions\t\tKill all tail sessions on this node.~n"
               "allow_tail_sessions\t\tAllow creation of new tail sessions.~n~n"
               "deny_drain_forward\t\tPrevent all writes to drains.~n"
               "allow_drain_forward\t\tAllow writes to drains.~n~n"
-              "deny_logs_ress\t\t\tPrevent ress for all logs.~n"
-              "allow_logs_ress\t\t\tAllow logs ress.~n~n"
+              "deny_logs_ress\t\t\tPrevent ingress for all logs.~n"
+              "allow_logs_ress\t\t\tAllow logs ingress.~n~n"
               "disable_firehose\t\tDisable firehose.~n"
               "enable_firehose\t\t\tEnable firehose.~n~n"
              ),
