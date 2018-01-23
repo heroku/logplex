@@ -29,12 +29,14 @@
 
 -export([register/1, route/2]).
 -export([shutdown/1]).
+-export([kill_all_sessions/0]).
 
 -include("logplex.hrl").
 
 %% API functions
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
 
 register(ChannelId) when is_binary(ChannelId) ->
     put(logplex_tail, {channel_id, ChannelId}), %% post mortem debug info
@@ -52,6 +54,10 @@ shutdown(ChannelId) when is_binary(ChannelId) ->
     [exit(Pid, shutdown)
      || {_ChannelId, Pid} <- ets:lookup(?MODULE, ChannelId)],
     ok.
+
+%% @doc Kill all tail sessions registered on this node.
+kill_all_sessions() ->
+    gen_server:call(?MODULE, kill_all_sessions).
 
 %%====================================================================
 %% gen_server callbacks
@@ -95,6 +101,11 @@ handle_cast({register, ChannelId, Pid}, State) ->
     ets:insert(?MODULE, {ChannelId, Pid}),
     {noreply, State};
 
+handle_cast(kill_all_sessions, State) ->
+    ets:foldl(fun({_ChannelId, Pid}, _Acc) -> exit(Pid, shutdown), ok end,
+              ok,
+              ?MODULE),
+    {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
