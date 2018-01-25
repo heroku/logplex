@@ -57,7 +57,7 @@ shutdown(ChannelId) when is_binary(ChannelId) ->
 
 %% @doc Kill all tail sessions registered on this node.
 kill_all_sessions() ->
-    gen_server:call(?MODULE, kill_all_sessions).
+    gen_server:cast(?MODULE, kill_all_sessions).
 
 %%====================================================================
 %% gen_server callbacks
