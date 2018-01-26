@@ -97,7 +97,7 @@ main(["enable_api"]) ->
 main(["set_api_read_only"]) ->
     Node = connect(),
     io:format("Setting API (v2 & v3) in read-only mode...~n"),
-    Res = rpc:call(Node, logplex_api, set_status, [normal]),
+    Res = rpc:call(Node, logplex_api, set_status, [read_only]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
