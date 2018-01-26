@@ -724,7 +724,16 @@ valid_uri(Req) ->
 %% Checks whether the API state
 -spec status() -> 'normal' | 'read_only' | 'disabled'.
 status() ->
-    logplex_app:config(api_status, normal).
+    case logplex_app:config(api_status, normal) of
+        Status when Status == normal;
+                    Status == disabled;
+                    Status == read_only ->
+            Status;
+        _Other ->
+            io:format("Invalid API status configured! Defaulting to 'normal' mode.~n"),
+            normal
+    end.
+
 
 set_status(Term) ->
     Old = status(),

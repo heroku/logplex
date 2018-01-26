@@ -5,78 +5,99 @@
 
 main(["deny_redis_buffers"]) ->
     Node = connect(),
-    io:format("Preventing all writes to logplex_logs_redis nodes..."),
+    io:format("Preventing all writes to logplex_logs_redis nodes...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_redis_buffers, true]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["allow_redis_buffers"]) ->
     Node = connect(),
-    io:format("Allowing writes to logplex_logs_redis nodes..."),
+    io:format("Allowing writes to logplex_logs_redis nodes...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_redis_buffers, false]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["deny_tail_sessions"]) ->
     Node = connect(),
-    io:format("Preventing creation of new tail sessions..."),
+    io:format("Preventing creation of new tail sessions...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, true]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["kill_tail_sessions"]) ->
     Node = connect(),
-    io:format("Killing all tail sessions..."),
+    io:format("Killing all tail sessions...~n"),
     Res = rpc:call(Node, logplex_tail, kill_all_sessions, []),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["allow_tail_sessions"]) ->
     Node = connect(),
-    io:format("Allowing creation of new tail sessions..."),
+    io:format("Allowing creation of new tail sessions...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, false]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["deny_drain_forwarding"]) ->
     Node = connect(),
-    io:format("Preventing all writes to drains..."),
+    io:format("Preventing all writes to drains...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_drain_forwarding, true]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["allow_drain_forwarding"]) ->
     Node = connect(),
-    io:format("Allowing writes to drains..."),
+    io:format("Allowing writes to drains...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_drain_forwarding, false]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["deny_logs_ingress"]) ->
     Node = connect(),
-    io:format("Preventing ingress for all logs..."),
+    io:format("Preventing ingress for all logs...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_logs_ingress, true]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["allow_logs_ingress"]) ->
     Node = connect(),
-    io:format("Allowing logs ingress..."),
+    io:format("Allowing logs ingress...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_logs_ingress, false]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["disable_firehose"]) ->
     Node = connect(),
-    io:format("Disabling firehose..."),
+    io:format("Disabling firehose...~n"),
     Res = rpc:call(Node, logplex_firehose, disable, []),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["enable_firehose"]) ->
     Node = connect(),
-    io:format("Enabling firehose..."),
+    io:format("Enabling firehose...~n"),
     Res = rpc:call(Node, logplex_firehose, enable, []),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["disable_api"]) ->
+    Node = connect(),
+    io:format("Disabling API (v2 & v3)...~n"),
+    Res = rpc:call(Node, logplex_api, set_status, [disabled]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["enable_api"]) ->
+    Node = connect(),
+    io:format("Enabling API (v2 & v3)...~n"),
+    Res = rpc:call(Node, logplex_api, set_status, [normal]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["set_api_read_only"]) ->
+    Node = connect(),
+    io:format("Setting API (v2 & v3) in read-only mode...~n"),
+    Res = rpc:call(Node, logplex_api, set_status, [normal]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
@@ -94,6 +115,9 @@ main(_) ->
               "allow_logs_ress\t\t\tAllow logs ingress.~n~n"
               "disable_firehose\t\tDisable firehose.~n"
               "enable_firehose\t\t\tEnable firehose.~n~n"
+              "disable_api\t\t\tDisable API (v2 & v3).~n"
+              "enable_api\t\t\tEnable API (v2 & v3).~n"
+              "set_api_read_only\t\tSet API (v2 & v3) in read-only mode.~n"
              ),
     halt(0).
 
