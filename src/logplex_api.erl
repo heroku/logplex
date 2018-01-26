@@ -741,7 +741,7 @@ set_status(Term) ->
         normal -> io:format("Fully Enabling API~n");
         read_only -> io:format("API in read-only mode: only GET requests and "
                                "canary operations allowed.~n");
-        disabled -> io:format("API entirely disabled, **INCLUDING HEALTHCHECKS**~n")
+        disabled -> io:format("API entirely disabled~n")
     end,
     logplex_app:set_config(api_status, Term),
     Old.
