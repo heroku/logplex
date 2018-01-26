@@ -78,6 +78,7 @@ stop(_State) ->
     ok.
 
 start_phase(listen, normal, _Args) ->
+    logplex_api:set_status(logplex_api:status()),
     setup_firehose(),
     {ok, _} = supervisor:start_child(logplex_sup,
                                      logplex_api:child_spec()),
@@ -154,6 +155,9 @@ cache_os_envvars() ->
                        optional,
                        atom}
                      ,{deny_logs_ingress, ["DENY_LOGS_INGRESS"],
+                       optional,
+                       atom}
+                     ,{api_status, ["API_STATUS"],
                        optional,
                        atom}
                      ]),
