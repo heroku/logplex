@@ -80,6 +80,27 @@ main(["enable_firehose"]) ->
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
+main(["disable_api"]) ->
+    Node = connect(),
+    io:format("Disabling API (v2 & v3)...~n"),
+    Res = rpc:call(Node, logplex_api, set_status, [disabled]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["enable_api"]) ->
+    Node = connect(),
+    io:format("Enabling API (v2 & v3)...~n"),
+    Res = rpc:call(Node, logplex_api, set_status, [normal]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["set_api_read_only"]) ->
+    Node = connect(),
+    io:format("Setting API (v2 & v3) in read-only mode...~n"),
+    Res = rpc:call(Node, logplex_api, set_status, [normal]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
 main(_) ->
     io:format("Control rods for local logplex node. These control rods can be modified on the fly while logplex is running.~n~n"
               "Usage: control_rods <rod>~n~n"
@@ -94,6 +115,9 @@ main(_) ->
               "allow_logs_ress\t\t\tAllow logs ingress.~n~n"
               "disable_firehose\t\tDisable firehose.~n"
               "enable_firehose\t\t\tEnable firehose.~n~n"
+              "disable_api\t\t\tDisable API (v2 & v3).~n"
+              "enable_api\t\t\tEnable API (v2 & v3).~n"
+              "set_api_read_only\t\tSet API (v2 & v3) in read-only mode.~n"
              ),
     halt(0).
 
