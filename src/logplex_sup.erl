@@ -76,6 +76,9 @@ init([]) ->
        ,{logplex_monitor, {logplex_mon_sup, start_link, []},
          permanent, 8000, supervisor, [logplex_mon_sup]}
 
+       ,{logplex_control_rods, 
+         {logplex_control_rods, start_link, []},
+         permanent, 2000, worker, [logplex_control_rods]}
        %% Temporary workaround for refc binary memory leaks
        ,{logplex_leak, {logplex_leak, start_link, []},
          permanent, 5000, worker, [logplex_leak]}
