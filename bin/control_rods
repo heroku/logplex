@@ -8,7 +8,6 @@ main(["deny_redis_buffers"]) ->
     io:format("Preventing all writes to logplex_logs_redis nodes...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_redis_buffers, true]),
     io:format("Node: ~p~n", [Res]),
-    measure("redis_buffers", 1),
     disconnect(),
     halt(0);
 main(["allow_redis_buffers"]) ->
@@ -16,7 +15,6 @@ main(["allow_redis_buffers"]) ->
     io:format("Allowing writes to logplex_logs_redis nodes...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_redis_buffers, false]),
     io:format("Node: ~p~n", [Res]),
-    measure("redis_buffers", 0),
     disconnect(),
     halt(0);
 main(["deny_tail_sessions"]) ->
@@ -24,7 +22,6 @@ main(["deny_tail_sessions"]) ->
     io:format("Preventing creation of new tail sessions...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, true]),
     io:format("Node: ~p~n", [Res]),
-    measure("tail_sessions", 1),
     disconnect(),
     halt(0);
 main(["kill_tail_sessions"]) ->
@@ -39,7 +36,6 @@ main(["allow_tail_sessions"]) ->
     io:format("Allowing creation of new tail sessions...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, false]),
     io:format("Node: ~p~n", [Res]),
-    measure("tail_sessions", 0),
     disconnect(),
     halt(0);
 main(["deny_drain_forwarding"]) ->
@@ -47,7 +43,6 @@ main(["deny_drain_forwarding"]) ->
     io:format("Preventing all writes to drains...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_drain_forwarding, true]),
     io:format("Node: ~p~n", [Res]),
-    measure("drain_forwarding", 1),
     disconnect(),
     halt(0);
 main(["allow_drain_forwarding"]) ->
@@ -55,7 +50,6 @@ main(["allow_drain_forwarding"]) ->
     io:format("Allowing writes to drains...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_drain_forwarding, false]),
     io:format("Node: ~p~n", [Res]),
-    measure("drain_forwarding", 0),
     disconnect(),
     halt(0);
 main(["deny_logs_ingress"]) ->
@@ -63,7 +57,6 @@ main(["deny_logs_ingress"]) ->
     io:format("Preventing ingress for all logs...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_logs_ingress, true]),
     io:format("Node: ~p~n", [Res]),
-    measure("logs_ingress", 1),
     disconnect(),
     halt(0);
 main(["allow_logs_ingress"]) ->
@@ -71,7 +64,6 @@ main(["allow_logs_ingress"]) ->
     io:format("Allowing logs ingress...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [deny_logs_ingress, false]),
     io:format("Node: ~p~n", [Res]),
-    measure("logs_ingress", 0),
     disconnect(),
     halt(0);
 main(["disable_firehose"]) ->
@@ -79,7 +71,6 @@ main(["disable_firehose"]) ->
     io:format("Disabling firehose...~n"),
     Res = rpc:call(Node, logplex_firehose, disable, []),
     io:format("Node: ~p~n", [Res]),
-    measure("firehose", 1),
     disconnect(),
     halt(0);
 main(["enable_firehose"]) ->
@@ -87,7 +78,6 @@ main(["enable_firehose"]) ->
     io:format("Enabling firehose...~n"),
     Res = rpc:call(Node, logplex_firehose, enable, []),
     io:format("Node: ~p~n", [Res]),
-    measure("firehose", 0),
     disconnect(),
     halt(0);
 main(["disable_api"]) ->
@@ -95,7 +85,6 @@ main(["disable_api"]) ->
     io:format("Disabling API (v2 & v3)...~n"),
     Res = rpc:call(Node, logplex_api, set_status, [disabled]),
     io:format("Node: ~p~n", [Res]),
-    measure("api", 1),
     disconnect(),
     halt(0);
 main(["enable_api"]) ->
@@ -103,7 +92,6 @@ main(["enable_api"]) ->
     io:format("Enabling API (v2 & v3)...~n"),
     Res = rpc:call(Node, logplex_api, set_status, [normal]),
     io:format("Node: ~p~n", [Res]),
-    measure("api", 0),
     disconnect(),
     halt(0);
 main(["set_api_read_only"]) ->
@@ -111,7 +99,6 @@ main(["set_api_read_only"]) ->
     io:format("Setting API (v2 & v3) in read-only mode...~n"),
     Res = rpc:call(Node, logplex_api, set_status, [read_only]),
     io:format("Node: ~p~n", [Res]),
-    measure("api", 1),
     disconnect(),
     halt(0);
 main(_) ->
@@ -144,7 +131,6 @@ connect() ->
     io:format("Connected.~n"),
     Node.
 
-
 node_name() ->
     list_to_atom("logplex@" ++ net_adm:localhost()).
 
@@ -164,12 +150,3 @@ set_cookie(Node) ->
         Cookie ->
             erlang:set_cookie(Node, list_to_atom(Cookie))
     end.
-
-measure(CtrlRod, Value) ->
-    Node = node_name(),
-    Metric = metric(CtrlRod),
-    rpc:call(Node, folsom_metrics, notify, [Metric, Value, gauge]).
-
-metric(CtrlRod) ->
-    list_to_binary([<<"logplex.control_rod.">>, CtrlRod, <<".active">>]).
-
