@@ -130,15 +130,15 @@ metric(CtrlRod) ->
     list_to_binary([<<"logplex.control_rod.">>, atom_to_list(CtrlRod), <<".active">>]).
 
 status_to_value(deny_redis_buffers) ->
-    bool_to_int(logplex_app:config(deny_redis_buffers));
+    bool_to_int(logplex_app:config(deny_redis_buffers, false));
 status_to_value(deny_tail_sessions) ->
-    bool_to_int(logplex_app:config(deny_tail_sessions));
+    bool_to_int(logplex_app:config(deny_tail_sessions, false));
 status_to_value(deny_drain_forwarding) ->
-    bool_to_int(logplex_app:config(deny_drain_forwarding));
+    bool_to_int(logplex_app:config(deny_drain_forwarding, false));
 status_to_value(deny_logs_ingress) ->
-    bool_to_int(logplex_app:config(deny_logs_ingress));
+    bool_to_int(logplex_app:config(deny_logs_ingress, false));
 status_to_value(disable_firehose) ->
-    bool_to_int(logplex_app:config(disable_firehose));
+    bool_to_int(logplex_app:config(disable_firehose, false));
 status_to_value(disable_redgrid) ->
     case redgrid:get_status() of
         suspended -> 1;
