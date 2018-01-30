@@ -78,11 +78,13 @@ enable() ->
     FilterTokens = firehose_filter_tokens(),
     store_master_info(ChannelIds),
     store_channels(ChannelIds, FilterTokens),
+    logplex_app:set_config(disable_firehose, false),
     ok.
 
 disable() ->
     store_master_info([]),
     ets:delete_all_objects(?SHARD_TAB),
+    logplex_app:set_config(disable_firehose, true),
     ok.
 
 %%%--------------------------------------------------------------------
