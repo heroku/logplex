@@ -88,7 +88,7 @@
   0},
  {<<"redgrid">>,
   {git,"git://github.com/heroku/redgrid.git",
-       {ref,"0e2f705126597779f1d73a4cec3a71264bd09549"}},
+       {ref,"4082e986ea92901c7da4f26918841bca4738f186"}},
   0},
  {<<"redis">>,
   {git,"git://github.com/heroku/redis_pool.git",
