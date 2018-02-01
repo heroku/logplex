@@ -77,7 +77,7 @@ handle_call(Msg, _From, State) ->
 
 %% @private
 handle_cast(report_status, State) ->
-    [ notify_metric(Server) || Server <- servers()],
+    [notify_metric(Server) || Server <- ranch_servers()],
     {noreply, State};
 handle_cast(Msg, State) ->
     ?WARN("type=unexpected_cast msg='~p'", [Msg]),
@@ -113,7 +113,7 @@ refresh_cycle() ->
 ranch_servers() ->
     [
      logplex_logs_rest,
-     logplex_api_v3,
+     logplex_api_v3
     ].
 
 notify_metric(Server) ->
@@ -121,7 +121,7 @@ notify_metric(Server) ->
     Value = value(Server),
     folsom_metrics:notify(Metric, Value, gauge).
 
-metric(CtrlRod) ->
+metric(Server) ->
     list_to_binary([<<"logplex.ranch_server.">>, atom_to_list(Server), <<".connections">>]).
 
 value(Server) ->
