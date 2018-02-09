@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if [ -z "$INSTANCE_NAME" ]; then
+   export INSTANCE_NAME="$(hostname)"
+fi
+
+exec "$@"

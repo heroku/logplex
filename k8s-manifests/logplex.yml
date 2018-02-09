@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: logplex-cluster
+spec:
+  selector:
+    app: logplex
+  clusterIP: None
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logplex
+  namespace: logplex
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: logplex
+  template:
+    metadata:
+      labels:
+        app: logplex
+    spec:
+      subdomain: logplex-cluster
+      containers:
+      - name: logplex
+        image: "{{ .ImagePrefix }}logplex:{{ .ImageTag }}"
+        env:
+        - name: LOCAL_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: LOGPLEX_CONFIG_REDIS_URL
+          value: redis://redis-config:6379
+        - name: LOGPLEX_REDGRID_REDIS_URL
+          value: redis://redis-config:6379
+        - name: LOGPLEX_STATS_REDIS_URL
+          value: redis://redis-config:6379
+        - name: LOGPLEX_SHARD_URLS
+          value: "redis://redis-logs-001:6379/"
+        - name: LOGPLEX_COOKIE
+          value: cookie
+        - name: LOGPLEX_AUTH_KEY
+          value: "YXV0aGtleTo=" # authkey
+        ports:
+        - containerPort: 8002
+          name: api-v3
+        - containerPort: 8601
+          name: logs
+        readinessProbe:
+          httpGet:
+            path: /healthcheck
+            port: logs
+        resources:
+          requests:
+            memory: "1Gi"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: logplex-api-v3
+spec:
+  selector:
+    app: logplex
+  ports:
+  - port: 80
+    targetPort: api-v3
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: logplex-logs
+spec:
+  selector:
+    app: logplex
+  ports:
+  - port: 80
+    targetPort: logs

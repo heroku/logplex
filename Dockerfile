@@ -1,6 +1,7 @@
 FROM voidlock/erlang:18.1.3
 
 ENV ERL_CRASH_DUMP=/dev/null \
+    RELX_REPLACE_OS_VARS=true \
     LOGPLEX_CONFIG_REDIS_URL="redis://db:6379/" \
     LOGPLEX_SHARD_URLS="redis://db:6379/#frag1" \
     LOGPLEX_REDGRID_REDIS_URL="redis://db:6379/" \
@@ -10,17 +11,15 @@ ENV ERL_CRASH_DUMP=/dev/null \
 
 EXPOSE 8001 8601 6001 4369 49000
 
-VOLUME /root/.cache
+RUN useradd -d /app logplex
+WORKDIR /app
 
-RUN cd /usr/src \
-      && git clone https://github.com/erlang/rebar3.git \
-      && cd rebar3 \
-      && ./bootstrap \
-      && cp rebar3 /usr/local/bin \
-      && cd .. \
-      && rm -rf rebar3
+COPY . /app
+RUN chown -R logplex:logplex /app
 
-RUN mkdir -p /usr/src/app
-WORKDIR /usr/src/app
+USER logplex
 
-CMD ["./bin/logplex"]
+RUN curl --silent -L --fail --max-time 10 -o rebar3 https://github.com/erlang/rebar3/releases/download/3.5.0/rebar3 && chmod +x rebar3
+RUN make compile
+
+CMD ["bin/run", "./_build/public/rel/logplex/bin/logplex", "foreground"]

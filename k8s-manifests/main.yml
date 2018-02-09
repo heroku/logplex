@@ -1,0 +1,6 @@
+- namespace: logplex
+  files:
+  - path: 00_namespace.yml
+  - path: redis-config.yml
+  - path: redis-shards.yml
+  - path: logplex.yml

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-logs-001
+  namespace: logplex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-logs-001
+  template:
+    metadata:
+      labels:
+        app: redis-logs-001
+    spec:
+      containers:
+      - name: redis
+        image: redis:3
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "1Gi"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-logs-001
+  namespace: logplex
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis-logs-001
