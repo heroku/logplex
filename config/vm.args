@@ -1,4 +1,4 @@
--name logplex
+-name logplex@${INSTANCE_NAME}
 -setcookie ${LOGPLEX_COOKIE}
 
 +K true

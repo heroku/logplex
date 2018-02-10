@@ -1,12 +1,13 @@
 #!/bin/bash
 
-. /home/logplex/keys.sh
+if [ -r "/home/logplex/keys.sh" ]; then
+    . /home/logplex/keys.sh
+fi
 
-HOST=`hostname -f`
 NODENAME=$1
 
 if [ -z "${NODENAME}" ]; then
     NODENAME=remsh
 fi
 
-erl -name ${NODENAME}@$HOST -hidden -setcookie $LOGPLEX_COOKIE -remsh logplex@$HOST
+erl -name ${NODENAME}@$LOCAL_IP -hidden -setcookie $LOGPLEX_COOKIE -remsh logplex@$LOCAL_IP

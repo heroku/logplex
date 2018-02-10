@@ -1,7 +1,11 @@
 #!/bin/sh
 
 if [ -z "$INSTANCE_NAME" ]; then
-   export INSTANCE_NAME="$(hostname)"
+    if [ -n "$LOCAL_IP" ]; then
+        export INSTANCE_NAME="$LOCAL_IP"
+    else
+        export INSTANCE_NAME="$(hostname)"
+    fi
 fi
 
 exec "$@"
