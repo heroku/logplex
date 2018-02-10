@@ -1,3 +1,28 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: redis-config-data
+  namespace: logplex
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+
+---
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: redis-config
+  namespace: logplex
+data:
+  redis.conf: |
+    save 60 1
+
+---
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,8 +41,21 @@ spec:
       containers:
       - name: redis
         image: redis:2.6
+        command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
         ports:
         - containerPort: 6379
+        volumeMounts:
+        - mountPath: "/usr/local/etc/redis"
+          name: etc-redis
+        - mountPath: "/data"
+          name: data
+      volumes:
+      - name: etc-redis
+        configMap:
+          name: redis-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: redis-config-data
 
 ---
 
