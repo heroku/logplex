@@ -19,11 +19,12 @@
          done/4
         ]).
 
--define(HEALTHCHECK_PATH, "/v3/healthcheck").
--define(CHANNELS_PATH,    "/v3/channels/:channel_id").
--define(DRAINS_PATH,      "/v3/channels/:channel_id/drains/[:drain_id]").
--define(TOKENS_PATH,      "/v3/channels/:channel_id/tokens").
--define(SESSIONS_PATH,    "/v3/sessions/[:session_id]").
+-define(HEALTHCHECK_PATH,  "/v3/healthcheck").
+-define(CHANNELS_PATH,     "/v3/channels/:channel_id").
+-define(DRAINS_PATH,       "/v3/channels/:channel_id/drains/[:drain_id]").
+-define(TOKENS_PATH,       "/v3/channels/:channel_id/tokens").
+-define(CHANNEL_LOGS_PATH, "/v3/channels/:channel_id/logs").
+-define(SESSIONS_PATH,     "/v3/sessions/[:session_id]").
 
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 -define(REQUEST_ID_HEADER_KEY, <<"request-id">>).
@@ -49,7 +50,8 @@ dispatch() ->
                              channels_path(),
                              drains_path(),
                              sessions_path(),
-                             tokens_path()
+                             tokens_path(),
+                             channel_logs_path()
                             ]}]).
 
 healthcheck_path() ->
@@ -67,6 +69,8 @@ sessions_path() ->
 tokens_path() ->
     {?TOKENS_PATH, logplex_api_v3_tokens, [{route, ?TOKENS_PATH}]}.
 
+channel_logs_path() ->
+    {?CHANNEL_LOGS_PATH, logplex_api_v3_channel_logs, [{route, ?CHANNEL_LOGS_PATH}]}.
 
 %% ----------------------------------------------------------------------------
 %% REST helpers
@@ -232,6 +236,7 @@ maybe_get_endpoint(?CHANNELS_PATH) -> "channels";
 maybe_get_endpoint(?DRAINS_PATH) -> "drains";
 maybe_get_endpoint(?SESSIONS_PATH) -> "sessions";
 maybe_get_endpoint(?TOKENS_PATH) -> "tokens";
+maybe_get_endpoint(?CHANNEL_LOGS_PATH) -> "channel_logs";
 maybe_get_endpoint(_) -> "unknown_resource".
 
 resp_code_group(Status) when Status >= 200, Status < 300 -> "2xx";

@@ -268,13 +268,16 @@ request(Method, Url, Opts) ->
 
 wait_for_http(RequestId, Headers, Body) ->
     receive
-        {http, {RequestId, stream_start, Headers}} ->
-            wait_for_http(RequestId, Headers, Body);
+        {http, {RequestId0, stream_start, Headers0}} ->
+            wait_for_http(RequestId0, Headers0, Body);
         {http, {RequestId, stream, BinBody}} ->
             Body0 = binary_to_list(BinBody),
             wait_for_http(RequestId, Headers, Body++Body0);
         {http, {RequestId, stream_end, Headers0}} ->
-            {Headers++Headers0, Body}
+            {Headers++Headers0, Body};
+        {http, Msg} ->
+            ct:fail("unexpected http message: ~p~n", [Msg]),
+            {error, unexpected_http_msg, Msg}
     end.
 
 wait_for_messages(Channel, MessageAmount, MaxWait, StartTime) ->
