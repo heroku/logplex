@@ -7,6 +7,7 @@ all() ->
     [{group, channels}
      , {group, drains}
      , {group, tokens}
+     , {group, channel_logs}
      , {group, sessions}
      , {group, healthcheck}
     ].
@@ -50,6 +51,11 @@ groups() ->
        , cannot_create_token_without_name
        , cannot_create_token_for_non_existing_channel
       ]},
+     {channel_logs,
+      [channel_logs_service_unavailable
+      , channel_logs_not_authorized
+      , fetch_channel_logs
+      ]},
      {sessions,
       [sessions_service_unavailable
        , create_session_for_existing_channel
@@ -79,13 +85,15 @@ end_per_suite(Config) ->
 init_per_testcase(Testcase , Config)
   when Testcase == channel_service_unavailable;
        Testcase == drains_service_unavailable;
-       Testcase == tokens_service_unavailable ->
+       Testcase == tokens_service_unavailable;
+       Testcase == channel_logs_service_unavailable ->
     logplex_app:set_config(api_status, disabled),
     Config;
 init_per_testcase(Testcase , Config)
   when Testcase == channel_not_authorized;
        Testcase == drains_not_authorized;
-       Testcase == tokens_not_authorized ->
+       Testcase == tokens_not_authorized;
+       Testcase == channel_logs_not_authorized ->
     [{auth, "Basic bad-token"}
      | Config];
 init_per_testcase(cannot_add_more_drains, Config) ->
@@ -105,7 +113,8 @@ init_per_testcase(_, Config) ->
 end_per_testcase(Testcase, Config)
   when Testcase == channel_service_unavailable;
        Testcase == drains_service_unavailable;
-       Testcase == tokens_service_unavailable ->
+       Testcase == tokens_service_unavailable;
+       Testcase == channel_logs_service_unavailable ->
     logplex_app:set_config(api_status, normal),
     Config;
 end_per_testcase(cannot_add_more_drains, Config) ->
@@ -153,7 +162,6 @@ channel_not_authorized(Config) ->
 create_channel_without_tokens(Config) ->
     Channel = new_channel(),
     Props = put_channel(Channel, [], Config),
-    ct:pal("put channel resp: ~p~n", [Props]),
     Body = proplists:get_value(body, Props),
     Headers = proplists:get_value(headers, Props),
     Resp = jsx:decode(list_to_binary(Body), [return_maps]),
@@ -166,44 +174,40 @@ create_channel_without_tokens(Config) ->
 
 create_channel_with_tokens(Config) ->
     Channel = new_channel(),
-    Tokens = [new_token_name() || _ <- lists:seq(1,5)],
+    Tokens = new_tokens(),
     Props = put_channel(Channel, Tokens, Config),
     Body = proplists:get_value(body, Props),
     Headers = proplists:get_value(headers, Props),
     Resp = jsx:decode(list_to_binary(Body), [return_maps]),
     ReceivedTokens = maps:to_list(maps:get(<<"tokens">>, Resp)),
-    ?assertEqual(length(Tokens), length(ReceivedTokens)),
-    ?assert(lists:all(fun(Token) -> lists:member(Token, Tokens) end,
-                      [binary_to_list(Token) || {Token, _} <- ReceivedTokens])),
+    assert_tokens(Tokens, ReceivedTokens),
     ?assertMatch(Channel, binary_to_list(maps:get(<<"channel">>, Resp))),
     ?assertEqual(201, proplists:get_value(status_code, Props)),
     ?assertEqual("Created", proplists:get_value(http_reason, Props)),
     ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
     ?assert(is_list(proplists:get_value("request-id", Headers))),
     [{channel, Channel}
-     , {tokens, Tokens}
+     , {tokens, ReceivedTokens}
      | Config].
 
 
 update_channel_with_tokens(Config0) ->
     Config = create_channel_without_tokens(Config0),
     Channel = ?config(channel, Config),
-    Tokens = [new_token_name() || _ <- lists:seq(1,5)],
+    Tokens = new_tokens(),
     Props = put_channel(Channel, Tokens, Config),
     ct:pal("put channel resp: ~p~n", [Props]),
     Body = proplists:get_value(body, Props),
     Headers = proplists:get_value(headers, Props),
     Resp = jsx:decode(list_to_binary(Body), [return_maps]),
     ReceivedTokens = maps:to_list(maps:get(<<"tokens">>, Resp)),
-    ?assertEqual(length(Tokens), length(ReceivedTokens)),
-    ?assert(lists:all(fun(Token) -> lists:member(Token, Tokens) end,
-                      [binary_to_list(Token) || {Token, _} <- ReceivedTokens])),
+    assert_tokens(Tokens, ReceivedTokens),
     ?assertMatch(Channel, binary_to_list(maps:get(<<"channel">>, Resp))),
     ?assertEqual(200, proplists:get_value(status_code, Props)),
     ?assertEqual("OK", proplists:get_value(http_reason, Props)),
     ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
     ?assert(is_list(proplists:get_value("request-id", Headers))),
-    [{tokens, Tokens} | Config].
+    [{tokens, ReceivedTokens} | Config].
 
 update_channel_and_remove_some_tokens(Config0) ->
     Config = create_channel_with_tokens(Config0),
@@ -214,15 +218,13 @@ update_channel_and_remove_some_tokens(Config0) ->
     Headers = proplists:get_value(headers, Props),
     Resp = jsx:decode(list_to_binary(Body), [return_maps]),
     ReceivedTokens = maps:to_list(maps:get(<<"tokens">>, Resp)),
-    ?assertEqual(length(Tokens), length(ReceivedTokens)),
-    ?assert(lists:all(fun(Token) -> lists:member(Token, Tokens) end,
-                      [binary_to_list(Token) || {Token, _} <- ReceivedTokens])),
+    assert_tokens(Tokens, ReceivedTokens),
     ?assertMatch(Channel, binary_to_list(maps:get(<<"channel">>, Resp))),
     ?assertEqual(200, proplists:get_value(status_code, Props)),
     ?assertEqual("OK", proplists:get_value(http_reason, Props)),
     ?assertEqual("application/json", proplists:get_value("content-type", Headers)),
     ?assert(is_list(proplists:get_value("request-id", Headers))),
-    [{tokens, Tokens} | Config].
+    [{tokens, ReceivedTokens} | Config].
 
 update_channel_and_nuke_tokens(Config0) ->
     Config = create_channel_with_tokens(Config0),
@@ -262,9 +264,7 @@ get_channel_with_tokens(Config0) ->
     Headers = proplists:get_value(headers, Props),
     Resp = jsx:decode(list_to_binary(Body), [return_maps]),
     ReceivedTokens = maps:to_list(maps:get(<<"tokens">>, Resp)),
-    ?assertEqual(length(Tokens), length(ReceivedTokens)),
-    ?assert(lists:all(fun(Token) -> lists:member(Token, Tokens) end,
-                      [binary_to_list(Token) || {Token, _} <- ReceivedTokens])),
+    assert_tokens(Tokens, ReceivedTokens),
     ?assertMatch(Channel, binary_to_list(maps:get(<<"channel">>, Resp))),
     ?assertEqual(200, proplists:get_value(status_code, Props)),
     ?assertEqual("OK", proplists:get_value(http_reason, Props)),
@@ -552,6 +552,43 @@ cannot_create_token_for_non_existing_channel(Config) ->
     Config.
 
 %% -----------------------------------------------------------------------------
+%% channel logs
+%% -----------------------------------------------------------------------------
+
+channel_logs_service_unavailable(Config) ->
+    Channel = new_channel(),
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/logs",
+    Props = logplex_api_SUITE:post(Url, []),
+    ?assertEqual(503, proplists:get_value(status_code, Props)),
+    ?assertEqual("Service Unavailable", proplists:get_value(http_reason, Props)),
+    Config.
+
+channel_logs_not_authorized(Config) ->
+    Channel = new_channel(),
+    Props = get_channel_logs(Channel, Config),
+    ?assertEqual(401, proplists:get_value(status_code, Props)),
+    ?assertEqual("Unauthorized", proplists:get_value(http_reason, Props)),
+    Config.
+
+fetch_channel_logs(Config0) ->
+    Config = create_channel_with_tokens(Config0),
+    Channel = ?config(channel, Config),
+    [{TokenName, TokenId} | _] = ?config(tokens, Config),
+    ExpectedLogMsgs = [{N, uuid:to_string(uuid:v4())} || N <- lists:seq(1, 5)],
+    LogMsgs = [{msg, new_log_msg(N, Msg)} || {N, Msg} <- ExpectedLogMsgs],
+    logplex_message:process_msgs(LogMsgs, list_to_binary(Channel), TokenId, TokenName),
+    Props = stream_channel_logs(Channel, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual("application/logplex-1", proplists:get_value("content-type", Headers)),
+    ?assertEqual("5", proplists:get_value("logplex-msg-count", Headers)),
+    ?assertEqual("chunked", proplists:get_value("transfer-encoding", Headers)),
+    ?assertEqual("close", proplists:get_value("connection", Headers)),
+    Lines = re:split(proplists:get_value(body, Props), "\n", [trim]),
+    [?assertEqual(match, re:run(Line, Expected, [{capture, none}])) || {{_, Expected}, Line} <- lists:zip(ExpectedLogMsgs, Lines)],
+    Config.
+
+
+%% -----------------------------------------------------------------------------
 %% sessions
 %% -----------------------------------------------------------------------------
 
@@ -619,7 +656,7 @@ unhealthy(Config) ->
 put_channel(Channel, Tokens, Config) ->
     Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel,
     Headers = [{"Authorization", ?config(auth, Config)}],
-    TokenList = [list_to_binary(Token) || Token <- Tokens],
+    TokenList = [to_binary(TokenName) || {TokenName, _TokenId} <- Tokens],
     JSON = jsx:encode(maps:from_list([{<<"tokens">>, TokenList} || length(TokenList) > 0])),
     Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
     logplex_api_SUITE:put_(Url, Opts).
@@ -664,6 +701,23 @@ create_token(Channel, TokenName, Config) ->
     Opts = [{headers, Headers}, {body, JSON}, {timeout, timer:seconds(10)}],
     logplex_api_SUITE:post(Url, Opts).
 
+get_channel_logs(Channel, Config) ->
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/logs",
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    Opts = [{headers, Headers}, {timeout, timer:seconds(10)}],
+    logplex_api_SUITE:get_(Url, Opts).
+
+stream_channel_logs(Channel, Config) ->
+    Url = ?config(api_v3_url, Config) ++ "/v3/channels/" ++ Channel ++ "/logs",
+    Headers = [{"Authorization", ?config(auth, Config)}],
+    Opts = [{headers, Headers},
+            {timeout, timer:seconds(10)},
+            %% we want to stream the results
+            {opts, [{sync, false},
+                    {stream, self}]}
+           ],
+    logplex_api_SUITE:get_(Url, Opts).
+
 create_session(Channel, Config) ->
     Url = ?config(api_v3_url, Config) ++ "/v3/sessions",
     Headers = [{"Authorization", ?config(auth, Config)}],
@@ -684,6 +738,9 @@ check_health(Config) ->
 new_channel() ->
     "app-" ++ uuid:to_string(uuid:v4()).
 
+new_tokens() ->
+    [{new_token_name(), Ignored} || Ignored <- lists:seq(1,5)].
+
 new_token_name() ->
     "token-" ++ uuid:to_string(uuid:v4()).
 
@@ -692,6 +749,18 @@ new_session() ->
 
 new_drain_url() ->
     list_to_binary([<<"http://my.drain.com/">>, uuid:to_binary(uuid:v4())]).
+
+new_log_msg(N, Msg) when is_integer(N) ->
+    list_to_binary(["<", integer_to_list(N), ">", "aaaa bbbb cccc dddd eeee ffff - ", Msg]).
+
+to_binary(L) when is_list(L) -> list_to_binary(L);
+to_binary(Bin) when is_binary(Bin) -> Bin.
+
+assert_tokens(Tokens, ReceivedTokens) ->
+    BinTokens = [{to_binary(Tok), V} || {Tok, V} <- Tokens],
+    ?assertEqual(length(Tokens), length(ReceivedTokens)),
+    ?assert(lists:all(fun(Token) -> lists:keymember(Token, 1, BinTokens) end,
+                      [to_binary(Token) || {Token, _} <- ReceivedTokens])).
 
 set_os_vars() ->
     [os:putenv(Key,Val) || {Key,Val} <-
