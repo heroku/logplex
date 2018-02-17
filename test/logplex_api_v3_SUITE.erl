@@ -584,7 +584,11 @@ fetch_channel_logs(Config0) ->
     ?assertEqual("chunked", proplists:get_value("transfer-encoding", Headers)),
     ?assertEqual("close", proplists:get_value("connection", Headers)),
     Lines = re:split(proplists:get_value(body, Props), "\n", [trim]),
-    [?assertEqual(match, re:run(Line, Expected, [{capture, none}])) || {{_, Expected}, Line} <- lists:zip(ExpectedLogMsgs, Lines)],
+    [begin
+         ?assertEqual(match, re:run(Line, Expected, [{capture, none}])),
+         NBin = list_to_binary(integer_to_list(N)),
+         ?assertMatch(<<"72 <", NBin:1/binary, _/binary>>, Line)
+     end || {{N, Expected}, Line} <- lists:zip(ExpectedLogMsgs, Lines)],
     Config.
 
 

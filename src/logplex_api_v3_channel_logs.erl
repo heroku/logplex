@@ -84,4 +84,7 @@ serve_logs(Logs, WriteChunkFun) ->
 prepare_logs([], Acc) ->
     Acc;
 prepare_logs([Msg | Logs], Acc) ->
-    prepare_logs(Logs, [list_to_binary([Msg, $\n]) | Acc]).
+    prepare_logs(Logs, [prepare_msg(Msg) | Acc]).
+
+prepare_msg(Msg) ->
+    logplex_syslog_utils:frame([Msg, $\n]).
