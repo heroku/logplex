@@ -12,13 +12,7 @@ EXPOSE 8001 8601 6001 4369 49000
 
 VOLUME /root/.cache
 
-RUN cd /usr/src \
-      && git clone https://github.com/erlang/rebar3.git \
-      && cd rebar3 \
-      && ./bootstrap \
-      && cp rebar3 /usr/local/bin \
-      && cd .. \
-      && rm -rf rebar3
+RUN curl --silent -L --fail --max-time 10 -o /usr/local/bin/rebar3 https://github.com/erlang/rebar3/releases/download/3.5.0/rebar3 && chmod +x /usr/local/bin/rebar3
 
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
