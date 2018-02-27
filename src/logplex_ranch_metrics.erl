@@ -77,7 +77,7 @@ handle_call(Msg, _From, State) ->
 
 %% @private
 handle_cast(report_status, State) ->
-    [notify_metric(Server) || Server <- ranch_servers()],
+    [notify_metrics(Server) || Server <- ranch_servers()],
     {noreply, State};
 handle_cast(Msg, State) ->
     ?WARN("type=unexpected_cast msg='~p'", [Msg]),
@@ -116,13 +116,18 @@ ranch_servers() ->
      logplex_api_v3
     ].
 
-notify_metric(Server) ->
-    Metric = metric(Server),
-    Value = value(Server),
-    folsom_metrics:notify(Metric, Value, gauge).
+notify_metrics(Server) ->
+    folsom_metrics:notify(connections_metric(Server), connections_value(Server), gauge),
+    folsom_metrics:notify(max_connections_metric(Server), max_connections_value(Server), gauge).
 
-metric(Server) ->
+connections_metric(Server) ->
     list_to_binary([<<"logplex.ranch_server.">>, atom_to_list(Server), <<".connections">>]).
 
-value(Server) ->
+connections_value(Server) ->
     ranch_server:count_connections(Server).
+
+max_connections_metric(Server) ->
+    list_to_binary([<<"logplex.ranch_server.">>, atom_to_list(Server), <<".max-connections">>]).
+
+max_connections_value(Server) ->
+    ranch_server:get_max_connections(Server).
