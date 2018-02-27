@@ -59,7 +59,7 @@
     ,{log_history, 1500}
     ,{log_unknown_tokens, false} % bool
     ,{logplex_shard_urls, "redis://localhost:6379"}
-    ,{max_drains_per_channel, 5} % #channels
+    ,{max_drains_per_channel, 6} % #channels
     ,{metrics_namespace, "dev"} % string, no spaces
     ,{no_tail_warning,
       "Error L20 (Tail sessions forbidden) "
