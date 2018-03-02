@@ -587,7 +587,7 @@ fetch_channel_logs(Config0) ->
     [begin
          ?assertEqual(match, re:run(Line, Expected, [{capture, none}])),
          NBin = list_to_binary(integer_to_list(N)),
-         ?assertMatch(<<"72 <", NBin:1/binary, _/binary>>, Line)
+         ?assertMatch(<<"61 <", NBin:1/binary, _/binary>>, Line)
      end || {{N, Expected}, Line} <- lists:zip(ExpectedLogMsgs, Lines)],
     Config.
 
@@ -755,7 +755,7 @@ new_drain_url() ->
     list_to_binary([<<"http://my.drain.com/">>, uuid:to_binary(uuid:v4())]).
 
 new_log_msg(N, Msg) when is_integer(N) ->
-    list_to_binary(["<", integer_to_list(N), ">", "aaaa bbbb cccc dddd eeee ffff - ", Msg]).
+    list_to_binary(["<", integer_to_list(N), ">1 ", "aaaa bbbb cccc dddd eeee - ", Msg]).
 
 to_binary(L) when is_list(L) -> list_to_binary(L);
 to_binary(Bin) when is_binary(Bin) -> Bin.
