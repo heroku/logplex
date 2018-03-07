@@ -86,7 +86,7 @@ prepare_logs([], Acc) ->
 prepare_logs([Msg | Logs], Acc) ->
     prepare_logs(Logs, [prepare_msg(Msg) | Acc]).
 
-prepare_msg(Msg) ->
-    ParsedMsg = logplex_syslog_utils:from_msg(Msg),
-    RFC5424Msg = logplex_syslog_utils:rfc5424(ParsedMsg),
+prepare_msg(RawMsg) ->
+    {Facility, Severity, Time, Source, Process, Msg} = logplex_syslog_utils:from_msg(RawMsg),
+    RFC5424Msg = logplex_syslog_utils:rfc5424(Facility, Severity, Time, "host", Source, Process, undefined, Msg),
     logplex_syslog_utils:frame([RFC5424Msg, $\n]).
