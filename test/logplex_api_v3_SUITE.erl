@@ -55,6 +55,7 @@ groups() ->
       [channel_logs_service_unavailable
       , channel_logs_not_authorized
       , fetch_channel_logs
+      , channel_logs_format
       ]},
      {sessions,
       [sessions_service_unavailable
@@ -587,9 +588,25 @@ fetch_channel_logs(Config0) ->
     [begin
          ?assertEqual(match, re:run(Line, Expected, [{capture, none}])),
          NBin = list_to_binary(integer_to_list(N)),
-         ?assertMatch(<<"72 <", NBin:1/binary, _/binary>>, Line)
+         ?assertMatch(<<"64 <", NBin:1/binary, _/binary>>, Line)
      end || {{N, Expected}, Line} <- lists:zip(ExpectedLogMsgs, Lines)],
     Config.
+
+channel_logs_format(Config0) ->
+    Config = create_channel_with_tokens(Config0),
+    Channel = ?config(channel, Config),
+    [{TokenName, TokenId} | _] = ?config(tokens, Config),
+    InputMsg = <<"<158>1 2018-03-02T23:22:34.901697+00:00 hermes.537018@staging.herokudev.com heroku router - - at=info code=H81 desc=\"Blank app\" method=GET path=\"/\" host=direwolf-d99daa9eda.staging.herokuappdev.com request_id=56a11b1c-1f68-4658-80e4-8213a09a81c2 fwd=\"54.163.94.153\" dyno= connect= service= status=502 bytes= protocol=https">>,
+    ExpectedMsg = "290 <158>1 2018-03-02T23:22:34.901697+00:00 host heroku router - at=info code=H81 desc=\"Blank app\" method=GET path=\"/\" host=direwolf-d99daa9eda.staging.herokuappdev.com request_id=56a11b1c-1f68-4658-80e4-8213a09a81c2 fwd=\"54.163.94.153\" dyno= connect= service= status=502 bytes= protocol=https\n",
+    logplex_message:process_msg({msg, InputMsg}, list_to_binary(Channel), TokenId, TokenName),
+    Props = stream_channel_logs(Channel, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual("application/logplex-1", proplists:get_value("content-type", Headers)),
+    ?assertEqual("1", proplists:get_value("logplex-msg-count", Headers)),
+    ?assertEqual("chunked", proplists:get_value("transfer-encoding", Headers)),
+    ?assertEqual("close", proplists:get_value("connection", Headers)),
+	?assertMatch(ExpectedMsg, proplists:get_value(body, Props)).
+
 
 
 %% -----------------------------------------------------------------------------
@@ -755,7 +772,7 @@ new_drain_url() ->
     list_to_binary([<<"http://my.drain.com/">>, uuid:to_binary(uuid:v4())]).
 
 new_log_msg(N, Msg) when is_integer(N) ->
-    list_to_binary(["<", integer_to_list(N), ">", "aaaa bbbb cccc dddd eeee ffff - ", Msg]).
+    list_to_binary(["<", integer_to_list(N), ">1 ", "aaaa bbbb cccc dddd eeee - ", Msg]).
 
 to_binary(L) when is_list(L) -> list_to_binary(L);
 to_binary(Bin) when is_binary(Bin) -> Bin.
