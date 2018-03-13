@@ -56,6 +56,7 @@ groups() ->
       , channel_logs_not_authorized
       , fetch_channel_logs
       , channel_logs_format
+      , channel_logs_bad_syslog_message
       ]},
      {sessions,
       [sessions_service_unavailable
@@ -607,6 +608,26 @@ channel_logs_format(Config0) ->
     ?assertEqual("close", proplists:get_value("connection", Headers)),
 	?assertMatch(ExpectedMsg, proplists:get_value(body, Props)).
 
+channel_logs_bad_syslog_message(Config0) ->
+    Config = create_channel_with_tokens(Config0),
+    Channel = ?config(channel, Config),
+    [{TokenName, TokenId} | _] = ?config(tokens, Config),
+    Uuid = uuid:to_string(uuid:v4()),
+    GoodMsg = new_log_msg(1, Uuid),
+    BadMsg = <<"<42> blafasel">>,
+    logplex_message:process_msg({msg, GoodMsg}, list_to_binary(Channel), TokenId, TokenName),
+    logplex_message:process_msg({msg, BadMsg}, list_to_binary(Channel), TokenId, TokenName),
+    Props = stream_channel_logs(Channel, Config),
+    Headers = proplists:get_value(headers, Props),
+    ?assertEqual("application/logplex-1", proplists:get_value("content-type", Headers)),
+    ?assertEqual("2", proplists:get_value("logplex-msg-count", Headers)),
+    ?assertEqual("chunked", proplists:get_value("transfer-encoding", Headers)),
+    ?assertEqual("close", proplists:get_value("connection", Headers)),
+    Body = proplists:get_value(body, Props),
+    Lines = re:split(Body, "\n", [trim]),
+    %% ensure bad message is dropped
+    ?assertEqual(1, length(Lines)),
+	?assertEqual("64 <1>1 aaaa host cccc dddd - " ++ Uuid ++ "\n", Body).
 
 
 %% -----------------------------------------------------------------------------

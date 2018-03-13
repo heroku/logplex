@@ -60,6 +60,7 @@ overflow_msg(N, When) ->
         [N,
          datetime(When)]).
 
+-spec from_msg(binary()) -> {binary(), binary(), binary(), binary(), binary(), binary()} | {error, bad_syslog_msg}.
 from_msg(Msg) when is_binary(Msg) ->
     %% <40>1 2010-11-10T17:16:33-08:00 domU-12-31-39-13-74-02 t.xxx web.1 - - State changed from created to starting
     %% <PriFac>1 Time Host Token Process - - Msg
