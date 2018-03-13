@@ -78,7 +78,8 @@ to_logs(Req, #state{ channel_id = ChannelId } = State) ->
     end.
 
 serve_logs(Logs, WriteChunkFun) ->
-    [WriteChunkFun(Msg) || Msg <- prepare_logs(Logs, [])],
+    %% note we drop bad syslog messages
+    [WriteChunkFun(Msg) || Msg <- prepare_logs(Logs, []), {error, bad_syslog_msg} /= Msg],
     ok.
 
 prepare_logs([], Acc) ->
@@ -87,6 +88,10 @@ prepare_logs([Msg | Logs], Acc) ->
     prepare_logs(Logs, [prepare_msg(Msg) | Acc]).
 
 prepare_msg(RawMsg) ->
-    {Facility, Severity, Time, Source, Process, Msg} = logplex_syslog_utils:from_msg(RawMsg),
-    RFC5424Msg = logplex_syslog_utils:rfc5424(Facility, Severity, Time, "host", Source, Process, undefined, Msg),
-    logplex_syslog_utils:frame([RFC5424Msg, $\n]).
+    case logplex_syslog_utils:from_msg(RawMsg) of
+        {Facility, Severity, Time, Source, Process, Msg} ->
+            RFC5424Msg = logplex_syslog_utils:rfc5424(Facility, Severity, Time, "host", Source, Process, undefined, Msg),
+            logplex_syslog_utils:frame([RFC5424Msg, $\n]);
+        {error, bad_syslog_msg} = Error ->
+            Error
+    end.
