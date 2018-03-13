@@ -134,11 +134,9 @@ setup_metrics() ->
                folsom_metrics:new_counter(StatusCount)
            end || Status <- [200, 300, 400, 500, 0]
          ]
-     end || Endpoint <- ["channels", "drains", "sessions", "tokens"]
+     end || Endpoint <- ["channels", "drains", "sessions", "tokens", "channel_logs"]
     ],
     ok.
-
-
 
 %% @doc Prepare request logging.
 %% Set the metadata on a request object relevant for logging.
