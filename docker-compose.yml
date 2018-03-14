@@ -25,10 +25,10 @@ clean:
 logplex:
   image: logplex_base
   command: ./_build/default/rel/logplex/bin/logplex foreground
-  hostname: logplex
-  domainname: docker.local
+  hostname: $LOGPLEX_HOSTNAME
+  domainname: $LOGPLEX_DOMAIN_NAME
   environment:
-    - INSTANCE_NAME=logplex.docker.local
+    - INSTANCE_NAME=$LOGPLEX_INSTANCE_NAME
     - LOCAL_IP=127.0.0.1
   env_file:
     - logplex.env
@@ -81,4 +81,3 @@ test_bash:
     - base
   links:
     - db
-

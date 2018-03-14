@@ -14,6 +14,8 @@ VOLUME /root/.cache
 
 RUN curl --silent -L --fail --max-time 10 -o /usr/local/bin/rebar3 https://github.com/erlang/rebar3/releases/download/3.5.0/rebar3 && chmod +x /usr/local/bin/rebar3
 
+RUN mkdir -p /home/logplex && ln -s logplex.env /home/logplex/keys.sh
+
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
