@@ -113,11 +113,13 @@ refresh_cycle() ->
 control_rods() ->
     [
      deny_redis_buffers,
-     deny_tail_sessions,
+     %% TODO: temporarily disabled
+     % deny_tail_sessions,
      deny_drain_forwarding,
      deny_logs_ingress,
      disable_firehose,
-     disable_redgrid,
+     %% TODO: temporarily disabled
+     % disable_redgrid,
      disable_api
     ].
 
