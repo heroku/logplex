@@ -230,8 +230,8 @@ lookup_tokens(ChannelId) when is_binary(ChannelId) ->
 lookup_drains(ChannelId) when is_binary(ChannelId) ->
     logplex_drain:lookup_by_channel(ChannelId).
 
+-spec logs(binary(), integer()) -> [binary()] | {error, term()}.
 logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
-
     {Map, Interval, _TS} = logplex_shard_info:read(logplex_read_pool_map),
     Index = redis_shard:key_to_index(binary_to_list(ChannelId)),
     {_RedisUrl, Pool} = redis_shard:get_matching_pool(Index, Map, Interval),
@@ -240,7 +240,7 @@ logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
         {'EXIT', Err} ->
             ?ERR("at=fetch_logs channel_id=~s err=\"~p\"",
                  [ChannelId, Err]),
-            [];
+            {error, Err};
         Logs ->
             Logs
     end.
