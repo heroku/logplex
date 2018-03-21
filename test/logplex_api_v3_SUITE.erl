@@ -89,7 +89,7 @@ init_per_testcase(Testcase , Config)
        Testcase == drains_service_unavailable;
        Testcase == tokens_service_unavailable;
        Testcase == channel_logs_service_unavailable ->
-    logplex_app:set_config(api_status, disabled),
+    logplex_api_v3:set_status(disabled),
     Config;
 init_per_testcase(Testcase , Config)
   when Testcase == channel_not_authorized;
@@ -117,7 +117,7 @@ end_per_testcase(Testcase, Config)
        Testcase == drains_service_unavailable;
        Testcase == tokens_service_unavailable;
        Testcase == channel_logs_service_unavailable ->
-    logplex_app:set_config(api_status, normal),
+    logplex_api_v3:set_status(normal),
     Config;
 end_per_testcase(cannot_add_more_drains, Config) ->
     OldLimit = ?config(old_max_drains_per_channel, Config),

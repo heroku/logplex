@@ -160,6 +160,9 @@ cache_os_envvars() ->
                      ,{api_status, ["API_STATUS"],
                        optional,
                        atom}
+                     ,{legacy_api_status, ["LEGACY_API_STATUS"],
+                       optional,
+                       atom}
                      ]),
     ok.
 

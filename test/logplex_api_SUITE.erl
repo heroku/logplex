@@ -34,12 +34,12 @@ end_per_suite(_Config) ->
     application:stop(logplex).
 
 init_per_group(read_only, Config) ->
-    InitialStatus = application:get_env(logplex, api_status),
+    InitialStatus = application:get_env(logplex, legacy_api_status),
     logplex_api:set_status(read_only),
     read_only = logplex_api:status(),
     [{initial_api_status, InitialStatus} | Config];
 init_per_group(disabled, Config) ->
-    InitialStatus = application:get_env(logplex, api_status),
+    InitialStatus = application:get_env(logplex, legacy_api_status),
     logplex_api:set_status(disabled),
     disabled = logplex_api:status(),
     [{initial_api_status, InitialStatus} | Config];
@@ -48,13 +48,13 @@ init_per_group(_, Config) ->
 
 end_per_group(read_only, Config) ->
     case ?config(initial_api_status, Config) of
-        undefined -> application:unset_env(logplex, api_status);
-        {ok,Val} -> application:set_env(logplex, api_status, Val)
+        undefined -> application:unset_env(logplex, legacy_api_status);
+        {ok,Val} -> application:set_env(logplex, legacy_api_status, Val)
     end;
 end_per_group(disabled, Config) ->
     case ?config(initial_api_status, Config) of
-        undefined -> application:unset_env(logplex, api_status);
-        {ok,Val} -> application:set_env(logplex, api_status, Val)
+        undefined -> application:unset_env(logplex, legacy_api_status);
+        {ok,Val} -> application:set_env(logplex, legacy_api_status, Val)
     end;
 end_per_group(_, _Config) ->
     ok.
