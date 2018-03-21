@@ -82,21 +82,42 @@ main(["enable_firehose"]) ->
     halt(0);
 main(["disable_api"]) ->
     Node = connect(),
-    io:format("Disabling API (v2 & v3)...~n"),
-    Res = rpc:call(Node, logplex_api, set_status, [disabled]),
+    io:format("Disabling v3 API...~n"),
+    Res = rpc:call(Node, logplex_api_v3, set_status, [disabled]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["enable_api"]) ->
     Node = connect(),
-    io:format("Enabling API (v2 & v3)...~n"),
-    Res = rpc:call(Node, logplex_api, set_status, [normal]),
+    io:format("Enabling v3 API ...~n"),
+    Res = rpc:call(Node, logplex_api_v3, set_status, [normal]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
 main(["set_api_read_only"]) ->
     Node = connect(),
-    io:format("Setting API (v2 & v3) in read-only mode...~n"),
+    io:format("Setting v3 API in read-only mode...~n"),
+    Res = rpc:call(Node, logplex_api_v3, set_status, [read_only]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["disable_legacy_api"]) ->
+    Node = connect(),
+    io:format("Disabling legacy API ...~n"),
+    Res = rpc:call(Node, logplex_api, set_status, [disabled]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["enable_legacy_api"]) ->
+    Node = connect(),
+    io:format("Enabling legacy API ...~n"),
+    Res = rpc:call(Node, logplex_api, set_status, [normal]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0);
+main(["set_legacy_api_read_only"]) ->
+    Node = connect(),
+    io:format("Setting legacy API in read-only mode...~n"),
     Res = rpc:call(Node, logplex_api, set_status, [read_only]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
@@ -115,9 +136,12 @@ main(_) ->
               "allow_logs_ress\t\t\tAllow logs ingress.~n~n"
               "disable_firehose\t\tDisable firehose.~n"
               "enable_firehose\t\t\tEnable firehose.~n~n"
-              "disable_api\t\t\tDisable API (v2 & v3).~n"
-              "enable_api\t\t\tEnable API (v2 & v3).~n"
-              "set_api_read_only\t\tSet API (v2 & v3) in read-only mode.~n"
+              "disable_api\t\t\tDisable v3 API.~n"
+              "enable_api\t\t\tEnable v3 API.~n"
+              "set_api_read_only\t\tSet v3 API in read-only mode.~n"
+              "disable_legacy_api\t\t\tDisable legacy API.~n"
+              "enable_legacy_api\t\t\tEnable legacy API.~n"
+              "set_legacy_api_read_only\t\tSet legacy API in read-only mode.~n"
              ),
     halt(0).
 

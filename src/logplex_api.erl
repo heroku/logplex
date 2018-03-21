@@ -724,7 +724,7 @@ valid_uri(Req) ->
 %% Checks whether the API state
 -spec status() -> 'normal' | 'read_only' | 'disabled'.
 status() ->
-    case logplex_app:config(api_status, normal) of
+    case logplex_app:config(legacy_api_status, normal) of
         Status when Status == normal;
                     Status == disabled;
                     Status == read_only ->
@@ -743,7 +743,7 @@ set_status(Term) ->
                                "canary operations allowed.~n");
         disabled -> io:format("API entirely disabled~n")
     end,
-    logplex_app:set_config(api_status, Term),
+    logplex_app:set_config(legacy_api_status, Term),
     Old.
 
 -spec status_io(pos_integer()) -> binary().

@@ -4,7 +4,8 @@
 
 %% setup functions
 -export([setup_metrics/0,
-         child_spec/0
+         child_spec/0,
+         set_status/1
         ]).
 
 %% rest helpers
@@ -71,6 +72,16 @@ tokens_path() ->
 
 channel_logs_path() ->
     {?CHANNEL_LOGS_PATH, logplex_api_v3_channel_logs, [{route, ?CHANNEL_LOGS_PATH}]}.
+
+-spec set_status(normal | disabled | read_only) -> ok.
+set_status(Status) ->
+    case Status of
+        normal -> io:format("Fully Enabling API~n");
+        read_only -> io:format("API in read-only mode: only GET requests~n");
+        disabled -> io:format("API entirely disabled~n")
+    end,
+    logplex_app:set_config(api_status, Status),
+    ok.
 
 %% ----------------------------------------------------------------------------
 %% REST helpers
