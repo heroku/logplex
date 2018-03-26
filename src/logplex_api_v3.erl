@@ -5,7 +5,8 @@
 %% setup functions
 -export([setup_metrics/0,
          child_spec/0,
-         set_status/1
+         set_status/1,
+         status/0
         ]).
 
 %% rest helpers
@@ -76,12 +77,25 @@ channel_logs_path() ->
 -spec set_status(normal | disabled | read_only) -> ok.
 set_status(Status) ->
     case Status of
-        normal -> io:format("Fully Enabling API~n");
-        read_only -> io:format("API in read-only mode: only GET requests~n");
-        disabled -> io:format("API entirely disabled~n")
+        normal -> io:format("Enabling v3 API~n");
+        read_only -> io:format("V3 API in read-only mode: only GET requests~n");
+        disabled -> io:format("V3 API entirely disabled~n")
     end,
     logplex_app:set_config(api_status, Status),
     ok.
+
+-spec status() -> normal | disabled | read_only.
+status() ->
+    case logplex_app:config(api_status, normal) of
+        Status when Status == normal;
+                    Status == disabled;
+                    Status == read_only ->
+            Status;
+        _Other ->
+            io:format("Invalid API status configured! Defaulting to 'normal' mode.~n"),
+            normal
+    end.
+
 
 %% ----------------------------------------------------------------------------
 %% REST helpers
@@ -91,7 +105,7 @@ set_status(Status) ->
 
 %% @private
 service_available(Req, State) ->
-    case logplex_app:config(api_status, normal) of
+    case status() of
         disabled ->
             {false, Req, State};
         read_only ->

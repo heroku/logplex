@@ -738,10 +738,10 @@ status() ->
 set_status(Term) ->
     Old = status(),
     case Term of
-        normal -> io:format("Fully Enabling API~n");
-        read_only -> io:format("API in read-only mode: only GET requests and "
+        normal -> io:format("Enabling legacy API~n");
+        read_only -> io:format("Legacy API in read-only mode: only GET requests and "
                                "canary operations allowed.~n");
-        disabled -> io:format("API entirely disabled~n")
+        disabled -> io:format("Legacy API entirely disabled~n")
     end,
     logplex_app:set_config(legacy_api_status, Term),
     Old.
