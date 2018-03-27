@@ -283,9 +283,21 @@ populate_info_table(ReadMap, WriteMap, Urls) ->
 register_worker(WorkerType, Url, Pid) ->
     gen_server:call(?MODULE, {register_worker, {WorkerType, Url, Pid}}).
 
+register_worker_with_retry(WorkerType, Url, Pid, 0) ->
+    ?ERR("err=failed_to_register_worker worker_type=~p", [WorkerType]),
+    {error, failed_to_register_worker};
+register_worker_with_retry(WorkerType, Url, Pid, N) ->
+    case register_worker(WorkerType, Url, Pid) of
+        ok ->
+            ok;
+        {error, Reason} ->
+            timer:sleep(timer:seconds(5)),
+            register_worker_with_retry(WorkerType, Url, Pid, N-1)
+    end.
+
 async_add_pool(ReadMap, Url) ->
     WorkerFun = fun () ->
-                        ok = register_worker(ReadMap, Url, add_pool(Url))
+                        ok = register_worker_with_retry(ReadMap, Url, add_pool(Url), 10)
                 end,
     {async, spawn(WorkerFun)}.
 
@@ -298,7 +310,7 @@ add_pool(Url) ->
 
 async_add_buffer(WriteMap, Url) ->
     {async, spawn(fun () ->
-                          ok = register_worker(WriteMap, Url, add_buffer(Url))
+                          ok = register_worker_with_retry(WriteMap, Url, add_buffer(Url), 10)
                   end)}.
 
 add_buffer(Url) ->
