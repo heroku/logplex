@@ -147,7 +147,7 @@ status_to_value(disable_redgrid) ->
         normal -> 0
     end;
 status_to_value(disable_api) ->
-    case logplex_api:status() of
+    case logplex_api_v3:status() of
         normal -> 0;
         read_only -> 1;
         disabled -> 1

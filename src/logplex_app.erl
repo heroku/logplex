@@ -78,6 +78,7 @@ stop(_State) ->
     ok.
 
 start_phase(listen, normal, _Args) ->
+    logplex_api_v3:set_status(logplex_api_v3:status()),
     logplex_api:set_status(logplex_api:status()),
     setup_firehose(),
     {ok, _} = supervisor:start_child(logplex_sup,
