@@ -8,6 +8,7 @@
          rest_init/2,
          service_available/2,
          allowed_methods/2,
+         malformed_request/2,
          is_authorized/2,
          resource_exists/2,
          content_types_provided/2,
@@ -15,7 +16,8 @@
         ]).
 
 -record(state, {
-          channel_id :: binary()
+          channel_id :: binary(),
+          num_logs = 100 :: integer() %% number of log lines to fetch from log buffers
          }).
 
 %% @private
@@ -39,6 +41,22 @@ allowed_methods(Req, State) ->
     {[<<"GET">>], Req, State}.
 
 %% @private
+malformed_request(Req, State) ->
+    case cowboy_req:qs_val(<<"num">>, Req) of
+        {undefined, Req1} ->
+            {false, Req1, State};
+        {Val, Req1} ->
+            try
+                Num = list_to_integer(binary_to_list(Val)),
+                NewState = State#state{ num_logs = Num },
+                {false, Req1, NewState}
+            catch
+                _:_ ->
+                    {false, Req1, State}
+            end
+    end.
+
+%% @private
 is_authorized(Req, State) ->
     logplex_api_v3:is_authorized(Req, State).
 
@@ -57,9 +75,10 @@ content_types_provided(Req, State) ->
     {[{{<<"application">>, <<"logplex-1">>, []}, to_logs}], Req, State}.
 
 %% @private
-to_logs(Req, #state{ channel_id = ChannelId } = State) ->
-    %% fetch all messages from log buffer
-    case logplex_channel:logs(ChannelId, -1) of
+to_logs(Req, #state{ channel_id = ChannelId,
+                     num_logs   = NumLogs } = State) ->
+    %% fetch messages from log buffer
+    case logplex_channel:logs(ChannelId, NumLogs) of
         {error, Reason} ->
             ?ERR("channel_id=~s err='failed to fetch channel logs' reason='~p'",
                  [ChannelId, Reason]),
