@@ -216,6 +216,23 @@ lookup_flag(Flag, ChannelId) when Flag =:= no_tail;
             not_found
     end.
 
+-spec handle_no_redis_flag(ChannelId::id(), NumberOfMessages::non_neg_integer()) -> no_redis | no_such_flag | not_found.
+handle_no_redis_flag(ChannelId, NumberOfMessages) ->
+    case lookup_flag(no_redis, ChannelId) of
+        no_redis -> no_redis;
+        not_found -> not_found;
+        no_such_flag ->
+            %% case msg count per channel > limit of
+            %%   true ->
+            %%        set no_redis flag,
+            %%        no_redis
+            %%   _ ->
+            %%        unset no_redis ?
+            %%        increment msg count per channel
+            no_such_flag
+            %% end
+    end.
+
 -spec lookup_flags(id()) -> flags() | 'not_found'.
 lookup_flags(ChannelId) when is_binary(ChannelId) ->
     try ets:lookup_element(channels, ChannelId, #channel.flags)
