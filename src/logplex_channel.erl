@@ -48,6 +48,7 @@
 
 -export([lookup_flag/2
          ,lookup_flags/1
+         ,flag_no_redis/1
          ,store/1
          ,cache/3
          ,binary_to_flags/1
@@ -200,6 +201,13 @@ lookup(ChannelId) when is_binary(ChannelId) ->
         [Channel = #channel{}] -> Channel;
         _ -> undefined
     end.
+
+flag_no_redis(ChannelIds) when is_list(ChannelIds) ->
+    Channels = [ lookup(ID) || ID <- ChannelIds],
+    MissingFlags = [ C || C <- Channels, not lists:member(no_redis, flags(C)) ],
+    Fixed = [ C#channel{flags = [no_redis | C#channel.flags ]} || C <- MissingFlags ],
+    lists:foreach(fun store/1, Fixed),
+    Fixed.
 
 -spec lookup_flag(F, id()) -> F | 'no_such_flag' | 'not_found'
                                   when is_subtype(F, flag()).
