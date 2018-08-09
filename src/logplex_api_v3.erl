@@ -21,13 +21,14 @@
          done/4
         ]).
 
--define(HEALTHCHECK_PATH,  "/v3/healthcheck").
--define(CHANNELS_PATH,     "/v3/channels/:channel_id").
--define(DRAINS_PATH,       "/v3/channels/:channel_id/drains/[:drain_id]").
--define(TOKENS_PATH,       "/v3/channels/:channel_id/tokens").
--define(CHANNEL_LOGS_PATH, "/v3/channels/:channel_id/logs").
--define(SESSIONS_PATH,     "/v3/sessions/[:session_id]").
--define(ADMIN_PATH,        "/v3/admin/no_redis").
+-define(HEALTHCHECK_PATH,   "/v3/healthcheck").
+-define(CHANNELS_PATH,      "/v3/channels/:channel_id").
+-define(DRAINS_PATH,        "/v3/channels/:channel_id/drains/[:drain_id]").
+-define(TOKENS_PATH,        "/v3/channels/:channel_id/tokens").
+-define(CHANNEL_LOGS_PATH,  "/v3/channels/:channel_id/logs").
+-define(CHANNEL_FLAGS_PATH, "/v3/channels/:channel_id/flags").
+-define(SESSIONS_PATH,      "/v3/sessions/[:session_id]").
+-define(ADMIN_PATH,         "/v3/admin/no_redis").
 
 -define(BASIC_AUTH, <<"Basic realm=Logplex">>).
 -define(REQUEST_ID_HEADER_KEY, <<"request-id">>).
@@ -55,6 +56,7 @@ dispatch() ->
                              sessions_path(),
                              tokens_path(),
                              channel_logs_path(),
+                             channel_flags_path(),
                              admin_path()
                             ]}]).
 
@@ -75,6 +77,9 @@ tokens_path() ->
 
 channel_logs_path() ->
     {?CHANNEL_LOGS_PATH, logplex_api_v3_channel_logs, [{route, ?CHANNEL_LOGS_PATH}]}.
+
+channel_flags_path() ->
+    {?CHANNEL_FLAGS_PATH, logplex_api_v3_channel_flags, [{route, ?CHANNEL_FLAGS_PATH}]}.
 
 admin_path() ->
     {?ADMIN_PATH, logplex_api_v3_admin, [{route, ?ADMIN_PATH}]}.

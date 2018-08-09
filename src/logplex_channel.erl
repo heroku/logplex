@@ -43,6 +43,9 @@
          ,flags/1
          ,poll/2
          ,set_flag/2
+         ,set_flags/2
+         ,remove_flag/2
+         ,remove_flags/2
          ,find/1
         ]).
 
@@ -104,9 +107,41 @@ poll(ChannelId, Timeout) ->
                     Timeout).
 
 -spec set_flag(flag(), channel()) -> channel().
-set_flag(Flag, #channel{ flags = Flags } = Channel) ->
-    Channel#channel{ flags = [Flag | Flags]}.
+set_flag(Flag, #channel{ flags = Flags } = C) ->
+    C#channel{ flags = [Flag | Flags]},
+    true = ets:insert(channels, C),
+    C.
 
+-spec remove_flag(flag(), channel()) -> channel().
+remove_flag(Flag, #channel{ flags = Flags } = C) ->
+    UpdatedChannel = C#channel{ flags = lists:delete(Flag, Flags) },
+    store(UpdatedChannel).
+
+-spec set_flags([flag()], id()) -> channel().
+set_flags(Flags, ChannelId) ->
+    case find(ChannelId) of
+        {ok, _Channel} ->
+            lists:foreach(fun(Flag) ->
+                set_flag(Flag, _Channel),
+                ?INFO("at=set_flags channel_id=~s flag=~s ", [ChannelId, Flag])
+            end, Flags);
+        {error, not_found} ->
+            %% channel was not found
+            {false, ChannelId}
+    end.
+
+-spec remove_flags([flag()], id()) -> channel().
+remove_flags(Flags, ChannelId) ->
+    case find(ChannelId) of
+        {ok, _Channel} ->
+            lists:foreach(fun(Flag) ->
+                remove_flag(Flag, _Channel),
+                ?INFO("at=remove_flags channel_id=~s flag=~s ", [ChannelId, Flag])
+            end, Flags);
+        {error, not_found} ->
+            %% channel was not found
+            {false, ChannelId}
+    end.
 
 -spec find(id()) -> {ok, channel()} | {error, not_found | timeout}.
 find(ChannelId) when is_binary(ChannelId) ->
