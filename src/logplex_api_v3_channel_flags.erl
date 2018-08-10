@@ -126,8 +126,12 @@ from_json(Req, #state{ channel_id = ChannelId } = State) ->
 
 -spec validate_payload(map()) -> {ok, [binary()]} | {error, term()}.
 validate_payload(#{<<"flags">> := Flags}) ->
-    true = lists:all(fun is_binary/1, Flags),
-    {ok, lists:usort(Flags)};
+    case lists:all(fun logplex_channel:is_valid_flag/1, Flags) of
+        true ->
+            {ok, lists:usort(Flags)};
+        false ->
+            {error, invalid_payload}
+    end;
 validate_payload(#{}) ->
     {ok, []};
 validate_payload(_) ->

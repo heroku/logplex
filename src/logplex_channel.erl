@@ -44,6 +44,7 @@
          ,poll/2
          ,set_flags/2
          ,remove_flags/2
+         ,is_valid_flag/1
          ,find/1
         ]).
 
@@ -92,6 +93,10 @@ new(Id, Name, Flags) when is_binary(Id),
 id(#channel{id=Id}) -> Id.
 name(#channel{id=Name}) -> Name.
 flags(#channel{flags=Flags}) -> Flags.
+
+is_valid_flag(Flag) ->
+    ValidFlags = [<<"no_redis">>, <<"no_tail">>],
+    lists:member(Flag, ValidFlags).
 
 -spec poll(id(), non_neg_integer()) -> channel() | {error, timeout}.
 poll(ChannelId, Timeout) ->
