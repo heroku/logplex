@@ -42,16 +42,13 @@
          ,name/1
          ,flags/1
          ,poll/2
-         ,set_flag/2
          ,set_flags/2
-         ,remove_flag/2
          ,remove_flags/2
          ,find/1
         ]).
 
 -export([lookup_flag/2
          ,lookup_flags/1
-         ,flag_no_redis/1
          ,store/1
          ,cache/3
          ,binary_to_flags/1
@@ -106,41 +103,34 @@ poll(ChannelId, Timeout) ->
                     end,
                     Timeout).
 
--spec set_flag(flag(), channel()) -> channel().
-set_flag(Flag, #channel{ flags = Flags } = C) ->
-    C#channel{ flags = [Flag | Flags]},
-    true = ets:insert(channels, C),
-    C.
-
--spec remove_flag(flag(), channel()) -> channel().
-remove_flag(Flag, #channel{ flags = Flags } = C) ->
-    UpdatedChannel = C#channel{ flags = lists:delete(Flag, Flags) },
-    store(UpdatedChannel).
-
--spec set_flags([flag()], id()) -> channel().
+-spec set_flags([flag()], id()) -> {ok, channel()} | {error, not_found}.
 set_flags(Flags, ChannelId) ->
     case find(ChannelId) of
-        {ok, _Channel} ->
-            lists:foreach(fun(Flag) ->
-                set_flag(Flag, _Channel),
-                ?INFO("at=set_flags channel_id=~s flag=~s ", [ChannelId, Flag])
-            end, Flags);
+        {ok, Channel0} ->
+            UpdatedChannel = lists:foldl(fun(Flag, ChannelN) ->
+                set_flag(Flag, ChannelN)
+            end, Channel0, Flags),
+            store(UpdatedChannel),
+            ?INFO("at=set_flags channel_id=~s flags=~p ", [ChannelId, Flags]),
+            {ok, UpdatedChannel};
         {error, not_found} ->
             %% channel was not found
-            {false, ChannelId}
+            {error, not_found}
     end.
 
--spec remove_flags([flag()], id()) -> channel().
+-spec remove_flags([flag()], id()) -> {ok, channel()} | {error, not_found}.
 remove_flags(Flags, ChannelId) ->
     case find(ChannelId) of
-        {ok, _Channel} ->
-            lists:foreach(fun(Flag) ->
-                remove_flag(Flag, _Channel),
-                ?INFO("at=remove_flags channel_id=~s flag=~s ", [ChannelId, Flag])
-            end, Flags);
+        {ok, Channel0} ->
+            UpdatedChannel = lists:foldl(fun(Flag, ChannelN) ->
+                remove_flag(Flag, ChannelN)
+            end, Channel0, Flags),
+            store(UpdatedChannel),
+            ?INFO("at=remove_flags channel_id=~s flags=~p ", [ChannelId, Flags]),
+            {ok, UpdatedChannel};
         {error, not_found} ->
             %% channel was not found
-            {false, ChannelId}
+            {error, not_found}
     end.
 
 -spec find(id()) -> {ok, channel()} | {error, not_found | timeout}.
@@ -237,13 +227,6 @@ lookup(ChannelId) when is_binary(ChannelId) ->
         _ -> undefined
     end.
 
-flag_no_redis(ChannelIds) when is_list(ChannelIds) ->
-    Channels = [ lookup(ID) || ID <- ChannelIds],
-    MissingFlags = [ C || C <- Channels, not lists:member(no_redis, flags(C)) ],
-    Fixed = [ C#channel{flags = [no_redis | C#channel.flags ]} || C <- MissingFlags ],
-    lists:foreach(fun store/1, Fixed),
-    Fixed.
-
 -spec lookup_flag(F, id()) -> F | 'no_such_flag' | 'not_found'
                                   when is_subtype(F, flag()).
 lookup_flag(Flag, ChannelId) when Flag =:= no_tail;
@@ -309,3 +292,20 @@ can_add_drain(ChannelId)
 
 num_channels() ->
     ets:info(channels, size).
+
+%% @private
+-spec set_flag(flag(), channel()) -> channel().
+set_flag(Flag, #channel{ flags = Flags } = C) when Flag =:= no_tail;
+                                                   Flag =:= no_redis ->
+    case lists:member(Flag, Flags) of
+        false ->
+            C#channel{ flags = [Flag | Flags]};
+        true ->
+            C
+    end.
+
+%% @private
+-spec remove_flag(flag(), channel()) -> channel().
+remove_flag(Flag, #channel{ flags = Flags } = C) when Flag =:= no_tail;
+                                                      Flag =:= no_redis ->
+    C#channel{ flags = lists:delete(Flag, Flags) }.

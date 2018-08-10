@@ -60,36 +60,17 @@ resource_exists(Req, #state{ channel_id = ChannelId } = State) ->
     end.
 
 %% @private
-delete_resource(Req, #state{ channel_id = ChannelId,
-                             flags      = Flags } = State) ->
-    logplex_channel:remove_flags(Flags, ChannelId),
-    {true, Req, State}.
-
-%% @private
-content_types_provided(Req, State) ->
-    {[{{<<"application">>, <<"json">>, []}, to_json}], Req, State}.
-
-%% @private
-to_json(Req, #state{ channel_id = ChannelId,
-                     flags      = Flags } = State) ->
-    Resp = serialize_channel(ChannelId, Flags),
-    {Resp, Req, State}.
-
-%% @private
-content_types_accepted(Req, State) ->
-    {[{{<<"application">>, <<"json">>, []}, from_json}], Req, State}.
-
-%% @private
-from_json(Req, #state{ channel_id = ChannelId } = State) ->
+delete_resource(Req, #state{ channel_id = ChannelId } = State) ->
     {ok, Body, Req1} = cowboy_req:body(Req),
     try jsx:decode(Body, [return_maps]) of
         Map ->
             case validate_payload(Map) of
-                {ok, Flags} ->
-                    logplex_channel:set_flags(Flags, ChannelId),
-                    Resp = jsx:encode([{<<"success">>, <<"flags set on channel">>}]),
+                {ok, NewFlags} ->
+                    DeserializedFlags = deserialize_flags(NewFlags),
+                    {ok, UpdatedChannel} = logplex_channel:remove_flags(DeserializedFlags, ChannelId),
+                    Resp = serialize_channel(UpdatedChannel),
                     Req2 = cowboy_req:set_resp_body(Resp, Req1),
-                    {false, Req2, State};
+                    {true, Req2, State};
                 {error, invalid_payload} ->
                     Resp = jsx:encode([{<<"error">>, <<"invalid payload">>}]),
                     Req2 = cowboy_req:set_resp_body(Resp, Req1),
@@ -101,16 +82,64 @@ from_json(Req, #state{ channel_id = ChannelId } = State) ->
             {false, Req, State}
     end.
 
+%% @private
+content_types_provided(Req, State) ->
+    {[{{<<"application">>, <<"json">>, []}, to_json}], Req, State}.
+
+%% @private
+to_json(Req, #state{ channel_id = ChannelId } = State) ->
+    case logplex_channel:find(ChannelId) of
+        {ok, Channel} ->
+            Resp = serialize_channel(Channel),
+            {Resp, Req, State};
+        {error, not_found} ->
+            %% channel was not found
+            {false, Req, State}
+    end.
+
+%% @private
+content_types_accepted(Req, State) ->
+    {[{{<<"application">>, <<"json">>, []}, from_json}], Req, State}.
+
+%% @private
+from_json(Req, #state{ channel_id = ChannelId } = State) ->
+    {ok, Body, Req1} = cowboy_req:body(Req),
+    try jsx:decode(Body, [return_maps]) of
+        Map ->
+            case validate_payload(Map) of
+                {ok, NewFlags} ->
+                    DeserializedFlags = deserialize_flags(NewFlags),
+                    {ok, UpdatedChannel} = logplex_channel:set_flags(DeserializedFlags, ChannelId),
+                    Resp = serialize_channel(UpdatedChannel),
+                    Req2 = cowboy_req:set_resp_body(Resp, Req1),
+                    {true, Req2, State};
+                {error, invalid_payload} ->
+                    Resp = jsx:encode([{<<"error">>, <<"invalid payload">>}]),
+                    Req2 = cowboy_req:set_resp_body(Resp, Req1),
+                    {false, Req2, State}
+            end
+    catch
+        error:badarg ->
+            %% invalid json
+            {false, Req, State}
+    end.
+
+-spec validate_payload(map()) -> {ok, [binary()]} | {error, term()}.
 validate_payload(#{<<"flags">> := Flags}) ->
     true = lists:all(fun is_binary/1, Flags),
     {ok, lists:usort(Flags)};
+validate_payload(#{}) ->
+    {ok, []};
 validate_payload(_) ->
     {error, invalid_payload}.
 
-serialize_channel(Channel, Flags) ->
-    jsx:encode([{<<"channel">>, Channel}] ++
-                serialize_flags(Flags)).
+serialize_channel(Channel) ->
+    jsx:encode([{<<"channel">>, Channel#channel.id}] ++
+                serialize_flags(Channel#channel.flags)).
 
 serialize_flags([]) -> [];
 serialize_flags(Flags) ->
     [{<<"flags">>, lists:usort(Flags)}].
+
+deserialize_flags(Flags) ->
+    lists:flatten([ logplex_channel:binary_to_flags(F) || F <- Flags ]).
