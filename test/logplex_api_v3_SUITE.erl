@@ -304,12 +304,12 @@ reject_invalid_channel_payload(Config) ->
 retain_flags_on_channel_update(Config0) ->
     Config = create_channel_without_tokens(Config0),
     Channel = ?config(channel, Config),
-    ChanRec = logplex_channel:poll(list_to_binary(Channel), timer:seconds(1)),
-    ChanRecWithFlag = logplex_channel:set_flags([no_redis], ChanRec),
+    ChannelId = list_to_binary(Channel),
+    {ok, ChanRecWithFlag} = logplex_channel:set_flags([no_redis], ChannelId),
     ?assertEqual(ok, logplex_channel:store(ChanRecWithFlag)),
     Props = put_channel(Channel, [], Config),
     ?assertEqual(200, proplists:get_value(status_code, Props)),
-    ?assertEqual(ChanRecWithFlag, logplex_channel:poll(list_to_binary(Channel), timer:seconds(1))),
+    ?assertEqual(ChanRecWithFlag, logplex_channel:poll(ChannelId, timer:seconds(1))),
     Config.
 
 %% -----------------------------------------------------------------------------
