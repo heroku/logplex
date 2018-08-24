@@ -5,9 +5,7 @@
 %% @end
 -module(logplex_message).
 
--export([process_msg/4
-         ,process_msg/5
-         ,process_msgs/4
+-export([process_msgs/4
          ,process_msgs/1
          ,process_error/5
          ,process_error/4
@@ -56,10 +54,6 @@ process_msg({msg, RawMsg}, ShardInfo) ->
             logplex_realtime:incr('message.received-malformed'),
             {error, malformed_msg}
     end.
-
-process_msg(RawMsg, ChannelId, Token, TokenName) when not is_list(RawMsg) ->
-    process_msg(RawMsg, ChannelId, Token, TokenName,
-                shard_info()).
 
 process_msg({msg, RawMsg}, ChannelId, Token, TokenName, ShardInfo)
   when is_binary(RawMsg) ->
