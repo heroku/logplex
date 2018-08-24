@@ -73,7 +73,7 @@ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
             CookedMsg = iolist_to_binary(re:replace(RawMsg, Token, TokenName)),
             logplex_firehose:post_msg(ChannelId, TokenName, RawMsg),
             process_drains(ChannelId, CookedMsg, logplex_app:config(deny_drain_forwarding, false)),
-            process_tails(ChannelId, CookedMsg),
+            process_tails(ChannelId, CookedMsg, logplex_app:config(deny_tail_sessions, false)),
             process_redis(ChannelId, ShardInfo, CookedMsg, logplex_app:config(deny_redis_buffers, Flag))
     end.
 
@@ -117,7 +117,9 @@ process_drains(ChannelID, Msg, true) ->
 process_drains(ChannelID, Msg, false) ->
     logplex_channel:post_msg({channel, ChannelID}, Msg).
 
-process_tails(ChannelId, Msg) ->
+process_tails(ChannelId, Msg, true) ->
+    ok;
+process_tails(ChannelId, Msg, false) ->
     logplex_tail:route(ChannelId, Msg).
 
 process_redis(_ChannelId, _ShardInfo, _Msg, Flag) when Flag =:= no_redis;
