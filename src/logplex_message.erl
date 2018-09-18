@@ -131,7 +131,7 @@ do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args) when
             CookedMsg = iolist_to_binary(re:replace(RawMsg, HerokuToken, HerokuOrigin)),
             ShardInfo = shard_info(),
             process_tails(ChannelID, CookedMsg, logplex_app:config(deny_tail_sessions, false)),
-            process_redis(ChannelID, ShardInfo, CookedMsg, Flag)
+            process_redis(ChannelID, ShardInfo, CookedMsg, logplex_app:config(deny_redis_buffers, Flag))
     end;
 
 do_process_error({false, _HerokuOrigin}, _ChannelID, _Origin, Fmt, Args) ->
