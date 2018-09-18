@@ -60,7 +60,7 @@ process_msg({malformed, _Msg}, _ShardInfo) ->
     {error, malformed_msg};
 
 process_msg({msg, RawMsg}, ShardInfo) ->
-    case parse_msg(RawMsg) of
+    case extract_token(RawMsg) of
         {ok, TokenId} ->
             case logplex_token:lookup(TokenId) of
                 undefined ->
@@ -176,7 +176,7 @@ get_raw_msgs(Msgs) ->
           RawMsg -> RawMsg
       end || Msg <- Msgs ].
 
-parse_msg(Msg) ->
+extract_token(Msg) ->
     case re:split(Msg, <<" +">>,
                   [{parts, 5}]) of
         [_PriVal, _Timestamp, _Host, Token = <<"t.", _/binary>>, _Rest] ->
