@@ -122,6 +122,20 @@ main(["set_legacy_api_read_only"]) ->
     io:format("Node: ~p~n", [Res]),
     disconnect(),
     halt(0);
+main(["enable_batch_redis"]) ->
+    Node = connect(),
+    io:format("Enabling batch redis...~n"),
+    Res = rpc:call(Node, logplex_app, set_config, [batch_redis, true]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0();
+main(["disable_batch_redis"]) ->
+    Node = connect(),
+    io:format("Disabling batch redis...~n"),
+    Res = rpc:call(Node, logplex_app, set_config, [batch_redis, false]),
+    io:format("Node: ~p~n", [Res]),
+    disconnect(),
+    halt(0();
 main(_) ->
     io:format("Control rods for local logplex node. These control rods can be modified on the fly while logplex is running.~n~n"
               "Usage: control_rods <rod>~n~n"
@@ -142,6 +156,8 @@ main(_) ->
               "disable_legacy_api\t\t\tDisable legacy API.~n"
               "enable_legacy_api\t\t\tEnable legacy API.~n"
               "set_legacy_api_read_only\t\tSet legacy API in read-only mode.~n"
+              "enable_batch_redis\t\t\tEnable batch redis.~n"
+              "disable_batch_redi\t\t\tDisable batch redis.~n"
              ),
     halt(0).
 
