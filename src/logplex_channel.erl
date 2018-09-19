@@ -50,6 +50,7 @@
          ,lookup_flags/1
          ,store/1
          ,cache/3
+         ,cache/1
          ,binary_to_flags/1
          ,create_ets_table/0
         ]).
@@ -170,6 +171,10 @@ cache(ChannelId, Name, Flags)
                     flags=Flags},
     true = ets:insert(channels, Chan),
     Chan.
+
+-spec cache(channel()) -> channel().
+cache(#channel{id = ChannelId, name = Name, flags = Flags}) ->
+    cache(ChannelId, Name, Flags).
 
 -spec flags_to_binary(flags()) -> binary().
 flags_to_binary(Flags) when is_list(Flags) ->
