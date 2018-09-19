@@ -3,66 +3,90 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 -include("../src/logplex_logging.hrl").
+
 -compile(export_all).
 
-all() -> [ channel_not_found
+all() -> [ channel_not_found,
+           process_messages,
+           process_messages_no_redis
          ].
 
 init_per_suite(Config) ->
     application:load(logplex), %% ensure default config is loaded
-    %% mock shard stuff
-    % meck:new([logplex_shard_info, logplex_shard]),
-    % meck:expect(logplex_shard_info, read, fun(_) -> fake_info end),
-    % meck:expect(logplex_shard_info, map_interval, fun(_) -> fake_interval end),
-    % meck:expect(logplex_shard, lookup, fun(_, _) -> fake_pid end),
-
-    Config.
+    [{cleanup_funs, []} %% cleanup funs run after each test
+     | Config].
 
 end_per_suite(Config) ->
     meck:unload(),
     Config.
 
-init_per_testcase(channel_not_found, Config) ->
+init_per_testcase(channel_not_found, Config0) ->
+    Config = make_storage(channel_not_found, Config0),
+
+    meck:new(logplex_shard_info),
+    meck:expect(logplex_shard_info, read, fun(_) -> fake_info end),
+
     meck:new(logplex_channel),
     meck:expect(logplex_channel, lookup_flag, fun(_, _) -> not_found end),
+
+    init_per_testcase(any, Config);
+
+init_per_testcase(process_messages, ConfigBase) ->
+    ChannelFlags = [],
+    Config0 = prepare_test(process_messages, ChannelFlags, ConfigBase),
+    Config = lists:foldr(fun(F, Acc) -> F(Acc) end,
+                         Config0,
+                         [fun mock_firehose/1,
+                          fun mock_drains/1,
+                          fun mock_tails/1,
+                          fun mock_redis/1
+                         ]),
+    init_per_testcase(any, Config);
+
+init_per_testcase(process_messages_no_redis, ConfigBase) ->
+    ChannelFlags = [no_redis],
+    Config0 = prepare_test(process_messages, ChannelFlags, ConfigBase),
+    Config = lists:foldr(fun(F, Acc) -> F(Acc) end,
+                         Config0,
+                         [fun mock_firehose/1,
+                          fun mock_drains/1,
+                          fun mock_tails/1,
+                          fun mock_redis/1
+                         ]),
     init_per_testcase(any, Config);
 
 init_per_testcase(_, Config) ->
+    Table = ?config(table, Config),
     %% mock logging
     %% We don't want actually test logging, only that we log the expected lines.
     %% We write logs into an ets table. We use a duplicate bag such that all log
     %% lines can be stored under the same key.
-    ets:new(logging, [named_table, public, duplicate_bag]),
     meck:new(syslog_lib),
     meck:expect(syslog_lib, notice, fun(_, Line) ->
-                                            ets:insert(logging, {logs, Line})
+                                            ets:insert(Table, {logs, Line})
                                     end),
 
     %% mock metrics
-    ets:new(metrics, [named_table, public]),
     meck:new([logplex_stats, logplex_realtime]),
     meck:expect(logplex_stats, incr, fun(Key, Value) ->
-                                             ets:update_counter(metrics, Key, Value, {Key, 0})
+                                             ets:update_counter(Table, Key, Value, {Key, 0})
                                      end),
     meck:expect(logplex_stats, incr, fun(Key) ->
-                                             ets:update_counter(metrics, Key, 1, {Key, 0})
+                                             ets:update_counter(Table, Key, 1, {Key, 0})
                                      end),
     meck:expect(logplex_realtime, incr, fun(Key, Value) ->
-                                                ets:update_counter(metrics, Key, Value, {Key, 0})
+                                                ets:update_counter(Table, Key, Value, {Key, 0})
                                         end),
     meck:expect(logplex_realtime, incr, fun(Key) ->
-                                                ets:update_counter(metrics, Key, 1, {Key, 0})
+                                                ets:update_counter(Table, Key, 1, {Key, 0})
                                         end),
 
-    meck:new(logplex_shard_info),
-    meck:expect(logplex_shard_info, read, fun(_) -> fake_info end),
 
     Config.
 
 end_per_testcase(_, Config) ->
     meck:unload(),
-    ets:delete(logging),
-    ets:delete(metrics),
+    [Cleanup() || Cleanup <- ?config(cleanup_funs, Config)],
     Config.
 
 
@@ -70,24 +94,85 @@ end_per_testcase(_, Config) ->
 %% tests
 %% ----------------------------------------------------------------------------
 
-channel_not_found(_Config) ->
+channel_not_found(Config) ->
+    Table = ?config(table, Config),
     NumMsgs = 5,
-    ExpectedMsgs = [{N, uuid:to_string(uuid:v4())} || N <- lists:seq(1, NumMsgs)],
-    Msgs = [{msg, new_msg(N, Msg)} || {N, Msg} <- ExpectedMsgs],
-    ChannelId = new_channel_id(),
+    Msgs = make_msgs(NumMsgs),
+    ChannelId = new_channel_id(), %% create a new unknown channel id
     Token = new_token(),
     TokenName = new_token_name(),
     ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
-    ?assertMatch([{message_received, NumMsgs}], ets:lookup(metrics, message_received)),
-    ?assertMatch([{'message.received', NumMsgs}], ets:lookup(metrics, 'message.received')),
-    ?assertMatch([{unknown_channel, NumMsgs}], ets:lookup(metrics, unknown_channel)),
+    ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
+    ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
+    ?assertMatch([{unknown_channel, NumMsgs}], ets:lookup(Table, unknown_channel)),
     ExpectedLogLine = io_lib:format("at=process_msgs? channel_id=~s msg=unknown_channel", [ChannelId]),
-    ?assert(is_contained_in_logs(ExpectedLogLine, fetch_logs())).
+    ?assert(is_contained_in_logs(ExpectedLogLine, fetch_logs(Table))).
 
+process_messages(Config) ->
+    Table = ?config(table, Config),
+    Bag = ?config(bag, Config),
+    NumMsgs = 5,
+    Msgs = make_msgs(NumMsgs),
+    ChannelId = ?config(channel_id, Config),
+    Token = new_token(),
+    TokenName = new_token_name(),
+    ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
+    ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
+    ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
+    ?assertMatch(asdf, ets:lookup(Bag, queued_redis_command)),
+    ok.
+
+process_messages_no_redis(Config) ->
+    Table = ?config(table, Config),
+    Bag = ?config(bag, Config),
+    NumMsgs = 5,
+    Msgs = make_msgs(NumMsgs),
+    ChannelId = ?config(channel_id, Config),
+    Token = new_token(),
+    TokenName = new_token_name(),
+    ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
+    ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
+    ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
+    ?assertMatch([], ets:lookup(Bag, queued_redis_command)),
+    ok.
 
 %% ----------------------------------------------------------------------------
 %% helper functions
 %% ----------------------------------------------------------------------------
+
+prepare_test(Testcase, ChannelFlags, Config0) ->
+    %% Ensure we can store and read channels locally.
+    ChannelsTable = logplex_channel:create_ets_table(),
+    CleanupChannels = fun() -> ets:delete(ChannelsTable) end,
+    CleanupFuns = [CleanupChannels | ?config(cleanup_funs, Config0)],
+
+    ChannelId = new_channel_id(),
+    Channel = logplex_channel:new(ChannelId, ChannelId, ChannelFlags),
+    %% here we circumvent config redis, just keep channel in ets
+    logplex_channel:cache(Channel),
+
+    Config = make_storage(Testcase, Config0),
+
+    [{channel_id, ChannelId},
+     {cleanup_funs, CleanupFuns}
+     | Config].
+
+make_storage(Testcase, Config) ->
+    %% the table is used for counters and single objects
+    Table = ets:new(Testcase, [public]),
+    %% the bag is used for similar objects under the same key, like logs or msgs
+    Bag = ets:new(Testcase, [public, duplicate_bag]),
+    CleanupTable = fun() -> ets:delete(Table) end,
+    CleanupBag = fun() -> ets:delete(Bag) end,
+    CleanupFuns = [CleanupTable, CleanupBag | ?config(cleanup_funs, Config)],
+    [{table, Table},
+     {bag, Bag},
+     {cleanup_funs, CleanupFuns}
+     | Config].
+
+make_msgs(NumMsgs) ->
+    Msgs = [{N, uuid:to_string(uuid:v4())} || N <- lists:seq(1, NumMsgs)],
+    [{msg, new_msg(N, Msg)} || {N, Msg} <- Msgs].
 
 new_channel_id() ->
     list_to_binary(["app-", uuid:to_string(uuid:v4())]).
@@ -101,9 +186,45 @@ new_token() ->
 new_token_name() ->
     list_to_binary(["token-",  uuid:to_string(uuid:v4())]).
 
-fetch_logs() ->
-    [Msg || {logs, Msg} <- ets:lookup(logging, logs)].
+fetch_logs(Table) ->
+    [Msg || {logs, Msg} <- ets:lookup(Table, logs)].
 
 is_contained_in_logs(Msg, Logs) ->
     lists:any(fun(M) -> M == match end,
               [re:run(Log, Msg, [{capture, none}]) || Log <- Logs]).
+
+mock_firehose(Config) ->
+    Bag = ?config(bag, Config),
+    meck:new(logplex_firehose),
+    meck:expect(logplex_firehose, post_msg, fun(ChannelId, TokenName, RawMsg) ->
+                                                    ets:insert(Bag, {firehose, ChannelId, TokenName, RawMsg})
+                                            end),
+    Config.
+
+mock_drains(Config) ->
+    Bag = ?config(bag, Config),
+    meck:new(logplex_channel, [passthrough]),
+    meck:expect(logplex_channel, post_msg, fun({channel, ChannelId}, Msg) ->
+                                                   ets:insert(Bag, {drain, ChannelId, Msg})
+                                           end),
+    Config.
+
+mock_tails(Config) ->
+    Bag = ?config(bag, Config),
+    meck:new(logplex_tail),
+    meck:expect(logplex_tail, route, fun(ChannelId, Msg) ->
+                                             ets:insert(Bag, {tail, ChannelId, Msg})
+                                     end),
+    Config.
+
+mock_redis(Config) ->
+    Bag = ?config(bag, Config),
+    meck:new([logplex_shard_info, logplex_shard, logplex_queue]),
+    meck:expect(logplex_shard_info, read, fun(_) -> fake_info end),
+    meck:expect(logplex_shard_info, map_interval, fun(_) -> {fake_map, fake_interval} end),
+    meck:expect(logplex_shard, lookup, fun(_, _, _) -> fake_buffer_pid end),
+    meck:expect(logplex_queue, in, fun(_BufferPid, Cmd) ->
+                                           % TODO: maybe fake a redis write, without shards?
+                                           ets:insert(Bag, {queued_redis_command, Cmd})
+                                   end),
+    Config.
