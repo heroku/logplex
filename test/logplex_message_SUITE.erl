@@ -12,7 +12,9 @@ all() -> [ {group, classic},
 
 tests_per_group() -> [ channel_not_found,
                        process_messages,
-                       process_messages_no_redis
+                       process_messages_no_redis,
+                       process_messages_deny_tails,
+                       process_messages_deny_drains
                      ].
 
 groups() -> [ {classic, [], tests_per_group()},
@@ -48,28 +50,26 @@ init_per_testcase(channel_not_found, Config0) ->
 
     init_per_testcase(any, Config);
 
-init_per_testcase(process_messages, ConfigBase) ->
+init_per_testcase(process_messages = Testcase, ConfigBase) ->
     ChannelFlags = [],
-    Config0 = prepare_test(process_messages, ChannelFlags, ConfigBase),
-    Config = lists:foldr(fun(F, Acc) -> F(Acc) end,
-                         Config0,
-                         [fun mock_firehose/1,
-                          fun mock_drains/1,
-                          fun mock_tails/1,
-                          fun mock_redis/1
-                         ]),
+    Config = mock_message_processing(Testcase, ChannelFlags, ConfigBase),
     init_per_testcase(any, Config);
 
-init_per_testcase(process_messages_no_redis, ConfigBase) ->
+init_per_testcase(process_messages_no_redis = Testcase, ConfigBase) ->
     ChannelFlags = [no_redis],
-    Config0 = prepare_test(process_messages, ChannelFlags, ConfigBase),
-    Config = lists:foldr(fun(F, Acc) -> F(Acc) end,
-                         Config0,
-                         [fun mock_firehose/1,
-                          fun mock_drains/1,
-                          fun mock_tails/1,
-                          fun mock_redis/1
-                         ]),
+    Config = mock_message_processing(Testcase, ChannelFlags, ConfigBase),
+    init_per_testcase(any, Config);
+
+init_per_testcase(process_messages_deny_tails = Testcase, ConfigBase) ->
+    application:set_env(logplex, deny_tail_sessions, true),
+    ChannelFlags = [],
+    Config = mock_message_processing(Testcase, ChannelFlags, ConfigBase),
+    init_per_testcase(any, Config);
+
+init_per_testcase(process_messages_deny_drains = Testcase, ConfigBase) ->
+    application:set_env(logplex, deny_drain_forwarding, true),
+    ChannelFlags = [],
+    Config = mock_message_processing(Testcase, ChannelFlags, ConfigBase),
     init_per_testcase(any, Config);
 
 init_per_testcase(_, Config) ->
@@ -153,9 +153,69 @@ process_messages_no_redis(Config) ->
     ?assertMatch([], ets:lookup(Bag, queued_redis_command)),
     ok.
 
+process_messages_deny_tails(Config) ->
+    Table = ?config(table, Config),
+    Bag = ?config(bag, Config),
+    NumMsgs = 5,
+    Msgs = make_msgs(NumMsgs),
+    ChannelId = ?config(channel_id, Config),
+    Token = new_token(),
+    TokenName = new_token_name(),
+    ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
+    ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
+    ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
+    ?assertMatch([], ets:lookup(Bag, tail)),
+    ok.
+
+process_messages_deny_drains(Config) ->
+    Table = ?config(table, Config),
+    Bag = ?config(bag, Config),
+    NumMsgs = 5,
+    Msgs = make_msgs(NumMsgs),
+    ChannelId = ?config(channel_id, Config),
+    Token = new_token(),
+    TokenName = new_token_name(),
+    ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
+    ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
+    ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
+    ?assertMatch([], ets:lookup(Bag, drain)).
+
 %% ----------------------------------------------------------------------------
 %% helper functions
 %% ----------------------------------------------------------------------------
+
+make_msgs(NumMsgs) ->
+    Msgs = [{N, uuid:to_string(uuid:v4())} || N <- lists:seq(1, NumMsgs)],
+    [{msg, new_msg(N, Msg)} || {N, Msg} <- Msgs].
+
+new_channel_id() ->
+    list_to_binary(["app-", uuid:to_string(uuid:v4())]).
+
+new_msg(N, Msg) when is_integer(N) ->
+    list_to_binary(["<", integer_to_list(N), ">1 ", "aaaa bbbb cccc dddd eeee - ", Msg]).
+
+new_token() ->
+    list_to_binary(["t.",  uuid:to_string(uuid:v4())]).
+
+new_token_name() ->
+    list_to_binary(["token-",  uuid:to_string(uuid:v4())]).
+
+fetch_logs(Table) ->
+    [Msg || {logs, Msg} <- ets:lookup(Table, logs)].
+
+is_contained_in_logs(Msg, Logs) ->
+    lists:any(fun(M) -> M == match end,
+              [re:run(Log, Msg, [{capture, none}]) || Log <- Logs]).
+
+mock_message_processing(Testcase, ChannelFlags, ConfigBase) ->
+    Config = prepare_test(Testcase, ChannelFlags, ConfigBase),
+    lists:foldr(fun(F, Acc) -> F(Acc) end,
+                Config,
+                [fun mock_firehose/1,
+                 fun mock_drains/1,
+                 fun mock_tails/1,
+                 fun mock_redis/1
+                ]).
 
 prepare_test(Testcase, ChannelFlags, Config0) ->
     %% Ensure we can store and read channels locally.
@@ -186,29 +246,6 @@ make_storage(Testcase, Config) ->
      {bag, Bag},
      {cleanup_funs, CleanupFuns}
      | Config].
-
-make_msgs(NumMsgs) ->
-    Msgs = [{N, uuid:to_string(uuid:v4())} || N <- lists:seq(1, NumMsgs)],
-    [{msg, new_msg(N, Msg)} || {N, Msg} <- Msgs].
-
-new_channel_id() ->
-    list_to_binary(["app-", uuid:to_string(uuid:v4())]).
-
-new_msg(N, Msg) when is_integer(N) ->
-    list_to_binary(["<", integer_to_list(N), ">1 ", "aaaa bbbb cccc dddd eeee - ", Msg]).
-
-new_token() ->
-    list_to_binary(["t.",  uuid:to_string(uuid:v4())]).
-
-new_token_name() ->
-    list_to_binary(["token-",  uuid:to_string(uuid:v4())]).
-
-fetch_logs(Table) ->
-    [Msg || {logs, Msg} <- ets:lookup(Table, logs)].
-
-is_contained_in_logs(Msg, Logs) ->
-    lists:any(fun(M) -> M == match end,
-              [re:run(Log, Msg, [{capture, none}]) || Log <- Logs]).
 
 mock_firehose(Config) ->
     Bag = ?config(bag, Config),
