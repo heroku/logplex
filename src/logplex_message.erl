@@ -6,7 +6,6 @@
 -module(logplex_message).
 
 -export([process_msgs/4
-         ,process_msgs_new/4
          ,process_msgs/1
          ,process_error/5
          ,process_error/4
@@ -23,12 +22,20 @@
 %% ----------------------------------------------------------------------------
 
 process_msgs(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
+    case logplex_app:config(batch_redis, false) of
+        true ->
+            process_msgs_batch_redis(Msgs, ChannelId, Token, TokenName);
+        _ ->
+            process_msgs_classic(Msgs, ChannelId, Token, TokenName)
+    end.
+
+process_msgs_classic(Msgs, ChannelId, Token, TokenName) ->
     ShardInfo = shard_info(),
     [ process_msg(RawMsg, ChannelId, Token, TokenName, ShardInfo)
       || RawMsg <- Msgs ],
     ok.
 
-process_msgs_new(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
+process_msgs_batch_redis(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
     ShardInfo = shard_info(), %% this can move down to process redis
     RawMsgs = get_raw_msgs(Msgs),
     logplex_stats:incr(message_received, length(RawMsgs)),

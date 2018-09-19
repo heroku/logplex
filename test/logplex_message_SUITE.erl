@@ -6,10 +6,18 @@
 
 -compile(export_all).
 
-all() -> [ channel_not_found,
-           process_messages,
-           process_messages_no_redis
+all() -> [ {group, classic},
+           {group, batch_redis}
          ].
+
+tests_per_group() -> [ channel_not_found,
+                       process_messages,
+                       process_messages_no_redis
+                     ].
+
+groups() -> [ {classic, [], tests_per_group()},
+              {batch_redis, [], tests_per_group()}
+            ].
 
 init_per_suite(Config) ->
     application:load(logplex), %% ensure default config is loaded
@@ -18,6 +26,15 @@ init_per_suite(Config) ->
 
 end_per_suite(Config) ->
     meck:unload(),
+    Config.
+
+init_per_group(batch_redis, Config) ->
+    application:set_env(logplex, batch_redis, true),
+    Config;
+init_per_group(_, Config) ->
+    Config.
+
+end_per_group(_, Config) ->
     Config.
 
 init_per_testcase(channel_not_found, Config0) ->
