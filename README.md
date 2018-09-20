@@ -36,7 +36,6 @@ For more details, you can look at stream management documentation in `doc/`.
     - [logplex_tail](#logplextail)
     - [logplex_redis_writer_sup](#logplexrediswritersup)
     - [logplex_read_queue_sup](#logplexreadqueuesup)
-    - [logplex_reader_sup](#logplexreadersup)
     - [logplex_shard](#logplexshard)
     - [logplex_api](#logplexapi)
     - [logplex_syslog_sup](#logplexsyslogsup)
@@ -59,7 +58,7 @@ Prior versions of Logplex are designed to run on R16B03 and 17.x.
 ### build
 
     $ ./rebar3 as public compile
-    
+
 ### develop
 
 run
@@ -163,7 +162,6 @@ fetch logs for session
                           <tr><td></td><td></td><td> <a href="#logplex_tail">logplex_tail</a></td><td></td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#logplex_redis_writer_sup">logplex_redis_writer_sup</a> (logplex_worker_sup)</td><td> logplex_redis_writer</td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#logplex_read_queue_sup">logplex_read_queue_sup</a> (logplex_queue_sup)</td><td> logplex_queue</td><td></td></tr>
-                          <tr><td></td><td></td><td> <a href="#logplex_reader_sup">logplex_reader_sup</a> (logplex_worker_sup)</td><td> logplex_reader</td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#logplex_shard">logplex_shard</a></td><td> redo</td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#logplex_api">logplex_api</a></td><td></td><td></td></tr>
                           <tr><td></td><td></td><td> <a href="#logplex_syslog_sup">logplex_syslog_sup</a></td><td> tcp_proxy_sup</td><td> tcp_proxy</td></tr>
@@ -286,10 +284,6 @@ Starts a [logplex_worker_sup](./src/logplex_worker_sup.erl) process, registered 
 ### logplex_read_queue_sup
 
 Starts a [logplex_queue_sup](./src/logplex_queue_sup.erl) process, registered as `logplex_read_queue_sup`, that supervises [logplex_queue](./src/logplex_queue.erl) processes.
-
-### logplex_reader_sup
-
-Appears to start a `logplex_worker_sup` that supervises `logplex_reader` processes. That model doesn't seem to exist?!?
 
 ### logplex_shard
 

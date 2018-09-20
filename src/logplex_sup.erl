@@ -65,10 +65,6 @@ init([]) ->
          {logplex_queue_sup, start_link,
           [logplex_read_queue_sup, logplex_read_queue]},
          permanent, 2000, worker, [logplex_read_queue_sup]}
-       ,{logplex_reader_sup,
-         {logplex_worker_sup, start_link,
-          [logplex_reader_sup, logplex_reader]},
-         permanent, 2000, worker, [logplex_reader_sup]}
 
        ,{logplex_shard, {logplex_shard, start_link, []},
          permanent, 2000, worker, [logplex_shard]}
