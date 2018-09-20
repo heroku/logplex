@@ -23,6 +23,12 @@ groups() -> [ {classic, [], tests_per_group()},
 
 init_per_suite(Config) ->
     application:load(logplex), %% ensure default config is loaded
+
+    %% We want to test writing to an actual redis instance. We should have at
+    %% least one redis shard locally from docker.
+    ShardUrls = string:tokens(os:getenv("LOGPLEX_SHARD_URLS"), ","),
+    application:set_env(logplex, logplex_shard_urls, logplex_shard:redis_sort(ShardUrls)),
+
     [{cleanup_funs, []} %% cleanup funs run after each test
      | Config].
 
@@ -40,7 +46,8 @@ end_per_group(_, Config) ->
     Config.
 
 init_per_testcase(channel_not_found, Config0) ->
-    Config = make_storage(channel_not_found, Config0),
+    Config1 = make_storage(channel_not_found, Config0),
+    Config = mock_logging(Config1),
 
     meck:new(logplex_shard_info),
     meck:expect(logplex_shard_info, read, fun(_) -> fake_info end),
@@ -74,14 +81,6 @@ init_per_testcase(process_messages_deny_drains = Testcase, ConfigBase) ->
 
 init_per_testcase(_, Config) ->
     Table = ?config(table, Config),
-    %% mock logging
-    %% We don't want actually test logging, only that we log the expected lines.
-    %% We write logs into an ets table. We use a duplicate bag such that all log
-    %% lines can be stored under the same key.
-    meck:new(syslog_lib),
-    meck:expect(syslog_lib, notice, fun(_, Line) ->
-                                            ets:insert(Table, {logs, Line})
-                                    end),
 
     %% mock metrics
     meck:new([logplex_stats, logplex_realtime]),
@@ -123,7 +122,7 @@ channel_not_found(Config) ->
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
     ?assertMatch([{unknown_channel, NumMsgs}], ets:lookup(Table, unknown_channel)),
     ExpectedLogLine = io_lib:format("at=process_msgs? channel_id=~s msg=unknown_channel", [ChannelId]),
-    ?assert(is_contained_in_logs(ExpectedLogLine, fetch_logs(Table))).
+    ?assert(is_contained_in_logs(ExpectedLogLine, fetch_logs(Config))).
 
 process_messages(Config) ->
     Table = ?config(table, Config),
@@ -136,7 +135,7 @@ process_messages(Config) ->
     ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
     ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
-    ?assertMatch(asdf, ets:lookup(Bag, queued_redis_command)),
+    ?assertMatch(asdf, logplex_channel:logs(ChannelId, 1500)),
     ok.
 
 process_messages_no_redis(Config) ->
@@ -150,7 +149,7 @@ process_messages_no_redis(Config) ->
     ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
     ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
-    ?assertMatch([], ets:lookup(Bag, queued_redis_command)),
+    ?assertMatch([], logplex_channel:logs(ChannelId, 1500)),
     ok.
 
 process_messages_deny_tails(Config) ->
@@ -200,12 +199,14 @@ new_token() ->
 new_token_name() ->
     list_to_binary(["token-",  uuid:to_string(uuid:v4())]).
 
-fetch_logs(Table) ->
-    [Msg || {logs, Msg} <- ets:lookup(Table, logs)].
+fetch_logs(Config) ->
+    Bag = ?config(bag, Config),
+    [Msg || {logs, Msg} <- ets:lookup(Bag, logs)].
 
 is_contained_in_logs(Msg, Logs) ->
     lists:any(fun(M) -> M == match end,
               [re:run(Log, Msg, [{capture, none}]) || Log <- Logs]).
+
 
 mock_message_processing(Testcase, ChannelFlags, ConfigBase) ->
     Config = prepare_test(Testcase, ChannelFlags, ConfigBase),
@@ -214,7 +215,7 @@ mock_message_processing(Testcase, ChannelFlags, ConfigBase) ->
                 [fun mock_firehose/1,
                  fun mock_drains/1,
                  fun mock_tails/1,
-                 fun mock_redis/1
+                 fun setup_redis/1
                 ]).
 
 prepare_test(Testcase, ChannelFlags, Config0) ->
@@ -228,7 +229,8 @@ prepare_test(Testcase, ChannelFlags, Config0) ->
     %% here we circumvent config redis, just keep channel in ets
     logplex_channel:cache(Channel),
 
-    Config = make_storage(Testcase, Config0),
+    Config1 = make_storage(Testcase, Config0),
+    Config = mock_logging(Config1),
 
     [{channel_id, ChannelId},
      {cleanup_funs, CleanupFuns}
@@ -246,6 +248,17 @@ make_storage(Testcase, Config) ->
      {bag, Bag},
      {cleanup_funs, CleanupFuns}
      | Config].
+
+mock_logging(Config) ->
+    %% We don't want actually test logging, only that we log the expected lines.
+    %% We write logs into an ets table. We use a duplicate bag such that all log
+    %% lines can be stored under the same key.
+    Bag = ?config(bag, Config),
+    meck:new(syslog_lib),
+    meck:expect(syslog_lib, notice, fun(_, Line) ->
+                                            ets:insert(Bag, {logs, Line})
+                                    end),
+    Config.
 
 mock_firehose(Config) ->
     Bag = ?config(bag, Config),
@@ -271,14 +284,22 @@ mock_tails(Config) ->
                                      end),
     Config.
 
-mock_redis(Config) ->
-    Bag = ?config(bag, Config),
-    meck:new([logplex_shard_info, logplex_shard, logplex_queue]),
-    meck:expect(logplex_shard_info, read, fun(_) -> fake_info end),
-    meck:expect(logplex_shard_info, map_interval, fun(_) -> {fake_map, fake_interval} end),
-    meck:expect(logplex_shard, lookup, fun(_, _, _) -> fake_buffer_pid end),
-    meck:expect(logplex_queue, in, fun(_BufferPid, Cmd) ->
-                                           % TODO: maybe fake a redis write, without shards?
-                                           ets:insert(Bag, {queued_redis_command, Cmd})
-                                   end),
-    Config.
+setup_redis(Config) ->
+    %% start the logplex_redis_writer_sup supervisor
+    {ok, RedisWriterPid} = logplex_worker_sup:start_link(logplex_redis_writer_sup, logplex_redis_writer),
+    CleanupRedisWriter = fun() ->
+                                 unlink(RedisWriterPid),
+                                 exit(RedisWriterPid, kill)
+                         end,
+
+    {ok, ShardPid} = logplex_shard:start_link(),
+    timer:sleep(200), %% give this thing some time to do whatever
+    CleanupShard = fun() ->
+                           unlink(ShardPid),
+                           exit(ShardPid, kill)
+                   end,
+
+    CleanupFuns = ?config(cleanup_funs, Config),
+
+    [{cleanup_funs, [CleanupRedisWriter, CleanupShard | CleanupFuns]}
+     | Config].
