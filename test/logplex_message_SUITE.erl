@@ -59,24 +59,34 @@ init_per_testcase(channel_not_found, Config0) ->
 
 init_per_testcase(process_messages = Testcase, ConfigBase) ->
     ChannelFlags = [],
-    Config = mock_message_processing(Testcase, ChannelFlags, ConfigBase),
+    Config = fake_message_processing(Testcase, ChannelFlags, ConfigBase),
     init_per_testcase(any, Config);
 
 init_per_testcase(process_messages_no_redis = Testcase, ConfigBase) ->
     ChannelFlags = [no_redis],
-    Config = mock_message_processing(Testcase, ChannelFlags, ConfigBase),
+    Config = fake_message_processing(Testcase, ChannelFlags, ConfigBase),
     init_per_testcase(any, Config);
 
 init_per_testcase(process_messages_deny_tails = Testcase, ConfigBase) ->
     application:set_env(logplex, deny_tail_sessions, true),
     ChannelFlags = [],
-    Config = mock_message_processing(Testcase, ChannelFlags, ConfigBase),
+    Config0 = fake_message_processing(Testcase, ChannelFlags, ConfigBase),
+    Cleanup = fun() ->
+                      application:set_env(logplex, deny_tail_sessions, false)
+              end,
+    CleanupFuns = ?config(cleanup_funs, ConfigBase),
+    Config = [{cleanup_funs, [Cleanup | CleanupFuns]} | Config0],
     init_per_testcase(any, Config);
 
 init_per_testcase(process_messages_deny_drains = Testcase, ConfigBase) ->
     application:set_env(logplex, deny_drain_forwarding, true),
     ChannelFlags = [],
-    Config = mock_message_processing(Testcase, ChannelFlags, ConfigBase),
+    Config0 = fake_message_processing(Testcase, ChannelFlags, ConfigBase),
+    Cleanup = fun() ->
+                      application:set_env(logplex, deny_drain_forwarding, false)
+              end,
+    CleanupFuns = ?config(cleanup_funs, ConfigBase),
+    Config = [{cleanup_funs, [Cleanup | CleanupFuns]} | Config0],
     init_per_testcase(any, Config);
 
 init_per_testcase(_, Config) ->
@@ -96,7 +106,6 @@ init_per_testcase(_, Config) ->
     meck:expect(logplex_realtime, incr, fun(Key) ->
                                                 ets:update_counter(Table, Key, 1, {Key, 0})
                                         end),
-
 
     Config.
 
@@ -128,15 +137,20 @@ process_messages(Config) ->
     Table = ?config(table, Config),
     Bag = ?config(bag, Config),
     NumMsgs = 5,
-    Msgs = make_msgs(NumMsgs),
     ChannelId = ?config(channel_id, Config),
     Token = new_token(),
     TokenName = new_token_name(),
+    {Msgs, WantMsgs} = make_msgs(NumMsgs, Token, TokenName),
     ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
     ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
-    ?assertMatch(asdf, logplex_channel:logs(ChannelId, 1500)),
-    ok.
+    validate_msgs(redis, WantMsgs, logplex_channel:logs(ChannelId, 1500)),
+    WantFirehoseMsgs = [{firehose, ChannelId, TokenName, RawMsg} || {msg, RawMsg} <- Msgs],
+    validate_msgs(firehose, WantFirehoseMsgs, ets:lookup(Bag, firehose)),
+    WantDrainMsgs = [{drain, ChannelId, Msg} || Msg <- WantMsgs],
+    validate_msgs(drain, WantDrainMsgs, ets:lookup(Bag, drain)),
+    WantTailMsgs = [{tail, ChannelId, Msg} || Msg <- WantMsgs],
+    validate_msgs(tail, WantTailMsgs, ets:lookup(Bag, tail)).
 
 process_messages_no_redis(Config) ->
     Table = ?config(table, Config),
@@ -183,15 +197,8 @@ process_messages_deny_drains(Config) ->
 %% helper functions
 %% ----------------------------------------------------------------------------
 
-make_msgs(NumMsgs) ->
-    Msgs = [{N, uuid:to_string(uuid:v4())} || N <- lists:seq(1, NumMsgs)],
-    [{msg, new_msg(N, Msg)} || {N, Msg} <- Msgs].
-
 new_channel_id() ->
     list_to_binary(["app-", uuid:to_string(uuid:v4())]).
-
-new_msg(N, Msg) when is_integer(N) ->
-    list_to_binary(["<", integer_to_list(N), ">1 ", "aaaa bbbb cccc dddd eeee - ", Msg]).
 
 new_token() ->
     list_to_binary(["t.",  uuid:to_string(uuid:v4())]).
@@ -199,16 +206,22 @@ new_token() ->
 new_token_name() ->
     list_to_binary(["token-",  uuid:to_string(uuid:v4())]).
 
-fetch_logs(Config) ->
-    Bag = ?config(bag, Config),
-    [Msg || {logs, Msg} <- ets:lookup(Bag, logs)].
+make_msgs(NumMsgs, Token, TokenName) ->
+    Msgs = make_msgs(Token, NumMsgs),
+    WantMsgs = [ iolist_to_binary(re:replace(RawMsg, Token, TokenName)) || {msg, RawMsg} <- Msgs],
+    {Msgs, WantMsgs}.
 
-is_contained_in_logs(Msg, Logs) ->
-    lists:any(fun(M) -> M == match end,
-              [re:run(Log, Msg, [{capture, none}]) || Log <- Logs]).
+make_msgs(Token, NumMsgs) ->
+    Msgs = [{N, uuid:to_string(uuid:v4())} || N <- lists:seq(1, NumMsgs)],
+    [{msg, new_msg(N, Token, Msg)} || {N, Msg} <- Msgs].
 
+make_msgs(NumMsgs) ->
+    make_msgs(<<"TOKEN_TOKEN">>, NumMsgs).
 
-mock_message_processing(Testcase, ChannelFlags, ConfigBase) ->
+new_msg(N, Token, Msg) when is_integer(N) ->
+    list_to_binary(["<", integer_to_list(N), ">1 ", Token, " aaaa bbbb cccc dddd - ", Msg]).
+
+fake_message_processing(Testcase, ChannelFlags, ConfigBase) ->
     Config = prepare_test(Testcase, ChannelFlags, ConfigBase),
     lists:foldr(fun(F, Acc) -> F(Acc) end,
                 Config,
@@ -303,3 +316,22 @@ setup_redis(Config) ->
 
     [{cleanup_funs, [CleanupRedisWriter, CleanupShard | CleanupFuns]}
      | Config].
+
+fetch_logs(Config) ->
+    Bag = ?config(bag, Config),
+    [Msg || {logs, Msg} <- ets:lookup(Bag, logs)].
+
+is_contained_in_logs(Msg, Logs) ->
+    lists:any(fun(M) -> M == match end,
+              [re:run(Log, Msg, [{capture, none}]) || Log <- Logs]).
+
+validate_msgs(_Context, [], []) ->
+    ok;
+validate_msgs(Context, WantMsgs, GotMsgs) when length(WantMsgs) =/= length(GotMsgs) ->
+    ct:pal("context: ~p~nwant: ~p~ngot: ~p~n",[ Context, WantMsgs, GotMsgs]),
+    ct:fail({Context, msg_count_mismatch});
+validate_msgs(Context, [WantMsg | WantMsgs], [GotMsg | GotMsgs]) ->
+    ct:pal("context: ~p~nwant: ~p~ngot: ~p~nequals: ~p",[ Context, WantMsg, GotMsg, WantMsg == GotMsg]),
+    ?assertEqual(WantMsg, GotMsg),
+    validate_msgs(Context, WantMsgs, GotMsgs).
+
