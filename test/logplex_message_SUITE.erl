@@ -142,9 +142,11 @@ process_messages(Config) ->
     TokenName = new_token_name(),
     {Msgs, WantMsgs} = make_msgs(NumMsgs, Token, TokenName),
     ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
+    timer:sleep(100), %% give some time figure things out
     ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
-    validate_msgs(redis, WantMsgs, logplex_channel:logs(ChannelId, 1500)),
+    %% we sort the channel logs here to simplify validation, this isn't quite accurate
+    validate_msgs(redis, WantMsgs, lists:sort(logplex_channel:logs(ChannelId, 1500))),
     WantFirehoseMsgs = [{firehose, ChannelId, TokenName, RawMsg} || {msg, RawMsg} <- Msgs],
     validate_msgs(firehose, WantFirehoseMsgs, ets:lookup(Bag, firehose)),
     WantDrainMsgs = [{drain, ChannelId, Msg} || Msg <- WantMsgs],

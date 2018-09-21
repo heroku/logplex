@@ -36,7 +36,6 @@ process_msgs_classic(Msgs, ChannelId, Token, TokenName) ->
     ok.
 
 process_msgs_batch_redis(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) ->
-    ShardInfo = shard_info(), %% this can move down to process redis
     RawMsgs = get_raw_msgs(Msgs),
     logplex_stats:incr(message_received, length(RawMsgs)),
     logplex_realtime:incr('message.received', length(RawMsgs)),
@@ -52,7 +51,7 @@ process_msgs_batch_redis(Msgs, ChannelId, Token, TokenName) when is_list(Msgs) -
             [process_drains(ChannelId, CookedMsg, logplex_app:config(deny_drain_forwarding, false)) || CookedMsg <- CookedMsgs],
             [process_tails(ChannelId, CookedMsg, logplex_app:config(deny_tail_sessions, false)) || CookedMsg <- CookedMsgs],
 
-            [process_redis(ChannelId, ShardInfo, CookedMsg, logplex_app:config(deny_redis_buffers, Flag)) || CookedMsg <- CookedMsgs],
+            process_redis_batch(ChannelId, CookedMsgs, logplex_app:config(deny_redis_buffers, Flag)),
             ok
     end.
 
@@ -168,6 +167,20 @@ process_redis(ChannelId, ShardInfo, Msg, _Flag) ->
                                      Map, Interval),
     Cmd = redis_helper:build_push_msg(ChannelId, HistorySize,
                                       Msg, Expiry),
+    logplex_queue:in(BufferPid, Cmd).
+
+process_redis_batch(_ChannelId, _Msgs, Flag) when Flag =:= no_redis;
+                                                  Flag =:= true ->
+    ok;
+process_redis_batch(ChannelId, Msgs, _Flag) ->
+    ShardInfo = shard_info(),
+    Expiry = logplex_app:config(redis_buffer_expiry),
+    HistorySize = list_to_binary(integer_to_list(logplex_app:config(log_history))),
+    {Map, Interval} = logplex_shard_info:map_interval(ShardInfo),
+    BufferPid = logplex_shard:lookup(binary_to_list(ChannelId),
+                                     Map, Interval),
+    Cmd = redis_helper:build_push_batch_msgs(ChannelId, HistorySize,
+                                             Msgs, Expiry),
     logplex_queue:in(BufferPid, Cmd).
 
 %% ----------------------------------------------------------------------------
