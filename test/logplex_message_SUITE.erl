@@ -10,12 +10,19 @@ all() -> [ {group, classic},
            {group, batch_redis}
          ].
 
-tests_per_group() -> [ channel_not_found,
+tests_per_group() -> [
+                       %% tests for process_msgs/4
+                       channel_not_found,
                        process_messages,
                        process_messages_no_redis,
                        process_messages_deny_tails,
                        process_messages_deny_drains,
-                       process_messages_log_history
+                       process_messages_log_history_limit,
+                       %% tests for process_msgs/1 (aka. any creds)
+                       process_messages_any_creds_unknown_token,
+                       process_messages_any_creds_malformed,
+                       process_messages_any_creds_no_token,
+                       process_messages_any_creds
                      ].
 
 groups() -> [ {classic, [], tests_per_group()},
@@ -90,7 +97,7 @@ init_per_testcase(process_messages_deny_drains = Testcase, ConfigBase) ->
     Config = [{cleanup_funs, [Cleanup | CleanupFuns]} | Config0],
     init_per_testcase(any, Config);
 
-init_per_testcase(process_messages_log_history = Testcase, ConfigBase) ->
+init_per_testcase(process_messages_log_history_limit = Testcase, ConfigBase) ->
     LogHistoryOriginal = logplex_app:config(log_history),
     application:set_env(logplex, log_history, 4), %% 0-indexed, expecting 5 elemets
     ChannelFlags = [],
@@ -101,6 +108,63 @@ init_per_testcase(process_messages_log_history = Testcase, ConfigBase) ->
     CleanupFuns = ?config(cleanup_funs, ConfigBase),
     Config = [{cleanup_funs, [Cleanup | CleanupFuns]} | Config0],
     init_per_testcase(any, Config);
+
+init_per_testcase(process_messages_any_creds_unknown_token = Testcase, ConfigBase) ->
+    Config1 = make_storage(Testcase, ConfigBase),
+    Config2 = mock_logging(Config1),
+
+    meck:new(logplex_shard_info),
+    meck:expect(logplex_shard_info, read, fun(_) -> fake_info end),
+
+    Token = new_token(),
+    meck:new(logplex_token, [passthrough]),
+    meck:expect(logplex_token, lookup, fun(_) -> undefined end),
+
+    Config = [{token, Token} | Config2],
+    init_per_testcase(any, Config);
+
+init_per_testcase(Testcase, ConfigBase)
+  when Testcase == process_messages_any_creds_malformed;
+       Testcase == process_messages_any_creds_no_token ->
+    Config = make_storage(Testcase, ConfigBase),
+
+    meck:new(logplex_shard_info),
+    meck:expect(logplex_shard_info, read, fun(_) -> fake_info end),
+
+    init_per_testcase(any, Config);
+
+init_per_testcase(process_messages_any_creds = Testcase, ConfigBase) ->
+    ChannelFlags = [],
+    Config0 = fake_message_processing(Testcase, ChannelFlags, ConfigBase),
+
+    %% add a token for channel
+    ChannelId = ?config(channel_id, Config0),
+    TokenId = new_token(),
+    TokenName = new_token_name(),
+    Token = logplex_token:new(TokenId, ChannelId, TokenName),
+
+    %% add another channel plus token
+    ChannelId2 = new_channel_id(),
+    Channel2 = logplex_channel:new(ChannelId2, ChannelId2, ChannelFlags),
+    logplex_channel:cache(Channel2),
+    TokenId2 = new_token(),
+    TokenName2 = new_token_name(),
+    Token2 = logplex_token:new(TokenId2, ChannelId2, TokenName2),
+
+    meck:new(logplex_token, [passthrough]),
+    meck:expect(logplex_token, lookup, fun(T) when T == TokenId -> Token;
+                                          (T) when T == TokenId2 -> Token2;
+                                          (_) -> undefined
+                                       end),
+
+    Config = [{token, TokenId},
+              {token_name, TokenName},
+              {channel_id_2, ChannelId2},
+              {token_2, TokenId2},
+              {token_name_2, TokenName2}
+              | Config0],
+    init_per_testcase(any, Config);
+
 
 init_per_testcase(_, Config) ->
     Table = ?config(table, Config),
@@ -158,7 +222,8 @@ process_messages(Config) ->
     timer:sleep(100), %% give some time figure things out
     ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
-    %% we sort the channel logs here to simplify validation, this isn't quite accurate
+    %% We sort the channel logs here to simplify validation, this isn't quite accurate as the redis writer
+    %% could write logs in random order. We only want to know the messages are there and their count is correct.
     validate_msgs(redis, WantMsgs, lists:sort(logplex_channel:logs(ChannelId, logplex_app:config(log_history)))),
     WantFirehoseMsgs = [{firehose, ChannelId, TokenName, RawMsg} || {msg, RawMsg} <- Msgs],
     validate_msgs(firehose, WantFirehoseMsgs, ets:lookup(Bag, firehose)),
@@ -207,7 +272,7 @@ process_messages_deny_drains(Config) ->
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
     ?assertMatch([], ets:lookup(Bag, drain)).
 
-process_messages_log_history(Config) ->
+process_messages_log_history_limit(Config) ->
     NumMsgs = 5,
     ChannelId = ?config(channel_id, Config),
     Token = new_token(),
@@ -222,6 +287,71 @@ process_messages_log_history(Config) ->
     timer:sleep(100),
     validate_msgs(redis, WantMsgs1, lists:sort(logplex_channel:logs(ChannelId, logplex_app:config(log_history)))).
 
+process_messages_any_creds_unknown_token(Config) ->
+    Table = ?config(table, Config),
+    NumMsgs = 5,
+    Token = ?config(token, Config),
+    Msgs = make_msgs(Token, NumMsgs),
+    logplex_message:process_msgs(Msgs),
+    ?assertMatch([{unknown_token, NumMsgs}], ets:lookup(Table, unknown_token)),
+    ExpectedLogLine = io_lib:format("at=process_msgs? token_id=<<\"~s\">> msg=unknown_token", [Token]),
+    ct:pal("want: ~p~nin: ~p", [ExpectedLogLine, fetch_logs(Config)]),
+    ?assert(is_contained_in_logs(ExpectedLogLine, fetch_logs(Config))).
+
+process_messages_any_creds_malformed(Config) ->
+    Table = ?config(table, Config),
+    NumMsgs = 5,
+    MalformedMsgs = [{malformed, uuid:to_string(uuid:v4())} || _ <- lists:seq(1, NumMsgs)],
+    logplex_message:process_msgs(MalformedMsgs),
+    ?assertMatch([{message_received_malformed, NumMsgs}], ets:lookup(Table, message_received_malformed)),
+    ?assertMatch([{'message.received-malformed', NumMsgs}], ets:lookup(Table, 'message.received-malformed')).
+
+process_messages_any_creds_no_token(Config) ->
+    Table = ?config(table, Config),
+    NumMsgs = 5,
+    Msgs = [{msg, uuid:to_string(uuid:v4())} || _ <- lists:seq(1, NumMsgs)],
+    logplex_message:process_msgs(Msgs),
+    ?assertMatch([{message_received_malformed, NumMsgs}], ets:lookup(Table, message_received_malformed)),
+    ?assertMatch([{'message.received-malformed', NumMsgs}], ets:lookup(Table, 'message.received-malformed')).
+
+process_messages_any_creds(Config) ->
+    Table = ?config(table, Config),
+    Bag = ?config(bag, Config),
+
+    NumMsgs = 5,
+
+ct:pal("~p", [Config]),
+    ChannelId = ?config(channel_id, Config),
+    Token = ?config(token, Config),
+    TokenName = ?config(token_name, Config),
+    ChannelId2 = ?config(channel_id_2, Config),
+    Token2 = ?config(token_2, Config),
+    TokenName2 = ?config(token_name_2, Config),
+    {Msgs, WantMsgs} = make_msgs(NumMsgs, Token, TokenName),
+    {Msgs2, WantMsgs2} = make_msgs(NumMsgs, Token2, TokenName2),
+
+    logplex_message:process_msgs(Msgs ++ Msgs2),
+    timer:sleep(100), %% give some time figure things out
+
+    WantNumMsgs = 2 * NumMsgs,
+    ?assertMatch([{message_received, WantNumMsgs}], ets:lookup(Table, message_received)),
+    ?assertMatch([{'message.received', WantNumMsgs}], ets:lookup(Table, 'message.received')),
+
+    validate_msgs(redis, WantMsgs, lists:sort(logplex_channel:logs(ChannelId, logplex_app:config(log_history)))),
+    validate_msgs(redis, WantMsgs2, lists:sort(logplex_channel:logs(ChannelId2, logplex_app:config(log_history)))),
+
+    WantFirehoseMsgs = [{firehose, ChannelId, TokenName, RawMsg} || {msg, RawMsg} <- Msgs] ++
+                       [{firehose, ChannelId2, TokenName2, RawMsg} || {msg, RawMsg} <- Msgs2],
+    validate_msgs(firehose, WantFirehoseMsgs, ets:lookup(Bag, firehose)),
+
+    WantDrainMsgs = [{drain, ChannelId, Msg} || Msg <- WantMsgs ] ++
+                    [{drain, ChannelId2, Msg} || Msg <- WantMsgs2 ],
+    validate_msgs(drain, WantDrainMsgs, ets:lookup(Bag, drain)),
+
+    WantTailMsgs = [{tail, ChannelId, Msg} || Msg <- WantMsgs] ++
+                   [{tail, ChannelId2, Msg} || Msg <- WantMsgs2],
+    validate_msgs(tail, WantTailMsgs, ets:lookup(Bag, tail)).
+
 %% ----------------------------------------------------------------------------
 %% helper functions
 %% ----------------------------------------------------------------------------
@@ -230,7 +360,7 @@ new_channel_id() ->
     list_to_binary(["app-", uuid:to_string(uuid:v4())]).
 
 new_token() ->
-    list_to_binary(["t.",  uuid:to_string(uuid:v4())]).
+    logplex_token:new_token_id().
 
 new_token_name() ->
     list_to_binary(["token-",  uuid:to_string(uuid:v4())]).
@@ -248,7 +378,7 @@ make_msgs(NumMsgs) ->
     make_msgs(<<"TOKEN_TOKEN">>, NumMsgs).
 
 new_msg(N, Token, Msg) when is_integer(N) ->
-    list_to_binary(["<", integer_to_list(N), ">1 ", Token, " aaaa bbbb cccc dddd - ", Msg]).
+    list_to_binary(["<", integer_to_list(N), ">1 timestamp host ", Token, " aaaa bbbb cccc dddd - ", Msg]).
 
 cook_msg(RawMsg, Token, TokenName) ->
     iolist_to_binary(re:replace(RawMsg, Token, TokenName)).
@@ -363,7 +493,7 @@ validate_msgs(Context, WantMsgs, GotMsgs) when length(WantMsgs) =/= length(GotMs
     ct:pal("context: ~p~nwant: ~p~ngot: ~p~n",[ Context, WantMsgs, GotMsgs]),
     ct:fail({Context, msg_count_mismatch});
 validate_msgs(Context, [WantMsg | WantMsgs], [GotMsg | GotMsgs]) ->
-    ct:pal("context: ~p~nwant: ~p~ngot: ~p~nequals: ~p",[ Context, WantMsg, GotMsg, WantMsg == GotMsg]),
+    ct:pal("context: ~p~nwant: ~p~ngot: ~p~nequals: ~p", [ Context, WantMsg, GotMsg, WantMsg == GotMsg]),
     ?assertEqual(WantMsg, GotMsg),
     validate_msgs(Context, WantMsgs, GotMsgs).
 
