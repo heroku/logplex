@@ -14,8 +14,6 @@
 -include("logplex.hrl").
 -include("logplex_error.hrl").
 -include("logplex_logging.hrl").
--define(SI_KEY, logplex_redis_buffer_map).
-
 
 %% ----------------------------------------------------------------------------
 %% API Functions
@@ -188,7 +186,7 @@ process_redis_batch(ChannelId, Msgs, _Flag) ->
 %% ----------------------------------------------------------------------------
 
 shard_info() ->
-    logplex_shard_info:read(?SI_KEY).
+    logplex_shard_info:read(logplex_redis_buffer_map).
 
 get_raw_msgs(Msgs) ->
     [ case Msg of
