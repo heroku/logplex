@@ -319,8 +319,6 @@ process_messages_any_creds(Config) ->
     Bag = ?config(bag, Config),
 
     NumMsgs = 5,
-
-ct:pal("~p", [Config]),
     ChannelId = ?config(channel_id, Config),
     Token = ?config(token, Config),
     TokenName = ?config(token_name, Config),
@@ -342,15 +340,15 @@ ct:pal("~p", [Config]),
 
     WantFirehoseMsgs = [{firehose, ChannelId, TokenName, RawMsg} || {msg, RawMsg} <- Msgs] ++
                        [{firehose, ChannelId2, TokenName2, RawMsg} || {msg, RawMsg} <- Msgs2],
-    validate_msgs(firehose, WantFirehoseMsgs, ets:lookup(Bag, firehose)),
+    validate_msgs(firehose, lists:sort(WantFirehoseMsgs), lists:sort(ets:lookup(Bag, firehose))),
 
     WantDrainMsgs = [{drain, ChannelId, Msg} || Msg <- WantMsgs ] ++
                     [{drain, ChannelId2, Msg} || Msg <- WantMsgs2 ],
-    validate_msgs(drain, WantDrainMsgs, ets:lookup(Bag, drain)),
+    validate_msgs(drain, lists:sort(WantDrainMsgs), lists:sort(ets:lookup(Bag, drain))),
 
     WantTailMsgs = [{tail, ChannelId, Msg} || Msg <- WantMsgs] ++
                    [{tail, ChannelId2, Msg} || Msg <- WantMsgs2],
-    validate_msgs(tail, WantTailMsgs, ets:lookup(Bag, tail)).
+    validate_msgs(tail, lists:sort(WantTailMsgs), lists:sort(ets:lookup(Bag, tail))).
 
 %% ----------------------------------------------------------------------------
 %% helper functions
