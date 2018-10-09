@@ -14,7 +14,8 @@ tests_per_group() -> [ channel_not_found,
                        process_messages,
                        process_messages_no_redis,
                        process_messages_deny_tails,
-                       process_messages_deny_drains
+                       process_messages_deny_drains,
+                       process_messages_log_history
                      ].
 
 groups() -> [ {classic, [], tests_per_group()},
@@ -89,6 +90,18 @@ init_per_testcase(process_messages_deny_drains = Testcase, ConfigBase) ->
     Config = [{cleanup_funs, [Cleanup | CleanupFuns]} | Config0],
     init_per_testcase(any, Config);
 
+init_per_testcase(process_messages_log_history = Testcase, ConfigBase) ->
+    LogHistoryOriginal = logplex_app:config(log_history),
+    application:set_env(logplex, log_history, 4), %% 0-indexed, expecting 5 elemets
+    ChannelFlags = [],
+    Config0 = fake_message_processing(Testcase, ChannelFlags, ConfigBase),
+    Cleanup = fun() ->
+                      application:set_env(logplex, log_history, LogHistoryOriginal)
+              end,
+    CleanupFuns = ?config(cleanup_funs, ConfigBase),
+    Config = [{cleanup_funs, [Cleanup | CleanupFuns]} | Config0],
+    init_per_testcase(any, Config);
+
 init_per_testcase(_, Config) ->
     Table = ?config(table, Config),
 
@@ -146,7 +159,7 @@ process_messages(Config) ->
     ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
     %% we sort the channel logs here to simplify validation, this isn't quite accurate
-    validate_msgs(redis, WantMsgs, lists:sort(logplex_channel:logs(ChannelId, 1500))),
+    validate_msgs(redis, WantMsgs, lists:sort(logplex_channel:logs(ChannelId, logplex_app:config(log_history)))),
     WantFirehoseMsgs = [{firehose, ChannelId, TokenName, RawMsg} || {msg, RawMsg} <- Msgs],
     validate_msgs(firehose, WantFirehoseMsgs, ets:lookup(Bag, firehose)),
     WantDrainMsgs = [{drain, ChannelId, Msg} || Msg <- WantMsgs],
@@ -156,7 +169,6 @@ process_messages(Config) ->
 
 process_messages_no_redis(Config) ->
     Table = ?config(table, Config),
-    Bag = ?config(bag, Config),
     NumMsgs = 5,
     Msgs = make_msgs(NumMsgs),
     ChannelId = ?config(channel_id, Config),
@@ -165,7 +177,7 @@ process_messages_no_redis(Config) ->
     ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
     ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
-    ?assertMatch([], logplex_channel:logs(ChannelId, 1500)),
+    ?assertMatch([], logplex_channel:logs(ChannelId, logplex_app:config(log_history))),
     ok.
 
 process_messages_deny_tails(Config) ->
@@ -195,6 +207,21 @@ process_messages_deny_drains(Config) ->
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
     ?assertMatch([], ets:lookup(Bag, drain)).
 
+process_messages_log_history(Config) ->
+    NumMsgs = 5,
+    ChannelId = ?config(channel_id, Config),
+    Token = new_token(),
+    TokenName = new_token_name(),
+    {Msgs, WantMsgs} = make_msgs(NumMsgs, Token, TokenName),
+    ?assertMatch(ok, logplex_message:process_msgs(Msgs, ChannelId, Token, TokenName)),
+    timer:sleep(100),
+    validate_msgs(redis, WantMsgs, lists:sort(logplex_channel:logs(ChannelId, logplex_app:config(log_history)))),
+    Msg = new_msg(6, Token, uuid:to_string(uuid:v4())),
+    WantMsgs1 = tl(WantMsgs) ++ [cook_msg(Msg, Token, TokenName)], %% drop oldest message and append newest
+    ?assertMatch(ok, logplex_message:process_msgs([{msg, Msg}], ChannelId, Token, TokenName)),
+    timer:sleep(100),
+    validate_msgs(redis, WantMsgs1, lists:sort(logplex_channel:logs(ChannelId, logplex_app:config(log_history)))).
+
 %% ----------------------------------------------------------------------------
 %% helper functions
 %% ----------------------------------------------------------------------------
@@ -210,7 +237,7 @@ new_token_name() ->
 
 make_msgs(NumMsgs, Token, TokenName) ->
     Msgs = make_msgs(Token, NumMsgs),
-    WantMsgs = [ iolist_to_binary(re:replace(RawMsg, Token, TokenName)) || {msg, RawMsg} <- Msgs],
+    WantMsgs = [cook_msg(RawMsg, Token, TokenName) || {msg, RawMsg} <- Msgs],
     {Msgs, WantMsgs}.
 
 make_msgs(Token, NumMsgs) ->
@@ -222,6 +249,9 @@ make_msgs(NumMsgs) ->
 
 new_msg(N, Token, Msg) when is_integer(N) ->
     list_to_binary(["<", integer_to_list(N), ">1 ", Token, " aaaa bbbb cccc dddd - ", Msg]).
+
+cook_msg(RawMsg, Token, TokenName) ->
+    iolist_to_binary(re:replace(RawMsg, Token, TokenName)).
 
 fake_message_processing(Testcase, ChannelFlags, ConfigBase) ->
     Config = prepare_test(Testcase, ChannelFlags, ConfigBase),

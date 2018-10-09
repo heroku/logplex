@@ -115,12 +115,11 @@ build_push_batch_msgs(ChannelId, Length, Msgs, Expiry)
   when is_binary(ChannelId), is_binary(Length),
        is_list(Msgs), is_binary(Expiry) ->
     Key = iolist_to_binary(["ch:", ChannelId, ":spool"]),
-    Cmds = [ [<<"LPUSH">>, Key | lists:reverse(Msgs)]
+    Cmds = [ [<<"LPUSH">>, Key | Msgs]
             ,[<<"LTRIM">>, Key, <<"0">>, Length]
             ,[<<"EXPIRE">>, Key, Expiry] ],
     iolist_to_binary([ redis_proto:build(Cmd)
                        || Cmd <- Cmds ]).
-
 
 
 -spec channel_exists(logplex_channel:id()) -> boolean().
