@@ -61,6 +61,25 @@ write_queued_logs(BufferPid, Socket) ->
         {'EXIT', {noproc, _}} ->
             exit(normal);
         timeout -> ok;
+        {NumBatches, [{_, _} | _] = BatchCmds} when is_integer(NumBatches) ->
+            Res = [ case gen_tcp:send(Socket, Cmd) of
+                        ok ->
+                            logplex_stats:incr(message_processed, BatchSize),
+                            logplex_realtime:incr('message.processed', BatchSize),
+                            logplex_stats:incr(message_batch_processed),
+                            logplex_realtime:incr('message_batch.processed'),
+                            1;
+                        Err ->
+                            ?INFO("event=send_batch error=~p", [Err]),
+                            0
+                    end || {Cmd, BatchSize} <- BatchCmds ],
+            case NumBatches - lists:sum(Res) of
+                0 -> ok;
+                N ->
+                    logplex_stats:incr(message_batch_failed, N),
+                    logplex_realtime:incr('message_batch.failed', N),
+                    throttled_restart(batch_processing_failed)
+            end;
         {NumItems, Logs} when is_list(Logs), is_integer(NumItems) ->
             case gen_tcp:send(Socket, Logs) of
                 ok ->
