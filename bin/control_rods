@@ -128,14 +128,14 @@ main(["enable_batch_redis"]) ->
     Res = rpc:call(Node, logplex_app, set_config, [batch_redis, true]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
-    halt(0();
+    halt(0);
 main(["disable_batch_redis"]) ->
     Node = connect(),
     io:format("Disabling batch redis...~n"),
     Res = rpc:call(Node, logplex_app, set_config, [batch_redis, false]),
     io:format("Node: ~p~n", [Res]),
     disconnect(),
-    halt(0();
+    halt(0);
 main(_) ->
     io:format("Control rods for local logplex node. These control rods can be modified on the fly while logplex is running.~n~n"
               "Usage: control_rods <rod>~n~n"
