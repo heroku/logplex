@@ -61,32 +61,7 @@ process_msgs(Msgs) ->
                  logplex_realtime:incr('message.received-malformed')
              end || {malformed, Msg} <- Msgs],
             RawMsgs = get_raw_msgs([Msg || {Tag, Msg} <- Msgs, Tag =/= malformed]),
-            ChannelMsgsMap = lists:foldr(fun(RawMsg, Acc) ->
-                                                 case extract_token(RawMsg) of
-                                                     {ok, TokenId} ->
-                                                         case logplex_token:lookup(TokenId) of
-                                                             undefined ->
-                                                                 logplex_realtime:incr(unknown_token),
-                                                                 ?INFO("at=process_msg token_id=~p msg=unknown_token", [TokenId]),
-                                                                 Acc;
-                                                             Token ->
-                                                                 ChannelId = logplex_token:channel_id(Token),
-                                                                 Key = {ChannelId, Token},
-                                                                 %% NOTE: the map code could use maps:update_with/4 on later erlang versions
-                                                                 case maps:is_key(Key, Acc) of
-                                                                     true ->
-                                                                         L = maps:get(Key, Acc),
-                                                                         maps:update(Key,  [RawMsg | L], Acc);
-                                                                     false ->
-                                                                         maps:put(Key, [RawMsg], Acc)
-                                                                 end
-                                                         end;
-                                                     _ ->
-                                                         logplex_stats:incr(message_received_malformed),
-                                                         logplex_realtime:incr('message.received-malformed'),
-                                                         Acc
-                                                 end
-                                         end, #{}, RawMsgs),
+            ChannelMsgsMap = map_msgs_to_channels(RawMsgs),
             maps:map(fun({ChannelId, Token}, RawChannelMsgs) ->
                              TokenId = logplex_token:id(Token),
                              TokenName = logplex_token:name(Token),
@@ -97,6 +72,34 @@ process_msgs(Msgs) ->
             ShardInfo = shard_info(),
             [ process_msg(RawMsg, ShardInfo) || RawMsg <- Msgs ]
     end.
+map_msgs_to_channels(RawMsgs) ->
+    %% returns a map of channel and token to messages
+    lists:foldr(fun(RawMsg, Acc) ->
+                        case extract_token(RawMsg) of
+                            {ok, TokenId} ->
+                                case logplex_token:lookup(TokenId) of
+                                    undefined ->
+                                        logplex_realtime:incr(unknown_token),
+                                        ?INFO("at=process_msg token_id=~p msg=unknown_token", [TokenId]),
+                                        Acc;
+                                    Token ->
+                                        ChannelId = logplex_token:channel_id(Token),
+                                        Key = {ChannelId, Token},
+                                        %% NOTE: the map code could use maps:update_with/4 on later erlang versions
+                                        case maps:is_key(Key, Acc) of
+                                            true ->
+                                                L = maps:get(Key, Acc),
+                                                maps:update(Key,  [RawMsg | L], Acc);
+                                            false ->
+                                                maps:put(Key, [RawMsg], Acc)
+                                        end
+                                end;
+                            _ ->
+                                logplex_stats:incr(message_received_malformed),
+                                logplex_realtime:incr('message.received-malformed'),
+                                Acc
+                        end
+                end, #{}, RawMsgs).
 
 process_msg({malformed, _Msg}, _ShardInfo) ->
     logplex_stats:incr(message_received_malformed),
