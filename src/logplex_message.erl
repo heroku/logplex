@@ -65,41 +65,13 @@ process_msgs(Msgs) ->
             maps:map(fun({ChannelId, Token}, RawChannelMsgs) ->
                              TokenId = logplex_token:id(Token),
                              TokenName = logplex_token:name(Token),
-                             process_msgs_batch_redis(lists:reverse(RawChannelMsgs), ChannelId, TokenId, TokenName)
+                             process_msgs_batch_redis(RawChannelMsgs, ChannelId, TokenId, TokenName)
                      end, ChannelMsgsMap),
             ok;
         _ ->
             ShardInfo = shard_info(),
             [ process_msg(RawMsg, ShardInfo) || RawMsg <- Msgs ]
     end.
-map_msgs_to_channels(RawMsgs) ->
-    %% returns a map of channel and token to messages
-    lists:foldr(fun(RawMsg, Acc) ->
-                        case extract_token(RawMsg) of
-                            {ok, TokenId} ->
-                                case logplex_token:lookup(TokenId) of
-                                    undefined ->
-                                        logplex_realtime:incr(unknown_token),
-                                        ?INFO("at=process_msg token_id=~p msg=unknown_token", [TokenId]),
-                                        Acc;
-                                    Token ->
-                                        ChannelId = logplex_token:channel_id(Token),
-                                        Key = {ChannelId, Token},
-                                        %% NOTE: the map code could use maps:update_with/4 on later erlang versions
-                                        case maps:is_key(Key, Acc) of
-                                            true ->
-                                                L = maps:get(Key, Acc),
-                                                maps:update(Key,  [RawMsg | L], Acc);
-                                            false ->
-                                                maps:put(Key, [RawMsg], Acc)
-                                        end
-                                end;
-                            _ ->
-                                logplex_stats:incr(message_received_malformed),
-                                logplex_realtime:incr('message.received-malformed'),
-                                Acc
-                        end
-                end, #{}, RawMsgs).
 
 process_msg({malformed, _Msg}, _ShardInfo) ->
     logplex_stats:incr(message_received_malformed),
@@ -159,6 +131,36 @@ process_error(ChannelID, Origin, Fmt, Args) when is_list(Fmt), is_list(Args) ->
 %% ----------------------------------------------------------------------------
 %% internal functions
 %% ----------------------------------------------------------------------------
+
+-spec map_msgs_to_channels(list()) -> #{{logplex_channel:id(), logplex_token:token()} => list()}.
+map_msgs_to_channels(RawMsgs) ->
+    %% returns a map of channel and token to messages
+    lists:foldr(fun(RawMsg, Acc) ->
+                        case extract_token(RawMsg) of
+                            {ok, TokenId} ->
+                                case logplex_token:lookup(TokenId) of
+                                    undefined ->
+                                        logplex_realtime:incr(unknown_token),
+                                        ?INFO("at=process_msg token_id=~p msg=unknown_token", [TokenId]),
+                                        Acc;
+                                    Token ->
+                                        ChannelId = logplex_token:channel_id(Token),
+                                        Key = {ChannelId, Token},
+                                        %% NOTE: the map code could use maps:update_with/4 on later erlang versions
+                                        case maps:is_key(Key, Acc) of
+                                            true ->
+                                                L = maps:get(Key, Acc),
+                                                maps:update(Key,  [RawMsg | L], Acc);
+                                            false ->
+                                                maps:put(Key, [RawMsg], Acc)
+                                        end
+                                end;
+                            _ ->
+                                logplex_stats:incr(message_received_malformed),
+                                logplex_realtime:incr('message.received-malformed'),
+                                Acc
+                        end
+                end, #{}, RawMsgs).
 
 do_process_error({HerokuToken, HerokuOrigin}, ChannelID, Origin, Fmt, Args) when is_binary(HerokuToken) ->
     Msg = logplex_syslog_utils:fmt(local7,
