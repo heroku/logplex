@@ -46,14 +46,13 @@ end_per_suite(Config) ->
 
 init_per_group(batch_redis, Config) ->
     application:set_env(logplex, batch_redis, true),
-    Cleanup = fun() ->
-                      application:set_env(logplex, batch_redis, false)
-              end,
-    [{cleanup_funs, [Cleanup | ?config(cleanup_funs, Config)]}
-     | Config];
+    Config;
 init_per_group(_, Config) ->
     Config.
 
+end_per_group(batch_redis, Config) ->
+    application:set_env(logplex, batch_redis, false),
+    Config;
 end_per_group(_, Config) ->
     Config.
 
@@ -226,6 +225,15 @@ process_messages(Config) ->
     timer:sleep(100), %% give some time figure things out
     ?assertMatch([{message_received, NumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', NumMsgs}], ets:lookup(Table, 'message.received')),
+    ?assertMatch([{message_processed, NumMsgs}], ets:lookup(Table, message_processed)),
+    ?assertMatch([{'message.processed', NumMsgs}], ets:lookup(Table, 'message.processed')),
+    case logplex_app:config(batch_redis, false) of
+        true ->
+            ?assertMatch([{message_batch_processed, 1}], ets:lookup(Table, message_batch_processed)),
+            ?assertMatch([{'message_batch.processed', 1}], ets:lookup(Table, 'message_batch.processed'));
+        _ ->
+            ok
+    end,
     %% We sort the channel logs here to simplify validation, this isn't quite accurate as the redis writer
     %% could write logs in random order. We only want to know the messages are there and their count is correct.
     validate_msgs(redis, WantMsgs, lists:sort(logplex_channel:logs(ChannelId, logplex_app:config(log_history)))),
@@ -338,6 +346,15 @@ process_messages_any_creds(Config) ->
     WantNumMsgs = 2 * NumMsgs,
     ?assertMatch([{message_received, WantNumMsgs}], ets:lookup(Table, message_received)),
     ?assertMatch([{'message.received', WantNumMsgs}], ets:lookup(Table, 'message.received')),
+    ?assertMatch([{message_processed, WantNumMsgs}], ets:lookup(Table, message_processed)),
+    ?assertMatch([{'message.processed', WantNumMsgs}], ets:lookup(Table, 'message.processed')),
+    case logplex_app:config(batch_redis, false) of
+        true ->
+            ?assertMatch([{message_batch_processed, 2}], ets:lookup(Table, message_batch_processed)),
+            ?assertMatch([{'message_batch.processed', 2}], ets:lookup(Table, 'message_batch.processed'));
+        _ ->
+            ok
+    end,
 
     validate_msgs(redis, WantMsgs, lists:sort(logplex_channel:logs(ChannelId, logplex_app:config(log_history)))),
     validate_msgs(redis, WantMsgs2, lists:sort(logplex_channel:logs(ChannelId2, logplex_app:config(log_history)))),

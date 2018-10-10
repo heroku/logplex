@@ -226,7 +226,8 @@ process_redis_batch(ChannelId, Msgs, _Flag) when is_list(Msgs) ->
                                      Map, Interval),
     Cmd = redis_helper:build_push_batch_msgs(ChannelId, HistorySize,
                                              Msgs, Expiry),
-    logplex_queue:in(BufferPid, Cmd).
+    BatchSize = length(Msgs),
+    logplex_queue:in(BufferPid, {Cmd, BatchSize}).
 
 %% ----------------------------------------------------------------------------
 %% helper functions
