@@ -46,7 +46,11 @@ end_per_suite(Config) ->
 
 init_per_group(batch_redis, Config) ->
     application:set_env(logplex, batch_redis, true),
-    Config;
+    Cleanup = fun() ->
+                      application:set_env(logplex, batch_redis, false)
+              end,
+    [{cleanup_funs, [Cleanup | ?config(cleanup_funs, Config)]}
+     | Config];
 init_per_group(_, Config) ->
     Config.
 
