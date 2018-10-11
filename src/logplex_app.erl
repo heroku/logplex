@@ -164,6 +164,9 @@ cache_os_envvars() ->
                      ,{legacy_api_status, ["LEGACY_API_STATUS"],
                        optional,
                        atom}
+                     ,{batch_redis, ["ENABLE_BATCH_REDIS"],
+                       optional,
+                       atom}
                      ]),
     ok.
 
