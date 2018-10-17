@@ -331,7 +331,7 @@ redis_buffer_opts(Url) ->
 handle_child_death(Pid) ->
     case logplex_shard_info:pid_info(Pid) of
         {logplex_read_pool_map, {{Shard, {Url, Pid}}, Map, V}} ->
-            {ok, NewPid} = add_pool_with_retry(Url, 10),
+            {ok, NewPid} = add_pool_with_retry(Url, 60),
             NewMap = dict:store(Shard, {Url, NewPid}, Map),
             logplex_shard_info:save(logplex_read_pool_map, NewMap, V),
             ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
