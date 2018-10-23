@@ -362,8 +362,9 @@ consistent(URLs) ->
 %%% Redis cluster move code
 %%--------------------------------------------------------------------
 
-prepare_new_shard_info(_Maps0, NewShardInfo) ->
-    new_shard_info(NewShardInfo).
+prepare_new_shard_info(_Maps0, NewUrls) ->
+    populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
+                        NewUrls).
 
 backup_shard_info() ->
     logplex_shard_info:copy(?CURRENT_WRITE_MAP, ?BACKUP_WRITE_MAP),
@@ -383,10 +384,6 @@ make_new_shard_info_permanent() ->
     logplex_shard_info:copy(?NEW_WRITE_MAP, ?CURRENT_WRITE_MAP),
     logplex_shard_info:copy(?NEW_READ_MAP, ?CURRENT_READ_MAP),
     ok.
-
-new_shard_info(NewUrls) ->
-    populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
-                        NewUrls).
 
 -spec prepare_shard_urls(string()) -> [string()]|[].
 prepare_shard_urls(ShardUrls) ->
