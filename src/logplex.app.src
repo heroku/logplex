@@ -25,10 +25,12 @@
                   ,folsom
                   ,folsom_cowboy
                   ,ssl_verify_hostname
+                  ,poolboy
+                  ,backoff
                  ]},
   {included_applications, [heroku_crashdumps,
-                           redgrid,
-                           backoff]},
+                           redgrid
+                          ]},
   {mod, {logplex_app, []}},
   {env,
    [
