@@ -241,7 +241,7 @@ logs(ChannelId, Num) when is_binary(ChannelId), is_integer(Num) ->
     Index = redis_shard:key_to_index(binary_to_list(ChannelId)),
     {_RedisUrl, Pool} = redis_shard:get_matching_pool(Index, Map, Interval),
     Cmd = [<<"LRANGE">>, iolist_to_binary(["ch:", ChannelId, ":spool"]), <<"0">>, list_to_binary(integer_to_list(Num))],
-    case catch redo:cmd(Pool, Cmd) of
+    case catch logplex_redis_reader:cmd(Pool, Cmd) of
         {'EXIT', Err} ->
             ?ERR("at=fetch_logs channel_id=~s err=\"~p\"",
                  [ChannelId, Err]),
