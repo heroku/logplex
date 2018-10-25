@@ -65,7 +65,9 @@ handle_cast(Msg, State) ->
 
 handle_info(connect, #state{ redis_opts = RedisOpts,
                              backoff = Backoff } = State) ->
-    case redo:start_link(undefined, RedisOpts) of
+    Host = proplists:get_value(host, RedisOpts),
+    {ok, Ip} = inet:getaddr(Host, inet),
+    case redo:start_link(undefined, [{host, Ip} | RedisOpts]) of
         {ok, Pid} ->
             {_, NewBackoff} = backoff:succeed(Backoff),
             NewState = State#state{ redo_pid = Pid,
