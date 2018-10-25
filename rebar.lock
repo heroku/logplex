@@ -1,3 +1,4 @@
+{"1.1.0",
 [{<<"abnfc">>,
   {git,"https://github.com/heroku/abnfc.git",
        {ref,"856c77cce8f0dd66bfe95f3ec4041f9f59b742bb"}},
@@ -74,6 +75,7 @@
   {git,"git://github.com/ferd/pobox.git",
        {ref,"8f9f227e1de2c0342ff1dac01f0219996dc08c4c"}},
   1},
+ {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.1">>},0},
  {<<"quoted">>,
   {git,"git://github.com/pivotree/quoted.erl.git",
        {ref,"079736cd5c3b71df6cc32a1868991bef86dfa231"}},
@@ -105,4 +107,8 @@
  {<<"syslog">>,
   {git,"https://github.com/heroku/erlang_syslog",
        {ref,"0cfef5a95150e11f60fee5c35b24decfcc41066e"}},
-  0}].
+  0}]}.
+[
+{pkg_hash,[
+ {<<"poolboy">>, <<"6B46163901CFD0A1B43D692657ED9D7E599853B3B21B95AE5AE0A777CF9B6CA8">>}]}
+].

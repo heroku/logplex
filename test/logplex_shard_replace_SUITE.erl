@@ -37,9 +37,7 @@ replace_shard(Config) ->
     [ok = logplex_SUITE:send_msg(logplex_SUITE:make_msg(Token,N)) ||
         N <- lists:seq(1, 50)],
     50 = length(wait_for_messages(Chan, 50, timer:seconds(1), os:timestamp())),
-    %% Set the new shard as our main shard - this is the same shard in this
-    %% test but can be another server.
-    true = os:putenv("LOGPLEX_SHARD_URLS", "redis://localhost:6379"),
+    true = os:putenv("LOGPLEX_SHARD_URLS", "redis://db:6379/#frag1,redis://db:6379/#frag2"),
     %% Replace the shard with itself
     os:cmd("../../bin/replace_shards -e"),
     "0\n" = os:cmd("echo $?"),

@@ -285,26 +285,17 @@ register_worker(WorkerType, Url, Pid) ->
 
 async_add_pool(ReadMap, Url) ->
     WorkerFun = fun () ->
-                        {ok, Pool} = add_pool_with_retry(Url, 10),
+                        {ok, Pool} = add_pool(Url),
                         ok = register_worker(ReadMap, Url, Pool)
                 end,
-    {async, spawn(WorkerFun)}.
+    {async, proc_lib:spawn(WorkerFun)}.
 
-add_pool_with_retry(Url, 0) ->
-    Host = proplists:get_value(host, parse_redis_uri(Url)),
-    ?ERR("error=failed_to_add_pool reason=out_of_retries redis_host=~p", [Host]),
-    {error, out_of_retries};
-add_pool_with_retry(Url, N) ->
+add_pool(Url) ->
     Opts = parse_redis_uri(Url),
-    case redo:start_link(undefined, Opts) of
-        {ok, Pid} when is_pid(Pid) ->
-            {ok, Pid};
-        {error, Reason} ->
-            Host = proplists:get_value(host, Opts),
-            ?WARN("warn=failed_to_add_pool reason=~p redis_host=~p retry_attempt=~p", [Reason, Host, N]),
-            timer:sleep(timer:seconds(5)),
-            add_pool_with_retry(Url, N-1)
-    end.
+    Uuid = uuid:to_iolist(uuid:v4()),
+    Pool = proplists:get_value(sortkey, Opts),
+    PoolId = {Pool, Uuid},
+    logplex_redis_reader:start_pool(PoolId, Opts).
 
 async_add_buffer(WriteMap, Url) ->
     {async, spawn(fun () ->
@@ -331,7 +322,7 @@ redis_buffer_opts(Url) ->
 handle_child_death(Pid) ->
     case logplex_shard_info:pid_info(Pid) of
         {logplex_read_pool_map, {{Shard, {Url, Pid}}, Map, V}} ->
-            {ok, NewPid} = add_pool_with_retry(Url, 60),
+            {ok, NewPid} = add_pool(Url),
             NewMap = dict:store(Shard, {Url, NewPid}, Map),
             logplex_shard_info:save(logplex_read_pool_map, NewMap, V),
             ?INFO("at=read_pool_restart oldpid=~p newpid=~p",
@@ -362,8 +353,9 @@ consistent(URLs) ->
 %%% Redis cluster move code
 %%--------------------------------------------------------------------
 
-prepare_new_shard_info(_Maps0, NewShardInfo) ->
-    new_shard_info(NewShardInfo).
+prepare_new_shard_info(_Maps0, NewUrls) ->
+    populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
+                        NewUrls).
 
 backup_shard_info() ->
     logplex_shard_info:copy(?CURRENT_WRITE_MAP, ?BACKUP_WRITE_MAP),
@@ -383,10 +375,6 @@ make_new_shard_info_permanent() ->
     logplex_shard_info:copy(?NEW_WRITE_MAP, ?CURRENT_WRITE_MAP),
     logplex_shard_info:copy(?NEW_READ_MAP, ?CURRENT_READ_MAP),
     ok.
-
-new_shard_info(NewUrls) ->
-    populate_info_table(?NEW_READ_MAP, ?NEW_WRITE_MAP,
-                        NewUrls).
 
 -spec prepare_shard_urls(string()) -> [string()]|[].
 prepare_shard_urls(ShardUrls) ->
@@ -426,7 +414,7 @@ abort_url_update() ->
     gen_server:call(?MODULE, {abort, new_shard_info}).
 
 stop_pool(Pid) ->
-    redo:shutdown(Pid).
+    logplex_redis_reader:stop_pool(Pid).
 
 stop_buffer(Pid) ->
     logplex_queue:stop(Pid).

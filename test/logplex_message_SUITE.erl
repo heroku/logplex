@@ -486,11 +486,14 @@ setup_redis(Config) ->
                                  exit(RedisWriterPid, kill)
                          end,
 
+    {ok, ReaderSupPid} = logplex_redis_reader_sup:start_link(),
     {ok, ShardPid} = logplex_shard:start_link(),
     timer:sleep(200), %% give this thing some time to do whatever
     CleanupShard = fun() ->
                            unlink(ShardPid),
-                           exit(ShardPid, kill)
+                           exit(ShardPid, kill),
+                           unlink(ReaderSupPid),
+                           exit(ReaderSupPid, kill)
                    end,
 
     CleanupFuns = ?config(cleanup_funs, Config),
