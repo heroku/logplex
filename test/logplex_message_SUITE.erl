@@ -35,7 +35,7 @@ init_per_suite(Config) ->
     %% We want to test writing to an actual redis instance. We should have at
     %% least one redis shard locally from docker.
     ShardUrls = string:tokens(os:getenv("LOGPLEX_SHARD_URLS"), ","),
-    application:set_env(logplex, logplex_shard_urls, logplex_shard:redis_sort(ShardUrls)),
+    application:set_env(logplex, logplex_shard_urls, logplex_utils:redis_sort(ShardUrls)),
 
     [{cleanup_funs, []} %% cleanup funs run after each test
      | Config].

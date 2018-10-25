@@ -1,5 +1,5 @@
 %% Copyright (c) 2010 Jacob Vorreuter <jacob.vorreuter@gmail.com>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -24,10 +24,15 @@
 -export([rpc/4, set_weight/1, resolve_host/1,
          parse_msg/1, filter/2, formatted_utc_date/0, format/1, field_val/2, field_val/3,
          format/4, format_utc_timestamp/0, format_utc_timestamp/1,
-         parse_redis_url/1, nl/1, to_int/1]).
+         nl/1, to_int/1]).
+
+-export([parse_redis_uri/1]).
+-export([parse_redis_url/1]).
+-export([redis_sort/1]).
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
+-include_lib("ex_uri/include/ex_uri.hrl").
 
 rpc(Node, M, F, A) when is_atom(Node), is_atom(M), is_atom(F), is_list(A) ->
     case net_adm:ping(Node) of
@@ -131,6 +136,66 @@ to_int(Bin) when is_binary(Bin) ->
 to_int(Int) when is_integer(Int) ->
     Int.
 
+
+parse_redis_uri(Url) when is_list(Url) ->
+    case ex_uri:decode(Url) of
+        {ok, Uri = #ex_uri{scheme="redis",
+                           authority=#ex_uri_authority{host=Host,
+                                                       port=Port}},
+         _} ->
+            lists:append([ [{url, Url},
+                            {host, Host},
+                            {port, case Port of
+                                       undefined -> 6379;
+                                       _ -> Port
+                                   end} ],
+                           parse_redis_uri_fragkey(Uri),
+                           parse_redis_uri_pass(Uri),
+                           parse_redis_uri_db(Uri) ]);
+        _ ->
+            {error, bad_uri}
+    end.
+
+parse_redis_uri_fragkey(#ex_uri{fragment = Frag}) when Frag =/= undefined ->
+    [{sortkey, Frag}];
+parse_redis_uri_fragkey(_) -> [].
+
+parse_redis_uri_pass(#ex_uri{authority=Auth}) when Auth =/= undefined ->
+    case Auth of
+        #ex_uri_authority{userinfo=Pass} when Pass =/= undefined ->
+            [{pass, Pass}];
+        _ -> []
+    end;
+parse_redis_uri_pass(_) -> [].
+
+parse_redis_uri_db(#ex_uri{path=Path}) when Path =/= undefined ->
+    case iolist_to_binary(Path) of
+        <<"/", DB/binary>> when DB =/= <<"">> ->
+            [{db, binary_to_list(DB)}];
+        _ ->
+            []
+    end;
+parse_redis_uri_db(_) -> [].
+
+redis_sort(Urls) ->
+    Parsed = lists:map(fun parse_redis_uri/1, Urls),
+    [ proplists:get_value(url, Server)
+      || Server <- lists:sort(fun sortfun/2, Parsed) ].
+
+sortfun(A, B) ->
+    sortkey(A) =< sortkey(B).
+
+sortkey(Info) ->
+    case proplists:get_value(sortkey, Info) of
+        undefined ->
+            proplists:get_value(url, Info);
+        Key -> Key
+    end.
+
+format_password([]) -> undefined;
+format_password(L=[_|_]) -> iolist_to_binary(L).
+
+
 parse_redis_url(Url) ->
     case redis_uri:parse(Url) of
         {redis, _User, Pass, Host, Port, _Path, _Query} ->
@@ -139,6 +204,3 @@ parse_redis_url(Url) ->
         _ ->
             [{ip, "127.0.0.1"}, {port, 6379}]
     end.
-
-format_password([]) -> undefined;
-format_password(L=[_|_]) -> iolist_to_binary(L).

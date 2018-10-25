@@ -30,7 +30,7 @@
 -export([lookup/3
          ,logs_redis_urls/0
          ,urls/0
-         ,redis_sort/1]).
+        ]).
 
 %% Redis Migration API
 -export([prepare_shard_urls/1,
@@ -41,7 +41,6 @@
 
 -include("logplex.hrl").
 -include("logplex_logging.hrl").
--include_lib("ex_uri/include/ex_uri.hrl").
 
 -define(NEW_READ_MAP, new_logplex_read_pool_map).
 -define(CURRENT_READ_MAP, logplex_read_pool_map).
@@ -266,7 +265,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 logs_redis_urls() ->
-    redis_sort(logplex_app:config(logplex_shard_urls)).
+    logplex_utils:redis_sort(logplex_app:config(logplex_shard_urls)).
 
 populate_info_table(Urls) ->
     populate_info_table(?CURRENT_READ_MAP, ?CURRENT_WRITE_MAP, Urls).
@@ -274,9 +273,9 @@ populate_info_table(Urls) ->
 populate_info_table(ReadMap, WriteMap, Urls) ->
     ?INFO("at=populate_info_table read_map=~p write_map=~p urls=~p", [ReadMap, WriteMap, Urls]),
     %% Populate Read pool
-    ReadPools = [ {Url, async_add_pool(ReadMap, Url)} || Url <- redis_sort(Urls)],
+    ReadPools = [ {Url, async_add_pool(ReadMap, Url)} || Url <- logplex_utils:redis_sort(Urls)],
     WritePools = [ {Url, async_add_buffer(WriteMap, Url)}
-                   || Url <- redis_sort(Urls)],
+                   || Url <- logplex_utils:redis_sort(Urls)],
 
     dict:from_list([{ReadMap, ReadPools}, {WriteMap, WritePools}]).
 
@@ -291,7 +290,7 @@ async_add_pool(ReadMap, Url) ->
     {async, proc_lib:spawn(WorkerFun)}.
 
 add_pool(Url) ->
-    Opts = parse_redis_uri(Url),
+    Opts = logplex_utils:parse_redis_uri(Url),
     Uuid = uuid:to_iolist(uuid:v4()),
     Pool = proplists:get_value(sortkey, Opts),
     PoolId = {Pool, Uuid},
@@ -310,7 +309,7 @@ add_buffer(Url) ->
 redis_buffer_opts(Url) ->
     MaxLength = logplex_utils:to_int(logplex_app:config(redis_buffer_length)),
     NumWorkers = logplex_utils:to_int(logplex_app:config(redis_writers)),
-    RedisOpts = logplex_utils:parse_redis_url(Url),
+    RedisOpts = logplex_utils:parse_redis_uri(Url),
     [{name, "logplex_redis_buffer"},
      {max_length, MaxLength},
      {num_workers, NumWorkers},
@@ -379,7 +378,7 @@ make_new_shard_info_permanent() ->
 -spec prepare_shard_urls(string()) -> [string()]|[].
 prepare_shard_urls(ShardUrls) ->
     Shards = string:tokens(ShardUrls, ","),
-    logplex_shard:redis_sort(Shards).
+    logplex_utils:redis_sort(Shards).
 
 -type shards_info() :: [string()].
 -spec prepare_url_update(shards_info()) -> good|{error, any()}.
@@ -418,58 +417,3 @@ stop_pool(Pid) ->
 
 stop_buffer(Pid) ->
     logplex_queue:stop(Pid).
-
-parse_redis_uri(Url) when is_list(Url) ->
-    case ex_uri:decode(Url) of
-        {ok, Uri = #ex_uri{scheme="redis",
-                           authority=#ex_uri_authority{host=Host,
-                                                       port=Port}},
-         _} ->
-            lists:append([ [{url, Url},
-                            {host, Host},
-                            {port, case Port of
-                                       undefined -> 6379;
-                                       _ -> Port
-                                   end} ],
-                           parse_redis_uri_fragkey(Uri),
-                           parse_redis_uri_pass(Uri),
-                           parse_redis_uri_db(Uri) ]);
-        _ ->
-            {error, bad_uri}
-    end.
-
-parse_redis_uri_fragkey(#ex_uri{fragment = Frag}) when Frag =/= undefined ->
-    [{sortkey, Frag}];
-parse_redis_uri_fragkey(_) -> [].
-
-parse_redis_uri_pass(#ex_uri{authority=Auth}) when Auth =/= undefined ->
-    case Auth of
-        #ex_uri_authority{userinfo=Pass} when Pass =/= undefined ->
-            [{pass, Pass}];
-        _ -> []
-    end;
-parse_redis_uri_pass(_) -> [].
-
-parse_redis_uri_db(#ex_uri{path=Path}) when Path =/= undefined ->
-    case iolist_to_binary(Path) of
-        <<"/", DB/binary>> when DB =/= <<"">> ->
-            [{db, binary_to_list(DB)}];
-        _ ->
-            []
-    end;
-parse_redis_uri_db(_) -> [].
-
-redis_sort(Urls) ->
-    Parsed = lists:map(fun parse_redis_uri/1, Urls),
-    [ proplists:get_value(url, Server)
-      || Server <- lists:sort(fun sortfun/2, Parsed) ].
-
-sortfun(A, B) ->
-    sortkey(A) =< sortkey(B).
-
-sortkey(Info) ->
-    case proplists:get_value(sortkey, Info) of
-        undefined ->
-            proplists:get_value(url, Info);
-        Key -> Key
-    end.

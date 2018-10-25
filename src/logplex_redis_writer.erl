@@ -108,7 +108,8 @@ throttled_restart(Reason, Delay) ->
     exit({error, closed}).
 
 open_socket(Opts) ->
-    Ip = proplists:get_value(ip, Opts),
+    Host = proplists:get_value(host, Opts),
+    {ok, Ip} = inet:getaddr(Host, inet),
     Port = proplists:get_value(port, Opts),
     Pass = proplists:get_value(pass, Opts),
     redis:connect(Ip, Port, Pass).

@@ -283,8 +283,7 @@ setup_redis_shards() ->
                _ ->
                    [config(config_redis_url)]
            end,
-    application:set_env(logplex, logplex_shard_urls,
-                        logplex_shard:redis_sort(URLs)).
+    application:set_env(logplex, logplex_shard_urls, URLs).
 
 setup_firehose() ->
     case config(disable_firehose, false) of
@@ -297,14 +296,16 @@ setup_firehose() ->
 
 nsync_opts() ->
     RedisUrl = config(config_redis_url),
-    RedisOpts = logplex_utils:parse_redis_url(RedisUrl),
-    Ip = case proplists:get_value(ip, RedisOpts) of
-             {_,_,_,_}=L ->
+    RedisOpts = logplex_utils:parse_redis_uri(RedisUrl),
+    ct:pal("url: ~p~nuri: ~p", [logplex_utils:parse_redis_url(RedisUrl), RedisOpts]),
+    Host = proplists:get_value(host, RedisOpts),
+    Ip = case inet:getaddr(Host, inet) of
+             {ok, {_,_,_,_}=L} ->
                  string:join([integer_to_list(I)
                               || I <- tuple_to_list(L)], ".");
              Other -> Other
          end,
-    RedisOpts1 = proplists:delete(ip, RedisOpts),
+    RedisOpts1 = proplists:delete(host, RedisOpts),
     RedisOpts2 = [{host, Ip} | RedisOpts1],
     [{callback, {nsync_callback, handle, []}} | RedisOpts2].
 
