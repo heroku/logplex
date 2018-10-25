@@ -297,7 +297,6 @@ setup_firehose() ->
 nsync_opts() ->
     RedisUrl = config(config_redis_url),
     RedisOpts = logplex_utils:parse_redis_uri(RedisUrl),
-    ct:pal("url: ~p~nuri: ~p", [logplex_utils:parse_redis_url(RedisUrl), RedisOpts]),
     Host = proplists:get_value(host, RedisOpts),
     Ip = case inet:getaddr(Host, inet) of
              {ok, {_,_,_,_}=L} ->
