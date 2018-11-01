@@ -1,5 +1,9 @@
 # Logplex
 
+In addition to the documentation below, please see [Engineering Docs](https://github.com/heroku/engineering-docs/tree/master/components/logplex), which includes [Playbooks](https://github.com/heroku/engineering-docs/tree/master/components/logplex/playbooks) and other guides. Also see [Additional Docs](https://github.com/heroku/logplex/tree/master/doc) for information about Logplex schema and architecture.
+
+## Overview
+
 Logplex is a distributed syslog log router, able to merge and redistribute multiple incoming streams of syslog logs to individual subscribers.
 
 A typical logplex installation will be a cluster of distributed Erlang nodes connected in a mesh, with one or more redis instances (which can be sharded). The cluster may or may not be sitting behind a load-balancer or proxy, but any of them may be contacted at any time for ideal scenarios.
