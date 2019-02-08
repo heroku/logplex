@@ -116,6 +116,11 @@ init([Props]) ->
     Name = proplists:get_value(name, Props),
     Self = self(),
     ?INFO("at=init name=~p", [Name]),
+    WorkerSup = proplists:get_value(worker_sup, Props),
+    NumWorkers = proplists:get_value(num_workers, Props),
+    WorkerArgs = proplists:get_value(worker_args, Props),
+    start_workers(WorkerSup, NumWorkers, WorkerArgs),
+    spawn_link(fun() -> report_stats(Self) end),
     State = #state{
         dropped_stat_key = build_stat_key(Name, "dropped"),
         length_stat_key = build_stat_key(Name, "length"),
@@ -126,11 +131,6 @@ init([Props]) ->
         dict = proplists:get_value(dict, Props, dict:new()),
         redis_url = proplists:get_value(redis_url, Props)
     },
-    WorkerSup = proplists:get_value(worker_sup, Props),
-    NumWorkers = proplists:get_value(num_workers, Props),
-    WorkerArgs = proplists:get_value(worker_args, Props),
-    start_workers(WorkerSup, NumWorkers, WorkerArgs),
-    spawn_link(fun() -> report_stats(Self) end),
     {ok, State}.
 
 %%--------------------------------------------------------------------
@@ -207,6 +207,7 @@ handle_cast(stop, State = #state{workers=Workers}) ->
     {stop, normal, State};
 
 handle_cast({register, WorkerPid}, #state{workers=Workers}=State) ->
+    erlang:monitor(process, WorkerPid),
     {noreply, State#state{workers=[WorkerPid|Workers]}};
 
 handle_cast(_Msg, State) ->
@@ -223,6 +224,14 @@ handle_info(report_stats, #state{length_stat_key=StatKey, length=Length}=State) 
     logplex_stats:incr(StatKey, Length),
     {noreply, State};
 
+handle_info({'DOWN', _Ref, process, WorkerPid, _Reason}, #state{workers=Workers}=State) ->
+    case lists:member(WorkerPid, Workers) of
+        true ->
+            NewState = State#state{workers=lists:delete(WorkerPid, Workers)},
+            {noreply, NewState};
+        _ ->
+            {noreply, State}
+    end;
 handle_info(_Info, State) ->
     {noreply, State}.
 
