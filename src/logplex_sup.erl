@@ -60,7 +60,8 @@ init([]) ->
        ,{logplex_redis_writer_sup,
          {logplex_worker_sup, start_link,
           [logplex_redis_writer_sup, logplex_redis_writer]},
-         permanent, 2000, worker, [logplex_redis_writer_sup]}
+         permanent, 2000, supervisor, [logplex_redis_writer_sup]}
+
        ,{logplex_redis_reader_sup,
          {logplex_redis_reader_sup, start_link, []},
          permanent, 2000, supervisor, [logplex_redis_reader_sup]}
