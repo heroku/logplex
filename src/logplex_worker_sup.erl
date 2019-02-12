@@ -32,6 +32,6 @@ start_child(Name, Args) ->
     supervisor:start_child(Name, Args).
 
 init([Mod]) ->
-    {ok, {{simple_one_for_one, 1000, 1}, [
+    {ok, {{simple_one_for_one, 15000, 30}, [
         {Mod, {Mod, start_link, []}, transient, 2000, worker, [Mod]}
     ]}}.

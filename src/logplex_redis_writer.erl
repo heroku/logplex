@@ -93,7 +93,7 @@ write_queued_logs(BufferPid, Socket) ->
             end;
         Else ->
             ?WARN("event=queue_out result=~p", [Else]),
-            exit(normal)
+            exit({error, {unexpected_result, Else}})
     end.
 
 check_for_stop_signal() ->
