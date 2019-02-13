@@ -371,7 +371,7 @@ try_send(Frame = #frame{tries = 0, msg_count=C}, State = #state{}) ->
     ready_to_send(drop_frame(Frame, State)).
 
 %% @private Decide what happened to the frame based on the http status
-%% code. Back of the napkin algorithm - 2xx is success, 4xx (client
+%% code. Back of the napkin algorithm - 2xx is success, 4xx, except 429 (client
 %% errors) are perm failures, so drop the frame and anything else is a
 %% temp failure, so retry the frame.
 handle_response_status(Status, Frame, State, _Latency) when 200 =< Status, Status < 300 ->
