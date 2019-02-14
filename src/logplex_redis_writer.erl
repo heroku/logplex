@@ -103,7 +103,7 @@ throttled_restart(Reason, Delay) ->
     timer:sleep(Delay),
     exit({error, closed}).
 
-connect_with_backoff(BufferPid, _RedisOpts, 6 = _MaxAttempts) ->
+connect_with_backoff(BufferPid, _RedisOpts, 10 = _MaxAttempts) ->
     ?WARN("at=connect_with_backoff msg=connect_attempts_exhausted buffer_pid=~p", [BufferPid]),
     exit({error, connect_attempts_exhausted});
 connect_with_backoff(BufferPid, RedisOpts, Attempt) ->
@@ -111,9 +111,9 @@ connect_with_backoff(BufferPid, RedisOpts, Attempt) ->
         {error, Reason} ->
             ?INFO("at=connect_with_backoff msg=failed_to_open_socket buffer_pid=~p attempt=~p reason=~p",
                   [BufferPid, Attempt, Reason]),
-            BaseBackoff = logplex_app:config(redis_buffer_base_backoff, timer:seconds(5000)),
+            BaseBackoff = logplex_app:config(redis_buffer_base_backoff, timer:seconds(5)),
             Jitter = case BaseBackoff of _ when BaseBackoff > 0 -> random:uniform(BaseBackoff); _ -> 0 end,
-            timer:sleep(trunc((math:pow(2, Attempt) * BaseBackoff) + Jitter)),
+            timer:sleep(trunc((Attempt * BaseBackoff) + Jitter)),
             connect_with_backoff(BufferPid, RedisOpts, Attempt + 1);
         {ok, Socket} when is_port(Socket) ->
             loop(BufferPid, Socket, RedisOpts)
