@@ -35,12 +35,8 @@ init(Parent, BufferPid, RedisOpts) ->
     ?INFO("at=init buffer_pid=~p parent=~p~n", [BufferPid, Parent]),
     logplex_queue:register(BufferPid, self()),
     proc_lib:init_ack(Parent, {ok, self()}),
-    case open_socket(RedisOpts) of
-        {error, Err} ->
-            throttled_restart(Err);
-        {ok, Socket} when is_port(Socket) ->
-            loop(BufferPid, Socket, RedisOpts)
-    end.
+    random:seed(os:timestamp()),
+    connect_with_backoff(BufferPid, RedisOpts, 0).
 
 loop(BufferPid, Socket, RedisOpts) when is_port(Socket) ->
     verify_open_connection(Socket),
@@ -106,6 +102,22 @@ throttled_restart(Reason, Delay) ->
     ?INFO("event=send result=~p exit_in=~pms", [Reason, Delay]),
     timer:sleep(Delay),
     exit({error, closed}).
+
+connect_with_backoff(BufferPid, _RedisOpts, 6 = _MaxAttempts) ->
+    ?WARN("at=connect_with_backoff msg=connect_attempts_exhausted buffer_pid=~p", [BufferPid]),
+    exit({error, connect_attempts_exhausted});
+connect_with_backoff(BufferPid, RedisOpts, Attempt) ->
+    case open_socket(RedisOpts) of
+        {error, Reason} ->
+            ?INFO("at=connect_with_backoff msg=failed_to_open_socket buffer_pid=~p attempt=~p reason=~p",
+                  [BufferPid, Attempt, Reason]),
+            BaseBackoff = logplex_app:config(redis_buffer_base_backoff, timer:seconds(5000)),
+            Jitter = case BaseBackoff of _ when BaseBackoff > 0 -> random:uniform(BaseBackoff); _ -> 0 end,
+            timer:sleep(trunc((math:pow(2, Attempt) * BaseBackoff) + Jitter)),
+            connect_with_backoff(BufferPid, RedisOpts, Attempt + 1);
+        {ok, Socket} when is_port(Socket) ->
+            loop(BufferPid, Socket, RedisOpts)
+    end.
 
 open_socket(Opts) ->
     Ip = proplists:get_value(ip, Opts),
