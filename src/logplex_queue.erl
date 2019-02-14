@@ -207,7 +207,6 @@ handle_cast(stop, State = #state{workers=Workers}) ->
     {stop, normal, State};
 
 handle_cast({register, WorkerPid}, #state{workers=Workers}=State) ->
-    erlang:monitor(process, WorkerPid),
     {noreply, State#state{workers=[WorkerPid|Workers]}};
 
 handle_cast(_Msg, State) ->
@@ -299,8 +298,12 @@ start_workers(WorkerSup, NumWorkers, WorkerArgs) ->
 
 start_worker(WorkerSup, WorkerArgs) ->
     case logplex_worker_sup:start_child(WorkerSup, [self() | WorkerArgs]) of
-        {ok, Pid} when is_pid(Pid) -> Pid;
-        {ok, Pid, _Info} -> Pid;
+        {ok, Pid} when is_pid(Pid) ->
+            erlang:monitor(process, Pid),
+            Pid;
+        {ok, Pid, _Info} ->
+            erlang:monitor(process, Pid),
+            Pid;
         {error, Reason} ->
             error_logger:error_msg("~p failed to start worker: ~p~n", [WorkerSup, Reason]),
             undefined
