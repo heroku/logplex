@@ -46,7 +46,7 @@ For more details, you can look at stream management documentation in `doc/`.
 
 # Erlang Version Requirements
 
-As of Logplex v93, Logplex requires Erlang 18. Logplex is currently tested againts OTP-18.1.3.
+As of Logplex v93, Logplex requires Erlang 18. Logplex is currently tested against OTP-18.1.3.
 
 Prior versions of Logplex are designed to run on R16B03 and 17.x.
 
