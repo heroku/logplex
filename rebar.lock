@@ -67,6 +67,7 @@
   {git,"https://github.com/heroku/nsync.git",
        {ref,"df46d5315b94d71942599f15ff3187795e195085"}},
   0},
+ {<<"observer_cli">>,{pkg,<<"observer_cli">>,<<"1.4.4">>},0},
  {<<"pagerduty">>,
   {git,"https://github.com/heroku/pagerduty.git",
        {ref,"36e4b95cdd05d309ff5aea9f01914b86bcce5d17"}},
@@ -110,5 +111,6 @@
   0}]}.
 [
 {pkg_hash,[
+ {<<"observer_cli">>, <<"DF1264B5871BBAF8DA4F11FEADFA0DC661F4D511493A25F8F9C7D615E0D614D5">>},
  {<<"poolboy">>, <<"6B46163901CFD0A1B43D692657ED9D7E599853B3B21B95AE5AE0A777CF9B6CA8">>}]}
 ].
