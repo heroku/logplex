@@ -65,6 +65,10 @@ resource_exists(Req, #state{ channel_id = ChannelId } = State) ->
     case logplex_channel:find(ChannelId) of
         {ok, _Channel} ->
             {true, Req, State};
+        {error, timeout} ->
+            ?WARN("at=resource_exists channel_id=~s error=channel_find_timeout", [ChannelId]),
+            {ok, Req2} = cowboy_req:reply(500, Req),
+            {halt, Req2, State};
         {error, not_found} ->
             %% channel was not found
             {false, Req, State}

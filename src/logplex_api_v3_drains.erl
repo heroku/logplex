@@ -110,10 +110,19 @@ resource_exists(Req, #state{ channel_id = ChannelId,
                 {ok, Drain} ->
                     NewState = State#state{ drain = Drain },
                     {true, Req, NewState};
+                {error, timeout} ->
+                    ?WARN("at=resource_exists channel_id=~s drain_id=~s error=drain_find_timeout",
+                    [ChannelId, DrainId]),
+                    {ok, Req2} = cowboy_req:reply(500, Req),
+                    {halt, Req2, State};
                 {error, not_found} ->
                     %% drain was not found for channel
                     {false, Req, State}
             end;
+        {error, timeout} ->
+            ?WARN("at=resource_exists channel_id=~s error=channel_find_timeout", [ChannelId]),
+            {ok, Req2} = cowboy_req:reply(500, Req),
+            {halt, Req2, State};
         {error, not_found} ->
             %% channel was not found
             {ok, Req1} = cowboy_req:reply(404, Req),
