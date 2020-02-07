@@ -111,7 +111,7 @@ resource_exists(Req, #state{ channel_id = ChannelId,
                     NewState = State#state{ drain = Drain },
                     {true, Req, NewState};
                 {error, timeout} ->
-                    ?WARN("at=resource_exists channel_id=~s drain_id=~s error=drain_find_timeout",
+                    ?WARN("at=resource_exists channel_id=~s drain_id=~b error=drain_find_timeout",
                     [ChannelId, DrainId]),
                     {ok, Req2} = cowboy_req:reply(500, Req),
                     {halt, Req2, State};
