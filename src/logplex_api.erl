@@ -518,15 +518,18 @@ authorize(Req) ->
         AuthKey = logplex_app:config(auth_key),
         "Basic " ++ Encoded = Req:get_header_value("Authorization"),
         case Encoded of
-            AuthKey -> true;
+            AuthKey ->
+                log_api_user(auth_key, Req),
+                true;
             _ ->
                 {authorized, Cred} = logplex_cred:verify_basic(Encoded),
                 permitted = logplex_cred:has_perm(full_api, Cred),
+                log_api_user(logplex_cred:id(Cred), Req),
                 true
         end
     catch
-        error:{badmatch, {incorrect_pass, CredId}} ->
-            ?INFO("at=authorize cred_id=~p error=incorrect_pass",
+        error:{badmatch, {error, {incorrect_pass, CredId}}} ->
+            ?INFO("at=authorize cred_id=~s error=incorrect_pass",
                   [CredId]),
             error_resp(401, <<"Not Authorized">>);
         Class:Ex ->
@@ -814,3 +817,18 @@ backwards_compat_chan_id(Id) when is_binary(Id) ->
         error:badarg ->
            Id
     end.
+
+log_api_user(CredId, Req) ->
+    case logplex_app:config(log_api_user, false) of
+        false -> ok;
+        true ->
+            Path = Req:get(path),
+            UserAgent = case Req:get_header_value(<<"User-Agent">>) of
+                            undefined -> <<"undefined">>;
+                            Value -> lager_format:format("~s", [Value], 250)
+                        end,
+
+            ?INFO("at=is_authorized path=~s cred_id=~s user_agent=\"~s\"",
+                  [Path, CredId, UserAgent])
+    end.
+

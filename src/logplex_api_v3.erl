@@ -122,20 +122,21 @@ is_authorized(Req, State) ->
         {<<"Basic ", Encoded/binary>>, Req1} = cowboy_req:header(<<"authorization">>, Req),
         case binary_to_list(Encoded) of
             AuthKey ->
-                {true, Req1, State};
+                {ok, Req2} = log_api_user(auth_key, Req1),
+                {true, Req2, State};
             _ ->
                 {authorized, Cred} = logplex_cred:verify_basic(Encoded),
                 permitted = logplex_cred:has_perm(full_api, Cred),
-                {true, Req1, State}
+                {ok, Req2} = log_api_user(logplex_cred:id(Cred), Req1),
+                {true, Req2, State}
         end
     catch
-        error:{badmatch, {incorrect_pass, CredId}} ->
-            ?INFO("at=authorize cred_id=~p error=incorrect_pass",
-                  [CredId]),
+        error:{badmatch, {error, {incorrect_pass, CredId}}} ->
+            ?WARN("at=is_authorized cred_id=~s error=incorrect_pass", [CredId]),
             {{false, ?BASIC_AUTH}, Req, State};
         Class:Ex ->
             Stack = erlang:get_stacktrace(),
-            ?WARN("at=authorize exception=~1000p",
+            ?WARN("at=is_authorized exception=~1000p",
                   [{Class, Ex, Stack}]),
             {{false, ?BASIC_AUTH}, Req, State}
     end.
@@ -239,7 +240,7 @@ maybe_log("unknown_resource", Path, Status, Req) ->
     %% the same things as for known resources, e.g., latency.
     {Method, Req1} = cowboy_req:method(Req),
     folsom_metrics:notify(<<"logplex.http.unknown_resource">>, {inc, 1}),
-	?INFO("at=done method=~p resp_code=~p path=~p", [Method, Status, Path]),
+	?INFO("at=done method=~s resp_code=~p path=~s", [Method, Status, Path]),
     Req1;
 maybe_log(Endpoint, Path, Status, Req) ->
     {Route, Req1} = route(Req),
@@ -273,3 +274,20 @@ http_latency_measure(Endpoint) ->
 
 http_status_count(Endpoint, RespCodeGroup) ->
     list_to_binary(["logplex.http.", Endpoint, ".status.", RespCodeGroup]).
+
+log_api_user(CredId, Req) ->
+    case logplex_app:config(log_api_user, false) of
+        false -> {ok, Req};
+        true ->
+            {RequestId, Req1} = request_id(Req),
+            {Route, Req2} = route(Req1),
+            {Path, Req3} = cowboy_req:path(Req2),
+            {UserAgent, Req4} = cowboy_req:header(<<"user-agent">>, Req3, <<"undefined">>),
+            UserAgent1 = lager_format:format("~s", [UserAgent], 200),
+
+            ?INFO("at=is_authorized request_id=~s route=~s path=~s cred_id=~s user_agent=\"~s\"",
+                  [RequestId, Route, Path, CredId, UserAgent1]),
+            {ok, Req4}
+    end.
+
+
