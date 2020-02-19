@@ -240,7 +240,7 @@ maybe_log("unknown_resource", Path, Status, Req) ->
     %% the same things as for known resources, e.g., latency.
     {Method, Req1} = cowboy_req:method(Req),
     folsom_metrics:notify(<<"logplex.http.unknown_resource">>, {inc, 1}),
-	?INFO("at=done method=~s resp_code=~p path=~s", [Method, Status, Path]),
+    ?INFO("at=done method=~s resp_code=~p path=~s", [Method, Status, Path]),
     Req1;
 maybe_log(Endpoint, Path, Status, Req) ->
     {Route, Req1} = route(Req),
