@@ -522,15 +522,14 @@ authorize(Req) ->
                 log_api_user(auth_key, Req),
                 true;
             _ ->
-                {authorized, Cred} = logplex_cred:verify_basic(Encoded),
+                Auth={authorized, Cred} = logplex_cred:verify_basic(Encoded),
                 permitted = logplex_cred:has_perm(full_api, Cred),
-                log_api_user(logplex_cred:id(Cred), Req),
+                log_api_user(Auth, Req),
                 true
         end
     catch
-        error:{badmatch, {error, {incorrect_pass, CredId}}} ->
-            ?INFO("at=authorize cred_id=~s error=incorrect_pass",
-                  [CredId]),
+        error:{badmatch, {auth_error, _}=AuthError} ->
+            log_api_user(AuthError, Req),
             error_resp(401, <<"Not Authorized">>);
         Class:Ex ->
             Stack = erlang:get_stacktrace(),
@@ -818,7 +817,7 @@ backwards_compat_chan_id(Id) when is_binary(Id) ->
            Id
     end.
 
-log_api_user(CredId, Req) ->
+log_api_user(Auth, Req) ->
     case logplex_app:config(log_api_user, false) of
         false -> ok;
         true ->
@@ -828,7 +827,13 @@ log_api_user(CredId, Req) ->
                             Value -> lager_format:format("~s", [Value], 250)
                         end,
 
-            ?INFO("at=is_authorized path=~s cred_id=~s user_agent=\"~s\"",
-                  [Path, CredId, UserAgent])
+            case Auth of
+                {auth_error, {Reason, CredId}} ->
+                    ?WARN("at=is_authorized path=~s error=~s cred_id=~s user_agent=\"~s\"",
+                          [Path, Reason, CredId, UserAgent]);
+                {authorized, Cred} ->
+                    ?INFO("at=is_authorized path=~s cred_id=~s user_agent=\"~s\"",
+                          [Path, logplex_cred:id(Cred), UserAgent])
+            end
     end.
 

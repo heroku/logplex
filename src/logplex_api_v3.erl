@@ -125,15 +125,15 @@ is_authorized(Req, State) ->
                 {ok, Req2} = log_api_user(auth_key, Req1),
                 {true, Req2, State};
             _ ->
-                {authorized, Cred} = logplex_cred:verify_basic(Encoded),
+                Auth={authorized, Cred} = logplex_cred:verify_basic(Encoded),
                 permitted = logplex_cred:has_perm(full_api, Cred),
-                {ok, Req2} = log_api_user(logplex_cred:id(Cred), Req1),
+                {ok, Req2} = log_api_user(Auth, Req1),
                 {true, Req2, State}
         end
     catch
-        error:{badmatch, {error, {incorrect_pass, CredId}}} ->
-            ?WARN("at=is_authorized cred_id=~s error=incorrect_pass", [CredId]),
-            {{false, ?BASIC_AUTH}, Req, State};
+        error:{badmatch, {auth_error, _}=AuthErr} ->
+            {ok, ReqE} = log_api_user(AuthErr, Req),
+            {{false, ?BASIC_AUTH}, ReqE, State};
         Class:Ex ->
             Stack = erlang:get_stacktrace(),
             ?WARN("at=is_authorized exception=~1000p",
@@ -275,7 +275,7 @@ http_latency_measure(Endpoint) ->
 http_status_count(Endpoint, RespCodeGroup) ->
     list_to_binary(["logplex.http.", Endpoint, ".status.", RespCodeGroup]).
 
-log_api_user(CredId, Req) ->
+log_api_user(Auth, Req) ->
     case logplex_app:config(log_api_user, false) of
         false -> {ok, Req};
         true ->
@@ -285,9 +285,14 @@ log_api_user(CredId, Req) ->
             {UserAgent, Req4} = cowboy_req:header(<<"user-agent">>, Req3, <<"undefined">>),
             UserAgent1 = lager_format:format("~s", [UserAgent], 200),
 
-            ?INFO("at=is_authorized request_id=~s route=~s path=~s cred_id=~s user_agent=\"~s\"",
-                  [RequestId, Route, Path, CredId, UserAgent1]),
+            case Auth of
+                {auth_error, {Reason, CredId}} ->
+                    ?WARN("at=is_authorized request_id=~s route=~s path=~s error=~s cred_id=~s user_agent=\"~s\"",
+                          [RequestId, Route, Path, Reason, CredId, UserAgent1]);
+                {authorized, Cred} ->
+                    ?INFO("at=is_authorized request_id=~s route=~s path=~s cred_id=~s user_agent=\"~s\"",
+                          [RequestId, Route, Path, logplex_cred:id(Cred), UserAgent1])
+            end,
+
             {ok, Req4}
     end.
-
-
