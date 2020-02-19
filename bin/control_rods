@@ -4,138 +4,47 @@
 -define(NAME, filename:basename(escript:script_name())).
 
 main(["deny_redis_buffers"]) ->
-    Node = connect(),
-    io:format("Preventing all writes to logplex_logs_redis nodes...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [deny_redis_buffers, true]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(deny_redis_buffers, true);
 main(["allow_redis_buffers"]) ->
-    Node = connect(),
-    io:format("Allowing writes to logplex_logs_redis nodes...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [deny_redis_buffers, false]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(deny_redis_buffers, false);
 main(["deny_tail_sessions"]) ->
-    Node = connect(),
-    io:format("Preventing creation of new tail sessions...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, true]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["kill_tail_sessions"]) ->
-    Node = connect(),
-    io:format("Killing all tail sessions...~n"),
-    Res = rpc:call(Node, logplex_tail, kill_all_sessions, []),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(deny_tail_sessions, true);
 main(["allow_tail_sessions"]) ->
-    Node = connect(),
-    io:format("Allowing creation of new tail sessions...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [deny_tail_sessions, false]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(deny_tail_sessions, false);
 main(["deny_drain_forwarding"]) ->
-    Node = connect(),
-    io:format("Preventing all writes to drains...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [deny_drain_forwarding, true]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(deny_drain_forwarding, true);
 main(["allow_drain_forwarding"]) ->
-    Node = connect(),
-    io:format("Allowing writes to drains...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [deny_drain_forwarding, false]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(deny_drain_forwarding, false);
 main(["deny_logs_ingress"]) ->
-    Node = connect(),
-    io:format("Preventing ingress for all logs...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [deny_logs_ingress, true]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(deny_logs_ingress, true);
 main(["allow_logs_ingress"]) ->
-    Node = connect(),
-    io:format("Allowing logs ingress...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [deny_logs_ingress, false]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["disable_firehose"]) ->
-    Node = connect(),
-    io:format("Disabling firehose...~n"),
-    Res = rpc:call(Node, logplex_firehose, disable, []),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["enable_firehose"]) ->
-    Node = connect(),
-    io:format("Enabling firehose...~n"),
-    Res = rpc:call(Node, logplex_firehose, enable, []),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["disable_api"]) ->
-    Node = connect(),
-    io:format("Disabling v3 API...~n"),
-    Res = rpc:call(Node, logplex_api_v3, set_status, [disabled]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["enable_api"]) ->
-    Node = connect(),
-    io:format("Enabling v3 API ...~n"),
-    Res = rpc:call(Node, logplex_api_v3, set_status, [normal]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["set_api_read_only"]) ->
-    Node = connect(),
-    io:format("Setting v3 API in read-only mode...~n"),
-    Res = rpc:call(Node, logplex_api_v3, set_status, [read_only]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["disable_legacy_api"]) ->
-    Node = connect(),
-    io:format("Disabling legacy API ...~n"),
-    Res = rpc:call(Node, logplex_api, set_status, [disabled]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["enable_legacy_api"]) ->
-    Node = connect(),
-    io:format("Enabling legacy API ...~n"),
-    Res = rpc:call(Node, logplex_api, set_status, [normal]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
-main(["set_legacy_api_read_only"]) ->
-    Node = connect(),
-    io:format("Setting legacy API in read-only mode...~n"),
-    Res = rpc:call(Node, logplex_api, set_status, [read_only]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(deny_logs_ingress, false);
 main(["enable_batch_redis"]) ->
-    Node = connect(),
-    io:format("Enabling batch redis...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [batch_redis, true]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(batch_redis, true);
 main(["disable_batch_redis"]) ->
-    Node = connect(),
-    io:format("Disabling batch redis...~n"),
-    Res = rpc:call(Node, logplex_app, set_config, [batch_redis, false]),
-    io:format("Node: ~p~n", [Res]),
-    disconnect(),
-    halt(0);
+  set_app_config(batch_redis, false);
+main(["enable_log_api_user"]) ->
+  set_app_config(log_api_user, true);
+main(["disable_log_api_user"]) ->
+  set_app_config(log_api_user, false);
+main(["kill_tail_sessions"]) ->
+  toggle_rod(logplex_tail, kill_all_sessions, [], "Killing all tail sessions");
+main(["disable_firehose"]) ->
+  toggle_rod(logplex_firehose, disable, [], "Disabling firehose");
+main(["enable_firehose"]) ->
+  toggle_rod(logplex_firehose, enable, [], "Enabling firehose");
+main(["disable_api"]) ->
+  toggle_rod(logplex_api_v3, set_status, [disabled], "Disabling v3 API");
+main(["enable_api"]) ->
+    toggle_rod(logplex_api_v3, set_status, [normal], "Enabling v3 API");
+main(["set_api_read_only"]) ->
+    toggle_rod(logplex_api_v3, set_status, [read_only], "Setting v3 API in read-only mode");
+main(["disable_legacy_api"]) ->
+    toggle_rod(logplex_api, set_status, [disabled], "Disabling legacy API");
+main(["enable_legacy_api"]) ->
+    toggle_rod(logplex_api, set_status, [normal], "Enabling legacy API");
+main(["set_legacy_api_read_only"]) ->
+    toggle_rod(logplex_api, set_status, [read_only], "Setting legacy API in read-only mode");
 main(_) ->
     io:format("Control rods for local logplex node. These control rods can be modified on the fly while logplex is running.~n~n"
               "Usage: control_rods <rod>~n~n"
@@ -144,20 +53,22 @@ main(_) ->
               "deny_tail_sessions\t\tPrevent creation of new tail sessions.~n"
               "kill_tail_sessions\t\tKill all tail sessions on this node.~n"
               "allow_tail_sessions\t\tAllow creation of new tail sessions.~n~n"
-              "deny_drain_forward\t\tPrevent all writes to drains.~n"
-              "allow_drain_forward\t\tAllow writes to drains.~n~n"
-              "deny_logs_ress\t\t\tPrevent ingress for all logs.~n"
-              "allow_logs_ress\t\t\tAllow logs ingress.~n~n"
+              "deny_drain_forwarding\t\tPrevent all writes to drains.~n"
+              "allow_drain_forwarding\t\tAllow writes to drains.~n~n"
+              "deny_logs_ingress\t\t\tPrevent ingress for all logs.~n"
+              "allow_logs_ingress\t\t\tAllow logs ingress.~n~n"
               "disable_firehose\t\tDisable firehose.~n"
               "enable_firehose\t\t\tEnable firehose.~n~n"
               "disable_api\t\t\tDisable v3 API.~n"
               "enable_api\t\t\tEnable v3 API.~n"
               "set_api_read_only\t\tSet v3 API in read-only mode.~n"
-              "disable_legacy_api\t\t\tDisable legacy API.~n"
-              "enable_legacy_api\t\t\tEnable legacy API.~n"
-              "set_legacy_api_read_only\t\tSet legacy API in read-only mode.~n"
-              "enable_batch_redis\t\t\tEnable batch redis.~n"
-              "disable_batch_redi\t\t\tDisable batch redis.~n"
+              "disable_legacy_api\t\tDisable legacy API.~n"
+              "enable_legacy_api\t\tEnable legacy API.~n"
+              "set_legacy_api_read_only\tSet legacy API in read-only mode.~n~n"
+              "enable_batch_redis\t\tEnable batch redis.~n"
+              "disable_batch_redis\t\tDisable batch redis.~n~n"
+              "enable_log_api_user\t\tEnable logging of API users.~n"
+              "disable_log_api_user\t\tDisable logging of API users.~n"
              ),
     halt(0).
 
@@ -190,3 +101,15 @@ set_cookie(Node) ->
         Cookie ->
             erlang:set_cookie(Node, list_to_atom(Cookie))
     end.
+
+set_app_config(Config, Value) ->
+  Args = [Config, Value],
+  toggle_rod(logplex_app, set_config, Args, io_lib:format("Setting app_config ~p to ~w", Args)).
+
+toggle_rod(Mod, Fun, Args, Msg) ->
+  Node = connect(),
+  io:format("~s...~n", [Msg]),
+  Res = rpc:call(Node, Mod, Fun, Args),
+  io:format("Node: ~p~n", [Res]),
+  disconnect(),
+  halt(0).

@@ -169,13 +169,13 @@ verify_basic(BasicAuthStr) ->
 auth(Id, Pass) when is_binary(Id), is_binary(Pass) ->
     case lookup(Id) of
         no_such_cred ->
-            {error, invalid_credentials};
+            {auth_error, {invalid_credentials, Id}};
         Cred ->
             case pass(Cred) of
                 Pass ->
                     {authorized, Cred};
                 _WrongPass ->
-                    {error, {incorrect_pass, Id}}
+                    {auth_error, {incorrect_pass, Id}}
             end
     end.
 

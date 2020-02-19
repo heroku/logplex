@@ -128,9 +128,9 @@ cred_auth(State, Req2, CredId, Pass) ->
                                    "to write to any channel.">>,
                             Req2, State)
             end;
-        {error, {incorrect_pass, _}} ->
-            ?INFO("at=authorization err=invalid_credentials "
-                  "credid=~p", [CredId]),
+        {auth_error, {Reason, Id}} ->
+            ?INFO("at=authorization error=~s "
+                  "cred_id=~s", [Reason, Id]),
             {{false, ?BASIC_AUTH}, Req2, State};
         {error, What} ->
             ?INFO("at=authorization "

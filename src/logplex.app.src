@@ -98,6 +98,7 @@
     ,{tls_cacertfile, "cacert.pem"} % assumes stored in ./priv
     ,{tls_pinned_certfile, "pinned_certs.pem"} % assumes stored in ./priv
     ,{tls_pinned_certs, []} % PEM formatted binary data or DER formatted list
+    ,{log_api_user, false} % when true will log api users
    ]}
  ,{start_phases,
    [{listen, []}

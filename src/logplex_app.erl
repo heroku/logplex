@@ -167,6 +167,9 @@ cache_os_envvars() ->
                      ,{batch_redis, ["ENABLE_BATCH_REDIS"],
                        optional,
                        atom}
+                     ,{log_api_user, ["LOG_API_USER"],
+                       optional,
+                       atom}
                      ]),
     ok.
 
