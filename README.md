@@ -1,4 +1,6 @@
-# Logplex
+# Logplex [DEPRECATED]
+
+_This project is officially retired and no longer maintained._
 
 Logplex is a distributed syslog log router, able to merge and redistribute multiple incoming streams of syslog logs to individual subscribers.
 
